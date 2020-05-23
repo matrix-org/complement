@@ -10,5 +10,7 @@ RUN go build ./cmd/generate-keys
 RUN ./generate-keys --private-key matrix_key.pem --tls-cert server.crt --tls-key server.key
 COPY dendrite.yaml dendrite.yaml
 
+ENV SERVER_NAME=localhost
 EXPOSE 8008 8448
-CMD ./dendrite-monolith-server
+
+CMD sed -i "s/SERVER_NAME/${SERVER_NAME}/g" dendrite.yaml && ./dendrite-monolith-server

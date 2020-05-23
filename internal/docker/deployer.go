@@ -26,6 +26,7 @@ type Deployer struct {
 	Namespace string
 	Docker    *client.Client
 	Counter   int
+	networkID string
 }
 
 type Deployment struct {
@@ -69,6 +70,11 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	if len(images) == 0 {
 		return nil, fmt.Errorf("Deploy: No images have been built for blueprint %s", blueprintName)
 	}
+	networkID := createNetwork(d.Docker, blueprintName)
+	if networkID == "" {
+		return nil, fmt.Errorf("Deploy: failed to create network")
+	}
+	d.networkID = networkID
 	for _, img := range images {
 		d.Counter++
 		contextStr := img.Labels["complement_context"]
@@ -76,7 +82,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		// TODO: Make CSAPI port configurable
 		hsURL, containerID, err := deployImage(
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
-			blueprintName, hsName, contextStr)
+			blueprintName, hsName, contextStr, networkID)
 		if err != nil {
 			return nil, fmt.Errorf("Deploy: Failed to deploy image %+v : %w", img, err)
 		}
@@ -94,6 +100,12 @@ func (d *Deployer) Destroy(dep *Deployment) {
 		err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
 		if err != nil {
 			log.Printf("Destroy: Failed to destroy container %s : %w\n", hsDep.ContainerID, err)
+		}
+	}
+	if d.networkID != "" {
+		err := d.Docker.NetworkRemove(context.Background(), d.networkID)
+		if err != nil {
+			log.Printf("Destroy: Failed to destroy network %s : %w\n", d.networkID, err)
 		}
 	}
 }

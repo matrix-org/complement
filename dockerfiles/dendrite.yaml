@@ -7,7 +7,7 @@ version: 0
 # The matrix specific config
 matrix:
     # The name of the server. This is usually the domain name, e.g 'matrix.org', 'localhost'.
-    server_name: "localhost"
+    server_name: "SERVER_NAME"
     # The path to the PEM formatted matrix private key.
     private_key: "matrix_key.pem"
     # The x509 certificates used by the federation listeners for this server

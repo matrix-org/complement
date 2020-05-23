@@ -73,7 +73,7 @@ func TestRegistration(t *testing.T) {
 				}
 				return nil
 			})
-			MustHaveJSONKeyEqual(t, body, "user_id", "@user-upper:localhost")
+			MustHaveJSONKeyEqual(t, body, "user_id", "@user-upper:hs1")
 		})
 		t.Run("POST /register returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()

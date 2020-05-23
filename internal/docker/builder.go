@@ -26,6 +26,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/network"
 	client "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/matrix-org/complement/internal/b"
@@ -57,12 +58,37 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 	}, nil
 }
 
-func (b *Builder) Cleanup() error {
+func (b *Builder) Cleanup() {
 	err := b.removeContainers()
+	if err != nil {
+		log.Printf("Cleanup: Failed to remove containers: %s", err)
+	}
+	err = b.removeImages()
+	if err != nil {
+		log.Printf("Cleanup: Failed to remove images: %s", err)
+	}
+	err = b.removeNetworks()
+	if err != nil {
+		log.Printf("Cleanup: Failed to remove networks: %s", err)
+	}
+}
+
+// removeImages removes all images with `complementLabel`.
+func (b *Builder) removeNetworks() error {
+	networks, err := b.Docker.NetworkList(context.Background(), types.NetworkListOptions{
+		Filters: label(complementLabel),
+	})
 	if err != nil {
 		return err
 	}
-	return b.removeImages()
+	for _, nw := range networks {
+		err = b.Docker.NetworkRemove(context.Background(), nw.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // removeImages removes all images with `complementLabel`.
@@ -128,19 +154,27 @@ func (b *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 			break
 		}
 	}
+	// do this after we have found images so we know that the containers have been detached so
+	// we can actually remove the networks.
+	b.removeNetworks()
 	if !foundImages {
 		return fmt.Errorf("failed to find built images via ImageList: did they all build ok?")
 	}
 	return nil
 }
 
-// construct all Homeservers sequentially then commit them
+// construct all Homeservers sequentially then commits them
 func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 	defer bpWg.Done()
+	networkID := createNetwork(b.Docker, bprint.Name)
+	if networkID == "" {
+		return
+	}
+
 	runner := instruction.NewRunner(bprint.Name)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
-		res := b.constructHomeserver(bprint.Name, runner, hs)
+		res := b.constructHomeserver(bprint.Name, runner, hs, networkID)
 		if res.err != nil && res.containerID != "" {
 			// print docker logs because something went wrong
 			reader, err2 := b.Docker.ContainerLogs(context.Background(), res.containerID, types.ContainerLogsOptions{
@@ -186,10 +220,10 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 }
 
 // construct this homeserver and execute its instructions, keeping the container alive.
-func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver) result {
+func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
 	log.Printf("%s : constructing homeserver...\n", contextStr)
-	baseURL, containerID, err := b.deployBaseImage(blueprintName, hs.Name, contextStr)
+	baseURL, containerID, err := b.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
 		return result{
@@ -209,14 +243,17 @@ func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.
 }
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
-func (b *Builder) deployBaseImage(blueprintName, hsName, contextStr string) (string, string, error) {
-	return deployImage(b.Docker, b.BaseImage, b.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr)
+func (b *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (string, string, error) {
+	return deployImage(b.Docker, b.BaseImage, b.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr, networkID)
 }
 
-func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr string) (string, string, error) {
+func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (string, string, error) {
 	ctx := context.Background()
 	body, err := docker.ContainerCreate(ctx, &container.Config{
-		Image: imageID,
+		Image:      imageID,
+		Domainname: hsName,
+		Hostname:   hsName,
+		Env:        []string{"SERVER_NAME=" + hsName},
 		//Cmd:   b.ImageArgs,
 		Labels: map[string]string{
 			complementLabel:        contextStr,
@@ -225,7 +262,13 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		},
 	}, &container.HostConfig{
 		PublishAllPorts: true,
-	}, nil, containerName)
+	}, &network.NetworkingConfig{
+		map[string]*network.EndpointSettings{
+			hsName: &network.EndpointSettings{
+				NetworkID: networkID,
+			},
+		},
+	}, containerName)
 	if err != nil {
 		return "", "", err
 	}
@@ -264,9 +307,27 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		break
 	}
 	if lastErr != nil {
-		return "", "", fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
+		return baseURL, containerID, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
 	}
 	return baseURL, containerID, nil
+}
+
+func createNetwork(docker *client.Client, blueprintName string) (networkID string) {
+	// make a user-defined network so we get DNS based on the container name
+	nw, err := docker.NetworkCreate(context.Background(), "complement_"+blueprintName, types.NetworkCreate{
+		Labels: map[string]string{
+			complementLabel:        blueprintName,
+			"complement_blueprint": blueprintName,
+		},
+	})
+	if err != nil {
+		log.Printf("Failed to create docker network: %s\n", err)
+		return ""
+	}
+	if nw.Warning != "" {
+		log.Printf("WARNING: %s\n", nw.Warning)
+	}
+	return nw.ID
 }
 
 func label(in string) filters.Args {

@@ -19,7 +19,6 @@ var BlueprintOneToOneRoom = MustValidate(Blueprint{
 				{
 					CreateRoom: map[string]interface{}{
 						"preset": "public_chat",
-						"invite": []string{"@bob:hs1"},
 					},
 					Creator: "@alice",
 					Events: []Event{
