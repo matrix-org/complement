@@ -53,6 +53,48 @@ func TestRegistration(t *testing.T) {
 				return nil
 			})
 		})
+		t.Run("POST /register downcases capitals in usernames", func(t *testing.T) {
+			t.Parallel()
+			res, err := http.Post(deployment.HS["hs1"].BaseURL+"/_matrix/client/r0/register", "application/json", strings.NewReader(`{
+				"auth": {
+					"type": "m.login.dummy"
+				},
+				"username": "user-UPPER",
+				"password": "sUp3rs3kr1t"
+			}`))
+			MustNotError(t, "POST returned error", err)
+			MustHaveStatus(t, res, 200)
+			body := MustParseJSON(t, res)
+			MustHaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
+				if r.Str == "" {
+					return fmt.Errorf("access_token is not a string")
+				}
+				return nil
+			})
+			MustHaveJSONKeyEqual(t, body, "user_id", "@user-upper:localhost")
+		})
+		t.Run("POST /register returns the same device_id as that in the request", func(t *testing.T) {
+			t.Parallel()
+			deviceID := "my_device_id"
+			res, err := http.Post(deployment.HS["hs1"].BaseURL+"/_matrix/client/r0/register", "application/json", strings.NewReader(`{
+				"auth": {
+					"type": "m.login.dummy"
+				},
+				"username": "user-device",
+				"password": "sUp3rs3kr1t",
+				"device_id": "`+deviceID+`"
+			}`))
+			MustNotError(t, "POST returned error", err)
+			MustHaveStatus(t, res, 200)
+			body := MustParseJSON(t, res)
+			MustHaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
+				if r.Str == "" {
+					return fmt.Errorf("access_token is not a string")
+				}
+				return nil
+			})
+			MustHaveJSONKeyEqual(t, body, "device_id", deviceID)
+		})
 	})
 	deployment.Destroy()
 }

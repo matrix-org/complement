@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/matrix-org/complement/internal"
@@ -80,10 +81,29 @@ func MustHaveJSONKey(t *testing.T, body []byte, wantKey string, checkFn func(r g
 	return
 }
 
+// MustHaveJSONKeyEqual ensures that `wantKey` exists in `body` and has the value `wantValue`, else terminates the test.
+// The value is checked deeply via `reflect.DeepEqual`, and the got JSON value is mapped according to https://godoc.org/github.com/tidwall/gjson#Result.Value
+func MustHaveJSONKeyEqual(t *testing.T, body []byte, wantKey string, wantValue interface{}) {
+	MustHaveJSONKey(t, body, wantKey, func(r gjson.Result) error {
+		gotValue := r.Value()
+		if !reflect.DeepEqual(gotValue, wantValue) {
+			return fmt.Errorf("MustHaveJSONKeyEqual: key '%s' got %v want %v", wantKey, gotValue, wantValue)
+		}
+		return nil
+	})
+}
+
 // MustHaveStatus will ensure that the HTTP response has the desired status code or terminate the test.
 func MustHaveStatus(t *testing.T, res *http.Response, wantStatusCode int) {
 	if res.StatusCode != wantStatusCode {
-		t.Fatalf("MustHaveStatus: got %d want %d", res.StatusCode, wantStatusCode)
+		b, err := ioutil.ReadAll(res.Body)
+		var body string
+		if err != nil {
+			body = err.Error()
+		} else {
+			body = string(b)
+		}
+		t.Fatalf("MustHaveStatus: got %d want %d - body: %s", res.StatusCode, wantStatusCode, body)
 	}
 }
 
