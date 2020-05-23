@@ -199,6 +199,7 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 		}(res)
 		results[i] = res
 	}
+
 	// commit containers
 	for _, res := range results {
 		if res.err != nil {
@@ -266,6 +267,7 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		map[string]*network.EndpointSettings{
 			hsName: &network.EndpointSettings{
 				NetworkID: networkID,
+				Aliases:   []string{hsName},
 			},
 		},
 	}, containerName)
