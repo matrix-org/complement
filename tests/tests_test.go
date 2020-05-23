@@ -15,6 +15,33 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+/*
+This is the main entry point for Complement. TestMain governs:
+ - Loading blueprints.
+ - Creating homeserver base containers.
+ - Running blueprints on containers.
+ - Committing the containers as new images with well-defined names $blueprintName:$hsName
+Tests will then ask for a deployment of a blueprint by name which will deploy potentially
+multiple servers (if testing Federation). Those servers can then be poked until the deployment
+is destroyed.
+
+setup (before tests are run)                      +---------------------+
+                                                  |              Docker |
+ +------------+          +---------+    runs      |  +--------+         |
+ | Blueprints | -------> | Builder | -----------> |  | Images |         |
+ +------------+          +---------+   commits    |  +--------+         |
+                                                  |                     |
+                                                  |                     |
+---------------------------------------------------------------------------------
+tests                                             |                     |
+                                                  |                     |
+ +-------+                +----------+            |  +------------+     |
+ | Tests | -------------> | Deployer | ---------> |  | Containers |     |
+ +-------+                +----------+   runs     |  +------------+     |
+                                                  +---------------------+
+
+*/
+
 // TestMain is the main entry point for Complement. It will process COMPLEMENT_ env vars and build blueprints
 // to images before executing the tests.
 func TestMain(m *testing.M) {
@@ -87,7 +114,7 @@ func MustHaveJSONKeyEqual(t *testing.T, body []byte, wantKey string, wantValue i
 	MustHaveJSONKey(t, body, wantKey, func(r gjson.Result) error {
 		gotValue := r.Value()
 		if !reflect.DeepEqual(gotValue, wantValue) {
-			return fmt.Errorf("MustHaveJSONKeyEqual: key '%s' got %v want %v", wantKey, gotValue, wantValue)
+			return fmt.Errorf("MustHaveJSONKeyEqual: key '%s' got '%v' want '%v'", wantKey, gotValue, wantValue)
 		}
 		return nil
 	})

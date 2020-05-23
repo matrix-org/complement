@@ -12,6 +12,7 @@ func Start(cfg *config.Complement) (*docker.Builder, error) {
 		return nil, err
 	}
 	builder.Cleanup()
+	// Add additional static blueprints here
 	return builder, builder.ConstructBlueprints([]b.Blueprint{
 		b.BlueprintCleanHS,
 		b.BlueprintOneToOneRoom,
