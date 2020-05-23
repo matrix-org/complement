@@ -20,6 +20,6 @@ A full list of config options can be found [in the config file](./internal/confi
 - The homeserver needs to `200 OK` requests to `GET /_matrix/client/versions`.
 - The homeserver needs to manage its own storage within the image.
 
-#### Why 'complement'?
+#### Why 'Complement'?
 
-**M**<sup>*C*</sup> = **1** - **M**
+Because **M**<sup>*C*</sup> = **1** - **M**
