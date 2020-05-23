@@ -4,10 +4,9 @@ Complement is a black box integration testing framework for Matrix homeservers.
 
 #### Running
 
-You need to have Docker installed. Then:
+You need to have Go and Docker installed. Then:
 ```
-$ go build ./cmd/complement
-$ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl COMPLEMENT_BASE_IMAGE_ARGS='-foo bar -baz 1' ./complement
+$ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl COMPLEMENT_BASE_IMAGE_ARGS='-foo bar -baz 1' go test -v ./tests
 ```
 
 You can either use your own image, or one of the ones supplied in the [dockerfiles](./dockerfiles) directory.

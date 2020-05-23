@@ -29,8 +29,13 @@ type Deployer struct {
 }
 
 type Deployment struct {
+	Deployer      *Deployer
 	BlueprintName string
-	Homeservers   map[string]HomeserverDeployment
+	HS            map[string]HomeserverDeployment
+}
+
+func (d *Deployment) Destroy() {
+	d.Deployer.Destroy(d)
 }
 
 type HomeserverDeployment struct {
@@ -51,8 +56,9 @@ func NewDeployer(namespace string) (*Deployer, error) {
 
 func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deployment, error) {
 	dep := &Deployment{
+		Deployer:      d,
 		BlueprintName: blueprintName,
-		Homeservers:   make(map[string]HomeserverDeployment),
+		HS:            make(map[string]HomeserverDeployment),
 	}
 	images, err := d.Docker.ImageList(ctx, types.ImageListOptions{
 		Filters: label("complement_blueprint=" + blueprintName),
@@ -66,7 +72,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	for _, img := range images {
 		d.Counter++
 		contextStr := img.Labels["complement_context"]
-		hsName := img.Labels["complement_hs"]
+		hsName := img.Labels["complement_hs_name"]
 		// TODO: Make CSAPI port configurable
 		hsURL, containerID, err := deployImage(
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
@@ -75,7 +81,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 			return nil, fmt.Errorf("Deploy: Failed to deploy image %+v : %w", img, err)
 		}
 		log.Printf("%s -> %s (%s)\n", contextStr, hsURL, containerID)
-		dep.Homeservers[hsName] = HomeserverDeployment{
+		dep.HS[hsName] = HomeserverDeployment{
 			BaseURL:     hsURL,
 			ContainerID: containerID,
 		}
@@ -84,7 +90,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 }
 
 func (d *Deployer) Destroy(dep *Deployment) {
-	for _, hsDep := range dep.Homeservers {
+	for _, hsDep := range dep.HS {
 		err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
 		if err != nil {
 			log.Printf("Destroy: Failed to destroy container %s : %w\n", hsDep.ContainerID, err)
