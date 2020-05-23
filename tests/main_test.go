@@ -51,8 +51,9 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Error: %s", err)
 		os.Exit(1)
 	}
-	defer builder.Cleanup()
-	os.Exit(m.Run())
+	exitCode := m.Run()
+	builder.Cleanup()
+	os.Exit(exitCode)
 }
 
 // MustNewDeployer will create a Deployer or terminate the test.

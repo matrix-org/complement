@@ -17,78 +17,76 @@ import (
 )
 
 type Runner struct {
-	contextStr string
-	hs         b.Homeserver
-	i          int
-	lookup     map[string]string
-	instrs     []instruction
+	blueprintName string
+	lookup        map[string]string
 }
 
-func NewRunner(hs b.Homeserver, contextStr string) *Runner {
+func NewRunner(blueprintName string) *Runner {
 	return &Runner{
-		instrs:     calculateInstructions(hs),
-		hs:         hs,
-		lookup:     make(map[string]string),
-		contextStr: contextStr,
+		lookup:        make(map[string]string),
+		blueprintName: blueprintName,
 	}
 }
 
 // Run all instructions until completion. Return an error if there was a problem executing any instruction.
-func (r *Runner) Run(hsURL string) error {
+func (r *Runner) Run(hs b.Homeserver, hsURL string) error {
+	contextStr := fmt.Sprintf("%s.%s", r.blueprintName, hs.Name)
+	instrs := calculateInstructions(hs)
+	i := 0
 	cli := http.Client{
 		Timeout: 10 * time.Second,
 	}
-	req, instr := r.next(hsURL)
+	req, instr, i := r.next(instrs, hsURL, i)
 	for req != nil {
 		res, err := cli.Do(req)
 		if err != nil {
-			return fmt.Errorf("%s : failed to perform HTTP request to %s: %w", r.contextStr, req.URL.String(), err)
+			return fmt.Errorf("%s : failed to perform HTTP request to %s: %w", contextStr, req.URL.String(), err)
 		}
-		log.Printf("%s [%s] %s => HTTP %s\n", r.contextStr, instr.accessToken, req.URL.String(), res.Status)
+		log.Printf("%s [%s] %s => HTTP %s\n", contextStr, instr.accessToken, req.URL.String(), res.Status)
 		body, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			return fmt.Errorf("%s : failed to read response body: %w", r.contextStr, err)
+			return fmt.Errorf("%s : failed to read response body: %w", contextStr, err)
 		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
 			log.Printf("LOOKUP : %+v\n", r.lookup)
 			log.Printf("INSTRUCTION: %+v\n", instr)
-			return fmt.Errorf("%s : request %s returned HTTP %s : %s", r.contextStr, req.URL.String(), res.Status, string(body))
+			return fmt.Errorf("%s : request %s returned HTTP %s : %s", contextStr, req.URL.String(), res.Status, string(body))
 		}
 		if instr.storeResponse != nil {
 			if !gjson.ValidBytes(body) {
-				return fmt.Errorf("%s : cannot storeResponse as response is not valid JSON. Body: %s", r.contextStr, string(body))
+				return fmt.Errorf("%s : cannot storeResponse as response is not valid JSON. Body: %s", contextStr, string(body))
 			}
 			for k, v := range instr.storeResponse {
 				val := gjson.GetBytes(body, strings.TrimPrefix(v, "."))
 				r.lookup[k] = val.Str
 			}
 		}
-		req, instr = r.next(hsURL)
+		req, instr, i = r.next(instrs, hsURL, i)
 	}
 	return nil
 }
 
 // next returns the next request to make, along with its instruction. Return nil if there are no more instructions.
-func (r *Runner) next(hsURL string) (*http.Request, *instruction) {
-	if r.i >= len(r.instrs) {
-		return nil, nil
+func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request, *instruction, int) {
+	if i >= len(instrs) {
+		return nil, nil, 0
 	}
-	instr := r.instrs[r.i]
-	r.i++
+	instr := instrs[i]
+	i++
 
 	var body io.Reader
 	if instr.body != nil {
 		b, err := json.Marshal(instr.body)
 		if err != nil {
 			log.Printf("Stopping. Failed to marshal JSON request for instruction: %s -- %+v", err, instr)
-			return nil, nil
+			return nil, nil, 0
 		}
 		body = bytes.NewBuffer(b)
 	}
 	req, err := http.NewRequest(instr.method, instr.url(hsURL, r.lookup), body)
 	if err != nil {
 		log.Printf("Stopping. Failed to form NewRequest for instruction: %s -- %+v \n", err, instr)
-		return nil, nil
+		return nil, nil, 0
 	}
 	if instr.accessToken != "" {
 		q := req.URL.Query()
@@ -96,7 +94,7 @@ func (r *Runner) next(hsURL string) (*http.Request, *instruction) {
 		req.URL.RawQuery = q.Encode()
 	}
 
-	return req, &instr
+	return req, &instr, i
 }
 
 // instruction represents an HTTP request which should be made to a remote server
@@ -163,21 +161,33 @@ func calculateInstructions(hs b.Homeserver) []instruction {
 	}
 	// add instructions to create rooms and send events
 	for roomIndex, room := range hs.Rooms {
-		instrs = append(instrs, instruction{
-			method:      "POST",
-			path:        "/_matrix/client/r0/createRoom",
-			accessToken: "user_" + room.Creator,
-			body:        room.CreateRoom,
-			storeResponse: map[string]string{
+		if room.Creator != "" {
+			storeRes := map[string]string{
 				fmt.Sprintf("room_%d", roomIndex): ".room_id",
-			},
-		})
+			}
+			if room.Ref != "" {
+				storeRes[fmt.Sprintf("room_ref_%s", room.Ref)] = ".room_id"
+			}
+			instrs = append(instrs, instruction{
+				method:        "POST",
+				path:          "/_matrix/client/r0/createRoom",
+				accessToken:   "user_" + room.Creator,
+				body:          room.CreateRoom,
+				storeResponse: storeRes,
+			})
+		} else if room.Ref == "" {
+			log.Printf("HS %s room index %d must either have a Ref or a Creator", hs.Name, roomIndex)
+			return nil
+		}
 		for eventIndex, event := range room.Events {
 			method := "PUT"
 			var path string
 			subs := map[string]string{
 				"$roomId":    fmt.Sprintf(".room_%d", roomIndex),
 				"$eventType": event.Type,
+			}
+			if room.Ref != "" {
+				subs["$roomId"] = fmt.Sprintf(".room_ref_%s", room.Ref)
 			}
 			if event.StateKey != nil {
 				path = "/_matrix/client/r0/rooms/$roomId/state/$eventType/$stateKey"

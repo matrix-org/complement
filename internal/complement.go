@@ -16,5 +16,6 @@ func Start(cfg *config.Complement) (*docker.Builder, error) {
 	return builder, builder.ConstructBlueprints([]b.Blueprint{
 		b.BlueprintCleanHS,
 		b.BlueprintOneToOneRoom,
+		// b.BlueprintFederationOneToOneRoom,
 	})
 }

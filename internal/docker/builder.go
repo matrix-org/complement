@@ -134,65 +134,78 @@ func (b *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	return nil
 }
 
+// construct all Homeservers sequentially then commit them
 func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 	defer bpWg.Done()
-	var hsWg sync.WaitGroup
-	hsWg.Add(len(bprint.Homeservers))
-	for _, hs := range bprint.Homeservers {
-		go b.constructHomeserver(bprint.Name, hs, &hsWg)
-	}
-	hsWg.Wait()
-}
-
-func (b *Builder) constructHomeserver(blueprintName string, hs b.Homeserver, hsWg *sync.WaitGroup) (string, error) {
-	defer hsWg.Done()
-	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
-	log.Printf("%s : constructing homeserver...\n", contextStr)
-	baseURL, containerID, err := b.deployBaseImage(blueprintName, hs.Name, contextStr)
-	if err != nil {
-		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
-		return "", err
-	}
-	log.Printf("%s : deployed base image to %s (%s)\n", contextStr, baseURL, containerID)
-	runner := instruction.NewRunner(hs, contextStr)
-	err = runner.Run(baseURL)
-	defer func() {
-		if err != nil {
+	runner := instruction.NewRunner(bprint.Name)
+	results := make([]result, len(bprint.Homeservers))
+	for i, hs := range bprint.Homeservers {
+		res := b.constructHomeserver(bprint.Name, runner, hs)
+		if res.err != nil && res.containerID != "" {
 			// print docker logs because something went wrong
-			reader, err2 := b.Docker.ContainerLogs(context.Background(), containerID, types.ContainerLogsOptions{
+			reader, err2 := b.Docker.ContainerLogs(context.Background(), res.containerID, types.ContainerLogsOptions{
 				ShowStderr: true,
 				ShowStdout: true,
 				Follow:     false,
 			})
 			if err2 != nil {
-				log.Printf("%s : Failed to extract container logs: %s\n", contextStr, err2)
+				log.Printf("%s : Failed to extract container logs: %s\n", res.contextStr, err2)
 			} else {
+				log.Printf("%s : Server logs:\n", res.contextStr)
 				io.Copy(log.Writer(), reader)
+				log.Printf("%s : ==============\n", res.contextStr)
 			}
 		}
 		// kill the container
-		killErr := b.Docker.ContainerKill(context.Background(), containerID, "KILL")
-		if killErr != nil {
-			log.Printf("%s : Failed to kill container %s: %s\n", contextStr, containerID, killErr)
+		defer func(r result) {
+			killErr := b.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
+			if killErr != nil {
+				log.Printf("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
+			}
+		}(res)
+		results[i] = res
+	}
+	// commit containers
+	for _, res := range results {
+		if res.err != nil {
+			continue
 		}
-	}()
+		// commit the container
+		commit, err := b.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
+			Author:    "Complement",
+			Pause:     true,
+			Reference: "localhost/complement:" + res.contextStr,
+		})
+		if err != nil {
+			log.Printf("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
+			return
+		}
+		imageID := strings.Replace(commit.ID, "sha256:", "", 1)
+		log.Printf("%s => %s\n", res.contextStr, imageID)
+	}
+}
+
+// construct this homeserver and execute its instructions, keeping the container alive.
+func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver) result {
+	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
+	log.Printf("%s : constructing homeserver...\n", contextStr)
+	baseURL, containerID, err := b.deployBaseImage(blueprintName, hs.Name, contextStr)
+	if err != nil {
+		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
+		return result{
+			err: err,
+		}
+	}
+	log.Printf("%s : deployed base image to %s (%s)\n", contextStr, baseURL, containerID)
+	err = runner.Run(hs, baseURL)
 	if err != nil {
 		log.Printf("%s : failed to run instructions: %s\n", contextStr, err)
-		return "", err
 	}
-	// commit the container
-	res, err := b.Docker.ContainerCommit(context.Background(), containerID, types.ContainerCommitOptions{
-		Author:    "Complement",
-		Pause:     true,
-		Reference: "localhost/complement:" + contextStr,
-	})
-	if err != nil {
-		log.Printf("%s : failed to ContainerCommit: %s\n", contextStr, err)
-		return "", err
+	return result{
+		err:         err,
+		containerID: containerID,
+		contextStr:  contextStr,
 	}
-	imageID := strings.Replace(res.ID, "sha256:", "", 1)
-	log.Printf("%s => %s\n", contextStr, imageID)
-	return imageID, nil
 }
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
@@ -260,4 +273,10 @@ func label(in string) filters.Args {
 	f := filters.NewArgs()
 	f.Add("label", in)
 	return f
+}
+
+type result struct {
+	err         error
+	containerID string
+	contextStr  string
 }

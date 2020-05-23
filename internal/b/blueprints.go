@@ -19,14 +19,20 @@ import (
 	"strings"
 )
 
+// Blueprint represents an entire deployment to make.
 type Blueprint struct {
-	Name        string
+	// The name of the blueprint. Containers will use this name.
+	Name string
+	// The list of homeservers to create for this deployment.
 	Homeservers []Homeserver
 }
 
 type Homeserver struct {
-	Name  string
+	// The name of this homeserver. Containers will use this name.
+	Name string
+	// The list of users to create on this homeserver.
 	Users []User
+	// The list of rooms to create on this homeserver
 	Rooms []Room
 }
 
@@ -43,6 +49,8 @@ type AccountData struct {
 }
 
 type Room struct {
+	// The unique reference for this room. Used to link together rooms across homeservers.
+	Ref        string
 	Creator    string
 	CreateRoom map[string]interface{}
 	Events     []Event
@@ -91,9 +99,13 @@ func Validate(bp Blueprint) (Blueprint, error) {
 
 func normaliseRoom(hsName string, r Room) (Room, error) {
 	var err error
-	r.Creator, err = normaliseUser(r.Creator, hsName)
-	if err != nil {
-		return r, err
+	if r.Creator != "" {
+		r.Creator, err = normaliseUser(r.Creator, hsName)
+		if err != nil {
+			return r, err
+		}
+	} else if r.Ref == "" {
+		return r, fmt.Errorf("%s : room must have either a Ref or a Creator", hsName)
 	}
 	for i := range r.Events {
 		r.Events[i].Sender, err = normaliseUser(r.Events[i].Sender, hsName)
