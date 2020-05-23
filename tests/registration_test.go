@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -94,6 +96,43 @@ func TestRegistration(t *testing.T) {
 				return nil
 			})
 			MustHaveJSONKeyEqual(t, body, "device_id", deviceID)
+		})
+		t.Run("POST /register rejects usernames with special characters", func(t *testing.T) {
+			t.Parallel()
+			specialChars := []string{
+				`!`,
+				`"`,
+				`:`,
+				`?`,
+				`\\`,
+				`@`,
+				`[`,
+				`]`,
+				`{`,
+				`|`,
+				`}`,
+				`£`,
+				`é`,
+				`\n`,
+				`'`,
+			}
+			for _, ch := range specialChars {
+				reqBody, err := json.Marshal(map[string]interface{}{
+					"auth": map[string]string{
+						"type": "m.login.dummy",
+					},
+					"username": "user-" + ch + "-reject-please",
+					"password": "sUp3rs3kr1t",
+				})
+				if err != nil {
+					t.Fatalf("failed to marshal JSON request body: %s", err)
+				}
+				res, err := http.Post(deployment.HS["hs1"].BaseURL+"/_matrix/client/r0/register", "application/json", bytes.NewBuffer(reqBody))
+				MustNotError(t, "POST returned error", err)
+				MustHaveStatus(t, res, 400)
+				body := MustParseJSON(t, res)
+				MustHaveJSONKeyEqual(t, body, "errcode", "M_INVALID_USERNAME")
+			}
 		})
 	})
 	deployment.Destroy()
