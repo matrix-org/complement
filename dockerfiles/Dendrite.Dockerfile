@@ -13,4 +13,4 @@ COPY dendrite.yaml dendrite.yaml
 ENV SERVER_NAME=localhost
 EXPOSE 8008 8448
 
-CMD sed -i "s/SERVER_NAME/${SERVER_NAME}/g" dendrite.yaml && ./dendrite-monolith-server
+CMD sed -i "s/SERVER_NAME/${SERVER_NAME}/g" dendrite.yaml && ./dendrite-monolith-server --tls-cert server.crt --tls-key server.key
