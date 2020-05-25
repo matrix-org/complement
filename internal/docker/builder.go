@@ -213,7 +213,7 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
 	log.Printf("%s : constructing homeserver...\n", contextStr)
-	baseURL, containerID, err := b.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
+	baseURL, _, containerID, err := b.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
 		printLogs(b.Docker, containerID, contextStr)
@@ -234,11 +234,11 @@ func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.
 }
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
-func (b *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (string, string, error) {
+func (b *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (string, string, string, error) {
 	return deployImage(b.Docker, b.BaseImage, b.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr, networkID)
 }
 
-func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (string, string, error) {
+func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (string, string, string, error) {
 	ctx := context.Background()
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image:      imageID,
@@ -262,24 +262,21 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		},
 	}, containerName)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	containerID := body.ID
 	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	inspect, err := docker.ContainerInspect(ctx, containerID)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	p := inspect.NetworkSettings.Ports
-	csapiPort := fmt.Sprintf("%d/tcp", csPort)
-	csapiPortInfo, ok := p[nat.Port(csapiPort)]
-	if !ok {
-		return "", "", fmt.Errorf("%s: image %s does not expose port %s - exposed: %v", contextStr, imageID, csapiPort, p)
+	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
+	if err != nil {
+		return "", "", "", fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
 	}
-	baseURL := fmt.Sprintf("http://localhost:%s", csapiPortInfo[0].HostPort)
 	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
 	// hit /versions to check it is up
 	var lastErr error
@@ -299,9 +296,9 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		break
 	}
 	if lastErr != nil {
-		return baseURL, containerID, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
+		return baseURL, fedBaseURL, containerID, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
 	}
-	return baseURL, containerID, nil
+	return baseURL, fedBaseURL, containerID, nil
 }
 
 func createNetwork(docker *client.Client, blueprintName string) (networkID string) {
@@ -342,6 +339,23 @@ func label(in string) filters.Args {
 	f := filters.NewArgs()
 	f.Add("label", in)
 	return f
+}
+
+func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {
+	csapiPort := fmt.Sprintf("%d/tcp", csPort)
+	csapiPortInfo, ok := p[nat.Port(csapiPort)]
+	if !ok {
+		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", csapiPort, p)
+	}
+	baseURL = fmt.Sprintf("http://localhost:%s", csapiPortInfo[0].HostPort)
+
+	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
+	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
+	if !ok {
+		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", ssapiPort, p)
+	}
+	fedBaseURL = fmt.Sprintf("https://localhost:%s", ssapiPortInfo[0].HostPort)
+	return
 }
 
 type result struct {

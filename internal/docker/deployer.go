@@ -41,6 +41,7 @@ func (d *Deployment) Destroy() {
 
 type HomeserverDeployment struct {
 	BaseURL     string
+	FedBaseURL  string
 	ContainerID string
 }
 
@@ -80,7 +81,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		contextStr := img.Labels["complement_context"]
 		hsName := img.Labels["complement_hs_name"]
 		// TODO: Make CSAPI port configurable
-		hsURL, containerID, err := deployImage(
+		hsURL, fedURL, containerID, err := deployImage(
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
 			blueprintName, hsName, contextStr, networkID)
 		if err != nil {
@@ -93,6 +94,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		log.Printf("%s -> %s (%s)\n", contextStr, hsURL, containerID)
 		dep.HS[hsName] = HomeserverDeployment{
 			BaseURL:     hsURL,
+			FedBaseURL:  fedURL,
 			ContainerID: containerID,
 		}
 	}
