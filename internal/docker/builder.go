@@ -177,18 +177,7 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 		res := b.constructHomeserver(bprint.Name, runner, hs, networkID)
 		if res.err != nil && res.containerID != "" {
 			// print docker logs because something went wrong
-			reader, err2 := b.Docker.ContainerLogs(context.Background(), res.containerID, types.ContainerLogsOptions{
-				ShowStderr: true,
-				ShowStdout: true,
-				Follow:     false,
-			})
-			if err2 != nil {
-				log.Printf("%s : Failed to extract container logs: %s\n", res.contextStr, err2)
-			} else {
-				log.Printf("%s : Server logs:\n", res.contextStr)
-				io.Copy(log.Writer(), reader)
-				log.Printf("%s : ==============\n", res.contextStr)
-			}
+			printLogs(b.Docker, res.containerID, res.contextStr)
 		}
 		// kill the container
 		defer func(r result) {
@@ -227,6 +216,7 @@ func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.
 	baseURL, containerID, err := b.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
+		printLogs(b.Docker, containerID, contextStr)
 		return result{
 			err: err,
 		}
@@ -330,6 +320,22 @@ func createNetwork(docker *client.Client, blueprintName string) (networkID strin
 		log.Printf("WARNING: %s\n", nw.Warning)
 	}
 	return nw.ID
+}
+
+func printLogs(docker *client.Client, containerID, contextStr string) {
+	reader, err := docker.ContainerLogs(context.Background(), containerID, types.ContainerLogsOptions{
+		ShowStderr: true,
+		ShowStdout: true,
+		Follow:     false,
+	})
+	if err != nil {
+		log.Printf("%s : Failed to extract container logs: %s\n", contextStr, err)
+		return
+	}
+	log.Printf("================\n")
+	log.Printf("%s : Server logs:\n", contextStr)
+	io.Copy(log.Writer(), reader)
+	log.Printf("%s : END LOGS ==============\n", contextStr)
 }
 
 func label(in string) filters.Args {

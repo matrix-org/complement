@@ -14,6 +14,7 @@ import (
 
 func TestRegistration(t *testing.T) {
 	deployment := MustDeploy(t, "registration", b.BlueprintCleanHS.Name)
+	defer deployment.Destroy()
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("POST {} returns a set of flows", func(t *testing.T) {
 			t.Parallel()
@@ -149,5 +150,4 @@ func TestRegistration(t *testing.T) {
 		// User signups are forbidden from starting with '_'
 		// Can register using an email address
 	})
-	deployment.Destroy()
 }

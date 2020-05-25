@@ -100,7 +100,6 @@ database:
     federation_sender: "file:dendrite_fedsender.db"
     public_rooms_api: "file:dendrite_publicroomsapi.db"
     appservice: "file:dendrite_appservice.db"
-    # If using naffka you need to specify a naffka database
     naffka: "file:dendrite_naffka.db"
 
 # The TCP host:port pairs to bind the internal HTTP APIs to.

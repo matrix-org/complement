@@ -84,6 +84,10 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
 			blueprintName, hsName, contextStr, networkID)
 		if err != nil {
+			if containerID != "" {
+				// print logs to help debug
+				printLogs(d.Docker, containerID, contextStr)
+			}
 			return nil, fmt.Errorf("Deploy: Failed to deploy image %+v : %w", img, err)
 		}
 		log.Printf("%s -> %s (%s)\n", contextStr, hsURL, containerID)
