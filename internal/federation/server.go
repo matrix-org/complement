@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/gomatrixserverlib"
 )
 
@@ -34,6 +36,10 @@ type Server struct {
 	keyPath  string
 	mux      *mux.Router
 	srv      *http.Server
+
+	aliases map[string]string
+	rooms   map[string]*ServerRoom
+	keyRing *gomatrixserverlib.KeyRing
 }
 
 // NewServer creates a new federation server with configured options.
@@ -50,6 +56,15 @@ func NewServer(t *testing.T, opts ...func(*Server)) *Server {
 		keyID:      "ed25519:complement",
 		mux:        mux.NewRouter(),
 		serverName: "host.docker.internal",
+		rooms:      make(map[string]*ServerRoom),
+		aliases:    make(map[string]string),
+		keyRing: &gomatrixserverlib.KeyRing{
+			KeyFetchers: []gomatrixserverlib.KeyFetcher{
+				&gomatrixserverlib.DirectKeyFetcher{
+					Client: *gomatrixserverlib.NewClient(),
+				},
+			},
+		},
 	}
 
 	// generate certs and an http.Server
@@ -64,7 +79,117 @@ func NewServer(t *testing.T, opts ...func(*Server)) *Server {
 	return srv
 }
 
-// HandleKeyRequests will process GET /_matrix/key/v2/server requests
+// UserID returns the complete user ID for the given localpart
+func (s *Server) UserID(localpart string) string {
+	return fmt.Sprintf("@%s:%s", localpart, s.serverName)
+}
+
+// Alias links a room ID and alias localpart together on this server. Returns the full room alias.
+func (s *Server) Alias(roomID, aliasLocalpart string) (roomAlias string) {
+	roomAlias = fmt.Sprintf("#%s:%s", aliasLocalpart, s.serverName)
+	s.aliases[roomAlias] = roomID
+	return
+}
+
+// MustMakeRoom will add a room to this server so it is accessible to other servers when prompted via federation.
+// The `events` will be added to this room. Returns the room ID of the created room.
+func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
+	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.serverName)
+	room := &ServerRoom{
+		RoomID:  roomID,
+		Version: roomVer,
+		State:   make(map[string]*gomatrixserverlib.Event),
+	}
+	// sign all these events
+	prevEventID := ""
+	for i, ev := range events {
+		content, err := json.Marshal(ev.Content)
+		if err != nil {
+			t.Fatalf("MustMakeRoom: failed to marshal event content %+v", ev.Content)
+		}
+		eb := gomatrixserverlib.EventBuilder{
+			Sender:   ev.Sender,
+			Depth:    int64(i + 1), // depth starts at 1
+			Type:     ev.Type,
+			StateKey: ev.StateKey,
+			Content:  content,
+			RoomID:   roomID,
+		}
+		if prevEventID != "" {
+			eb.PrevEvents = []string{prevEventID}
+		}
+		stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
+		if err != nil {
+			t.Fatalf("MustMakeRoom: failed to work out auth_events : %s", err)
+		}
+		eb.AuthEvents = room.AuthEvents(stateNeeded)
+		signedEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyID, s.priv, roomVer)
+		if err != nil {
+			t.Fatalf("MustMakeRoom: failed to sign event: %s", err)
+		}
+		room.ReplaceCurrentState(&signedEvent)
+	}
+	s.rooms[roomID] = room
+	return room
+}
+
+// HandleMakeSendJoinRequests is an option which will process make_join and send_join requests for rooms which are present
+// in this server. To add a room to this server, see Server.MustMakeRoom.
+func HandleMakeSendJoinRequests() func(*Server) {
+	return func(srv *Server) {
+		srv.mux.Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
+				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), srv.keyRing,
+			)
+			if fedReq == nil {
+				w.WriteHeader(errResp.Code)
+				b, _ := json.Marshal(errResp.JSON)
+				w.Write(b)
+				return
+			}
+
+			vars := mux.Vars(req)
+			//userID := vars["userID"]
+			roomID := vars["roomID"]
+
+			_, ok := srv.rooms[roomID]
+			if !ok {
+				w.WriteHeader(404)
+				w.Write([]byte("complement: make_join unexpected room ID: " + roomID))
+				return
+			}
+
+			// TODO: Generate a join event
+
+		})).Methods("GET")
+
+		srv.mux.Handle("/_matrix/federation/v1/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
+				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), srv.keyRing,
+			)
+			if fedReq == nil {
+				w.WriteHeader(errResp.Code)
+				b, _ := json.Marshal(errResp.JSON)
+				w.Write(b)
+				return
+			}
+			vars := mux.Vars(req)
+			roomID := vars["roomID"]
+			//eventID := vars["eventID"]
+
+			_, ok := srv.rooms[roomID]
+			if !ok {
+				w.WriteHeader(404)
+				w.Write([]byte("complement: make_join unexpected room ID: " + roomID))
+				return
+			}
+
+			// TODO: insert join event
+		})).Methods("PUT")
+	}
+}
+
+// HandleKeyRequests is an option which will process GET /_matrix/key/v2/server requests universally when requested.
 func HandleKeyRequests() func(*Server) {
 	return func(srv *Server) {
 		keymux := srv.mux.PathPrefix("/_matrix/key/v2").Subrouter()

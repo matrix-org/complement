@@ -138,7 +138,7 @@ func normaliseUser(u string, hsName string) (string, error) {
 	return u, nil
 }
 
-// ptr returns a pointer to `in`, because Go doesn't allow you to inline this.
-func ptr(in string) *string {
+// Ptr returns a pointer to `in`, because Go doesn't allow you to inline this.
+func Ptr(in string) *string {
 	return &in
 }

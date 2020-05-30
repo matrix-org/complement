@@ -45,7 +45,7 @@ var BlueprintFederationOneToOneRoom = MustValidate(Blueprint{
 					Events: []Event{
 						{
 							Type:     "m.room.member",
-							StateKey: ptr("@bob:hs2"),
+							StateKey: Ptr("@bob:hs2"),
 							Content: map[string]interface{}{
 								"membership": "join",
 							},
