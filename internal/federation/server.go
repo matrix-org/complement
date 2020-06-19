@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -13,6 +14,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"sync"
@@ -21,6 +23,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/gomatrixserverlib"
 )
 
@@ -43,7 +46,7 @@ type Server struct {
 }
 
 // NewServer creates a new federation server with configured options.
-func NewServer(t *testing.T, opts ...func(*Server)) *Server {
+func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server)) *Server {
 	// generate signing key
 	_, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -58,12 +61,20 @@ func NewServer(t *testing.T, opts ...func(*Server)) *Server {
 		serverName: "host.docker.internal",
 		rooms:      make(map[string]*ServerRoom),
 		aliases:    make(map[string]string),
-		keyRing: &gomatrixserverlib.KeyRing{
-			KeyFetchers: []gomatrixserverlib.KeyFetcher{
-				&gomatrixserverlib.DirectKeyFetcher{
-					Client: *gomatrixserverlib.NewClient(),
-				},
-			},
+	}
+	fetcher := &basicKeyFetcher{
+		KeyFetcher: &gomatrixserverlib.DirectKeyFetcher{
+			Client: *gomatrixserverlib.NewClientWithTransport(&dockerRoundTripper{
+				cli:        &http.Client{},
+				deployment: deployment,
+			}),
+		},
+		srv: srv,
+	}
+	srv.keyRing = &gomatrixserverlib.KeyRing{
+		KeyDatabase: &nopKeyDatabase{},
+		KeyFetchers: []gomatrixserverlib.KeyFetcher{
+			fetcher,
 		},
 	}
 
@@ -85,6 +96,7 @@ func (s *Server) UserID(localpart string) string {
 }
 
 // Alias links a room ID and alias localpart together on this server. Returns the full room alias.
+// This assumes that this server is joined to the given room ID.
 func (s *Server) Alias(roomID, aliasLocalpart string) (roomAlias string) {
 	roomAlias = fmt.Sprintf("#%s:%s", aliasLocalpart, s.serverName)
 	s.aliases[roomAlias] = roomID
@@ -158,7 +170,7 @@ func HandleMakeSendJoinRequests() func(*Server) {
 			room, ok := s.rooms[roomID]
 			if !ok {
 				w.WriteHeader(404)
-				w.Write([]byte("complement: make_join unexpected room ID: " + roomID))
+				w.Write([]byte("complement: HandleMakeSendJoinRequests make_join unexpected room ID: " + roomID))
 				return
 			}
 
@@ -173,13 +185,13 @@ func HandleMakeSendJoinRequests() func(*Server) {
 			err := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
 			if err != nil {
 				w.WriteHeader(500)
-				w.Write([]byte("complement: make_join cannot set membership content: " + err.Error()))
+				w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot set membership content: " + err.Error()))
 				return
 			}
 			stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
 			if err != nil {
 				w.WriteHeader(500)
-				w.Write([]byte("complement: make_join cannot calculate auth_events: " + err.Error()))
+				w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot calculate auth_events: " + err.Error()))
 				return
 			}
 			builder.AuthEvents = room.AuthEvents(stateNeeded)
@@ -194,7 +206,7 @@ func HandleMakeSendJoinRequests() func(*Server) {
 			w.Write(b)
 		})).Methods("GET")
 
-		s.mux.Handle("/_matrix/federation/v1/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		s.mux.Handle("/_matrix/federation/v2/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
 				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 			)
@@ -206,16 +218,33 @@ func HandleMakeSendJoinRequests() func(*Server) {
 			}
 			vars := mux.Vars(req)
 			roomID := vars["roomID"]
-			//eventID := vars["eventID"]
 
-			_, ok := s.rooms[roomID]
+			room, ok := s.rooms[roomID]
 			if !ok {
 				w.WriteHeader(404)
-				w.Write([]byte("complement: make_join unexpected room ID: " + roomID))
+				w.Write([]byte("complement: HandleMakeSendJoinRequests send_join unexpected room ID: " + roomID))
 				return
 			}
+			event, err := gomatrixserverlib.NewEventFromUntrustedJSON(fedReq.Content(), room.Version)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot parse event JSON: " + err.Error()))
+			}
+			// insert the join event into the room state
+			room.AddEvent(&event)
 
-			// TODO: insert join event
+			// return current state and auth chain
+			b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
+				AuthEvents:  room.AuthChain(),
+				StateEvents: room.AllCurrentState(),
+				Origin:      gomatrixserverlib.ServerName(s.serverName),
+			})
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot marshal RespSendJoin: " + err.Error()))
+			}
+			w.WriteHeader(200)
+			w.Write(b)
 		})).Methods("PUT")
 	}
 }
@@ -236,7 +265,7 @@ func HandleKeyRequests() func(*Server) {
 			publicKey := srv.priv.Public().(ed25519.PublicKey)
 			k.VerifyKeys = map[gomatrixserverlib.KeyID]gomatrixserverlib.VerifyKey{
 				srv.keyID: {
-					Key: gomatrixserverlib.Base64String(publicKey),
+					Key: gomatrixserverlib.Base64Bytes(publicKey),
 				},
 			}
 			k.OldVerifyKeys = map[gomatrixserverlib.KeyID]gomatrixserverlib.OldVerifyKey{}
@@ -245,7 +274,7 @@ func HandleKeyRequests() func(*Server) {
 			toSign, err := json.Marshal(k.ServerKeyFields)
 			if err != nil {
 				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
+				w.Write([]byte("complement: HandleKeyRequests cannot marshal serverkeyfields: " + err.Error()))
 				return
 			}
 
@@ -254,14 +283,46 @@ func HandleKeyRequests() func(*Server) {
 			)
 			if err != nil {
 				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
+				w.Write([]byte("complement: HandleKeyRequests cannot sign json: " + err.Error()))
 				return
 			}
+			w.WriteHeader(200)
+			w.Write(k.Raw)
 		})
 
 		keymux.Handle("/server", keyFn).Methods("GET")
 		keymux.Handle("/server/", keyFn).Methods("GET")
 		keymux.Handle("/server/{keyID}", keyFn).Methods("GET")
+	}
+}
+
+// HandleDirectoryLookups will automatically return room IDs for any alias set via Server.Alias
+func HandleDirectoryLookups() func(*Server) {
+	return func(s *Server) {
+		s.mux.Handle("/_matrix/federation/v1/query/directory", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			alias := req.URL.Query().Get("room_alias")
+			if roomID, ok := s.aliases[alias]; ok {
+				b, err := json.Marshal(gomatrixserverlib.RespDirectory{
+					RoomID: roomID,
+					Servers: []gomatrixserverlib.ServerName{
+						gomatrixserverlib.ServerName(s.serverName),
+					},
+				})
+				if err != nil {
+					w.WriteHeader(500)
+					w.Write([]byte("complement: HandleDirectoryLookups failed to marshal JSON: " + err.Error()))
+					return
+				}
+				w.WriteHeader(200)
+				w.Write(b)
+				return
+			}
+			w.WriteHeader(404)
+			w.Write([]byte(`{
+				"errcode": "M_NOT_FOUND",
+				"error": "Room alias not found."
+			}`))
+		})).Methods("GET")
 	}
 }
 
@@ -363,4 +424,81 @@ func fingerprintPEM(data []byte) []gomatrixserverlib.TLSFingerprint {
 			}
 		}
 	}
+}
+
+type nopKeyDatabase struct {
+	gomatrixserverlib.KeyFetcher
+}
+
+func (d *nopKeyDatabase) StoreKeys(ctx context.Context, results map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult) error {
+	return nil
+}
+func (f *nopKeyDatabase) FetchKeys(
+	ctx context.Context,
+	requests map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.Timestamp) (
+	map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, error,
+) {
+	return nil, nil
+}
+func (f *nopKeyDatabase) FetcherName() string {
+	return "nopKeyDatabase"
+}
+
+type basicKeyFetcher struct {
+	gomatrixserverlib.KeyFetcher
+	srv *Server
+}
+
+func (f *basicKeyFetcher) FetchKeys(
+	ctx context.Context,
+	requests map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.Timestamp) (
+	map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, error,
+) {
+	result := make(map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, len(requests))
+	for req := range requests {
+		if string(req.ServerName) == f.srv.serverName && req.KeyID == f.srv.keyID {
+			publicKey := f.srv.priv.Public().(ed25519.PublicKey)
+			result[req] = gomatrixserverlib.PublicKeyLookupResult{
+				ValidUntilTS: gomatrixserverlib.AsTimestamp(time.Now().Add(24 * time.Hour)),
+				ExpiredTS:    gomatrixserverlib.PublicKeyNotExpired,
+				VerifyKey: gomatrixserverlib.VerifyKey{
+					Key: gomatrixserverlib.Base64Bytes(publicKey),
+				},
+			}
+		} else {
+			return f.KeyFetcher.FetchKeys(ctx, requests)
+		}
+	}
+	return result, nil
+}
+
+func (f *basicKeyFetcher) FetcherName() string {
+	return "basicKeyFetcher"
+}
+
+type dockerRoundTripper struct {
+	cli        *http.Client
+	deployment *docker.Deployment
+}
+
+func (t *dockerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	// map HS names to localhost:port combos
+	hsName := req.URL.Hostname()
+	dep, ok := t.deployment.HS[hsName]
+	if !ok {
+		return nil, fmt.Errorf("dockerRoundTripper unknown hostname: '%s'", hsName)
+	}
+	newURL, err := url.Parse(dep.FedBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("dockerRoundTripper: failed to parase fedbaseurl for hs: %s", err)
+	}
+	req.URL.Host = newURL.Host
+	req.URL.Scheme = "https"
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			ServerName:         hsName,
+			InsecureSkipVerify: true,
+		},
+	}
+	return transport.RoundTrip(req)
 }

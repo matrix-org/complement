@@ -1,6 +1,7 @@
 package federation
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -60,18 +61,65 @@ func (r *ServerRoom) CurrentState(evType, stateKey string) *gomatrixserverlib.Ev
 	return r.State[tuple]
 }
 
+// AllCurrentState returns all the current state events
+func (r *ServerRoom) AllCurrentState() (events []gomatrixserverlib.Event) {
+	for _, ev := range r.State {
+		events = append(events, *ev)
+	}
+	return
+}
+
+// AuthChain returns all auth events for all events in the current state TODO: recursively
+func (r *ServerRoom) AuthChain() (chain []gomatrixserverlib.Event) {
+	chainMap := make(map[string]bool)
+	// get all the auth event IDs
+	for _, ev := range r.AllCurrentState() {
+		for _, evID := range ev.AuthEventIDs() {
+			if chainMap[evID] {
+				continue
+			}
+			chainMap[evID] = true
+		}
+	}
+	// find them in the timeline
+	for _, tev := range r.Timeline {
+		if chainMap[tev.EventID()] {
+			chain = append(chain, *tev)
+		}
+	}
+	return
+}
+
+func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLevelContent) {
+	c.Defaults()
+	c.Events = map[string]int64{
+		"m.room.name":               50,
+		"m.room.power_levels":       100,
+		"m.room.history_visibility": 100,
+		"m.room.canonical_alias":    50,
+		"m.room.avatar":             50,
+		"m.room.aliases":            0, // anyone can publish aliases by default. Has to be 0 else state_default is used.
+	}
+	c.Users = map[string]int64{roomCreator: 100}
+	return c
+}
+
 // InitialRoomEvents returns the initial set of events that get created when making a room.
-func InitialRoomEvents(creator string) []b.Event {
-	plContent := gomatrixserverlib.PowerLevelContent{}
-	plContent.Defaults()
-	plContent.Users = make(map[string]int64)
-	plContent.Users[creator] = 100
+func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []b.Event {
+	// need to serialise/deserialise to get map[string]interface{} annoyingly
+	plContent := initialPowerLevelsContent(creator)
+	plBytes, _ := json.Marshal(plContent)
+	var plContentMap map[string]interface{}
+	json.Unmarshal(plBytes, &plContentMap)
 	return []b.Event{
 		{
 			Type:     "m.room.create",
 			StateKey: b.Ptr(""),
 			Sender:   creator,
-			Content:  map[string]interface{}{},
+			Content: map[string]interface{}{
+				"creator":      creator,
+				"room_version": roomVer,
+			},
 		},
 		{
 			Type:     "m.room.member",
@@ -85,17 +133,7 @@ func InitialRoomEvents(creator string) []b.Event {
 			Type:     "m.room.power_levels",
 			StateKey: b.Ptr(""),
 			Sender:   creator,
-			Content: map[string]interface{}{
-				"state_default":  plContent.StateDefault,
-				"users_default":  plContent.UsersDefault,
-				"events_default": plContent.EventsDefault,
-				"ban":            plContent.Ban,
-				"invite":         plContent.Invite,
-				"kick":           plContent.Kick,
-				"redact":         plContent.Redact,
-				"users":          plContent.Users,
-				"events":         plContent.Events,
-			},
+			Content:  plContentMap,
 		},
 		{
 			Type:     "m.room.join_rules",

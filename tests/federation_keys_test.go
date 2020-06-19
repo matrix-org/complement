@@ -32,7 +32,7 @@ type serverKeyFields struct {
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-key-v2-server-keyid
 func TestInboundFederationKeys(t *testing.T) {
 	deployment := MustDeploy(t, "federation_keys", b.BlueprintCleanHS.Name)
-	defer deployment.Destroy()
+	defer deployment.Destroy(false)
 	t.Run("Federation key API allows unsigned requests for keys", func(t *testing.T) {
 		tr := &http.Transport{
 			TLSClientConfig: &tls.Config{

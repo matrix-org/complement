@@ -28,6 +28,18 @@ func NewRunner(blueprintName string) *Runner {
 	}
 }
 
+// AccessTokens returns the access tokens for all users who were created on the given HS domain.
+// Returns a map of user_id => access_token
+func (r *Runner) AccessTokens(hsDomain string) map[string]string {
+	res := make(map[string]string)
+	for key, val := range r.lookup {
+		if strings.HasPrefix(key, "user_@") && strings.HasSuffix(key, ":"+hsDomain) {
+			res[strings.TrimPrefix(key, "user_")] = val
+		}
+	}
+	return res
+}
+
 // Run all instructions until completion. Return an error if there was a problem executing any instruction.
 func (r *Runner) Run(hs b.Homeserver, hsURL string) error {
 	contextStr := fmt.Sprintf("%s.%s", r.blueprintName, hs.Name)

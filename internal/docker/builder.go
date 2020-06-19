@@ -194,11 +194,16 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 		if res.err != nil {
 			continue
 		}
+		labels := labelsForTokens(runner.AccessTokens(res.homeserver.Name))
+
 		// commit the container
 		commit, err := b.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
 			Author:    "Complement",
 			Pause:     true,
 			Reference: "localhost/complement:" + res.contextStr,
+			Config: &container.Config{
+				Labels: labels,
+			},
 		})
 		if err != nil {
 			log.Printf("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
@@ -213,32 +218,33 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
 	log.Printf("%s : constructing homeserver...\n", contextStr)
-	baseURL, _, containerID, err := b.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
+	dep, err := b.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
-		printLogs(b.Docker, containerID, contextStr)
+		printLogs(b.Docker, dep.ContainerID, contextStr)
 		return result{
 			err: err,
 		}
 	}
-	log.Printf("%s : deployed base image to %s (%s)\n", contextStr, baseURL, containerID)
-	err = runner.Run(hs, baseURL)
+	log.Printf("%s : deployed base image to %s (%s)\n", contextStr, dep.BaseURL, dep.ContainerID)
+	err = runner.Run(hs, dep.BaseURL)
 	if err != nil {
 		log.Printf("%s : failed to run instructions: %s\n", contextStr, err)
 	}
 	return result{
 		err:         err,
-		containerID: containerID,
+		containerID: dep.ContainerID,
 		contextStr:  contextStr,
+		homeserver:  hs,
 	}
 }
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
-func (b *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (string, string, string, error) {
+func (b *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
 	return deployImage(b.Docker, b.BaseImage, b.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr, networkID)
 }
 
-func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (string, string, string, error) {
+func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image:      imageID,
@@ -255,27 +261,27 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		PublishAllPorts: true,
 	}, &network.NetworkingConfig{
 		map[string]*network.EndpointSettings{
-			hsName: &network.EndpointSettings{
+			hsName: {
 				NetworkID: networkID,
 				Aliases:   []string{hsName},
 			},
 		},
 	}, containerName)
 	if err != nil {
-		return "", "", "", err
+		return nil, err
 	}
 	containerID := body.ID
 	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
 	if err != nil {
-		return "", "", "", err
+		return nil, err
 	}
 	inspect, err := docker.ContainerInspect(ctx, containerID)
 	if err != nil {
-		return "", "", "", err
+		return nil, err
 	}
 	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
 	if err != nil {
-		return "", "", "", fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
+		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
 	}
 	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
 	// hit /versions to check it is up
@@ -295,10 +301,16 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		lastErr = nil
 		break
 	}
-	if lastErr != nil {
-		return baseURL, fedBaseURL, containerID, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
+	d := &HomeserverDeployment{
+		BaseURL:      baseURL,
+		FedBaseURL:   fedBaseURL,
+		ContainerID:  containerID,
+		AccessTokens: tokensFromLabels(inspect.Config.Labels),
 	}
-	return baseURL, fedBaseURL, containerID, nil
+	if lastErr != nil {
+		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
+	}
+	return d, nil
 }
 
 func createNetwork(docker *client.Client, blueprintName string) (networkID string) {
@@ -341,6 +353,25 @@ func label(in string) filters.Args {
 	return f
 }
 
+func tokensFromLabels(labels map[string]string) map[string]string {
+	userIDToToken := make(map[string]string)
+	for k, v := range labels {
+		if strings.HasPrefix(k, "access_token_") {
+			userIDToToken[strings.TrimPrefix(k, "access_token_")] = v
+		}
+	}
+	return userIDToToken
+}
+
+func labelsForTokens(userIDToToken map[string]string) map[string]string {
+	labels := make(map[string]string)
+	// collect and store access tokens as labels 'access_token_$userid: $token'
+	for k, v := range userIDToToken {
+		labels["access_token_"+k] = v
+	}
+	return labels
+}
+
 func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {
 	csapiPort := fmt.Sprintf("%d/tcp", csPort)
 	csapiPortInfo, ok := p[nat.Port(csapiPort)]
@@ -362,4 +393,5 @@ type result struct {
 	err         error
 	containerID string
 	contextStr  string
+	homeserver  b.Homeserver
 }

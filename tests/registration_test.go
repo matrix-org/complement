@@ -14,7 +14,7 @@ import (
 
 func TestRegistration(t *testing.T) {
 	deployment := MustDeploy(t, "registration", b.BlueprintCleanHS.Name)
-	defer deployment.Destroy()
+	defer deployment.Destroy(false)
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("POST {} returns a set of flows", func(t *testing.T) {
 			t.Parallel()

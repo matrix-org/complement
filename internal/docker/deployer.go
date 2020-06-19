@@ -35,14 +35,15 @@ type Deployment struct {
 	HS            map[string]HomeserverDeployment
 }
 
-func (d *Deployment) Destroy() {
-	d.Deployer.Destroy(d)
+func (d *Deployment) Destroy(printServerLogs bool) {
+	d.Deployer.Destroy(d, printServerLogs)
 }
 
 type HomeserverDeployment struct {
-	BaseURL     string
-	FedBaseURL  string
-	ContainerID string
+	BaseURL      string
+	FedBaseURL   string
+	ContainerID  string
+	AccessTokens map[string]string
 }
 
 func NewDeployer(namespace string) (*Deployer, error) {
@@ -81,37 +82,37 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		contextStr := img.Labels["complement_context"]
 		hsName := img.Labels["complement_hs_name"]
 		// TODO: Make CSAPI port configurable
-		hsURL, fedURL, containerID, err := deployImage(
+		deployment, err := deployImage(
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
 			blueprintName, hsName, contextStr, networkID)
 		if err != nil {
-			if containerID != "" {
+			if deployment.ContainerID != "" {
 				// print logs to help debug
-				printLogs(d.Docker, containerID, contextStr)
+				printLogs(d.Docker, deployment.ContainerID, contextStr)
 			}
 			return nil, fmt.Errorf("Deploy: Failed to deploy image %+v : %w", img, err)
 		}
-		log.Printf("%s -> %s (%s)\n", contextStr, hsURL, containerID)
-		dep.HS[hsName] = HomeserverDeployment{
-			BaseURL:     hsURL,
-			FedBaseURL:  fedURL,
-			ContainerID: containerID,
-		}
+		log.Printf("%s -> %s (%s)\n", contextStr, deployment.BaseURL, deployment.ContainerID)
+		dep.HS[hsName] = *deployment
 	}
 	return dep, nil
 }
 
-func (d *Deployer) Destroy(dep *Deployment) {
+// Destroy a deployment. This will kill all running containers.
+func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 	for _, hsDep := range dep.HS {
+		if printServerLogs {
+			printLogs(d.Docker, hsDep.ContainerID, hsDep.ContainerID)
+		}
 		err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
 		if err != nil {
-			log.Printf("Destroy: Failed to destroy container %s : %w\n", hsDep.ContainerID, err)
+			log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
 		}
 	}
 	if d.networkID != "" {
 		err := d.Docker.NetworkRemove(context.Background(), d.networkID)
 		if err != nil {
-			log.Printf("Destroy: Failed to destroy network %s : %w\n", d.networkID, err)
+			log.Printf("Destroy: Failed to destroy network %s : %s\n", d.networkID, err)
 		}
 	}
 }

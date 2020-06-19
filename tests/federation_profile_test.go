@@ -15,9 +15,9 @@ import (
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-federation-v1-query-profile
 func TestOutboundFederationProfile(t *testing.T) {
 	deployment := MustDeploy(t, "federation_profile", b.BlueprintOneToOneRoom.Name)
-	defer deployment.Destroy()
+	defer deployment.Destroy(false)
 
-	srv := federation.NewServer(t,
+	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 	)
 	cancel := srv.Listen()
