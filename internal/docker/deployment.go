@@ -35,7 +35,8 @@ func (d *Deployment) Destroy(printServerLogs bool) {
 }
 
 // Client returns a CSAPI client targetting the given hsName, using the access token for the given userID.
-// Fails the test if either the hsName or userID is not found.
+// Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
+// if the userID is otherwise not found.
 func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 	dep, ok := d.HS[hsName]
 	if !ok {
@@ -43,7 +44,7 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		return nil
 	}
 	token := dep.AccessTokens[userID]
-	if token == "" {
+	if token == "" && userID != "" {
 		t.Fatalf("Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, userID)
 		return nil
 	}

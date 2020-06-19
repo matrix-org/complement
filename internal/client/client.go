@@ -31,14 +31,18 @@ func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody int
 
 // Do a JSON request. The access token for this user will automatically be added.
 func (c *CSAPI) Do(t *testing.T, method string, paths []string, jsonBody interface{}) (*http.Response, error) {
-	query := url.Values{
-		"access_token": []string{c.AccessToken},
+	qs := ""
+	if c.AccessToken != "" {
+		query := url.Values{
+			"access_token": []string{c.AccessToken},
+		}
+		qs = "?" + query.Encode()
 	}
 	for i := range paths {
 		paths[i] = url.PathEscape(paths[i])
 	}
 
-	reqURL := c.BaseURL + "/" + strings.Join(paths, "/") + "?" + query.Encode()
+	reqURL := c.BaseURL + "/" + strings.Join(paths, "/") + qs
 	b, err := json.Marshal(jsonBody)
 	if err != nil {
 		t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
