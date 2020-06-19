@@ -15,8 +15,11 @@ package docker
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 
 	"github.com/docker/docker/api/types"
 	client "github.com/docker/docker/client"
@@ -98,4 +101,32 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 			log.Printf("Destroy: Failed to destroy network %s : %s\n", d.networkID, err)
 		}
 	}
+}
+
+// RoundTripper is a round tripper that maps https://hs1 to the federation port of the container
+// e.g https://localhost:35352
+type RoundTripper struct {
+	Deployment *Deployment
+}
+
+func (t *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	// map HS names to localhost:port combos
+	hsName := req.URL.Hostname()
+	dep, ok := t.Deployment.HS[hsName]
+	if !ok {
+		return nil, fmt.Errorf("dockerRoundTripper unknown hostname: '%s'", hsName)
+	}
+	newURL, err := url.Parse(dep.FedBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("dockerRoundTripper: failed to parase fedbaseurl for hs: %s", err)
+	}
+	req.URL.Host = newURL.Host
+	req.URL.Scheme = "https"
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			ServerName:         hsName,
+			InsecureSkipVerify: true,
+		},
+	}
+	return transport.RoundTrip(req)
 }

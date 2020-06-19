@@ -6,14 +6,12 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"math/big"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"sync"
@@ -63,9 +61,8 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	}
 	fetcher := &basicKeyFetcher{
 		KeyFetcher: &gomatrixserverlib.DirectKeyFetcher{
-			Client: *gomatrixserverlib.NewClientWithTransport(&dockerRoundTripper{
-				cli:        &http.Client{},
-				deployment: deployment,
+			Client: *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{
+				Deployment: deployment,
 			}),
 		},
 		srv: srv,
@@ -293,31 +290,4 @@ func (f *basicKeyFetcher) FetchKeys(
 
 func (f *basicKeyFetcher) FetcherName() string {
 	return "basicKeyFetcher"
-}
-
-type dockerRoundTripper struct {
-	cli        *http.Client
-	deployment *docker.Deployment
-}
-
-func (t *dockerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	// map HS names to localhost:port combos
-	hsName := req.URL.Hostname()
-	dep, ok := t.deployment.HS[hsName]
-	if !ok {
-		return nil, fmt.Errorf("dockerRoundTripper unknown hostname: '%s'", hsName)
-	}
-	newURL, err := url.Parse(dep.FedBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("dockerRoundTripper: failed to parase fedbaseurl for hs: %s", err)
-	}
-	req.URL.Host = newURL.Host
-	req.URL.Scheme = "https"
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			ServerName:         hsName,
-			InsecureSkipVerify: true,
-		},
-	}
-	return transport.RoundTrip(req)
 }

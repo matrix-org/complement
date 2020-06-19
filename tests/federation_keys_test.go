@@ -2,12 +2,9 @@ package tests
 
 import (
 	"crypto/ed25519"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
-	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -34,18 +31,9 @@ func TestInboundFederationKeys(t *testing.T) {
 	deployment := MustDeploy(t, "federation_keys", b.BlueprintCleanHS.Name)
 	defer deployment.Destroy(false)
 	t.Run("Federation key API allows unsigned requests for keys", func(t *testing.T) {
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{
-				ServerName:         "hs1",
-				InsecureSkipVerify: true,
-			},
-		}
-		cli := &http.Client{
-			Transport: tr,
-		}
-		res, err := cli.Get(fmt.Sprintf("%s/_matrix/key/v2/server", deployment.HS["hs1"].FedBaseURL))
-		MustNotError(t, "GET /keys returned error", err)
-		MustHaveStatus(t, res, 200)
+		fedClient := deployment.FederationClient(t, "hs1")
+		res := fedClient.MustDo(t, "GET", []string{"_matrix", "key", "v2", "server"}, nil)
+
 		body, err := ioutil.ReadAll(res.Body)
 		MustNotError(t, "failed to read response body", err)
 		var k serverKeyFields
