@@ -29,23 +29,6 @@ type Deployer struct {
 	networkID string
 }
 
-type Deployment struct {
-	Deployer      *Deployer
-	BlueprintName string
-	HS            map[string]HomeserverDeployment
-}
-
-func (d *Deployment) Destroy(printServerLogs bool) {
-	d.Deployer.Destroy(d, printServerLogs)
-}
-
-type HomeserverDeployment struct {
-	BaseURL      string
-	FedBaseURL   string
-	ContainerID  string
-	AccessTokens map[string]string
-}
-
 func NewDeployer(namespace string) (*Deployer, error) {
 	cli, err := client.NewEnvClient()
 	if err != nil {

@@ -1,9 +1,6 @@
 package tests
 
 import (
-	"net/http"
-	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -13,7 +10,7 @@ import (
 
 // Tests that the server is capable of making outbound /send requests
 func TestOutboundFederationSend(t *testing.T) {
-	deployment := MustDeploy(t, "federation_send", b.BlueprintOneToOneRoom.Name)
+	deployment := MustDeploy(t, "federation_send", b.BlueprintAlice.Name)
 	defer func() {
 		deployment.Destroy(t.Failed())
 	}()
@@ -26,17 +23,13 @@ func TestOutboundFederationSend(t *testing.T) {
 	cancel := srv.Listen()
 	defer cancel()
 
+	ver := gomatrixserverlib.RoomVersionV5
 	charlie := srv.UserID("charlie")
-	serverRoom := srv.MustMakeRoom(t, gomatrixserverlib.RoomVersionV5, federation.InitialRoomEvents(gomatrixserverlib.RoomVersionV5, charlie))
+	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 	roomAlias := srv.Alias(serverRoom.RoomID, "flibble")
 
-	// alice := b.BlueprintOneToOneRoom.Homeservers[0].Users[0]
 	// join the room
-	joinURL := deployment.HS["hs1"].BaseURL + "/_matrix/client/r0/join/" + url.PathEscape(roomAlias) + "?access_token=" + url.QueryEscape(deployment.HS["hs1"].AccessTokens["@alice:hs1"])
-	res, err := http.Post(joinURL, "application/json", strings.NewReader(`{}`))
-	MustNotError(t, "POST returned error", err)
-	MustHaveStatus(t, res, 200) // TODO: 200
-
-	// send a message
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "r0", "join", roomAlias}, struct{}{})
 
 }

@@ -1,5 +1,7 @@
 package b
 
+// BlueprintFederationOneToOneRoom contains two homeservers with 1 user in each, who are joined
+// to the same room.
 var BlueprintFederationOneToOneRoom = MustValidate(Blueprint{
 	Name: "federation_one_to_one_room",
 	Homeservers: []Homeserver{

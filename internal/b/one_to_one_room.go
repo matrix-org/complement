@@ -1,5 +1,6 @@
 package b
 
+// BlueprintOneToOneRoom contains a homeserver with 2 users, who are joined to the same room.
 var BlueprintOneToOneRoom = MustValidate(Blueprint{
 	Name: "one_to_one_room",
 	Homeservers: []Homeserver{

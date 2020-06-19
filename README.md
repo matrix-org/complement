@@ -20,7 +20,11 @@ For instance, for Dendrite:
 COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests
 ```
 
-A full list of config options can be found [in the config file](./internal/config/config.go).
+A full list of config options can be found [in the config file](./internal/config/config.go). All normal Go test config
+options will work, so to just run 1 named test and include a timeout for the test run:
+```
+$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests
+```
 
 ##### Image requirements
 - The Dockerfile must `EXPOSE 8008` and `EXPOSE 8448` for client and federation traffic respectively.

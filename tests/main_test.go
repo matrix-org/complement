@@ -131,7 +131,7 @@ func MustHaveStatus(t *testing.T, res *http.Response, wantStatusCode int) {
 		} else {
 			body = string(b)
 		}
-		t.Fatalf("MustHaveStatus: got %d want %d - body: %s", res.StatusCode, wantStatusCode, body)
+		t.Fatalf("MustHaveStatus: %s got %d want %d - body: %s", res.Request.URL.String(), res.StatusCode, wantStatusCode, body)
 	}
 }
 
