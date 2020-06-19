@@ -3,8 +3,6 @@ package tests
 import (
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json"
-	"io/ioutil"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +11,11 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
+
+// TODO:
+// Federation key API can act as a notary server via a $method request
+// Key notary server should return an expired key if it can't find any others
+// Key notary server must not overwrite a valid key with a spurious result from the origin server
 
 type serverKeyFields struct {
 	ServerName string `json:"server_name"`
@@ -32,14 +35,8 @@ func TestInboundFederationKeys(t *testing.T) {
 	defer deployment.Destroy(false)
 	t.Run("Federation key API allows unsigned requests for keys", func(t *testing.T) {
 		fedClient := deployment.FederationClient(t, "hs1")
-		res := fedClient.MustDo(t, "GET", []string{"_matrix", "key", "v2", "server"}, nil)
-
-		body, err := ioutil.ReadAll(res.Body)
-		MustNotError(t, "failed to read response body", err)
 		var k serverKeyFields
-		if err := json.Unmarshal(body, &k); err != nil {
-			t.Fatalf("Failed to decode JSON response: %s", err)
-		}
+		body := fedClient.MustDoAndParse(t, "GET", []string{"_matrix", "key", "v2", "server"}, nil, &k)
 		if k.ServerName != "hs1" {
 			t.Errorf("server_name : got %s want %s", k.ServerName, "hs1")
 		}

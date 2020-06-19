@@ -11,6 +11,12 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 )
 
+// TODO:
+// Inbound federation can receive events
+// Inbound federation can receive redacted events
+// Ephemeral messages received from servers are correctly expired
+// Events whose auth_events are in the wrong room do not mess up the room state
+
 // Tests that the server is capable of making outbound /send requests
 func TestOutboundFederationSend(t *testing.T) {
 	deployment := MustDeploy(t, "federation_send", b.BlueprintAlice.Name)
@@ -37,8 +43,11 @@ func TestOutboundFederationSend(t *testing.T) {
 
 	wantEventType := "m.room.message"
 
+	// TODO: Have 'await' with a timeout
 	var wg sync.WaitGroup
 	wg.Add(1)
+
+	// TODO: Have a nicer api shape than just http.Handler
 	srv.Mux().Handle("/_matrix/federation/v1/send/{txnID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		defer wg.Done()
 		var body gomatrixserverlib.Transaction

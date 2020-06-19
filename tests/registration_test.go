@@ -19,6 +19,8 @@ func TestRegistration(t *testing.T) {
 			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{}`))
 			MustNotError(t, "POST returned error", err)
 			MustHaveStatus(t, res, 401)
+			// TODO: would it be any clearer to have With... style assertions on the request itself so people can assert as much
+			//       or as little as they want?
 			MustHaveHeader(t, res, "Content-Type", "application/json")
 			body := MustParseJSON(t, res)
 			j := gjson.GetBytes(body, "flows")

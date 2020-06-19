@@ -2,14 +2,15 @@ package tests
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"net/url"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
 )
+
+// TODO:
+// Inbound federation can query profile data
 
 // Test that the server can make outbound federation profile requests
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-federation-v1-query-profile
@@ -49,11 +50,8 @@ func TestOutboundFederationProfile(t *testing.T) {
 	})).Methods("GET")
 
 	// query the display name which should do an outbound federation hit
-	x := deployment.HS["hs1"].BaseURL + "/_matrix/client/r0/profile/" + url.PathEscape(remoteUserID) + "/displayname"
-	fmt.Println(x)
-	res, err := http.Get(x)
-	MustNotError(t, "GET /profile returned error: %s", err)
-	MustHaveStatus(t, res, 200)
+	unauthedClient := deployment.Client(t, "hs1", "")
+	res := unauthedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "profile", remoteUserID, "displayname"}, nil)
 	body := MustParseJSON(t, res)
 	MustHaveJSONKeyEqual(t, body, "displayname", remoteDisplayName)
 }
