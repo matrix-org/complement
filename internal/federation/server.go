@@ -127,19 +127,22 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 		if err != nil {
 			t.Fatalf("MustMakeRoom: failed to sign event: %s", err)
 		}
-		room.ReplaceCurrentState(&signedEvent)
+		room.AddEvent(&signedEvent)
+		prevEventID = signedEvent.EventID()
 	}
 	s.rooms[roomID] = room
 	return room
 }
 
 // HandleMakeSendJoinRequests is an option which will process make_join and send_join requests for rooms which are present
-// in this server. To add a room to this server, see Server.MustMakeRoom.
+// in this server. To add a room to this server, see Server.MustMakeRoom. No checks are done to see whether join requests
+// are allowed or not. If you wish to test that, write your own test.
 func HandleMakeSendJoinRequests() func(*Server) {
-	return func(srv *Server) {
-		srv.mux.Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	return func(s *Server) {
+		s.mux.Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			// Check federation signature
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), srv.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 			)
 			if fedReq == nil {
 				w.WriteHeader(errResp.Code)
@@ -149,23 +152,51 @@ func HandleMakeSendJoinRequests() func(*Server) {
 			}
 
 			vars := mux.Vars(req)
-			//userID := vars["userID"]
+			userID := vars["userID"]
 			roomID := vars["roomID"]
 
-			_, ok := srv.rooms[roomID]
+			room, ok := s.rooms[roomID]
 			if !ok {
 				w.WriteHeader(404)
 				w.Write([]byte("complement: make_join unexpected room ID: " + roomID))
 				return
 			}
 
-			// TODO: Generate a join event
+			// Generate a join event
+			builder := gomatrixserverlib.EventBuilder{
+				Sender:     userID,
+				RoomID:     roomID,
+				Type:       "m.room.member",
+				StateKey:   &userID,
+				PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
+			}
+			err := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte("complement: make_join cannot set membership content: " + err.Error()))
+				return
+			}
+			stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte("complement: make_join cannot calculate auth_events: " + err.Error()))
+				return
+			}
+			builder.AuthEvents = room.AuthEvents(stateNeeded)
 
+			// Send it
+			res := map[string]interface{}{
+				"event":        builder,
+				"room_version": room.Version,
+			}
+			w.WriteHeader(200)
+			b, _ := json.Marshal(res)
+			w.Write(b)
 		})).Methods("GET")
 
-		srv.mux.Handle("/_matrix/federation/v1/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		s.mux.Handle("/_matrix/federation/v1/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), srv.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 			)
 			if fedReq == nil {
 				w.WriteHeader(errResp.Code)
@@ -177,7 +208,7 @@ func HandleMakeSendJoinRequests() func(*Server) {
 			roomID := vars["roomID"]
 			//eventID := vars["eventID"]
 
-			_, ok := srv.rooms[roomID]
+			_, ok := s.rooms[roomID]
 			if !ok {
 				w.WriteHeader(404)
 				w.Write([]byte("complement: make_join unexpected room ID: " + roomID))

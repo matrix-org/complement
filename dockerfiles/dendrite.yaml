@@ -95,7 +95,7 @@ database:
     device: "file:dendrite_device.db"
     media_api: "file:dendrite_mediaapi.db"
     sync_api: "file:dendrite_syncapi.db"
-    room_server: "file:dendrite_roomserver.db" # "postgres://dendrite:itsasecret@postgres/dendrite_roomserver?sslmode=disable"
+    room_server: "file:dendrite_roomserver.db"
     server_key: "file:dendrite_key.db"
     federation_sender: "file:dendrite_fedsender.db"
     public_rooms_api: "file:dendrite_publicroomsapi.db"
