@@ -8,6 +8,15 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// TODO:
+// Setting room topic reports m.room.topic to myself
+// Global initialSync
+// Global initialSync with limit=0 gives no messages
+// Room initialSync
+// Room initialSync with limit=0 gives no messages
+// Setting state twice is idempotent
+// Joining room twice is idempotent
+
 // Test that the m.room.create and m.room.member events for a room we created comes down /sync
 func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 	deployment := must.Deploy(t, "rooms_state", b.BlueprintAlice.Name)

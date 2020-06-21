@@ -10,6 +10,21 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// TODO:
+// POST /r0/admin/register with shared secret
+// POST /r0/admin/register admin with shared secret
+// POST /r0/admin/register with shared secret downcases capitals
+// POST /r0/admin/register with shared secret disallows symbols
+// POST /r0/register rejects invalid utf-8 in JSON
+// Register with a recaptcha
+// registration is idempotent, without username specified
+// registration is idempotent, with username specified
+// registration remembers parameters
+// registration accepts non-ascii passwords
+// registration with inhibit_login inhibits login
+// User signups are forbidden from starting with '_'
+// Can register using an email address
+
 func TestRegistration(t *testing.T) {
 	deployment := must.Deploy(t, "registration", b.BlueprintCleanHS.Name)
 	defer deployment.Destroy(t)
@@ -130,19 +145,5 @@ func TestRegistration(t *testing.T) {
 				must.HaveJSONKeyEqual(t, body, "errcode", "M_INVALID_USERNAME")
 			}
 		})
-		// TODO:
-		// POST /r0/admin/register with shared secret
-		// POST /r0/admin/register admin with shared secret
-		// POST /r0/admin/register with shared secret downcases capitals
-		// POST /r0/admin/register with shared secret disallows symbols
-		// POST /r0/register rejects invalid utf-8 in JSON
-		// Register with a recaptcha
-		// registration is idempotent, without username specified
-		// registration is idempotent, with username specified
-		// registration remembers parameters
-		// registration accepts non-ascii passwords
-		// registration with inhibit_login inhibits login
-		// User signups are forbidden from starting with '_'
-		// Can register using an email address
 	})
 }
