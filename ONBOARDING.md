@@ -33,6 +33,35 @@ The high numbered ports are randomly chosen, and are for illustrative purposes o
 ```
 The mapping of `hs1` to `localhost:port` combinations can be done automatically using a `docker.RoundTripper`.
 
+#### How do I...
+
+Get a CS API client:
+```go
+// the user and hs name are from the blueprint
+// automatically maps localhost:12345 to the right container
+alice := deployment.Client(t, "hs1", "@alice:hs1")
+```
+
+Get a Federation client:
+```go
+// automatically accepts self-signed TLS certs
+// automatically maps localhost:12345 to the right container
+// automatically signs requests
+// srv == federation.Server
+fedClient := srv.FederationClient(deployment, "hs1")
+```
+
+Make a Federation server:
+```go
+srv := federation.NewServer(t, deployment,
+    federation.HandleKeyRequests(),
+    federation.HandleMakeSendJoinRequests(),
+    federation.HandleDirectoryLookups(),
+)
+cancel := srv.Listen()
+defer cancel()
+```
+
 #### FAQ
 
 - Should I always make a new blueprint for a test?
