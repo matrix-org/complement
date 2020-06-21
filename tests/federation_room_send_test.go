@@ -8,6 +8,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/gomatrixserverlib"
 )
 
@@ -19,10 +20,8 @@ import (
 
 // Tests that the server is capable of making outbound /send requests
 func TestOutboundFederationSend(t *testing.T) {
-	deployment := MustDeploy(t, "federation_send", b.BlueprintAlice.Name)
-	defer func() {
-		deployment.Destroy(t.Failed())
-	}()
+	deployment := must.Deploy(t, "federation_send", b.BlueprintAlice.Name)
+	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),

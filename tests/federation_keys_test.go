@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -31,8 +32,8 @@ type serverKeyFields struct {
 // Test that a server can receive /keys requests:
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-key-v2-server-keyid
 func TestInboundFederationKeys(t *testing.T) {
-	deployment := MustDeploy(t, "federation_keys", b.BlueprintCleanHS.Name)
-	defer deployment.Destroy(false)
+	deployment := must.Deploy(t, "federation_keys", b.BlueprintCleanHS.Name)
+	defer deployment.Destroy(t)
 	t.Run("Federation key API allows unsigned requests for keys", func(t *testing.T) {
 		fedClient := deployment.FederationClient(t, "hs1")
 		var k serverKeyFields
@@ -84,6 +85,6 @@ func TestInboundFederationKeys(t *testing.T) {
 		}
 
 		// old_verify_keys is mandatory, even if it's empty
-		MustHaveJSONKey(t, body, "old_verify_keys", func(r gjson.Result) error { return nil })
+		must.HaveJSONKey(t, body, "old_verify_keys", func(r gjson.Result) error { return nil })
 	})
 }

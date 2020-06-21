@@ -6,23 +6,24 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 )
 
 func TestRegistration(t *testing.T) {
-	deployment := MustDeploy(t, "registration", b.BlueprintCleanHS.Name)
-	defer deployment.Destroy(false)
+	deployment := must.Deploy(t, "registration", b.BlueprintCleanHS.Name)
+	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("POST {} returns a set of flows", func(t *testing.T) {
 			t.Parallel()
 			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{}`))
-			MustNotError(t, "POST returned error", err)
-			MustHaveStatus(t, res, 401)
+			must.NotError(t, "POST returned error", err)
+			must.HaveStatus(t, res, 401)
 			// TODO: would it be any clearer to have With... style assertions on the request itself so people can assert as much
 			//       or as little as they want?
-			MustHaveHeader(t, res, "Content-Type", "application/json")
-			body := MustParseJSON(t, res)
+			must.HaveHeader(t, res, "Content-Type", "application/json")
+			body := must.ParseJSON(t, res)
 			j := gjson.GetBytes(body, "flows")
 			j.ForEach(func(_, val gjson.Result) bool {
 				if !val.Get("stages").IsArray() {
@@ -40,14 +41,14 @@ func TestRegistration(t *testing.T) {
 				"username": "post-can-create-a-user",
 				"password": "sUp3rs3kr1t"
 			}`))
-			body := MustParseJSON(t, res)
-			MustHaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
+			body := must.ParseJSON(t, res)
+			must.HaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
 				if r.Str == "" {
 					return fmt.Errorf("access_token is not a string")
 				}
 				return nil
 			})
-			MustHaveJSONKey(t, body, "user_id", func(r gjson.Result) error {
+			must.HaveJSONKey(t, body, "user_id", func(r gjson.Result) error {
 				if r.Str == "" {
 					return fmt.Errorf("user_id is not a string")
 				}
@@ -63,14 +64,14 @@ func TestRegistration(t *testing.T) {
 				"username": "user-UPPER",
 				"password": "sUp3rs3kr1t"
 			}`))
-			body := MustParseJSON(t, res)
-			MustHaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
+			body := must.ParseJSON(t, res)
+			must.HaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
 				if r.Str == "" {
 					return fmt.Errorf("access_token is not a string")
 				}
 				return nil
 			})
-			MustHaveJSONKeyEqual(t, body, "user_id", "@user-upper:hs1")
+			must.HaveJSONKeyEqual(t, body, "user_id", "@user-upper:hs1")
 		})
 		t.Run("POST /register returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
@@ -83,14 +84,14 @@ func TestRegistration(t *testing.T) {
 				"password": "sUp3rs3kr1t",
 				"device_id": "`+deviceID+`"
 			}`))
-			body := MustParseJSON(t, res)
-			MustHaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
+			body := must.ParseJSON(t, res)
+			must.HaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
 				if r.Str == "" {
 					return fmt.Errorf("access_token is not a string")
 				}
 				return nil
 			})
-			MustHaveJSONKeyEqual(t, body, "device_id", deviceID)
+			must.HaveJSONKeyEqual(t, body, "device_id", deviceID)
 		})
 		t.Run("POST /register rejects usernames with special characters", func(t *testing.T) {
 			t.Parallel()
@@ -123,10 +124,10 @@ func TestRegistration(t *testing.T) {
 					t.Fatalf("failed to marshal JSON request body: %s", err)
 				}
 				res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(reqBody))
-				MustNotError(t, "POST returned error", err)
-				MustHaveStatus(t, res, 400)
-				body := MustParseJSON(t, res)
-				MustHaveJSONKeyEqual(t, body, "errcode", "M_INVALID_USERNAME")
+				must.NotError(t, "POST returned error", err)
+				must.HaveStatus(t, res, 400)
+				body := must.ParseJSON(t, res)
+				must.HaveJSONKeyEqual(t, body, "errcode", "M_INVALID_USERNAME")
 			}
 		})
 		// TODO:

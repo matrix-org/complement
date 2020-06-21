@@ -30,8 +30,8 @@ type HomeserverDeployment struct {
 
 // Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
 // will print container logs before killing the container.
-func (d *Deployment) Destroy(printServerLogs bool) {
-	d.Deployer.Destroy(d, printServerLogs)
+func (d *Deployment) Destroy(t *testing.T) {
+	d.Deployer.Destroy(d, t.Failed())
 }
 
 // Client returns a CSAPI client targetting the given hsName, using the access token for the given userID.

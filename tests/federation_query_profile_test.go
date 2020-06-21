@@ -7,6 +7,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/internal/must"
 )
 
 // TODO:
@@ -15,8 +16,8 @@ import (
 // Test that the server can make outbound federation profile requests
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-federation-v1-query-profile
 func TestOutboundFederationProfile(t *testing.T) {
-	deployment := MustDeploy(t, "federation_profile", b.BlueprintOneToOneRoom.Name)
-	defer deployment.Destroy(false)
+	deployment := must.Deploy(t, "federation_profile", b.BlueprintOneToOneRoom.Name)
+	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
@@ -52,6 +53,6 @@ func TestOutboundFederationProfile(t *testing.T) {
 	// query the display name which should do an outbound federation hit
 	unauthedClient := deployment.Client(t, "hs1", "")
 	res := unauthedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "profile", remoteUserID, "displayname"}, nil)
-	body := MustParseJSON(t, res)
-	MustHaveJSONKeyEqual(t, body, "displayname", remoteDisplayName)
+	body := must.ParseJSON(t, res)
+	must.HaveJSONKeyEqual(t, body, "displayname", remoteDisplayName)
 }
