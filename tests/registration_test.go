@@ -38,7 +38,7 @@ func TestRegistration(t *testing.T) {
 			// TODO: would it be any clearer to have With... style assertions on the request itself so people can assert as much
 			//       or as little as they want?
 			must.HaveHeader(t, res, "Content-Type", "application/json")
-			body := must.ParseJSON(t, res)
+			body := must.ParseJSON(t, res.Body)
 			j := gjson.GetBytes(body, "flows")
 			j.ForEach(func(_, val gjson.Result) bool {
 				if !val.Get("stages").IsArray() {
@@ -56,7 +56,7 @@ func TestRegistration(t *testing.T) {
 				"username": "post-can-create-a-user",
 				"password": "sUp3rs3kr1t"
 			}`))
-			body := must.ParseJSON(t, res)
+			body := must.ParseJSON(t, res.Body)
 			must.HaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
 				if r.Str == "" {
 					return fmt.Errorf("access_token is not a string")
@@ -79,7 +79,7 @@ func TestRegistration(t *testing.T) {
 				"username": "user-UPPER",
 				"password": "sUp3rs3kr1t"
 			}`))
-			body := must.ParseJSON(t, res)
+			body := must.ParseJSON(t, res.Body)
 			must.HaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
 				if r.Str == "" {
 					return fmt.Errorf("access_token is not a string")
@@ -99,7 +99,7 @@ func TestRegistration(t *testing.T) {
 				"password": "sUp3rs3kr1t",
 				"device_id": "`+deviceID+`"
 			}`))
-			body := must.ParseJSON(t, res)
+			body := must.ParseJSON(t, res.Body)
 			must.HaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
 				if r.Str == "" {
 					return fmt.Errorf("access_token is not a string")
@@ -141,7 +141,7 @@ func TestRegistration(t *testing.T) {
 				res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(reqBody), nil)
 				must.NotError(t, "POST returned error", err)
 				must.HaveStatus(t, res, 400)
-				body := must.ParseJSON(t, res)
+				body := must.ParseJSON(t, res.Body)
 				must.HaveJSONKeyEqual(t, body, "errcode", "M_INVALID_USERNAME")
 			}
 		})

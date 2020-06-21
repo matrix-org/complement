@@ -4,6 +4,7 @@ package must
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -44,15 +45,15 @@ func NotError(t *testing.T, msg string, err error) {
 	}
 }
 
-// ParseJSON will ensure that the HTTP response body is valid JSON, then return the body, else terminate the test.
-func ParseJSON(t *testing.T, res *http.Response) []byte {
+// ParseJSON will ensure that the HTTP request/response body is valid JSON, then return the body, else terminate the test.
+func ParseJSON(t *testing.T, b io.ReadCloser) []byte {
 	t.Helper()
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(b)
 	if err != nil {
-		t.Fatalf("MustParseJSON: reading HTTP response body returned %s", err)
+		t.Fatalf("MustParseJSON: reading body returned %s", err)
 	}
 	if !gjson.ValidBytes(body) {
-		t.Fatalf("MustParseJSON: Response is not valid JSON")
+		t.Fatalf("MustParseJSON: not valid JSON")
 	}
 	return body
 }
@@ -114,7 +115,15 @@ func HaveHeader(t *testing.T, res *http.Response, header string, want string) {
 func EqualStr(t *testing.T, got, want, msg string) {
 	t.Helper()
 	if got != want {
-		t.Errorf("%s: got '%s' want '%s'", msg, got, want)
+		t.Errorf("EqualStr %s: got '%s' want '%s'", msg, got, want)
+	}
+}
+
+// NotEqualStr ensures that got!=want else logs an error.
+func NotEqualStr(t *testing.T, got, want, msg string) {
+	t.Helper()
+	if got == want {
+		t.Errorf("NotEqualStr %s: got '%s', but didn't want it", msg, got)
 	}
 }
 

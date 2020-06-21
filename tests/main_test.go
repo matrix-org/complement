@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"testing"
 
@@ -41,6 +42,7 @@ tests                                             |                     |
 // to images before executing the tests.
 func TestMain(m *testing.M) {
 	cfg := config.NewConfigFromEnvVars()
+	log.Printf("config: %+v", cfg)
 	builder, err := internal.Start(cfg)
 	if err != nil {
 		fmt.Printf("Error: %s", err)

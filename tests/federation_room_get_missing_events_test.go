@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -10,7 +11,13 @@ import (
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/tidwall/gjson"
 )
+
+// TODO:
+// Outbound federation can request missing events
+// Inbound federation can return missing events for $vis visibility
+// outliers whose auth_events are in a different room are correctly rejected
 
 // A homeserver receiving a response from `get_missing_events` for a version 6
 // room with a bad JSON value (e.g. a float) should discard the bad data.
@@ -28,7 +35,6 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleDirectoryLookups(),
 	)
-	srv.UnexpectedRequestsAreErrors = false
 	cancel := srv.Listen()
 	defer cancel()
 
@@ -40,7 +46,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	alice.MustDo(t, "POST", []string{"_matrix", "client", "r0", "join", roomAlias}, struct{}{})
 
-	//latestEvent := room.Timeline[len(serverRoom.Timeline)-1]
+	latestEvent := room.Timeline[len(room.Timeline)-1]
 
 	// Sign this bad event which has a float (we can't use helpers here as they check it isn't bad)
 	badEvent := b.Event{
@@ -85,6 +91,38 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	})
 	room.AddEvent(sentEvent)
 
+	srv.Mux().HandleFunc("/_matrix/federation/v1/get_missing_events/{roomID}", func(w http.ResponseWriter, req *http.Request) {
+		body := must.ParseJSON(t, req.Body)
+		earliestEvents := gjson.GetBytes(body, "earliest_events")
+		if !earliestEvents.IsArray() {
+			t.Fatalf("get_missing_events 'earliest events' is not an array: %s", string(body))
+		}
+		early := earliestEvents.Array()
+		if len(early) != 1 {
+			t.Fatalf("get_missing_events 'earliest events' expected length 1, got %d", len(early))
+		}
+		must.EqualStr(t, early[0].Str, latestEvent.EventID(), "wrong earliest event ID")
+		latestEvents := gjson.GetBytes(body, "latest_events")
+		if !latestEvents.IsArray() {
+			t.Fatalf("get_missing_events 'latest_events' is not an array: %s", string(body))
+		}
+		latest := latestEvents.Array()
+		if len(latest) != 1 {
+			t.Fatalf("get_missing_events 'latest_events' expected length 1, got %d", len(latest))
+		}
+		must.EqualStr(t, latest[0].Str, sentEvent.EventID(), "wrong latest event ID")
+		// return the bad event, which should result in the transaction failing.
+		w.WriteHeader(200)
+		res := struct {
+			Events []gomatrixserverlib.Event `json:"events"`
+		}{
+			Events: []gomatrixserverlib.Event{signedBadEvent},
+		}
+		b, err := json.Marshal(&res)
+		must.NotError(t, "failed to marshal response", err)
+		w.Write(b)
+	}).Methods("POST")
+
 	fedClient := srv.FederationClient(deployment, "hs1")
 	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "wut",
@@ -101,8 +139,5 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	if !ok {
 		t.Fatalf("wrong PDU returned from send transaction, got %v want %s", resp.PDUs, sentEvent.EventID())
 	}
-	if pduRes.Error == "" {
-		t.Fatalf("wanted an error string for pdu but was blank")
-	}
-
+	must.NotEqualStr(t, pduRes.Error, "", "wanted an error string for pdu but was blank")
 }

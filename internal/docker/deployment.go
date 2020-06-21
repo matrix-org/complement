@@ -31,6 +31,7 @@ type HomeserverDeployment struct {
 // Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
 // will print container logs before killing the container.
 func (d *Deployment) Destroy(t *testing.T) {
+	t.Helper()
 	d.Deployer.Destroy(d, t.Failed())
 }
 
@@ -38,6 +39,7 @@ func (d *Deployment) Destroy(t *testing.T) {
 // Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
 // if the userID is otherwise not found.
 func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
+	t.Helper()
 	dep, ok := d.HS[hsName]
 	if !ok {
 		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)

@@ -53,6 +53,6 @@ func TestOutboundFederationProfile(t *testing.T) {
 	// query the display name which should do an outbound federation hit
 	unauthedClient := deployment.Client(t, "hs1", "")
 	res := unauthedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "profile", remoteUserID, "displayname"}, nil)
-	body := must.ParseJSON(t, res)
+	body := must.ParseJSON(t, res.Body)
 	must.HaveJSONKeyEqual(t, body, "displayname", remoteDisplayName)
 }
