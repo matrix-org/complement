@@ -1,8 +1,6 @@
 package docker
 
 import (
-	"crypto/tls"
-	"net/http"
 	"testing"
 	"time"
 
@@ -56,33 +54,5 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		BaseURL:          dep.BaseURL,
 		Client:           client.NewLoggedClient(t, nil),
 		SyncUntilTimeout: 5 * time.Second,
-	}
-}
-
-// FederationClient return a SSAPI client targetting the given hsName.
-// Fails the test if the hsName is not found.
-func (d *Deployment) FederationClient(t *testing.T, hsName string) *client.Federation {
-	t.Helper()
-	dep, ok := d.HS[hsName]
-	if !ok {
-		t.Fatalf("Deployment.FederationClient - HS name '%s' not found", hsName)
-		return nil
-	}
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			ServerName:         hsName,
-			InsecureSkipVerify: true,
-		},
-	}
-	fedClient := &http.Client{
-		Timeout:   30 * time.Second,
-		Transport: tr,
-	}
-	fedClient.Transport = &RoundTripper{d}
-
-	return &client.Federation{
-		BaseURL: dep.FedBaseURL,
-		Client:  client.NewLoggedClient(t, fedClient),
-		HSName:  hsName,
 	}
 }

@@ -138,7 +138,7 @@ tests/50federation/11query-directory.pl
 tests/50federation/30room-join.pl
 1/5 tests/50federation/31room-send.pl
 tests/50federation/32room-getevent.pl
-tests/50federation/33room-get-missing-events.pl
+1/4 tests/50federation/33room-get-missing-events.pl
 tests/50federation/34room-backfill.pl
 tests/50federation/35room-invite.pl
 tests/50federation/36state.pl

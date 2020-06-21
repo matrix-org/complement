@@ -3,11 +3,15 @@ package tests
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -35,9 +39,20 @@ func TestInboundFederationKeys(t *testing.T) {
 	deployment := must.Deploy(t, "federation_keys", b.BlueprintCleanHS.Name)
 	defer deployment.Destroy(t)
 	t.Run("Federation key API allows unsigned requests for keys", func(t *testing.T) {
-		fedClient := deployment.FederationClient(t, "hs1")
+		fedClient := &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: &docker.RoundTripper{deployment},
+		}
+		res, err := fedClient.Get("https://hs1/_matrix/key/v2/server")
+		must.NotError(t, "failed to GET /keys", err)
+		must.HaveStatus(t, res, 200)
 		var k serverKeyFields
-		body := fedClient.MustDoAndParse(t, "GET", []string{"_matrix", "key", "v2", "server"}, nil, &k)
+		defer res.Body.Close()
+		body, err := ioutil.ReadAll(res.Body)
+		must.NotError(t, "failed to read response body", err)
+		if err := json.Unmarshal(body, &k); err != nil {
+			t.Fatalf("failed to decode response body: %s", err)
+		}
 		if k.ServerName != "hs1" {
 			t.Errorf("server_name : got %s want %s", k.ServerName, "hs1")
 		}
