@@ -14,6 +14,7 @@ type Federation struct {
 	BaseURL string
 	HSName  string
 	Client  *http.Client
+	txnID   int
 }
 
 // MustDoAndParse is the same as MustDo but will unmarshal the response body into `responseBody`, which should be a pointer to the struct.

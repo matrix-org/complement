@@ -7,6 +7,7 @@ import (
 
 	"github.com/matrix-org/complement/internal"
 	"github.com/matrix-org/complement/internal/config"
+	"github.com/sirupsen/logrus"
 )
 
 /*
@@ -45,6 +46,9 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Error: %s", err)
 		os.Exit(1)
 	}
+	// we use GMSL which uses logrus by default. We don't want those logs in our test output unless they are Serious.
+	logrus.SetLevel(logrus.ErrorLevel)
+
 	exitCode := m.Run()
 	builder.Cleanup()
 	os.Exit(exitCode)

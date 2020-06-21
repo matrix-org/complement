@@ -9,14 +9,15 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/tidwall/gjson"
 )
 
 // NewDeployer will create a Deployer or terminate the test.
-func NewDeployer(t *testing.T, namespace string) *docker.Deployer {
+func NewDeployer(t *testing.T, namespace string, debugEnabled bool) *docker.Deployer {
 	t.Helper()
-	d, err := docker.NewDeployer(namespace)
+	d, err := docker.NewDeployer(namespace, debugEnabled)
 	if err != nil {
 		t.Fatalf("MustNewDeployer: returned error %s", err)
 	}
@@ -26,7 +27,8 @@ func NewDeployer(t *testing.T, namespace string) *docker.Deployer {
 // Deploy will deploy the given blueprint in the given namespace or terminate the test.
 func Deploy(t *testing.T, namespace, blueprintName string) *docker.Deployment {
 	t.Helper()
-	d := NewDeployer(t, namespace)
+	cfg := config.NewConfigFromEnvVars()
+	d := NewDeployer(t, namespace, cfg.DebugLoggingEnabled)
 	dep, err := d.Deploy(context.Background(), blueprintName)
 	if err != nil {
 		t.Fatalf("MustDeploy: returned error %s", err)

@@ -19,7 +19,7 @@ func HandleMakeSendJoinRequests() func(*Server) {
 		s.mux.Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			// Check federation signature
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
 			)
 			if fedReq == nil {
 				w.WriteHeader(errResp.Code)
@@ -73,7 +73,7 @@ func HandleMakeSendJoinRequests() func(*Server) {
 
 		s.mux.Handle("/_matrix/federation/v2/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
 			)
 			if fedReq == nil {
 				w.WriteHeader(errResp.Code)
@@ -102,7 +102,7 @@ func HandleMakeSendJoinRequests() func(*Server) {
 			b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
 				AuthEvents:  room.AuthChain(),
 				StateEvents: room.AllCurrentState(),
-				Origin:      gomatrixserverlib.ServerName(s.serverName),
+				Origin:      gomatrixserverlib.ServerName(s.ServerName),
 			})
 			if err != nil {
 				w.WriteHeader(500)
@@ -123,7 +123,7 @@ func HandleDirectoryLookups() func(*Server) {
 				b, err := json.Marshal(gomatrixserverlib.RespDirectory{
 					RoomID: roomID,
 					Servers: []gomatrixserverlib.ServerName{
-						gomatrixserverlib.ServerName(s.serverName),
+						gomatrixserverlib.ServerName(s.ServerName),
 					},
 				})
 				if err != nil {
@@ -156,10 +156,10 @@ func HandleKeyRequests() func(*Server) {
 
 		keyFn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			k := gomatrixserverlib.ServerKeys{}
-			k.ServerName = gomatrixserverlib.ServerName(srv.serverName)
-			publicKey := srv.priv.Public().(ed25519.PublicKey)
+			k.ServerName = gomatrixserverlib.ServerName(srv.ServerName)
+			publicKey := srv.Priv.Public().(ed25519.PublicKey)
 			k.VerifyKeys = map[gomatrixserverlib.KeyID]gomatrixserverlib.VerifyKey{
-				srv.keyID: {
+				srv.KeyID: {
 					Key: gomatrixserverlib.Base64Bytes(publicKey),
 				},
 			}
@@ -174,7 +174,7 @@ func HandleKeyRequests() func(*Server) {
 			}
 
 			k.Raw, err = gomatrixserverlib.SignJSON(
-				string(srv.serverName), srv.keyID, srv.priv, toSign,
+				string(srv.ServerName), srv.KeyID, srv.Priv, toSign,
 			)
 			if err != nil {
 				w.WriteHeader(500)

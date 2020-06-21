@@ -28,9 +28,12 @@ import (
 type Server struct {
 	t *testing.T
 
-	priv       ed25519.PrivateKey
-	keyID      gomatrixserverlib.KeyID
-	serverName string
+	// Default: true
+	UnexpectedRequestsAreErrors bool
+
+	Priv       ed25519.PrivateKey
+	KeyID      gomatrixserverlib.KeyID
+	ServerName string
 
 	certPath string
 	keyPath  string
@@ -51,13 +54,14 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	}
 
 	srv := &Server{
-		t:          t,
-		priv:       priv,
-		keyID:      "ed25519:complement",
-		mux:        mux.NewRouter(),
-		serverName: "host.docker.internal",
-		rooms:      make(map[string]*ServerRoom),
-		aliases:    make(map[string]string),
+		t:                           t,
+		Priv:                        priv,
+		KeyID:                       "ed25519:complement",
+		mux:                         mux.NewRouter(),
+		ServerName:                  "host.docker.internal",
+		rooms:                       make(map[string]*ServerRoom),
+		aliases:                     make(map[string]string),
+		UnexpectedRequestsAreErrors: true,
 	}
 	fetcher := &basicKeyFetcher{
 		KeyFetcher: &gomatrixserverlib.DirectKeyFetcher{
@@ -74,7 +78,11 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 		},
 	}
 	srv.mux.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		t.Logf("received unexpected request to server: %s %s", req.Method, req.URL.Path)
+		if srv.UnexpectedRequestsAreErrors {
+			t.Errorf("Server.UnexpectedRequestsAreErrors=true received unexpected request to server: %s %s", req.Method, req.URL.Path)
+		} else {
+			t.Logf("Server.UnexpectedRequestsAreErrors=false received unexpected request to server: %s %s", req.Method, req.URL.Path)
+		}
 		w.WriteHeader(404)
 		w.Write([]byte("complement: federation server is not listening for this path"))
 	})
@@ -93,13 +101,13 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 
 // UserID returns the complete user ID for the given localpart
 func (s *Server) UserID(localpart string) string {
-	return fmt.Sprintf("@%s:%s", localpart, s.serverName)
+	return fmt.Sprintf("@%s:%s", localpart, s.ServerName)
 }
 
 // Alias links a room ID and alias localpart together on this server. Returns the full room alias.
 // This assumes that this server is joined to the given room ID.
 func (s *Server) Alias(roomID, aliasLocalpart string) (roomAlias string) {
-	roomAlias = fmt.Sprintf("#%s:%s", aliasLocalpart, s.serverName)
+	roomAlias = fmt.Sprintf("#%s:%s", aliasLocalpart, s.ServerName)
 	s.aliases[roomAlias] = roomID
 	return
 }
@@ -107,44 +115,54 @@ func (s *Server) Alias(roomID, aliasLocalpart string) (roomAlias string) {
 // MustMakeRoom will add a room to this server so it is accessible to other servers when prompted via federation.
 // The `events` will be added to this room. Returns the room ID of the created room.
 func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
-	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.serverName)
+	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.ServerName)
 	room := &ServerRoom{
 		RoomID:  roomID,
 		Version: roomVer,
 		State:   make(map[string]*gomatrixserverlib.Event),
 	}
 	// sign all these events
-	prevEventID := ""
-	for i, ev := range events {
-		content, err := json.Marshal(ev.Content)
-		if err != nil {
-			t.Fatalf("MustMakeRoom: failed to marshal event content %+v", ev.Content)
-		}
-		eb := gomatrixserverlib.EventBuilder{
-			Sender:   ev.Sender,
-			Depth:    int64(i + 1), // depth starts at 1
-			Type:     ev.Type,
-			StateKey: ev.StateKey,
-			Content:  content,
-			RoomID:   roomID,
-		}
-		if prevEventID != "" {
-			eb.PrevEvents = []string{prevEventID}
-		}
-		stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
-		if err != nil {
-			t.Fatalf("MustMakeRoom: failed to work out auth_events : %s", err)
-		}
-		eb.AuthEvents = room.AuthEvents(stateNeeded)
-		signedEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyID, s.priv, roomVer)
-		if err != nil {
-			t.Fatalf("MustMakeRoom: failed to sign event: %s", err)
-		}
-		room.AddEvent(&signedEvent)
-		prevEventID = signedEvent.EventID()
+	for _, ev := range events {
+		signedEvent := s.MustCreateEvent(t, room, ev)
+		room.AddEvent(signedEvent)
 	}
 	s.rooms[roomID] = room
 	return room
+}
+
+// FederationClient returns a client which will sign requests using this server and accept certs from hsName.
+func (s *Server) FederationClient(deployment *docker.Deployment, hsName string) *gomatrixserverlib.FederationClient {
+	f := gomatrixserverlib.NewFederationClient(gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv)
+	f.Client = *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{deployment})
+	return f
+}
+
+// MustCreateEvent will create a new latest event for the given room. It does not insert this event into the room however.
+// See ServerRoom.AddEvent for that.
+func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *gomatrixserverlib.Event {
+	content, err := json.Marshal(ev.Content)
+	if err != nil {
+		t.Fatalf("MustCreateEvent: failed to marshal event content %+v", ev.Content)
+	}
+	eb := gomatrixserverlib.EventBuilder{
+		Sender:     ev.Sender,
+		Depth:      int64(room.Depth + 1), // depth starts at 1
+		Type:       ev.Type,
+		StateKey:   ev.StateKey,
+		Content:    content,
+		RoomID:     room.RoomID,
+		PrevEvents: room.ForwardExtremities,
+	}
+	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
+	if err != nil {
+		t.Fatalf("MustCreateEvent: failed to work out auth_events : %s", err)
+	}
+	eb.AuthEvents = room.AuthEvents(stateNeeded)
+	signedEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, room.Version)
+	if err != nil {
+		t.Fatalf("MustCreateEvent: failed to sign event: %s", err)
+	}
+	return &signedEvent
 }
 
 // Mux returns this server's router so you can attach additional paths
@@ -277,8 +295,8 @@ func (f *basicKeyFetcher) FetchKeys(
 ) {
 	result := make(map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, len(requests))
 	for req := range requests {
-		if string(req.ServerName) == f.srv.serverName && req.KeyID == f.srv.keyID {
-			publicKey := f.srv.priv.Public().(ed25519.PublicKey)
+		if string(req.ServerName) == f.srv.ServerName && req.KeyID == f.srv.KeyID {
+			publicKey := f.srv.Priv.Public().(ed25519.PublicKey)
 			result[req] = gomatrixserverlib.PublicKeyLookupResult{
 				ValidUntilTS: gomatrixserverlib.AsTimestamp(time.Now().Add(24 * time.Hour)),
 				ExpiredTS:    gomatrixserverlib.PublicKeyNotExpired,

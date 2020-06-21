@@ -10,18 +10,26 @@ import (
 
 // ServerRoom represents a room on this test federation server
 type ServerRoom struct {
-	Version  gomatrixserverlib.RoomVersion
-	RoomID   string
-	State    map[string]*gomatrixserverlib.Event
-	Timeline []*gomatrixserverlib.Event
+	Version            gomatrixserverlib.RoomVersion
+	RoomID             string
+	State              map[string]*gomatrixserverlib.Event
+	Timeline           []*gomatrixserverlib.Event
+	ForwardExtremities []string
+	Depth              int64
 }
 
 // AddEvent adds a new event to the timeline, updating current state if it is a state event.
+// Updates depth and forward extremities.
 func (r *ServerRoom) AddEvent(ev *gomatrixserverlib.Event) {
 	if ev.StateKey() != nil {
 		r.replaceCurrentState(ev)
 	}
 	r.Timeline = append(r.Timeline, ev)
+	// update extremities and depth
+	if ev.Depth() > r.Depth {
+		r.Depth = ev.Depth()
+	}
+	r.ForwardExtremities = []string{ev.EventID()}
 }
 
 // AuthEvents returns the state event IDs of the auth events which authenticate this event

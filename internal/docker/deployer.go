@@ -26,21 +26,30 @@ import (
 )
 
 type Deployer struct {
-	Namespace string
-	Docker    *client.Client
-	Counter   int
-	networkID string
+	Namespace    string
+	Docker       *client.Client
+	Counter      int
+	networkID    string
+	debugLogging bool
 }
 
-func NewDeployer(namespace string) (*Deployer, error) {
+func NewDeployer(namespace string, debugLogging bool) (*Deployer, error) {
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		return nil, err
 	}
 	return &Deployer{
-		Namespace: namespace,
-		Docker:    cli,
+		Namespace:    namespace,
+		Docker:       cli,
+		debugLogging: debugLogging,
 	}, nil
+}
+
+func (d *Deployer) log(str string, args ...interface{}) {
+	if !d.debugLogging {
+		return
+	}
+	log.Printf(str, args...)
 }
 
 func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deployment, error) {
@@ -78,7 +87,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 			}
 			return nil, fmt.Errorf("Deploy: Failed to deploy image %+v : %w", img, err)
 		}
-		log.Printf("%s -> %s (%s)\n", contextStr, deployment.BaseURL, deployment.ContainerID)
+		d.log("%s -> %s (%s)\n", contextStr, deployment.BaseURL, deployment.ContainerID)
 		dep.HS[hsName] = *deployment
 	}
 	return dep, nil
