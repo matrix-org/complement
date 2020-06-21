@@ -139,7 +139,6 @@ type loggedRoundTripper struct {
 }
 
 func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	t.t.Logf("%s %s", req.Method, req.URL.String())
 	res, err := t.wrap.RoundTrip(req)
 	if err != nil {
 		t.t.Logf("%s %s => error: %s", req.Method, req.URL.String(), err)
