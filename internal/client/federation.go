@@ -19,6 +19,7 @@ type Federation struct {
 // MustDoAndParse is the same as MustDo but will unmarshal the response body into `responseBody`, which should be a pointer to the struct.
 // Also returns the HTTP body as a slice of bytes.
 func (c *Federation) MustDoAndParse(t *testing.T, method string, paths []string, jsonBody interface{}, responseBody interface{}) []byte {
+	t.Helper()
 	res := c.MustDo(t, method, paths, jsonBody)
 	defer res.Body.Close()
 	b, err := ioutil.ReadAll(res.Body)
@@ -33,6 +34,7 @@ func (c *Federation) MustDoAndParse(t *testing.T, method string, paths []string,
 
 // MustDo is the same as Do but fails the test if the response is not 2xx
 func (c *Federation) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
+	t.Helper()
 	res, err := c.Do(t, method, paths, jsonBody)
 	if err != nil {
 		t.Fatalf("Federation.MustDo %s %s error: %s", method, strings.Join(paths, "/"), err)
@@ -45,6 +47,7 @@ func (c *Federation) MustDo(t *testing.T, method string, paths []string, jsonBod
 
 // Do a JSON request.
 func (c *Federation) Do(t *testing.T, method string, paths []string, jsonBody interface{}) (*http.Response, error) {
+	t.Helper()
 	for i := range paths {
 		paths[i] = url.PathEscape(paths[i])
 	}

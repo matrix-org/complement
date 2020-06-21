@@ -42,6 +42,7 @@ type Builder struct {
 	CSAPIPort      int
 	FederationPort int
 	Docker         *client.Client
+	debugLogging   bool
 }
 
 func NewBuilder(cfg *config.Complement) (*Builder, error) {
@@ -55,21 +56,29 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 		ImageArgs:      cfg.BaseImageArgs,
 		CSAPIPort:      8008,
 		FederationPort: 8448,
+		debugLogging:   cfg.DebugLoggingEnabled,
 	}, nil
+}
+
+func (b *Builder) log(str string, args ...interface{}) {
+	if !b.debugLogging {
+		return
+	}
+	log.Printf(str, args...)
 }
 
 func (b *Builder) Cleanup() {
 	err := b.removeContainers()
 	if err != nil {
-		log.Printf("Cleanup: Failed to remove containers: %s", err)
+		b.log("Cleanup: Failed to remove containers: %s", err)
 	}
 	err = b.removeImages()
 	if err != nil {
-		log.Printf("Cleanup: Failed to remove images: %s", err)
+		b.log("Cleanup: Failed to remove images: %s", err)
 	}
 	err = b.removeNetworks()
 	if err != nil {
-		log.Printf("Cleanup: Failed to remove networks: %s", err)
+		b.log("Cleanup: Failed to remove networks: %s", err)
 	}
 }
 
@@ -171,7 +180,7 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 		return
 	}
 
-	runner := instruction.NewRunner(bprint.Name)
+	runner := instruction.NewRunner(bprint.Name, b.debugLogging)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
 		res := b.constructHomeserver(bprint.Name, runner, hs, networkID)
@@ -183,7 +192,7 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 		defer func(r result) {
 			killErr := b.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
 			if killErr != nil {
-				log.Printf("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
+				b.log("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
 			}
 		}(res)
 		results[i] = res
@@ -206,30 +215,30 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 			},
 		})
 		if err != nil {
-			log.Printf("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
+			b.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
 			return
 		}
 		imageID := strings.Replace(commit.ID, "sha256:", "", 1)
-		log.Printf("%s => %s\n", res.contextStr, imageID)
+		b.log("%s => %s\n", res.contextStr, imageID)
 	}
 }
 
 // construct this homeserver and execute its instructions, keeping the container alive.
 func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
-	log.Printf("%s : constructing homeserver...\n", contextStr)
+	b.log("%s : constructing homeserver...\n", contextStr)
 	dep, err := b.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
 	if err != nil {
-		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
+		b.log("%s : failed to deployBaseImage: %s\n", contextStr, err)
 		printLogs(b.Docker, dep.ContainerID, contextStr)
 		return result{
 			err: err,
 		}
 	}
-	log.Printf("%s : deployed base image to %s (%s)\n", contextStr, dep.BaseURL, dep.ContainerID)
+	b.log("%s : deployed base image to %s (%s)\n", contextStr, dep.BaseURL, dep.ContainerID)
 	err = runner.Run(hs, dep.BaseURL)
 	if err != nil {
-		log.Printf("%s : failed to run instructions: %s\n", contextStr, err)
+		b.log("%s : failed to run instructions: %s\n", contextStr, err)
 	}
 	return result{
 		err:         err,
@@ -341,10 +350,10 @@ func printLogs(docker *client.Client, containerID, contextStr string) {
 		log.Printf("%s : Failed to extract container logs: %s\n", contextStr, err)
 		return
 	}
-	log.Printf("================\n")
+	log.Printf("============================================\n\n\n")
 	log.Printf("%s : Server logs:\n", contextStr)
 	io.Copy(log.Writer(), reader)
-	log.Printf("%s : END LOGS ==============\n", contextStr)
+	log.Printf("============== %s : END LOGS ==============\n\n\n", contextStr)
 }
 
 func label(in string) filters.Args {

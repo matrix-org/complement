@@ -59,6 +59,7 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 // FederationClient return a SSAPI client targetting the given hsName.
 // Fails the test if the hsName is not found.
 func (d *Deployment) FederationClient(t *testing.T, hsName string) *client.Federation {
+	t.Helper()
 	dep, ok := d.HS[hsName]
 	if !ok {
 		t.Fatalf("Deployment.FederationClient - HS name '%s' not found", hsName)

@@ -19,6 +19,7 @@ type CSAPI struct {
 
 // MustDo is the same as Do but fails the test if the response is not 2xx
 func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
+	t.Helper()
 	res, err := c.Do(t, method, paths, jsonBody)
 	if err != nil {
 		t.Fatalf("CSAPI.MustDo %s %s error: %s", method, strings.Join(paths, "/"), err)
@@ -31,6 +32,7 @@ func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody int
 
 // Do a JSON request. The access token for this user will automatically be added.
 func (c *CSAPI) Do(t *testing.T, method string, paths []string, jsonBody interface{}) (*http.Response, error) {
+	t.Helper()
 	qs := ""
 	if c.AccessToken != "" {
 		query := url.Values{
@@ -57,6 +59,7 @@ func (c *CSAPI) Do(t *testing.T, method string, paths []string, jsonBody interfa
 
 // NewLoggedClient returns an http.Client which logs requests/responses
 func NewLoggedClient(t *testing.T, cli *http.Client) *http.Client {
+	t.Helper()
 	if cli == nil {
 		cli = &http.Client{
 			Timeout: 30 * time.Second,

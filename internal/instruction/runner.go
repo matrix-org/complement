@@ -19,13 +19,22 @@ import (
 type Runner struct {
 	blueprintName string
 	lookup        map[string]string
+	debugLogging  bool
 }
 
-func NewRunner(blueprintName string) *Runner {
+func NewRunner(blueprintName string, debugLogging bool) *Runner {
 	return &Runner{
 		lookup:        make(map[string]string),
 		blueprintName: blueprintName,
+		debugLogging:  debugLogging,
 	}
+}
+
+func (r *Runner) log(str string, args ...interface{}) {
+	if !r.debugLogging {
+		return
+	}
+	log.Printf(str, args...)
 }
 
 // AccessTokens returns the access tokens for all users who were created on the given HS domain.
@@ -54,14 +63,14 @@ func (r *Runner) Run(hs b.Homeserver, hsURL string) error {
 		if err != nil {
 			return fmt.Errorf("%s : failed to perform HTTP request to %s: %w", contextStr, req.URL.String(), err)
 		}
-		log.Printf("%s [%s] %s => HTTP %s\n", contextStr, instr.accessToken, req.URL.String(), res.Status)
+		r.log("%s [%s] %s => HTTP %s\n", contextStr, instr.accessToken, req.URL.String(), res.Status)
 		body, err := ioutil.ReadAll(res.Body)
 		if err != nil {
 			return fmt.Errorf("%s : failed to read response body: %w", contextStr, err)
 		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			log.Printf("LOOKUP : %+v\n", r.lookup)
-			log.Printf("INSTRUCTION: %+v\n", instr)
+			r.log("LOOKUP : %+v\n", r.lookup)
+			r.log("INSTRUCTION: %+v\n", instr)
 			return fmt.Errorf("%s : request %s returned HTTP %s : %s", contextStr, req.URL.String(), res.Status, string(body))
 		}
 		if instr.storeResponse != nil {
@@ -90,14 +99,14 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 	if instr.body != nil {
 		b, err := json.Marshal(instr.body)
 		if err != nil {
-			log.Printf("Stopping. Failed to marshal JSON request for instruction: %s -- %+v", err, instr)
+			r.log("Stopping. Failed to marshal JSON request for instruction: %s -- %+v", err, instr)
 			return nil, nil, 0
 		}
 		body = bytes.NewBuffer(b)
 	}
 	req, err := http.NewRequest(instr.method, instr.url(hsURL, r.lookup), body)
 	if err != nil {
-		log.Printf("Stopping. Failed to form NewRequest for instruction: %s -- %+v \n", err, instr)
+		r.log("Stopping. Failed to form NewRequest for instruction: %s -- %+v \n", err, instr)
 		return nil, nil, 0
 	}
 	if instr.accessToken != "" {
@@ -188,7 +197,7 @@ func calculateInstructions(hs b.Homeserver) []instruction {
 				storeResponse: storeRes,
 			})
 		} else if room.Ref == "" {
-			log.Printf("HS %s room index %d must either have a Ref or a Creator", hs.Name, roomIndex)
+			log.Printf("HS %s room index %d must either have a Ref or a Creator\n", hs.Name, roomIndex)
 			return nil
 		}
 		for eventIndex, event := range room.Events {
