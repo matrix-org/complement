@@ -99,3 +99,24 @@ func HaveHeader(t *testing.T, res *http.Response, header string, want string) {
 		t.Fatalf("MustHaveHeader: [%s] got %s want %s", header, got, want)
 	}
 }
+
+// EqualStr ensures that got==want else logs an error.
+func EqualStr(t *testing.T, got, want, msg string) {
+	if got != want {
+		t.Errorf("%s: got '%s' want '%s'", msg, got, want)
+	}
+}
+
+// GetJSONFieldStr extracts the string value under `wantKey` or fails the test.
+// The format of `wantKey` is specified at https://godoc.org/github.com/tidwall/gjson#Get
+func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
+	t.Helper()
+	res := gjson.GetBytes(body, wantKey)
+	if res.Index == 0 {
+		t.Fatalf("JSONFieldStr: key '%s' missing from %s", wantKey, string(body))
+	}
+	if res.Str == "" {
+		t.Fatalf("JSONFieldStr: key '%s' is not a string, body: %s", wantKey, string(body))
+	}
+	return res.Str
+}

@@ -17,7 +17,7 @@ func TestRegistration(t *testing.T) {
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("POST {} returns a set of flows", func(t *testing.T) {
 			t.Parallel()
-			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{}`))
+			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{}`), nil)
 			must.NotError(t, "POST returned error", err)
 			must.HaveStatus(t, res, 401)
 			// TODO: would it be any clearer to have With... style assertions on the request itself so people can assert as much
@@ -123,7 +123,7 @@ func TestRegistration(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to marshal JSON request body: %s", err)
 				}
-				res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(reqBody))
+				res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(reqBody), nil)
 				must.NotError(t, "POST returned error", err)
 				must.HaveStatus(t, res, 400)
 				body := must.ParseJSON(t, res)

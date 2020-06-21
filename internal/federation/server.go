@@ -73,6 +73,11 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 			fetcher,
 		},
 	}
+	srv.mux.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		t.Logf("received unexpected request to server: %s %s", req.Method, req.URL.Path)
+		w.WriteHeader(404)
+		w.Write([]byte("complement: federation server is not listening for this path"))
+	})
 
 	// generate certs and an http.Server
 	httpServer, certPath, keyPath, err := federationServer("name", srv.mux)

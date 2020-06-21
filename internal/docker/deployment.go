@@ -49,10 +49,11 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		return nil
 	}
 	return &client.CSAPI{
-		UserID:      userID,
-		AccessToken: token,
-		BaseURL:     dep.BaseURL,
-		Client:      client.NewLoggedClient(t, nil),
+		UserID:           userID,
+		AccessToken:      token,
+		BaseURL:          dep.BaseURL,
+		Client:           client.NewLoggedClient(t, nil),
+		SyncUntilTimeout: 5 * time.Second,
 	}
 }
 
