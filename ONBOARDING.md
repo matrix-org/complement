@@ -88,3 +88,7 @@ Use one of `t.Skipf(...)` or `t.SkipNow()`.
 - Why do we use `t.Errorf` sometimes and `t.Fatalf` other times?
 
 Error will fail the test but continue execution, where Fatal will fail the test and quit. Use Fatal when continuing to run the test will result in programming errors (e.g nil exceptions).
+
+- Why do I get the error "Error response from daemon: Conflict. The container name "/complement_rooms_state_alice.hs1_1" is already in use by container "c2d1d90c6cff7b7de2678b56c702bd1ff76ca72b930e8f2ca32eef3f2514ff3b". You have to remove (or rename) that container to be able to reuse that name."?
+
+The Docker daemon has a lag time between removing containers and them actually being removed. This means you cannot remove a container called 'foo' and immediately recreate it as 'foo'. To get around this, you need to use a different name. This probably means the namespace you have given the deployment is used by another test. Try changing it to something else e.g `must.Deploy(t, "rooms_state_2", b.BlueprintAlice.Name)`

@@ -15,6 +15,7 @@ import (
 
 // NewDeployer will create a Deployer or terminate the test.
 func NewDeployer(t *testing.T, namespace string) *docker.Deployer {
+	t.Helper()
 	d, err := docker.NewDeployer(namespace)
 	if err != nil {
 		t.Fatalf("MustNewDeployer: returned error %s", err)
@@ -24,6 +25,7 @@ func NewDeployer(t *testing.T, namespace string) *docker.Deployer {
 
 // Deploy will deploy the given blueprint in the given namespace or terminate the test.
 func Deploy(t *testing.T, namespace, blueprintName string) *docker.Deployment {
+	t.Helper()
 	d := NewDeployer(t, namespace)
 	dep, err := d.Deploy(context.Background(), blueprintName)
 	if err != nil {
@@ -34,6 +36,7 @@ func Deploy(t *testing.T, namespace, blueprintName string) *docker.Deployment {
 
 // NotError will ensure `err` is nil else terminate the test with `msg`.
 func NotError(t *testing.T, msg string, err error) {
+	t.Helper()
 	if err != nil {
 		t.Fatalf("MustNotError: %s -> %s", msg, err)
 	}
@@ -41,6 +44,7 @@ func NotError(t *testing.T, msg string, err error) {
 
 // ParseJSON will ensure that the HTTP response body is valid JSON, then return the body, else terminate the test.
 func ParseJSON(t *testing.T, res *http.Response) []byte {
+	t.Helper()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("MustParseJSON: reading HTTP response body returned %s", err)
@@ -55,6 +59,7 @@ func ParseJSON(t *testing.T, res *http.Response) []byte {
 // The format of `wantKey` is specified at https://godoc.org/github.com/tidwall/gjson#Get
 // Terminates the test if the key is missing or if `checkFn` returns an error.
 func HaveJSONKey(t *testing.T, body []byte, wantKey string, checkFn func(r gjson.Result) error) {
+	t.Helper()
 	res := gjson.GetBytes(body, wantKey)
 	if res.Index == 0 {
 		t.Fatalf("MustHaveJSONKey: key '%s' missing from %s", wantKey, string(body))
@@ -69,6 +74,7 @@ func HaveJSONKey(t *testing.T, body []byte, wantKey string, checkFn func(r gjson
 // HaveJSONKeyEqual ensures that `wantKey` exists in `body` and has the value `wantValue`, else terminates the test.
 // The value is checked deeply via `reflect.DeepEqual`, and the got JSON value is mapped according to https://godoc.org/github.com/tidwall/gjson#Result.Value
 func HaveJSONKeyEqual(t *testing.T, body []byte, wantKey string, wantValue interface{}) {
+	t.Helper()
 	HaveJSONKey(t, body, wantKey, func(r gjson.Result) error {
 		gotValue := r.Value()
 		if !reflect.DeepEqual(gotValue, wantValue) {
@@ -80,6 +86,7 @@ func HaveJSONKeyEqual(t *testing.T, body []byte, wantKey string, wantValue inter
 
 // HaveStatus will ensure that the HTTP response has the desired status code or terminate the test.
 func HaveStatus(t *testing.T, res *http.Response, wantStatusCode int) {
+	t.Helper()
 	if res.StatusCode != wantStatusCode {
 		b, err := ioutil.ReadAll(res.Body)
 		var body string
@@ -94,6 +101,7 @@ func HaveStatus(t *testing.T, res *http.Response, wantStatusCode int) {
 
 // HaveHeader will ensure that the HTTP response has the header `header` with the value `want` or terminate the test.
 func HaveHeader(t *testing.T, res *http.Response, header string, want string) {
+	t.Helper()
 	got := res.Header.Get(header)
 	if got != want {
 		t.Fatalf("MustHaveHeader: [%s] got %s want %s", header, got, want)
@@ -102,6 +110,7 @@ func HaveHeader(t *testing.T, res *http.Response, header string, want string) {
 
 // EqualStr ensures that got==want else logs an error.
 func EqualStr(t *testing.T, got, want, msg string) {
+	t.Helper()
 	if got != want {
 		t.Errorf("%s: got '%s' want '%s'", msg, got, want)
 	}

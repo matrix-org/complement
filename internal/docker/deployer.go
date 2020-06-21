@@ -72,7 +72,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
 			blueprintName, hsName, contextStr, networkID)
 		if err != nil {
-			if deployment.ContainerID != "" {
+			if deployment != nil && deployment.ContainerID != "" {
 				// print logs to help debug
 				printLogs(d.Docker, deployment.ContainerID, contextStr)
 			}
