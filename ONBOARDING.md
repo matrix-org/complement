@@ -59,6 +59,7 @@ t.Run("parallel", func(t *testing.T) {
 ```
 
 - How should I do comments in the test?
+
 Add long prose to the start of the function to outline what it is you're testing (and why if it is unclear). For example:
 ```go
 // Test that a server can receive /keys requests:
@@ -69,6 +70,7 @@ func TestInboundFederationKeys(t *testing.T) {
 ```
 
 - I think Complement is doing something weird, can I get more logs?
+
 You can pass `COMPLEMENT_DEBUG=1` to add lots of debug logging.
 
 - How do I set up a bunch of stuff before the tests, e.g before each?
