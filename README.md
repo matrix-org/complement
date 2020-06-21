@@ -67,7 +67,7 @@ tests/13logout.pl
 tests/14account/01change-password.pl
 tests/14account/02deactivate.pl
 tests/21presence-events.pl
-tests/30rooms/01state.pl
+2/9 tests/30rooms/01state.pl
 tests/30rooms/02members-local.pl
 tests/30rooms/03members-remote.pl
 tests/30rooms/04messages.pl

@@ -230,7 +230,11 @@ func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.
 	dep, err := b.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
 	if err != nil {
 		b.log("%s : failed to deployBaseImage: %s\n", contextStr, err)
-		printLogs(b.Docker, dep.ContainerID, contextStr)
+		containerID := ""
+		if dep != nil {
+			containerID = dep.ContainerID
+		}
+		printLogs(b.Docker, containerID, contextStr)
 		return result{
 			err: err,
 		}
