@@ -36,9 +36,11 @@ The mapping of `hs1` to `localhost:port` combinations can be done automatically 
 #### FAQ
 
 - Should I always make a new blueprint for a test?
+
 Probably not. Blueprints are costly, and they should only be made if there is a strong case for plenty of reuse among tests. In the same way that we don't always add fixtures to sytest, we should be sparing with adding blueprints.
 
 - I want to run a bunch of tests in parallel, how do I do this?
+
 If you're familiar with Go testing then you already know how. Add `t.Parallel()` to all tests which you want to run in parallel. For a good example of this, see `registration_test.go` which does:
 ```go
 // This will block until the 2 subtests have completed
@@ -70,13 +72,17 @@ func TestInboundFederationKeys(t *testing.T) {
 You can pass `COMPLEMENT_DEBUG=1` to add lots of debug logging.
 
 - How do I set up a bunch of stuff before the tests, e.g before each?
+
 There is no syntactically pleasing way to do this. Create a separate function which returns a function. See https://stackoverflow.com/questions/42310088/setup-and-teardown-for-each-test-using-std-testing-package?rq=1
 
 - How do I log messages in tests?
+
 Standard Go testing here, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers.
 
 - How do I skip a test?
+
 Use one of `t.Skipf(...)` or `t.SkipNow()`.
 
 - Why do we use `t.Errorf` sometimes and `t.Fatalf` other times?
+
 Error will fail the test but continue execution, where Fatal will fail the test and quit. Use Fatal when continuing to run the test will result in programming errors (e.g nil exceptions).
