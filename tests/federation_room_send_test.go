@@ -20,7 +20,7 @@ import (
 
 // Tests that the server is capable of making outbound /send requests
 func TestOutboundFederationSend(t *testing.T) {
-	deployment := must.Deploy(t, "federation_send", b.BlueprintAlice.Name)
+	deployment := must.Deploy(t, "federation_send", b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,

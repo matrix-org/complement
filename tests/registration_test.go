@@ -26,7 +26,7 @@ import (
 // Can register using an email address
 
 func TestRegistration(t *testing.T) {
-	deployment := must.Deploy(t, "registration", b.BlueprintCleanHS.Name)
+	deployment := must.Deploy(t, "registration", b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	t.Run("parallel", func(t *testing.T) {

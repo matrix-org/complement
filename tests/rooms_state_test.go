@@ -19,7 +19,7 @@ import (
 
 // Test that the m.room.create and m.room.member events for a room we created comes down /sync
 func TestRoomCreationReportsEventsToMyself(t *testing.T) {
-	deployment := must.Deploy(t, "rooms_state", b.BlueprintAlice.Name)
+	deployment := must.Deploy(t, "rooms_state", b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	userID := "@alice:hs1"

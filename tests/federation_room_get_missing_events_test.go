@@ -28,7 +28,7 @@ import (
 // * The homeserver attempts to get the missing event (with the bad data).
 // * Ensure that fetching the event results in an error.
 func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *testing.T) {
-	deployment := must.Deploy(t, "federation_get_missing_events", b.BlueprintAlice.Name)
+	deployment := must.Deploy(t, "federation_get_missing_events", b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),

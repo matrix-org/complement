@@ -60,38 +60,38 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 	}, nil
 }
 
-func (b *Builder) log(str string, args ...interface{}) {
-	if !b.debugLogging {
+func (d *Builder) log(str string, args ...interface{}) {
+	if !d.debugLogging {
 		return
 	}
 	log.Printf(str, args...)
 }
 
-func (b *Builder) Cleanup() {
-	err := b.removeContainers()
+func (d *Builder) Cleanup() {
+	err := d.removeContainers()
 	if err != nil {
-		b.log("Cleanup: Failed to remove containers: %s", err)
+		d.log("Cleanup: Failed to remove containers: %s", err)
 	}
-	err = b.removeImages()
+	err = d.removeImages()
 	if err != nil {
-		b.log("Cleanup: Failed to remove images: %s", err)
+		d.log("Cleanup: Failed to remove images: %s", err)
 	}
-	err = b.removeNetworks()
+	err = d.removeNetworks()
 	if err != nil {
-		b.log("Cleanup: Failed to remove networks: %s", err)
+		d.log("Cleanup: Failed to remove networks: %s", err)
 	}
 }
 
 // removeImages removes all images with `complementLabel`.
-func (b *Builder) removeNetworks() error {
-	networks, err := b.Docker.NetworkList(context.Background(), types.NetworkListOptions{
+func (d *Builder) removeNetworks() error {
+	networks, err := d.Docker.NetworkList(context.Background(), types.NetworkListOptions{
 		Filters: label(complementLabel),
 	})
 	if err != nil {
 		return err
 	}
 	for _, nw := range networks {
-		err = b.Docker.NetworkRemove(context.Background(), nw.ID)
+		err = d.Docker.NetworkRemove(context.Background(), nw.ID)
 		if err != nil {
 			return err
 		}
@@ -101,15 +101,15 @@ func (b *Builder) removeNetworks() error {
 }
 
 // removeImages removes all images with `complementLabel`.
-func (b *Builder) removeImages() error {
-	images, err := b.Docker.ImageList(context.Background(), types.ImageListOptions{
+func (d *Builder) removeImages() error {
+	images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
 		Filters: label(complementLabel),
 	})
 	if err != nil {
 		return err
 	}
 	for _, img := range images {
-		_, err = b.Docker.ImageRemove(context.Background(), img.ID, types.ImageRemoveOptions{
+		_, err = d.Docker.ImageRemove(context.Background(), img.ID, types.ImageRemoveOptions{
 			Force: true,
 		})
 		if err != nil {
@@ -121,8 +121,8 @@ func (b *Builder) removeImages() error {
 }
 
 // removeContainers removes all containers with `complementLabel`.
-func (b *Builder) removeContainers() error {
-	containers, err := b.Docker.ContainerList(context.Background(), types.ContainerListOptions{
+func (d *Builder) removeContainers() error {
+	containers, err := d.Docker.ContainerList(context.Background(), types.ContainerListOptions{
 		All:     true,
 		Filters: label(complementLabel),
 	})
@@ -130,7 +130,7 @@ func (b *Builder) removeContainers() error {
 		return err
 	}
 	for _, c := range containers {
-		err = b.Docker.ContainerRemove(context.Background(), c.ID, types.ContainerRemoveOptions{
+		err = d.Docker.ContainerRemove(context.Background(), c.ID, types.ContainerRemoveOptions{
 			Force: true,
 		})
 		if err != nil {
@@ -140,17 +140,33 @@ func (b *Builder) removeContainers() error {
 	return nil
 }
 
-func (b *Builder) ConstructBlueprints(bs []b.Blueprint) error {
+func (d *Builder) ConstructBlueprintsIfNotExist(bs []b.Blueprint) error {
+	var blueprintsToBuild []b.Blueprint
+	for _, bprint := range bs {
+		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
+			Filters: label("complement_blueprint=" + bprint.Name),
+		})
+		if err != nil {
+			return fmt.Errorf("ConstructBlueprintsIfNotExist: failed to ImageList: %w", err)
+		}
+		if len(images) == 0 {
+			blueprintsToBuild = append(blueprintsToBuild, bprint)
+		}
+	}
+	return d.ConstructBlueprints(blueprintsToBuild)
+}
+
+func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	var bpWg sync.WaitGroup
 	bpWg.Add(len(bs))
 	for _, bprint := range bs {
-		go b.construct(bprint, &bpWg)
+		go d.construct(bprint, &bpWg)
 	}
 	bpWg.Wait()
 	// wait a bit for images/containers to show up in 'image ls'
 	foundImages := false
 	for i := 0; i < 50; i++ { // max 5s
-		images, err := b.Docker.ImageList(context.Background(), types.ImageListOptions{
+		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
 			Filters: label(complementLabel),
 		})
 		if err != nil {
@@ -165,7 +181,7 @@ func (b *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	}
 	// do this after we have found images so we know that the containers have been detached so
 	// we can actually remove the networks.
-	b.removeNetworks()
+	d.removeNetworks()
 	if !foundImages {
 		return fmt.Errorf("failed to find built images via ImageList: did they all build ok?")
 	}
@@ -173,26 +189,26 @@ func (b *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 }
 
 // construct all Homeservers sequentially then commits them
-func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
+func (d *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 	defer bpWg.Done()
-	networkID := createNetwork(b.Docker, bprint.Name)
+	networkID := createNetwork(d.Docker, bprint.Name)
 	if networkID == "" {
 		return
 	}
 
-	runner := instruction.NewRunner(bprint.Name, b.debugLogging)
+	runner := instruction.NewRunner(bprint.Name, d.debugLogging)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
-		res := b.constructHomeserver(bprint.Name, runner, hs, networkID)
+		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
 		if res.err != nil && res.containerID != "" {
 			// print docker logs because something went wrong
-			printLogs(b.Docker, res.containerID, res.contextStr)
+			printLogs(d.Docker, res.containerID, res.contextStr)
 		}
 		// kill the container
 		defer func(r result) {
-			killErr := b.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
+			killErr := d.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
 			if killErr != nil {
-				b.log("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
+				d.log("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
 			}
 		}(res)
 		results[i] = res
@@ -206,7 +222,7 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 		labels := labelsForTokens(runner.AccessTokens(res.homeserver.Name))
 
 		// commit the container
-		commit, err := b.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
+		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
 			Author:    "Complement",
 			Pause:     true,
 			Reference: "localhost/complement:" + res.contextStr,
@@ -215,34 +231,34 @@ func (b *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 			},
 		})
 		if err != nil {
-			b.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
+			d.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
 			return
 		}
 		imageID := strings.Replace(commit.ID, "sha256:", "", 1)
-		b.log("%s => %s\n", res.contextStr, imageID)
+		d.log("%s => %s\n", res.contextStr, imageID)
 	}
 }
 
 // construct this homeserver and execute its instructions, keeping the container alive.
-func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
+func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
-	b.log("%s : constructing homeserver...\n", contextStr)
-	dep, err := b.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
+	d.log("%s : constructing homeserver...\n", contextStr)
+	dep, err := d.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
 	if err != nil {
-		b.log("%s : failed to deployBaseImage: %s\n", contextStr, err)
+		d.log("%s : failed to deployBaseImage: %s\n", contextStr, err)
 		containerID := ""
 		if dep != nil {
 			containerID = dep.ContainerID
 		}
-		printLogs(b.Docker, containerID, contextStr)
+		printLogs(d.Docker, containerID, contextStr)
 		return result{
 			err: err,
 		}
 	}
-	b.log("%s : deployed base image to %s (%s)\n", contextStr, dep.BaseURL, dep.ContainerID)
+	d.log("%s : deployed base image to %s (%s)\n", contextStr, dep.BaseURL, dep.ContainerID)
 	err = runner.Run(hs, dep.BaseURL)
 	if err != nil {
-		b.log("%s : failed to run instructions: %s\n", contextStr, err)
+		d.log("%s : failed to run instructions: %s\n", contextStr, err)
 	}
 	return result{
 		err:         err,
@@ -253,8 +269,8 @@ func (b *Builder) constructHomeserver(blueprintName string, runner *instruction.
 }
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
-func (b *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
-	return deployImage(b.Docker, b.BaseImage, b.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr, networkID)
+func (d *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
+	return deployImage(d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr, networkID)
 }
 
 func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
@@ -264,7 +280,7 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		Domainname: hsName,
 		Hostname:   hsName,
 		Env:        []string{"SERVER_NAME=" + hsName},
-		//Cmd:   b.ImageArgs,
+		//Cmd:   d.ImageArgs,
 		Labels: map[string]string{
 			complementLabel:        contextStr,
 			"complement_blueprint": blueprintName,

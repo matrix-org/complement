@@ -36,7 +36,7 @@ type serverKeyFields struct {
 // Test that a server can receive /keys requests:
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-key-v2-server-keyid
 func TestInboundFederationKeys(t *testing.T) {
-	deployment := must.Deploy(t, "federation_keys", b.BlueprintCleanHS.Name)
+	deployment := must.Deploy(t, "federation_keys", b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 	t.Run("Federation key API allows unsigned requests for keys", func(t *testing.T) {
 		fedClient := &http.Client{
