@@ -28,12 +28,11 @@ import (
 // * The homeserver attempts to get the missing event (with the bad data).
 // * Ensure that fetching the event results in an error.
 func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *testing.T) {
-	deployment := must.Deploy(t, "federation_get_missing_events", b.BlueprintAlice)
+	deployment := Deploy(t, "federation_get_missing_events", b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
-		federation.HandleDirectoryLookups(),
 	)
 	cancel := srv.Listen()
 	defer cancel()
@@ -41,7 +40,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	ver := gomatrixserverlib.RoomVersionV6
 	charlie := srv.UserID("charlie")
 	room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
-	roomAlias := srv.Alias(room.RoomID, "flibble")
+	roomAlias := srv.MakeAliasMapping("flibble", room.RoomID)
 	// join the room
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	alice.MustDo(t, "POST", []string{"_matrix", "client", "r0", "join", roomAlias}, struct{}{})

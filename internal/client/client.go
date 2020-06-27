@@ -29,11 +29,16 @@ type CSAPI struct {
 // will be automatically logged. Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
 	t.Helper()
+	c.syncUntil(t, "rooms.join."+roomID+".timeline.events", check)
+}
+
+func (c *CSAPI) syncUntil(t *testing.T, key string, check func(gjson.Result) bool) {
+	t.Helper()
 	start := time.Now()
 	checkCounter := 0
 	for {
 		if time.Now().Sub(start) > c.SyncUntilTimeout {
-			t.Fatalf("SyncUntilTimelineHas timed out. Called check function %d times", checkCounter)
+			t.Fatalf("syncUntil timed out. Called check function %d times", checkCounter)
 		}
 		query := url.Values{
 			"access_token": []string{c.AccessToken},
@@ -44,27 +49,27 @@ func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjs
 		}
 		res, err := c.Do(t, "GET", []string{"_matrix", "client", "r0", "sync"}, nil, query)
 		if err != nil {
-			t.Fatalf("CSAPI.SyncUntilTimelineHas since=%s error: %s", c.Since, err)
+			t.Fatalf("CSAPI.syncUntil since=%s error: %s", c.Since, err)
 		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			t.Fatalf("CSAPI.SyncUntilTimelineHas since=%s returned HTTP %d", c.Since, res.StatusCode)
+			t.Fatalf("CSAPI.syncUntil since=%s returned HTTP %d", c.Since, res.StatusCode)
 		}
 		body := parseJSON(t, res)
 		c.Since = getJSONFieldStr(t, body, "next_batch")
 
-		timelineRes := gjson.GetBytes(body, "rooms.join."+roomID+".timeline.events")
-		if timelineRes.IsArray() {
-			timeline := timelineRes.Array()
-			for _, ev := range timeline {
+		keyRes := gjson.GetBytes(body, key)
+		if keyRes.IsArray() {
+			events := keyRes.Array()
+			for _, ev := range events {
 				wasFailed := t.Failed()
 				if check(ev) {
 					if !wasFailed && t.Failed() {
-						t.Logf("failing timeline event %s", ev.Raw)
+						t.Logf("failing event %s", ev.Raw)
 					}
 					return
 				}
 				if !wasFailed && t.Failed() {
-					t.Logf("failing timeline event %s", ev.Raw)
+					t.Logf("failing event %s", ev.Raw)
 				}
 				checkCounter++
 			}
@@ -148,7 +153,6 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	return res, err
 }
 
-// getJSONFieldStr is duplicated here because import cycles are not allowed
 func getJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	t.Helper()
 	res := gjson.GetBytes(body, wantKey)
@@ -161,8 +165,8 @@ func getJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	return res.Str
 }
 
-// parseJSON is duplicated here because import cycles are not allowed
 func parseJSON(t *testing.T, res *http.Response) []byte {
+	t.Helper()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("MustParseJSON: reading HTTP response body returned %s", err)

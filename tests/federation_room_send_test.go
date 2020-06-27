@@ -8,7 +8,6 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/gomatrixserverlib"
 )
 
@@ -20,13 +19,12 @@ import (
 
 // Tests that the server is capable of making outbound /send requests
 func TestOutboundFederationSend(t *testing.T) {
-	deployment := must.Deploy(t, "federation_send", b.BlueprintAlice)
+	deployment := Deploy(t, "federation_send", b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
-		federation.HandleDirectoryLookups(),
 	)
 	cancel := srv.Listen()
 	defer cancel()
@@ -34,7 +32,7 @@ func TestOutboundFederationSend(t *testing.T) {
 	ver := gomatrixserverlib.RoomVersionV5
 	charlie := srv.UserID("charlie")
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
-	roomAlias := srv.Alias(serverRoom.RoomID, "flibble")
+	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// join the room
 	alice := deployment.Client(t, "hs1", "@alice:hs1")

@@ -17,7 +17,7 @@ import (
 // Test that the server can make outbound federation profile requests
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-federation-v1-query-profile
 func TestOutboundFederationProfile(t *testing.T) {
-	deployment := must.Deploy(t, "federation_profile", b.BlueprintOneToOneRoom)
+	deployment := Deploy(t, "federation_profile", b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,

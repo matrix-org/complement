@@ -114,9 +114,13 @@ func HandleMakeSendJoinRequests() func(*Server) {
 	}
 }
 
-// HandleDirectoryLookups will automatically return room IDs for any alias set via Server.Alias
+// HandleDirectoryLookups will automatically return room IDs for any aliases present on this server.
 func HandleDirectoryLookups() func(*Server) {
 	return func(s *Server) {
+		if s.directoryHandlerSetup {
+			return
+		}
+		s.directoryHandlerSetup = true
 		s.mux.Handle("/_matrix/federation/v1/query/directory", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			alias := req.URL.Query().Get("room_alias")
 			if roomID, ok := s.aliases[alias]; ok {

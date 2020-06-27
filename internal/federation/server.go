@@ -40,9 +40,10 @@ type Server struct {
 	mux      *mux.Router
 	srv      *http.Server
 
-	aliases map[string]string
-	rooms   map[string]*ServerRoom
-	keyRing *gomatrixserverlib.KeyRing
+	directoryHandlerSetup bool
+	aliases               map[string]string
+	rooms                 map[string]*ServerRoom
+	keyRing               *gomatrixserverlib.KeyRing
 }
 
 // NewServer creates a new federation server with configured options.
@@ -104,12 +105,14 @@ func (s *Server) UserID(localpart string) string {
 	return fmt.Sprintf("@%s:%s", localpart, s.ServerName)
 }
 
-// Alias links a room ID and alias localpart together on this server. Returns the full room alias.
-// This assumes that this server is joined to the given room ID.
-func (s *Server) Alias(roomID, aliasLocalpart string) (roomAlias string) {
-	roomAlias = fmt.Sprintf("#%s:%s", aliasLocalpart, s.ServerName)
-	s.aliases[roomAlias] = roomID
-	return
+// MakeAliasMapping will create a mapping of room alias to room ID on this server. Returns the alias.
+// If this is the first time calling this function, a directory lookup handler will be added to
+// handle alias requests over federation.
+func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
+	alias := fmt.Sprintf("#%s:%s", aliasLocalpart, s.ServerName)
+	s.aliases[alias] = roomID
+	HandleDirectoryLookups()(s)
+	return alias
 }
 
 // MustMakeRoom will add a room to this server so it is accessible to other servers when prompted via federation.
