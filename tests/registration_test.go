@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 )
@@ -34,17 +35,19 @@ func TestRegistration(t *testing.T) {
 			t.Parallel()
 			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{}`), nil)
 			must.NotError(t, "POST returned error", err)
-			must.HaveStatus(t, res, 401)
-			// TODO: would it be any clearer to have With... style assertions on the request itself so people can assert as much
-			//       or as little as they want?
-			must.HaveHeader(t, res, "Content-Type", "application/json")
-			body := must.ParseJSON(t, res.Body)
-			j := gjson.GetBytes(body, "flows")
-			j.ForEach(func(_, val gjson.Result) bool {
-				if !val.Get("stages").IsArray() {
-					t.Errorf("'stages' is not an array: %v", val.Get("stages").Raw)
-				}
-				return true
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 401,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+				JSON: []match.JSON{
+					match.JSONArrayEach("flows", func(val gjson.Result) error {
+						if !val.Get("stages").IsArray() {
+							return fmt.Errorf("'stages' is not an array: %v", val.Get("stages").Raw)
+						}
+						return nil
+					}),
+				},
 			})
 		})
 		t.Run("POST /register can create a user", func(t *testing.T) {
@@ -56,18 +59,11 @@ func TestRegistration(t *testing.T) {
 				"username": "post-can-create-a-user",
 				"password": "sUp3rs3kr1t"
 			}`))
-			body := must.ParseJSON(t, res.Body)
-			must.HaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
-				if r.Str == "" {
-					return fmt.Errorf("access_token is not a string")
-				}
-				return nil
-			})
-			must.HaveJSONKey(t, body, "user_id", func(r gjson.Result) error {
-				if r.Str == "" {
-					return fmt.Errorf("user_id is not a string")
-				}
-				return nil
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual("access_token", gjson.String),
+					match.JSONKeyTypeEqual("user_id", gjson.String),
+				},
 			})
 		})
 		t.Run("POST /register downcases capitals in usernames", func(t *testing.T) {
@@ -79,14 +75,12 @@ func TestRegistration(t *testing.T) {
 				"username": "user-UPPER",
 				"password": "sUp3rs3kr1t"
 			}`))
-			body := must.ParseJSON(t, res.Body)
-			must.HaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
-				if r.Str == "" {
-					return fmt.Errorf("access_token is not a string")
-				}
-				return nil
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual("access_token", gjson.String),
+					match.JSONKeyEqual("user_id", "@user-upper:hs1"),
+				},
 			})
-			must.HaveJSONKeyEqual(t, body, "user_id", "@user-upper:hs1")
 		})
 		t.Run("POST /register returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
@@ -99,14 +93,12 @@ func TestRegistration(t *testing.T) {
 				"password": "sUp3rs3kr1t",
 				"device_id": "`+deviceID+`"
 			}`))
-			body := must.ParseJSON(t, res.Body)
-			must.HaveJSONKey(t, body, "access_token", func(r gjson.Result) error {
-				if r.Str == "" {
-					return fmt.Errorf("access_token is not a string")
-				}
-				return nil
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual("access_token", gjson.String),
+					match.JSONKeyEqual("device_id", deviceID),
+				},
 			})
-			must.HaveJSONKeyEqual(t, body, "device_id", deviceID)
 		})
 		t.Run("POST /register rejects usernames with special characters", func(t *testing.T) {
 			t.Parallel()
@@ -140,9 +132,12 @@ func TestRegistration(t *testing.T) {
 				}
 				res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(reqBody), nil)
 				must.NotError(t, "POST returned error", err)
-				must.HaveStatus(t, res, 400)
-				body := must.ParseJSON(t, res.Body)
-				must.HaveJSONKeyEqual(t, body, "errcode", "M_INVALID_USERNAME")
+				must.MatchResponse(t, res, match.HTTPResponse{
+					StatusCode: 400,
+					JSON: []match.JSON{
+						match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
+					},
+				})
 			}
 		})
 	})

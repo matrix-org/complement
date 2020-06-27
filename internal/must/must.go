@@ -7,12 +7,12 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"reflect"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
+	"github.com/matrix-org/complement/internal/match"
 	"github.com/tidwall/gjson"
 )
 
@@ -62,57 +62,69 @@ func ParseJSON(t *testing.T, b io.ReadCloser) []byte {
 	return body
 }
 
-// HaveJSONKey ensures that `wantKey` exists in `body`, and calls `checkFn` for additional testing.
-// The format of `wantKey` is specified at https://godoc.org/github.com/tidwall/gjson#Get
-// Terminates the test if the key is missing or if `checkFn` returns an error.
-func HaveJSONKey(t *testing.T, body []byte, wantKey string, checkFn func(r gjson.Result) error) {
+// MatchRequest consumes the HTTP request and performs HTTP-level assertions on it. Returns the raw response body.
+func MatchRequest(t *testing.T, req *http.Request, m match.HTTPRequest) []byte {
 	t.Helper()
-	res := gjson.GetBytes(body, wantKey)
-	if res.Index == 0 {
-		t.Fatalf("MustHaveJSONKey: key '%s' missing from %s", wantKey, string(body))
-	}
-	err := checkFn(res)
+	body, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		t.Fatalf("MustHaveJSONKey: checkFn returned error: %s", err)
+		t.Fatalf("MatchRequest: Failed to read request body: %s", err)
 	}
-	return
-}
 
-// HaveJSONKeyEqual ensures that `wantKey` exists in `body` and has the value `wantValue`, else terminates the test.
-// The value is checked deeply via `reflect.DeepEqual`, and the got JSON value is mapped according to https://godoc.org/github.com/tidwall/gjson#Result.Value
-func HaveJSONKeyEqual(t *testing.T, body []byte, wantKey string, wantValue interface{}) {
-	t.Helper()
-	HaveJSONKey(t, body, wantKey, func(r gjson.Result) error {
-		gotValue := r.Value()
-		if !reflect.DeepEqual(gotValue, wantValue) {
-			return fmt.Errorf("MustHaveJSONKeyEqual: key '%s' got '%v' want '%v'", wantKey, gotValue, wantValue)
+	contextStr := fmt.Sprintf("%s => %s", req.URL.String(), string(body))
+
+	if m.Headers != nil {
+		for name, val := range m.Headers {
+			if req.Header.Get(name) != val {
+				t.Fatalf("got %s: %s want %s - %s", name, req.Header.Get(name), val, contextStr)
+			}
 		}
-		return nil
-	})
-}
-
-// HaveStatus will ensure that the HTTP response has the desired status code or terminate the test.
-func HaveStatus(t *testing.T, res *http.Response, wantStatusCode int) {
-	t.Helper()
-	if res.StatusCode != wantStatusCode {
-		b, err := ioutil.ReadAll(res.Body)
-		var body string
-		if err != nil {
-			body = err.Error()
-		} else {
-			body = string(b)
+	}
+	if m.JSON != nil {
+		if !gjson.ValidBytes(body) {
+			t.Fatalf("request body is not valid JSON - %s", contextStr)
 		}
-		t.Fatalf("MustHaveStatus: %s got %d want %d - body: %s", res.Request.URL.String(), res.StatusCode, wantStatusCode, body)
+		for _, jm := range m.JSON {
+			if err = jm(body); err != nil {
+				t.Fatalf("%s - %s", err, contextStr)
+			}
+		}
 	}
+	return body
 }
 
-// HaveHeader will ensure that the HTTP response has the header `header` with the value `want` or terminate the test.
-func HaveHeader(t *testing.T, res *http.Response, header string, want string) {
+// MatchResponse consumes the HTTP response and performs HTTP-level assertions on it. Returns the raw response body.
+func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byte {
 	t.Helper()
-	got := res.Header.Get(header)
-	if got != want {
-		t.Fatalf("MustHaveHeader: [%s] got %s want %s", header, got, want)
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("MatchResponse: Failed to read response body: %s", err)
 	}
+
+	contextStr := fmt.Sprintf("%s => %s", res.Request.URL.String(), string(body))
+
+	if m.StatusCode != 0 {
+		if res.StatusCode != m.StatusCode {
+			t.Fatalf("got status %d want %d - %s", res.StatusCode, m.StatusCode, contextStr)
+		}
+	}
+	if m.Headers != nil {
+		for name, val := range m.Headers {
+			if res.Header.Get(name) != val {
+				t.Fatalf("got %s: %s want %s - %s", name, res.Header.Get(name), val, contextStr)
+			}
+		}
+	}
+	if m.JSON != nil {
+		if !gjson.ValidBytes(body) {
+			t.Fatalf("response body is not valid JSON - %s", contextStr)
+		}
+		for _, jm := range m.JSON {
+			if err = jm(body); err != nil {
+				t.Fatalf("%s - %s", err, contextStr)
+			}
+		}
+	}
+	return body
 }
 
 // EqualStr ensures that got==want else logs an error.

@@ -9,9 +9,9 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/gomatrixserverlib"
-	"github.com/tidwall/gjson"
 )
 
 // TODO:
@@ -92,25 +92,12 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	room.AddEvent(sentEvent)
 
 	srv.Mux().HandleFunc("/_matrix/federation/v1/get_missing_events/{roomID}", func(w http.ResponseWriter, req *http.Request) {
-		body := must.ParseJSON(t, req.Body)
-		earliestEvents := gjson.GetBytes(body, "earliest_events")
-		if !earliestEvents.IsArray() {
-			t.Fatalf("get_missing_events 'earliest events' is not an array: %s", string(body))
-		}
-		early := earliestEvents.Array()
-		if len(early) != 1 {
-			t.Fatalf("get_missing_events 'earliest events' expected length 1, got %d", len(early))
-		}
-		must.EqualStr(t, early[0].Str, latestEvent.EventID(), "wrong earliest event ID")
-		latestEvents := gjson.GetBytes(body, "latest_events")
-		if !latestEvents.IsArray() {
-			t.Fatalf("get_missing_events 'latest_events' is not an array: %s", string(body))
-		}
-		latest := latestEvents.Array()
-		if len(latest) != 1 {
-			t.Fatalf("get_missing_events 'latest_events' expected length 1, got %d", len(latest))
-		}
-		must.EqualStr(t, latest[0].Str, sentEvent.EventID(), "wrong latest event ID")
+		must.MatchRequest(t, req, match.HTTPRequest{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("earliest_events", []interface{}{latestEvent.EventID()}),
+				match.JSONKeyEqual("latest_events", []interface{}{sentEvent.EventID()}),
+			},
+		})
 		// return the bad event, which should result in the transaction failing.
 		w.WriteHeader(200)
 		res := struct {
