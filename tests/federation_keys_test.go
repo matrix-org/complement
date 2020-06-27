@@ -3,7 +3,7 @@ package tests
 import (
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
@@ -20,17 +21,6 @@ import (
 // Federation key API can act as a notary server via a $method request
 // Key notary server should return an expired key if it can't find any others
 // Key notary server must not overwrite a valid key with a spurious result from the origin server
-
-type serverKeyFields struct {
-	ServerName string `json:"server_name"`
-	VerifyKeys map[string]struct {
-		Key string `json:"key"`
-	} `json:"verify_keys"`
-	ValidUntilTS  int64                  `json:"valid_until_ts"`
-	OldVerifyKeys map[string]interface{} `json:"old_verify_keys"`
-	// server_name -> { keyID: signature }
-	Signatures map[string]map[string]string
-}
 
 // Test that a server can receive /keys requests:
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-key-v2-server-keyid
@@ -44,54 +34,44 @@ func TestInboundFederationKeys(t *testing.T) {
 		}
 		res, err := fedClient.Get("https://hs1/_matrix/key/v2/server")
 		must.NotError(t, "failed to GET /keys", err)
+		var key ed25519.PublicKey
+		var keyID string
 		body := must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
 				match.JSONKeyPresent("old_verify_keys"),
+				match.JSONKeyEqual("server_name", "hs1"),
+				match.JSONMapEach("verify_keys", func(k, v gjson.Result) error {
+					// Currently we always expect ed25519 keys
+					if !strings.HasPrefix(k.Str, "ed25519:") {
+						return fmt.Errorf("complement: unknown key ID type, only ed25519 is supported, got '%s'", k.Str)
+					}
+					keyBytes, err := base64.RawStdEncoding.DecodeString(v.Get("key").Str)
+					if err != nil {
+						return fmt.Errorf("Failed to decode ed25519 key as base64: %s", err)
+					}
+					// slightly evil to side-effect like this, but it's the easiest way
+					keyID = k.Str
+					key = keyBytes
+					return nil
+				}),
 			},
 		})
-		var k serverKeyFields
-		must.NotError(t, "failed to read response body", err)
-		if err := json.Unmarshal(body, &k); err != nil {
-			t.Fatalf("failed to decode response body: %s", err)
-		}
-		if k.ServerName != "hs1" {
-			t.Errorf("server_name : got %s want %s", k.ServerName, "hs1")
-		}
-		gotTime := time.Unix(0, k.ValidUntilTS*1000*1000) // ms -> ns
+		jsonObj := gjson.ParseBytes(body)
+		gotTime := time.Unix(0, jsonObj.Get("valid_until_ts").Int()*1000*1000) // ms -> ns
 		wantTime := time.Now()
 		if gotTime.Before(wantTime) {
 			t.Errorf("valid_until_ts : timestamp is in the past: %s < %s", gotTime, wantTime)
 		}
-		if len(k.VerifyKeys) == 0 {
-			t.Errorf("verify_keys : Expected 1 or more keys, got none")
-		}
-		// Currently we always expect ed25519 keys
-		var key ed25519.PublicKey
-		var keyID string
-		for kid, verifyKey := range k.VerifyKeys {
-			if strings.HasPrefix(string(kid), "ed25519:") {
-				keyID = kid
-				keyBytes, err := base64.RawStdEncoding.DecodeString(verifyKey.Key)
-				if err != nil {
-					t.Fatalf("Failed to decode ed25519 key as base64: %s", err)
-				}
-				key = keyBytes
-				break
-			}
-		}
+
 		if keyID == "" {
 			t.Fatalf("missing ed25519: key")
 		}
-		hsSig, ok := k.Signatures["hs1"]
-		if !ok {
-			t.Fatalf("missing signature for own server")
+		sigBase64 := jsonObj.Get(fmt.Sprintf("signatures.hs1.%s", keyID))
+		if !sigBase64.Exists() {
+			t.Fatalf("missing signature for hs1.%s", keyID)
 		}
-		sigBase64, ok := hsSig[keyID]
-		if !ok {
-			t.Fatalf("missing signature for key ID %s", keyID)
-		}
-		sigBytes, err := base64.RawStdEncoding.DecodeString(sigBase64)
+		sigBytes, err := base64.RawStdEncoding.DecodeString(sigBase64.Str)
 
 		bodyWithoutSig, err := sjson.DeleteBytes(body, "signatures")
 		if err != nil {

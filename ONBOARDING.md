@@ -4,7 +4,7 @@ If you've not run Complement tests yet, please do so. This document will outline
 
 #### Architecture
 
-Complement runs Docker containers every time you call `deployment := must.Deploy(...)`, which gets killed on `deployment.Destroy(...)`. These containers are snapshots of the target Homeserver at a particular state. The state is determined by the `Blueprint`, which is a human-readable outline for what should be done prior to the test. Coming from Sytest, a `Blueprint` is similar to a `fixture`. A `deployment` has functions on it for creating deployment-scoped structs such as CSAPI clients for interacting with specific Homeservers in the deployment. Assertions are done via the `must` package. For testing outbound federation, Complement implements a bare-bones Federation server for Homeservers to talk to. Unlike Sytest, you have to explicitly opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically. This is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
+Complement runs Docker containers every time you call `deployment := must.Deploy(...)`, which gets killed on `deployment.Destroy(...)`. These containers are snapshots of the target Homeserver at a particular state. The state is determined by the `Blueprint`, which is a human-readable outline for what should be done prior to the test. Coming from Sytest, a `Blueprint` is similar to a `fixture`. A `deployment` has functions on it for creating deployment-scoped structs such as CSAPI clients for interacting with specific Homeservers in the deployment. Assertions are done via the `must` and `match` packages. For testing outbound federation, Complement implements a bare-bones Federation server for Homeservers to talk to. Unlike Sytest, you have to explicitly opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically. This is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
 ```go
 // A federation server which handles serving up its own keys when requested,
 // automatically accepts make_join and send_join requests and deals with
@@ -67,6 +67,20 @@ fedClient := srv.FederationClient(deployment, "hs1")
 - Should I always make a new blueprint for a test?
 
 Probably not. Blueprints are costly, and they should only be made if there is a strong case for plenty of reuse among tests. In the same way that we don't always add fixtures to sytest, we should be sparing with adding blueprints.
+
+- How should I assert JSON objects?
+
+Use one of the matchers in the `match` package (which uses `gjson`) rather than `json.Unmarshal(...)` into a struct. There's a few reasons for this:
+ - Removes the temptation to use `gomatrixserverlib` structs.
+ - Forces exact key matching (without JSON tags, `json.Unmarshal` will case-insensitively match fields by default).
+ - Clearer syntax: `match.JSONKeyEqual("earliest_events", []interface{}{latestEvent.EventID()}),` is clearer than unmarshalling into a slice then doing assertions on the first element.
+
+If you want to extract data from objects, just use `gjson` directly.
+
+- How should I assert HTTP requests/responses?
+
+Use the corresponding matcher in the `match` package. This allows you to be as specific or as lax as you like on your checks, and allows you to add JSON matchers on
+the HTTP body.
 
 - I want to run a bunch of tests in parallel, how do I do this?
 

@@ -77,3 +77,26 @@ func JSONArrayEach(wantKey string, fn func(gjson.Result) error) JSON {
 		return err
 	}
 }
+
+// JSONMapEach returns a matcher which will check that `wantKey` is a map then loops over each
+// item calling `fn`. If `fn` returns an error, iterating stops and an error is returned.
+func JSONMapEach(wantKey string, fn func(k, v gjson.Result) error) JSON {
+	return func(body []byte) error {
+		res := gjson.GetBytes(body, wantKey)
+		if !res.Exists() {
+			return fmt.Errorf("missing key '%s'", wantKey)
+		}
+		if !res.IsObject() {
+			return fmt.Errorf("key '%s' is not an object", wantKey)
+		}
+		var err error
+		res.ForEach(func(key, val gjson.Result) bool {
+			err = fn(key, val)
+			if err == nil {
+				return true
+			}
+			return false
+		})
+		return err
+	}
+}
