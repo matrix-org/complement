@@ -29,6 +29,14 @@ type CSAPI struct {
 	txnID int
 }
 
+// CreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
+func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
+	t.Helper()
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, creationContent)
+	body := parseJSON(t, res)
+	return getJSONFieldStr(t, body, "room_id")
+}
+
 // JoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
 func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string) string {
 	t.Helper()
@@ -214,6 +222,7 @@ func getJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 
 func parseJSON(t *testing.T, res *http.Response) []byte {
 	t.Helper()
+	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("MustParseJSON: reading HTTP response body returned %s", err)

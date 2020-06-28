@@ -24,9 +24,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
-	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, struct{}{})
-	body := must.ParseJSON(t, res.Body)
-	roomID := must.GetJSONFieldStr(t, body, "room_id")
+	roomID := alice.CreateRoom(t, nil)
 
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("reports m.room.create event", func(t *testing.T) {
