@@ -143,6 +143,7 @@ func (s *Server) FederationClient(deployment *docker.Deployment, hsName string) 
 // MustCreateEvent will create and sign a new latest event for the given room.
 // It does not insert this event into the room however. See ServerRoom.AddEvent for that.
 func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *gomatrixserverlib.Event {
+	t.Helper()
 	content, err := json.Marshal(ev.Content)
 	if err != nil {
 		t.Fatalf("MustCreateEvent: failed to marshal event content %+v", ev.Content)

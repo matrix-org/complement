@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
@@ -57,4 +60,45 @@ func Deploy(t *testing.T, namespace string, blueprint b.Blueprint) *docker.Deplo
 		t.Fatalf("Deploy: Deploy returned error %s", err)
 	}
 	return dep
+}
+
+// ExpectRouteToBeCalled `n` times. Returns a wait function which, when invoked, will block until either the timeout
+// is reached or the route is called `n` times. Any invocations of the route after calling this function but
+// before calling the wait function /are/ counted.
+//
+// Routes are counted via a channel, so if there are more than `n` invocations of the route /before/ the wait function
+// is called then the handler will block.
+func ExpectRouteToBeCalled(t *testing.T, n int, route *mux.Route) func(timeout time.Duration) {
+	t.Helper()
+	h := route.GetHandler()
+	if h == nil {
+		t.Fatalf("ExpectRouteToBeCalled: route has no handler")
+	}
+	ch := make(chan bool, n)
+
+	// wrap the handler to send on the channel
+	route.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		defer func() {
+			ch <- true
+		}()
+		h.ServeHTTP(w, req)
+	})
+
+	count := 0
+	return func(timeout time.Duration) {
+		t.Helper()
+		end := time.Now().Add(timeout)
+		for count < n {
+			now := time.Now()
+			if now.After(end) {
+				t.Fatalf("Wait: timed out after %f seconds. Route called %d times", timeout.Seconds(), count)
+			}
+			waitTime := end.Sub(now)
+			select {
+			case <-ch:
+				count++
+			case <-time.After(waitTime):
+			}
+		}
+	}
 }

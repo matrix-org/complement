@@ -3,8 +3,8 @@ package tests
 import (
 	"encoding/json"
 	"net/http"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
@@ -40,13 +40,8 @@ func TestOutboundFederationSend(t *testing.T) {
 
 	wantEventType := "m.room.message"
 
-	// TODO: Have 'await' with a timeout
-	var wg sync.WaitGroup
-	wg.Add(1)
-
 	// TODO: Have a nicer api shape than just http.Handler
-	srv.Mux().Handle("/_matrix/federation/v1/send/{txnID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		defer wg.Done()
+	wait := ExpectRouteToBeCalled(t, 1, srv.Mux().Handle("/_matrix/federation/v1/send/{txnID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		var body gomatrixserverlib.Transaction
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 			t.Errorf("failed to decode /send body: %s", err)
@@ -64,7 +59,7 @@ func TestOutboundFederationSend(t *testing.T) {
 			t.Errorf("Wrong event type, got %s want %s", ev.Type(), wantEventType)
 		}
 		w.WriteHeader(200)
-	})).Methods("PUT")
+	})).Methods("PUT"))
 
 	alice.MustDo(t, "PUT", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "send", wantEventType, "1"}, struct {
 		Msgtype string `json:"msgtype"`
@@ -73,6 +68,5 @@ func TestOutboundFederationSend(t *testing.T) {
 		Msgtype: "m.text",
 		Body:    "Hello world!",
 	})
-	t.Logf("alice sent message")
-	wg.Wait()
+	wait(5 * time.Second)
 }
