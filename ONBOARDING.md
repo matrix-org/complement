@@ -123,7 +123,7 @@ There is no syntactically pleasing way to do this. Create a separate function wh
 
 - How do I log messages in tests?
 
-Standard Go testing here, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers.
+Standard Go testing here, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
 
 - How do I skip a test?
 
