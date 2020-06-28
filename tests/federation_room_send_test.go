@@ -36,7 +36,7 @@ func TestOutboundFederationSend(t *testing.T) {
 
 	// join the room
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	alice.MustDo(t, "POST", []string{"_matrix", "client", "r0", "join", roomAlias}, struct{}{})
+	alice.JoinRoom(t, roomAlias)
 
 	wantEventType := "m.room.message"
 
@@ -64,12 +64,12 @@ func TestOutboundFederationSend(t *testing.T) {
 		w.WriteHeader(200)
 	})).Methods("PUT")
 
-	alice.MustDo(t, "PUT", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "send", wantEventType, "1"}, struct {
-		Msgtype string `json:"msgtype"`
-		Body    string `json:"body"`
-	}{
-		Msgtype: "m.text",
-		Body:    "Hello world!",
+	alice.SendEventSynced(t, serverRoom.RoomID, b.Event{
+		Type: wantEventType,
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Hello world!",
+		},
 	})
 	waiter.Wait(t, 5*time.Second)
 }

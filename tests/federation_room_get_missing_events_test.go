@@ -43,7 +43,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	roomAlias := srv.MakeAliasMapping("flibble", room.RoomID)
 	// join the room
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	alice.MustDo(t, "POST", []string{"_matrix", "client", "r0", "join", roomAlias}, struct{}{})
+	alice.JoinRoom(t, roomAlias)
 
 	latestEvent := room.Timeline[len(room.Timeline)-1]
 
@@ -90,7 +90,9 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	})
 	room.AddEvent(sentEvent)
 
+	waiter := NewWaiter()
 	srv.Mux().HandleFunc("/_matrix/federation/v1/get_missing_events/{roomID}", func(w http.ResponseWriter, req *http.Request) {
+		defer waiter.Finish()
 		must.MatchRequest(t, req, match.HTTPRequest{
 			JSON: []match.JSON{
 				match.JSONKeyEqual("earliest_events", []interface{}{latestEvent.EventID()}),
@@ -117,6 +119,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 			sentEvent.JSON(),
 		},
 	})
+	waiter.Wait(t, 5*time.Second)
 	must.NotError(t, "SendTransaction errored", err)
 	if len(resp.PDUs) != 1 {
 		t.Fatalf("got %d errors, want 1", len(resp.PDUs))

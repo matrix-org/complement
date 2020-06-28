@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/matrix-org/complement/internal/b"
 	"github.com/tidwall/gjson"
 )
 
@@ -21,21 +23,50 @@ type CSAPI struct {
 	Client      *http.Client
 	// how long are we willing to wait for SyncUntil.... calls
 	SyncUntilTimeout time.Duration
-	// the since token for /sync calls
-	Since string
 	// True to enable verbose logging
 	Debug bool
+
+	txnID int
+}
+
+// JoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
+func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string) string {
+	t.Helper()
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, struct{}{})
+	if roomIDOrAlias[0] == '!' {
+		return roomIDOrAlias
+	}
+	// we should be told the room ID if we joined via an alias
+	body := parseJSON(t, res)
+	return getJSONFieldStr(t, body, "room_id")
+}
+
+// SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
+func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
+	t.Helper()
+	c.txnID++
+	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
+	if e.StateKey != nil {
+		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
+	}
+	res := c.MustDo(t, "PUT", paths, e.Content)
+	body := parseJSON(t, res)
+	eventID := getJSONFieldStr(t, body, "event_id")
+	t.Logf("SendEventSynced waiting for event ID %s", eventID)
+	c.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
+		return r.Get("event_id").Str == eventID
+	})
 }
 
 // SyncUntilTimelineHas blocks and continually calls /sync until the `check` function returns true.
-// The since token is controlled by CSAPI.Since. If the `check` function fails the test, the failing event
-// will be automatically logged. Will time out after CSAPI.SyncUntilTimeout.
+// If the `check` function fails the test, the failing event will be automatically logged.
+// Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
 	t.Helper()
-	c.syncUntil(t, "rooms.join."+roomID+".timeline.events", check)
+	c.syncUntil(t, "", "rooms.join."+gjsonEscape(roomID)+".timeline.events", check)
 }
 
-func (c *CSAPI) syncUntil(t *testing.T, key string, check func(gjson.Result) bool) {
+func (c *CSAPI) syncUntil(t *testing.T, since, key string, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
 	checkCounter := 0
@@ -47,18 +78,18 @@ func (c *CSAPI) syncUntil(t *testing.T, key string, check func(gjson.Result) boo
 			"access_token": []string{c.AccessToken},
 			"timeout":      []string{"1000"},
 		}
-		if c.Since != "" {
-			query["since"] = []string{c.Since}
+		if since != "" {
+			query["since"] = []string{since}
 		}
 		res, err := c.Do(t, "GET", []string{"_matrix", "client", "r0", "sync"}, nil, query)
 		if err != nil {
-			t.Fatalf("CSAPI.syncUntil since=%s error: %s", c.Since, err)
+			t.Fatalf("CSAPI.syncUntil since=%s error: %s", since, err)
 		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			t.Fatalf("CSAPI.syncUntil since=%s returned HTTP %d", c.Since, res.StatusCode)
+			t.Fatalf("CSAPI.syncUntil since=%s returned HTTP %d", since, res.StatusCode)
 		}
 		body := parseJSON(t, res)
-		c.Since = getJSONFieldStr(t, body, "next_batch")
+		since = getJSONFieldStr(t, body, "next_batch")
 		keyRes := gjson.GetBytes(body, key)
 		if keyRes.IsArray() {
 			events := keyRes.Array()
@@ -159,11 +190,12 @@ type loggedRoundTripper struct {
 }
 
 func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	start := time.Now()
 	res, err := t.wrap.RoundTrip(req)
 	if err != nil {
-		t.t.Logf("%s %s => error: %s", req.Method, req.URL.String(), err)
+		t.t.Logf("%s %s => error: %s (%s)", req.Method, req.URL.Path, err, time.Now().Sub(start))
 	} else {
-		t.t.Logf("%s %s => HTTP %s", req.Method, req.URL.String(), res.Status)
+		t.t.Logf("%s %s => %s (%s)", req.Method, req.URL.Path, res.Status, time.Now().Sub(start))
 	}
 	return res, err
 }
@@ -171,7 +203,7 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 func getJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	t.Helper()
 	res := gjson.GetBytes(body, wantKey)
-	if res.Index == 0 {
+	if !res.Exists() {
 		t.Fatalf("JSONFieldStr: key '%s' missing from %s", wantKey, string(body))
 	}
 	if res.Str == "" {
@@ -190,4 +222,11 @@ func parseJSON(t *testing.T, res *http.Response) []byte {
 		t.Fatalf("MustParseJSON: Response is not valid JSON")
 	}
 	return body
+}
+
+// gjsonEscape escapes . and * from the input so it can be used with gjson.Get
+func gjsonEscape(in string) string {
+	in = strings.ReplaceAll(in, ".", `\.`)
+	in = strings.ReplaceAll(in, "*", `\*`)
+	return in
 }
