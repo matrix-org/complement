@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"strings"
 	"testing"
@@ -22,6 +23,8 @@ type CSAPI struct {
 	SyncUntilTimeout time.Duration
 	// the since token for /sync calls
 	Since string
+	// True to enable verbose logging
+	Debug bool
 }
 
 // SyncUntilTimelineHas blocks and continually calls /sync until the `check` function returns true.
@@ -56,7 +59,6 @@ func (c *CSAPI) syncUntil(t *testing.T, key string, check func(gjson.Result) boo
 		}
 		body := parseJSON(t, res)
 		c.Since = getJSONFieldStr(t, body, "next_batch")
-
 		keyRes := gjson.GetBytes(body, key)
 		if keyRes.IsArray() {
 			events := keyRes.Array()
@@ -114,12 +116,25 @@ func (c *CSAPI) Do(t *testing.T, method string, paths []string, jsonBody interfa
 	if err != nil {
 		t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
 	}
+	if c.Debug {
+		t.Logf("Making %s request to %s", method, reqURL)
+		t.Logf("Request body: %s", string(b))
+	}
 	req, err := http.NewRequest(method, reqURL, bytes.NewReader(b))
 	if err != nil {
 		t.Fatalf("CSAPI.Do failed to create http.NewRequest: %s", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	return c.Client.Do(req)
+	res, err := c.Client.Do(req)
+	if c.Debug && res != nil {
+		dump, err := httputil.DumpResponse(res, true)
+		if err != nil {
+			t.Fatalf("CSAPI.Do failed to dump response body: %s", err)
+		}
+		t.Logf("%s", string(dump))
+
+	}
+	return res, err
 }
 
 // NewLoggedClient returns an http.Client which logs requests/responses

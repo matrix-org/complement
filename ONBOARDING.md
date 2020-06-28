@@ -47,7 +47,6 @@ Make a Federation server:
 srv := federation.NewServer(t, deployment,
     federation.HandleKeyRequests(),
     federation.HandleMakeSendJoinRequests(),
-    federation.HandleDirectoryLookups(),
 )
 cancel := srv.Listen()
 defer cancel()
@@ -55,6 +54,8 @@ defer cancel()
 
 Get a Federation client:
 ```go
+// Federation servers sign their requests, so you need a server before
+// you can make a client.
 // automatically accepts self-signed TLS certs
 // automatically maps localhost:12345 to the right container
 // automatically signs requests
@@ -114,7 +115,7 @@ func TestInboundFederationKeys(t *testing.T) {
 
 - I think Complement is doing something weird, can I get more logs?
 
-You can pass `COMPLEMENT_DEBUG=1` to add lots of debug logging.
+You can pass `COMPLEMENT_DEBUG=1` to add lots of debug logging. You can also do this via `os.Setenv("COMPLEMENT_DEBUG", "1")` before you make a deployment. This will add trace logging to the clients which logs full HTTP request/responses, amongst other debug info.
 
 - How do I set up a bunch of stuff before the tests, e.g before each?
 

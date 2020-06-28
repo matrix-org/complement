@@ -54,5 +54,6 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		BaseURL:          dep.BaseURL,
 		Client:           client.NewLoggedClient(t, nil),
 		SyncUntilTimeout: 5 * time.Second,
+		Debug:            d.Deployer.debugLogging,
 	}
 }

@@ -46,17 +46,17 @@ func MatchRequest(t *testing.T, req *http.Request, m match.HTTPRequest) []byte {
 	if m.Headers != nil {
 		for name, val := range m.Headers {
 			if req.Header.Get(name) != val {
-				t.Fatalf("got %s: %s want %s - %s", name, req.Header.Get(name), val, contextStr)
+				t.Fatalf("MatchRequest got %s: %s want %s - %s", name, req.Header.Get(name), val, contextStr)
 			}
 		}
 	}
 	if m.JSON != nil {
 		if !gjson.ValidBytes(body) {
-			t.Fatalf("request body is not valid JSON - %s", contextStr)
+			t.Fatalf("MatchRequest request body is not valid JSON - %s", contextStr)
 		}
 		for _, jm := range m.JSON {
 			if err = jm(body); err != nil {
-				t.Fatalf("%s - %s", err, contextStr)
+				t.Fatalf("MatchRequest %s - %s", err, contextStr)
 			}
 		}
 	}
@@ -75,23 +75,23 @@ func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byt
 
 	if m.StatusCode != 0 {
 		if res.StatusCode != m.StatusCode {
-			t.Fatalf("got status %d want %d - %s", res.StatusCode, m.StatusCode, contextStr)
+			t.Fatalf("MatchResponse got status %d want %d - %s", res.StatusCode, m.StatusCode, contextStr)
 		}
 	}
 	if m.Headers != nil {
 		for name, val := range m.Headers {
 			if res.Header.Get(name) != val {
-				t.Fatalf("got %s: %s want %s - %s", name, res.Header.Get(name), val, contextStr)
+				t.Fatalf("MatchResponse got %s: %s want %s - %s", name, res.Header.Get(name), val, contextStr)
 			}
 		}
 	}
 	if m.JSON != nil {
 		if !gjson.ValidBytes(body) {
-			t.Fatalf("response body is not valid JSON - %s", contextStr)
+			t.Fatalf("MatchResponse response body is not valid JSON - %s", contextStr)
 		}
 		for _, jm := range m.JSON {
 			if err = jm(body); err != nil {
-				t.Fatalf("%s - %s", err, contextStr)
+				t.Fatalf("MatchResponse %s - %s", err, contextStr)
 			}
 		}
 	}
