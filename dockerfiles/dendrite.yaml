@@ -92,6 +92,7 @@ kafka:
 # The postgres connection configs for connecting to the databases e.g a postgres:// URI
 database:
     account: "file:dendrite_account.db"
+    current_state: "file:dendrite_current_state.db"
     device: "file:dendrite_device.db"
     media_api: "file:dendrite_mediaapi.db"
     sync_api: "file:dendrite_syncapi.db"
