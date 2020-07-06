@@ -27,7 +27,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 	roomID := alice.CreateRoom(t, nil)
 
 	t.Run("parallel", func(t *testing.T) {
-		t.Run("reports m.room.create event", func(t *testing.T) {
+		t.Run("Room creation reports m.room.create to myself", func(t *testing.T) {
 			t.Parallel()
 			alice := deployment.Client(t, "hs1", userID)
 			alice.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
@@ -39,7 +39,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				return true
 			})
 		})
-		t.Run("reports m.room.member event", func(t *testing.T) {
+		t.Run("Room creation reports m.room.member to myself", func(t *testing.T) {
 			t.Parallel()
 			alice := deployment.Client(t, "hs1", userID)
 			alice.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {

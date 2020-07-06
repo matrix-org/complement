@@ -40,168 +40,197 @@ Because **M**<sup>*C*</sup> = **1** - **M**
 #### Sytest parity
 
 ```
-5/18 tests/10apidoc/01register.pl
-tests/10apidoc/01request-encoding.pl
-tests/10apidoc/02login.pl
-tests/10apidoc/03events-initial.pl
-tests/10apidoc/04version.pl
-tests/10apidoc/10profile-displayname.pl
-tests/10apidoc/11profile-avatar_url.pl
-tests/10apidoc/12device_management.pl
-tests/10apidoc/20presence.pl
-tests/10apidoc/30room-create.pl
-tests/10apidoc/31room-state.pl
-tests/10apidoc/32room-alias.pl
-tests/10apidoc/33room-members.pl
-tests/10apidoc/34room-messages.pl
-tests/10apidoc/35room-typing.pl
-tests/10apidoc/36room-levels.pl
-tests/10apidoc/37room-receipts.pl
-tests/10apidoc/38room-read-marker.pl
-tests/10apidoc/40content.pl
-tests/10apidoc/45server-capabilities.pl
-tests/11register.pl
-tests/12login/01threepid-and-password.pl
-tests/12login/02cas.pl
-tests/13logout.pl
-tests/14account/01change-password.pl
-tests/14account/02deactivate.pl
-tests/21presence-events.pl
-2/9 tests/30rooms/01state.pl
-tests/30rooms/02members-local.pl
-tests/30rooms/03members-remote.pl
-tests/30rooms/04messages.pl
-tests/30rooms/05aliases.pl
-tests/30rooms/06invite.pl
-tests/30rooms/07ban.pl
-tests/30rooms/08levels.pl
-tests/30rooms/09eventstream.pl
-tests/30rooms/10redactions.pl
-tests/30rooms/11leaving.pl
-tests/30rooms/12thirdpartyinvite.pl
-tests/30rooms/13guestaccess.pl
-tests/30rooms/14override-per-room.pl
-tests/30rooms/15kick.pl
-tests/30rooms/20typing.pl
-tests/30rooms/21receipts.pl
-tests/30rooms/22profile.pl
-tests/30rooms/30history-visibility.pl
-tests/30rooms/31forget.pl
-tests/30rooms/32erasure.pl
-tests/30rooms/40joinedapis.pl
-tests/30rooms/50context.pl
-tests/30rooms/51event.pl
-tests/30rooms/52members.pl
-tests/30rooms/60version_upgrade.pl
-tests/30rooms/70publicroomslist.pl
-tests/31sync/01filter.pl
-tests/31sync/02sync.pl
-tests/31sync/03joined.pl
-tests/31sync/04timeline.pl
-tests/31sync/05presence.pl
-tests/31sync/06state.pl
-tests/31sync/07invited.pl
-tests/31sync/08polling.pl
-tests/31sync/09archived.pl
-tests/31sync/10archived-ban.pl
-tests/31sync/11typing.pl
-tests/31sync/12receipts.pl
-tests/31sync/13filtered_sync.pl
-tests/31sync/14read-markers.pl
-tests/31sync/15lazy-members.pl
-tests/31sync/16room-summary.pl
-tests/32room-versions.pl
-tests/40presence.pl
-tests/41end-to-end-keys/01-upload-key.pl
-tests/41end-to-end-keys/03-one-time-keys.pl
-tests/41end-to-end-keys/04-query-key-federation.pl
-tests/41end-to-end-keys/05-one-time-key-federation.pl
-tests/41end-to-end-keys/06-device-lists.pl
-tests/41end-to-end-keys/07-backup.pl
-tests/41end-to-end-keys/08-cross-signing.pl
-tests/42tags.pl
-tests/43search.pl
-tests/44account_data.pl
-tests/45openid.pl
-tests/46direct/01directmessage.pl
-tests/46direct/02reliability.pl
-tests/46direct/03polling.pl
-tests/46direct/04federation.pl
-tests/46direct/05wildcard.pl
-tests/48admin.pl
-tests/49ignore.pl
-tests/50federation/00prepare.pl
-1/4 tests/50federation/01keys.pl
-tests/50federation/02server-names.pl
-1/2 tests/50federation/10query-profile.pl
-tests/50federation/11query-directory.pl
-tests/50federation/30room-join.pl
-1/5 tests/50federation/31room-send.pl
-tests/50federation/32room-getevent.pl
-1/4 tests/50federation/33room-get-missing-events.pl
-tests/50federation/34room-backfill.pl
-tests/50federation/35room-invite.pl
-tests/50federation/36state.pl
-tests/50federation/37public-rooms.pl
-tests/50federation/38receipts.pl
-tests/50federation/39redactions.pl
-tests/50federation/40devicelists.pl
-tests/50federation/40publicroomlist.pl
-tests/50federation/41power-levels.pl
-tests/50federation/42query-auth.pl
-tests/50federation/43typing.pl
-tests/50federation/50no-deextrem-outliers.pl
-tests/50federation/50server-acl-endpoints.pl
-tests/50federation/51transactions.pl
-tests/50federation/52soft-fail.pl
-tests/51media/01unicode.pl
-tests/51media/02nofilename.pl
-tests/51media/03ascii.pl
-tests/51media/10thumbnail.pl
-tests/51media/20urlpreview.pl
-tests/51media/30config.pl
-tests/51media/48admin-quarantine.pl
-tests/52user-directory/01public.pl
-tests/52user-directory/02private.pl
-tests/53groups/01create.pl
-tests/53groups/02read.pl
-tests/53groups/03local.pl
-tests/53groups/04remote-group.pl
-tests/53groups/05categories.pl
-tests/53groups/05roles.pl
-tests/53groups/06summaries.pl
-tests/53groups/10sync.pl
-tests/53groups/11publicise.pl
-tests/53groups/12joinable.pl
-tests/53groups/20room-upgrade.pl
-tests/54identity.pl
-tests/60app-services/01as-create.pl
-tests/60app-services/02ghost.pl
-tests/60app-services/03passive.pl
-tests/60app-services/04asuser.pl
-tests/60app-services/05lookup3pe.pl
-tests/60app-services/06publicroomlist.pl
-tests/60app-services/07deactivate.pl
-tests/61push/01message-pushed.pl
-tests/61push/02add_rules.pl
-tests/61push/03_unread_count.pl
-tests/61push/05_set_actions.pl
-tests/61push/06_get_pusher.pl
-tests/61push/06_push_rules_in_sync.pl
-tests/61push/07_set_enabled.pl
-tests/61push/08_rejected_pushers.pl
-tests/61push/09_notifications_api.pl
-tests/61push/80torture.pl
-tests/80torture/03events.pl
-tests/80torture/10filters.pl
-tests/90jira/SYN-115.pl
-tests/90jira/SYN-202.pl
-tests/90jira/SYN-205.pl
-tests/90jira/SYN-328.pl
-tests/90jira/SYN-343.pl
-tests/90jira/SYN-390.pl
-tests/90jira/SYN-442.pl
-tests/90jira/SYN-516.pl
-tests/90jira/SYN-606.pl
-tests/90jira/SYN-627.pl
+$ go run sytest_coverage.go
+
+account_change_password_test.go 0/7 tests
+account_data_test.go 0/10 tests
+account_deactivate_test.go 0/4 tests
+admin_test.go 0/5 tests
+apidoc_content_test.go 0/2 tests
+apidoc_device_management_test.go 0/8 tests
+apidoc_events_initial_test.go 0/2 tests
+apidoc_login_test.go 0/6 tests
+apidoc_presence_test.go 0/2 tests
+apidoc_profile_avatar_url_test.go 0/2 tests
+apidoc_profile_displayname_test.go 0/2 tests
+apidoc_register_test.go 3/9 tests
+    × GET /register yields a set of flows
+    ✓ POST /register can create a user
+    ✓ POST /register downcases capitals in usernames
+    ✓ POST /register returns the same device_id as that in the request
+    × POST /register rejects registration of usernames with '$q'
+    × POST $ep_name with shared secret
+    × POST $ep_name admin with shared secret
+    × POST $ep_name with shared secret downcases capitals
+    × POST $ep_name with shared secret disallows symbols
+
+apidoc_request_encoding_test.go 0/1 tests
+apidoc_room_alias_test.go 0/2 tests
+apidoc_room_create_test.go 0/10 tests
+apidoc_room_levels_test.go 0/4 tests
+apidoc_room_members_test.go 0/8 tests
+apidoc_room_messages_test.go 0/5 tests
+apidoc_room_read_marker_test.go 0/1 tests
+apidoc_room_receipts_test.go 0/1 tests
+apidoc_room_state_test.go 0/14 tests
+apidoc_room_typing_test.go 0/1 tests
+apidoc_server_capabilities_test.go 0/2 tests
+apidoc_ui_auth_test.go 0/4 tests
+apidoc_version_test.go 0/1 tests
+app_services_as_create_test.go 0/7 tests
+app_services_asuser_test.go 0/2 tests
+app_services_deactivate_test.go 0/1 tests
+app_services_ghost_test.go 0/6 tests
+app_services_lookuppe_test.go 0/4 tests
+app_services_passive_test.go 0/3 tests
+app_services_publicroomlist_test.go 0/2 tests
+direct_directmessage_test.go 0/3 tests
+direct_federation_test.go 0/2 tests
+direct_polling_test.go 0/1 tests
+direct_reliability_test.go 0/2 tests
+direct_wildcard_test.go 0/4 tests
+end_to_end_keys__backup_test.go 0/10 tests
+end_to_end_keys__cross_signing_test.go 0/8 tests
+end_to_end_keys__device_lists_test.go 0/15 tests
+end_to_end_keys__one_time_key_federation_test.go 0/1 tests
+end_to_end_keys__one_time_keys_test.go 0/1 tests
+end_to_end_keys__query_key_federation_test.go 0/1 tests
+end_to_end_keys__upload_key_test.go 0/5 tests
+federation_devicelists_test.go 0/11 tests
+federation_keys_test.go 1/4 tests
+    ✓ Federation key API allows unsigned requests for keys
+    × Federation key API can act as a notary server via a $method request
+    × Key notary server should return an expired key if it can't find any others
+    × Key notary server must not overwrite a valid key with a spurious result from the origin server
+
+federation_no_deextrem_outliers_test.go 0/1 tests
+federation_power_levels_test.go 0/2 tests
+federation_prepare_test.go 0/2 tests
+federation_public_rooms_test.go 0/1 tests
+federation_publicroomlist_test.go 0/1 tests
+federation_query_directory_test.go 0/2 tests
+federation_query_profile_test.go 1/2 tests
+    ✓ Outbound federation can query profile data
+    × Inbound federation can query profile data
+
+federation_receipts_test.go 0/2 tests
+federation_redactions_test.go 0/4 tests
+federation_room_backfill_test.go 0/5 tests
+federation_room_get_missing_events_test.go 1/4 tests
+    × Outbound federation can request missing events
+    × Inbound federation can return missing events for $vis visibility
+    × outliers whose auth_events are in a different room are correctly rejected
+    ✓ Outbound federation will ignore a missing event with bad JSON for room version 6
+
+federation_room_getevent_test.go 0/2 tests
+federation_room_invite_test.go 0/12 tests
+federation_room_join_test.go 0/17 tests
+federation_room_send_test.go 0/5 tests
+federation_server_acl_endpoints_test.go 0/1 tests
+federation_server_names_test.go 0/1 tests
+federation_soft_fail_test.go 0/3 tests
+federation_state_test.go 0/11 tests
+federation_transactions_test.go 0/2 tests
+federation_typing_test.go 0/1 tests
+groups_categories_test.go 0/3 tests
+groups_create_test.go 0/3 tests
+groups_joinable_test.go 0/4 tests
+groups_local_test.go 0/3 tests
+groups_publicise_test.go 0/2 tests
+groups_read_test.go 0/4 tests
+groups_remote_group_test.go 0/3 tests
+groups_roles_test.go 0/3 tests
+groups_room_upgrade_test.go 0/1 tests
+groups_summaries_test.go 0/11 tests
+groups_sync_test.go 0/3 tests
+identity_test.go 0/6 tests
+ignore_test.go 0/3 tests
+jira_SYN__test.go 0/9 tests
+login_cas_test.go 0/3 tests
+login_threepid_and_password_test.go 0/1 tests
+logout_test.go 0/4 tests
+media_admin_quarantine_test.go 0/1 tests
+media_ascii_test.go 0/5 tests
+media_config_test.go 0/1 tests
+media_nofilename_test.go 0/3 tests
+media_thumbnail_test.go 0/2 tests
+media_unicode_test.go 0/5 tests
+media_urlpreview_test.go 0/1 tests
+openid_test.go 0/3 tests
+presence_events_test.go 0/3 tests
+presence_test.go 0/5 tests
+push__get_pusher_test.go 0/1 tests
+push__notifications_api_test.go 0/1 tests
+push__push_rules_in_sync_test.go 0/5 tests
+push__rejected_pushers_test.go 0/1 tests
+push__set_actions_test.go 0/4 tests
+push__set_enabled_test.go 0/2 tests
+push__unread_count_test.go 0/2 tests
+push_add_rules_test.go 0/7 tests
+push_message_pushed_test.go 0/7 tests
+push_torture_test.go 0/3 tests
+register_test.go 0/8 tests
+room_versions_test.go 0/6 tests
+rooms_aliases_test.go 0/13 tests
+rooms_ban_test.go 0/2 tests
+rooms_context_test.go 0/4 tests
+rooms_erasure_test.go 0/1 tests
+rooms_event_test.go 0/3 tests
+rooms_eventstream_test.go 0/2 tests
+rooms_forget_test.go 0/5 tests
+rooms_guestaccess_test.go 0/13 tests
+rooms_history_visibility_test.go 0/2 tests
+rooms_invite_test.go 0/12 tests
+rooms_joinedapis_test.go 0/2 tests
+rooms_kick_test.go 0/2 tests
+rooms_leaving_test.go 0/7 tests
+rooms_levels_test.go 0/3 tests
+rooms_members_local_test.go 0/5 tests
+rooms_members_remote_test.go 0/8 tests
+rooms_members_test.go 0/3 tests
+rooms_messages_test.go 0/9 tests
+rooms_override_per_room_test.go 0/2 tests
+rooms_profile_test.go 0/1 tests
+rooms_publicroomslist_test.go 0/5 tests
+rooms_receipts_test.go 0/3 tests
+rooms_redactions_test.go 0/5 tests
+rooms_state_test.go 2/9 tests
+    ✓ Room creation reports m.room.create to myself
+    ✓ Room creation reports m.room.member to myself
+    × Setting room topic reports m.room.topic to myself
+    × Global initialSync
+    × Global initialSync with limit=0 gives no messages
+    × Room initialSync
+    × Room initialSync with limit=0 gives no messages
+    × Setting state twice is idempotent
+    × Joining room twice is idempotent
+
+rooms_thirdpartyinvite_test.go 0/13 tests
+rooms_typing_test.go 0/3 tests
+rooms_version_upgrade_test.go 0/19 tests
+search_test.go 0/5 tests
+sync_archived_ban_test.go 0/3 tests
+sync_archived_test.go 0/8 tests
+sync_filter_test.go 0/2 tests
+sync_filtered_sync_test.go 0/2 tests
+sync_invited_test.go 0/3 tests
+sync_joined_test.go 0/6 tests
+sync_lazy_members_test.go 0/11 tests
+sync_polling_test.go 0/2 tests
+sync_presence_test.go 0/3 tests
+sync_read_markers_test.go 0/3 tests
+sync_receipts_test.go 0/2 tests
+sync_room_summary_test.go 0/4 tests
+sync_state_test.go 0/14 tests
+sync_sync_test.go 0/1 tests
+sync_timeline_test.go 0/8 tests
+sync_typing_test.go 0/3 tests
+tags_test.go 0/10 tests
+torture_events_test.go 0/5 tests
+torture_filters_test.go 0/1 tests
+torture_json_test.go 0/3 tests
+user_directory_private_test.go 0/3 tests
+user_directory_public_test.go 0/7 tests
+
+TOTAL: 8/694 tests converted
 ```

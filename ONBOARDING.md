@@ -65,6 +65,22 @@ fedClient := srv.FederationClient(deployment, "hs1")
 
 ### FAQ
 
+#### How should I name the test files / test functions?
+
+There is a particular naming convention so that `sytest_coverage.go` can automatically pick up when tests have been added.
+
+You have to have `_test.go` on them else Go won't run the tests in that file. Other than that, if it's copying across sytest tests then remove `/` and digits and use an `_` separator e.g `tests/30rooms/20typing.pl` becomes `rooms_typing_test.go`, `tests/52user-directory/01public.pl` becomes `user_directory_public_test.go`, `tests/44account_data.pl` becomes `account_data_test.go`, etc. When you convert a test, make it a subtest with the perl test name e.g:
+
+```go
+func TestFoo(t *testing.T) {
+    t.Run("Outbound federation can query profile data", func(t *testing.T) {
+        // ....
+    })
+}
+```
+
+This slightly awkward structure means `sytest_coverage.go` will know the test is converted and automatically update the list when run! If you are struggling to get the script to pick up the file, just do `go run sytest_coverage.go -v` to see the exact filename and expected string.
+
 #### Should I always make a new blueprint for a test?
 
 Probably not. Blueprints are costly, and they should only be made if there is a strong case for plenty of reuse among tests. In the same way that we don't always add fixtures to sytest, we should be sparing with adding blueprints.
