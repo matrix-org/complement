@@ -15,9 +15,9 @@ You can either use your own image, or one of the ones supplied in the [dockerfil
 For instance, for Dendrite:
 ```
 # build a docker image for Dendrite...
-(cd dockerfiles && docker build -t complement-dendrite -f Dendrite.Dockerfile .)
+$ cd dockerfiles && docker build -t complement-dendrite -f Dendrite.Dockerfile .
 # ...and test it
-COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests
+$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests
 ```
 
 A full list of config options can be found [in the config file](./internal/config/config.go). All normal Go test config

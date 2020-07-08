@@ -4,7 +4,7 @@ If you've not run Complement tests yet, please do so. This document will outline
 
 ### Architecture
 
-Complement runs Docker containers every time you call `deployment := must.Deploy(...)`, which gets killed on `deployment.Destroy(...)`. These containers are snapshots of the target Homeserver at a particular state. The state is determined by the `Blueprint`, which is a human-readable outline for what should be done prior to the test. Coming from Sytest, a `Blueprint` is similar to a `fixture`. A `deployment` has functions on it for creating deployment-scoped structs such as CSAPI clients for interacting with specific Homeservers in the deployment. Assertions are done via the `must` and `match` packages. For testing outbound federation, Complement implements a bare-bones Federation server for Homeservers to talk to. Unlike Sytest, you have to explicitly opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically. This is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
+Complement runs Docker containers every time you call `deployment := must.Deploy(...)`, which gets killed on `deployment.Destroy(...)`. These containers are snapshots of the target homeserver at a particular state. The state is determined by the `Blueprint`, which is a human-readable outline for what should be done prior to the test. Coming from Sytest, a `Blueprint` is similar to a `fixture`. A `deployment` has functions on it for creating deployment-scoped structs such as CS-API clients for interacting with specific Homeservers in the deployment. Assertions are done via the `must` and `match` packages. For testing outbound federation, Complement implements a bare-bones Federation server for homeservers to talk to. Unlike Sytest, you have to explicitly opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically. This is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
 ```go
 // A federation server which handles serving up its own keys when requested,
 // automatically accepts make_join and send_join requests and deals with
@@ -16,18 +16,20 @@ srv := federation.NewServer(t, deployment,
 )
 // begin listening on a goroutine
 cancel := srv.Listen()
+
+// Shutdown the server at test end
 defer cancel()
 ```
 
 Network topology for all forms of communication look like this:
 ```
 +------+                  Outbound federation           +-----------+             Network: one per blueprint                +-----------+
-|      | :35372 <------ host.docker.internal:35372 ---- |           |                                                       |           |
+|      | :12345 <------ host.docker.internal:12345 ---- |           |                                                       |           |
 | Host |                                                | Container | ------- SS API https://hs2/_matrix/federation/... --> | Container |
-|      | -------CS API http://localhost:38295 --------> |   (hs1)   |                                                       |   (hs2)   |
-|      | ------SS API https://localhost:37562 --------> |           |                                                       |           |
+|      | -------CS API http://localhost:54321 --------> |   (hs1)   |                                                       |   (hs2)   |
+|      | ------SS API https://localhost:55555 --------> |           |                                                       |           |
 +------+                                                +-----------+                                                       +-----------+
-                                             docker -p 38295:8008 -p 37562:8448
+                                             docker -p 54321:8008 -p 55555:8448
 
 The high numbered ports are randomly chosen, and are for illustrative purposes only.
 ```
@@ -79,7 +81,7 @@ func TestFoo(t *testing.T) {
 }
 ```
 
-This slightly awkward structure means `sytest_coverage.go` will know the test is converted and automatically update the list when run! If you are struggling to get the script to pick up the file, just do `go run sytest_coverage.go -v` to see the exact filename and expected string.
+This slightly awkward structure means `sytest_coverage.go` will know the test is converted and automatically update the list in the README when run! If you are struggling to get the script to pick up the file, just do `go run sytest_coverage.go -v` to see the exact filename and expected string.
 
 #### Should I always make a new blueprint for a test?
 
