@@ -15,7 +15,7 @@ You can either use your own image, or one of the ones supplied in the [dockerfil
 For instance, for Dendrite:
 ```
 # build a docker image for Dendrite...
-$ cd dockerfiles && docker build -t complement-dendrite -f Dendrite.Dockerfile .
+$ (cd dockerfiles && docker build -t complement-dendrite -f Dendrite.Dockerfile .)
 # ...and test it
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests
 ```

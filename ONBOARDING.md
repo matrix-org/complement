@@ -81,7 +81,7 @@ func TestFoo(t *testing.T) {
 }
 ```
 
-This slightly awkward structure means `sytest_coverage.go` will know the test is converted and automatically update the list in the README when run! If you are struggling to get the script to pick up the file, just do `go run sytest_coverage.go -v` to see the exact filename and expected string.
+This slightly awkward structure means `sytest_coverage.go` will know the test is converted and automatically update the list when run! If you are struggling to get the script to pick up the file, just do `go run sytest_coverage.go -v` to see the exact filename and expected string.
 
 #### Should I always make a new blueprint for a test?
 
