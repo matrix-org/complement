@@ -194,3 +194,39 @@ func HandleKeyRequests() func(*Server) {
 		keymux.Handle("/server/{keyID}", keyFn).Methods("GET")
 	}
 }
+
+// HandleMediaRequests is an option which will process /_matrix/media/v1/* requests using predefined media IDs as ways to
+// get particular kinds of media. The origin of the media must match the server name. Uploads are not handled. The
+// predefined media IDs are:
+//   * PlainTextFile   => "Hello from the other side"
+func HandleMediaRequests() func(*Server) {
+	return func(srv *Server) {
+		// Note: The spec says to use r0, but implementations rely on /v1 working for federation requests as a legacy
+		// route.
+		mediamux := srv.mux.PathPrefix("/_matrix/media/v1").Subrouter()
+
+		downloadFn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			origin := vars["origin"]
+			mediaId := vars["mediaId"]
+
+			if origin != srv.ServerName {
+				w.WriteHeader(400)
+				w.Write([]byte("complement: Invalid Origin; Expected " + srv.ServerName))
+				return
+			}
+
+			if mediaId == "PlainTextFile" {
+				w.Header().Set("Content-Type", "text/plain")
+				w.WriteHeader(200)
+				w.Write([]byte("Hello from the other side"))
+			} else {
+				w.WriteHeader(404)
+				w.Write([]byte("complement: Unknown predefined media ID: " + mediaId))
+				return
+			}
+		})
+
+		mediamux.Handle("/download/{origin}/{mediaId}", downloadFn).Methods("GET")
+	}
+}
