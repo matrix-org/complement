@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -14,8 +15,18 @@ func TestMediaWithoutFileName(t *testing.T) {
 	deployment := Deploy(t, "media_repo", b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
+	remoteMediaId := "PlainTextFile"
+	remoteFile := []byte("Hello from the other side")
+	remoteContentType := "text/plain"
+
 	srv := federation.NewServer(t, deployment,
-		federation.HandleMediaRequests(),
+		federation.HandleMediaRequests(map[string]func(w http.ResponseWriter){
+			remoteMediaId: func(w http.ResponseWriter) {
+				w.Header().Set("Content-Type", remoteContentType)
+				w.WriteHeader(200)
+				w.Write(remoteFile)
+			},
+		}),
 	)
 	cancel := srv.Listen()
 	defer cancel()
@@ -47,13 +58,9 @@ func TestMediaWithoutFileName(t *testing.T) {
 			t.Parallel()
 			alice := deployment.Client(t, "hs1", userID)
 
-			// We know to expect a text/plain response like this from the HandleMediaRequests docs
-			wantContentType := "text/plain"
-			wantResponse := "Hello from the other side"
-
-			b, ct := alice.DownloadContent(t, fmt.Sprintf("mxc://%s/%s", srv.ServerName, "PlainTextFile"))
-			must.EqualStr(t, ct, wantContentType, "wrong Content-Type returned")
-			must.EqualStr(t, string(b), wantResponse, "wrong file content returned")
+			b, ct := alice.DownloadContent(t, fmt.Sprintf("mxc://%s/%s", srv.ServerName, remoteMediaId))
+			must.EqualStr(t, ct, remoteContentType, "wrong Content-Type returned")
+			must.EqualStr(t, string(b), string(remoteFile), "wrong file content returned")
 		})
 	})
 }
