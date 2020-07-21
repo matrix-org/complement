@@ -102,6 +102,7 @@ database:
     public_rooms_api: "file:dendrite_publicroomsapi.db"
     appservice: "file:dendrite_appservice.db"
     naffka: "file:dendrite_naffka.db"
+    e2e_key: "file:dendrite_e2e_key.db"
 
 # The TCP host:port pairs to bind the internal HTTP APIs to.
 # These shouldn't be exposed to the public internet.
