@@ -119,7 +119,7 @@ func NotEqualStr(t *testing.T, got, want, msg string) {
 func StartWithStr(t *testing.T, got, wantPrefix, msg string) {
 	t.Helper()
 	if !strings.HasPrefix(got, wantPrefix) {
-		t.Errorf("StartWithStr: #{msg}: got '#{got}' without prefix '#{wantPrefix}'")
+		t.Errorf("StartWithStr: %s: got '%s' without prefix '%s'", msg, got, wantPrefix)
 	}
 }
 
