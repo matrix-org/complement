@@ -152,7 +152,11 @@ logout_test.go 0/4 tests
 media_admin_quarantine_test.go 0/1 tests
 media_ascii_test.go 0/5 tests
 media_config_test.go 0/1 tests
-media_nofilename_test.go 0/3 tests
+media_nofilename_test.go 3/3 tests
+    ✓ Can upload without a file name
+    ✓ Can download without a file name locally
+    ✓ Can download without a file name over federation
+
 media_thumbnail_test.go 0/2 tests
 media_unicode_test.go 0/5 tests
 media_urlpreview_test.go 0/1 tests
@@ -232,5 +236,5 @@ torture_json_test.go 0/3 tests
 user_directory_private_test.go 0/3 tests
 user_directory_public_test.go 0/7 tests
 
-TOTAL: 8/694 tests converted
+TOTAL: 11/694 tests converted
 ```

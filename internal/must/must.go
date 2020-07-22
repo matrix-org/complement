@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/match"
@@ -111,6 +112,14 @@ func NotEqualStr(t *testing.T, got, want, msg string) {
 	t.Helper()
 	if got == want {
 		t.Errorf("NotEqualStr %s: got '%s', but didn't want it", msg, got)
+	}
+}
+
+// StartWithStr ensures that got starts with wantPrefix else logs an error.
+func StartWithStr(t *testing.T, got, wantPrefix, msg string) {
+	t.Helper()
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Errorf("StartWithStr: %s: got '%s' without prefix '%s'", msg, got, wantPrefix)
 	}
 }
 

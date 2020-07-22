@@ -194,3 +194,36 @@ func HandleKeyRequests() func(*Server) {
 		keymux.Handle("/server/{keyID}", keyFn).Methods("GET")
 	}
 }
+
+// HandleMediaRequests is an option which will process /_matrix/media/v1/download/* using the provided map
+// as a way to do so. The key of the map is the media ID to be handled.
+func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*Server) {
+	return func(srv *Server) {
+		mediamux := srv.mux.PathPrefix("/_matrix/media").Subrouter()
+
+		downloadFn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			origin := vars["origin"]
+			mediaId := vars["mediaId"]
+
+			if origin != srv.ServerName {
+				w.WriteHeader(400)
+				w.Write([]byte("complement: Invalid Origin; Expected " + srv.ServerName))
+				return
+			}
+
+			if f, ok := mediaIds[mediaId]; ok {
+				f(w)
+			} else {
+				w.WriteHeader(404)
+				w.Write([]byte("complement: Unknown predefined media ID: " + mediaId))
+				return
+			}
+		})
+
+		// Note: The spec says to use r0, but implementations rely on /v1 working for federation requests as a legacy
+		// route.
+		mediamux.Handle("/v1/download/{origin}/{mediaId}", downloadFn).Methods("GET")
+		mediamux.Handle("/r0/download/{origin}/{mediaId}", downloadFn).Methods("GET")
+	}
+}

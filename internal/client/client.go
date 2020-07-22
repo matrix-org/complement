@@ -29,6 +29,33 @@ type CSAPI struct {
 	txnID int
 }
 
+// UploadContent uploads the provided content with an optional file name. Fails the test on error. Returns the MXC URI.
+func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, contentType string) string {
+	t.Helper()
+	query := url.Values{}
+	if fileName != "" {
+		query.Set("filename", fileName)
+	}
+	res := c.MustDoRaw(t, "POST", []string{"_matrix", "media", "r0", "upload"}, fileBody, contentType, query)
+	body := parseJSON(t, res)
+	return getJSONFieldStr(t, body, "content_uri")
+}
+
+// DownloadContent downloads media from the server, returning the raw bytes and the Content-Type. Fails the test on error.
+func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
+	t.Helper()
+	mxcParts := strings.Split(strings.TrimPrefix(mxcUri, "mxc://"), "/")
+	origin := mxcParts[0]
+	mediaId := strings.Join(mxcParts[1:], "/")
+	res := c.MustDo(t, "GET", []string{"_matrix", "media", "r0", "download", origin, mediaId}, struct{}{})
+	contentType := res.Header.Get("Content-Type")
+	b, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Error(err)
+	}
+	return b, contentType
+}
+
 // CreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
 func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 	t.Helper()
@@ -131,6 +158,18 @@ func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody int
 	return res
 }
 
+func (c *CSAPI) MustDoRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) *http.Response {
+	t.Helper()
+	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
+	if err != nil {
+		t.Fatalf("CSAPI.MustDo %s %s error: %s", method, strings.Join(paths, "/"), err)
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+	}
+	return res
+}
+
 // DoWithAuth a JSON request. The access token for this user will automatically be added.
 func (c *CSAPI) DoWithAuth(t *testing.T, method string, paths []string, jsonBody interface{}) (*http.Response, error) {
 	t.Helper()
@@ -139,8 +178,25 @@ func (c *CSAPI) DoWithAuth(t *testing.T, method string, paths []string, jsonBody
 	})
 }
 
+func (c *CSAPI) DoWithAuthRaw(t *testing.T, method string, paths[] string, body []byte, contentType string, query url.Values) (*http.Response, error) {
+	t.Helper()
+	if query == nil {
+		query = url.Values{}
+	}
+	query.Set("access_token", c.AccessToken)
+	return c.DoRaw(t, method, paths, body, contentType, query)
+}
+
 // Do a JSON request.
 func (c *CSAPI) Do(t *testing.T, method string, paths []string, jsonBody interface{}, query url.Values) (*http.Response, error) {
+	b, err := json.Marshal(jsonBody)
+	if err != nil {
+		t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
+	}
+	return c.DoRaw(t, method, paths, b, "application/json", query)
+}
+
+func (c *CSAPI) DoRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) (*http.Response, error) {
 	t.Helper()
 	qs := ""
 	if len(query) > 0 {
@@ -151,19 +207,19 @@ func (c *CSAPI) Do(t *testing.T, method string, paths []string, jsonBody interfa
 	}
 
 	reqURL := c.BaseURL + "/" + strings.Join(paths, "/") + qs
-	b, err := json.Marshal(jsonBody)
-	if err != nil {
-		t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
-	}
 	if c.Debug {
 		t.Logf("Making %s request to %s", method, reqURL)
-		t.Logf("Request body: %s", string(b))
+		if contentType == "application/json" || strings.HasPrefix(contentType, "text/") {
+			t.Logf("Request body: %s", string(body))
+		} else {
+			t.Logf("Request body: <binary:%s>", contentType)
+		}
 	}
-	req, err := http.NewRequest(method, reqURL, bytes.NewReader(b))
+	req, err := http.NewRequest(method, reqURL, bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("CSAPI.Do failed to create http.NewRequest: %s", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	res, err := c.Client.Do(req)
 	if c.Debug && res != nil {
 		dump, err := httputil.DumpResponse(res, true)
