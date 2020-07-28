@@ -314,8 +314,9 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 	}
 	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
 	// hit /versions to check it is up
+	cfg := config.NewConfigFromEnvVars()
 	var lastErr error
-	for i := 0; i < 20; i++ {
+	for i := 0; i < cfg.VersionCheckIterations; i++ {
 		res, err := http.Get(versionsURL)
 		if err != nil {
 			lastErr = fmt.Errorf("GET %s => error: %s", versionsURL, err)
