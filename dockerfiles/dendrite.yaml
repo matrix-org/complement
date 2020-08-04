@@ -87,6 +87,8 @@ kafka:
         output_client_data: clientapiOutput
         output_typing_event: typingServerOutput
         user_updates: userUpdates
+        output_send_to_device_event: sendToDeviceOutput
+        output_key_change_event: keyChangeOutput
 
 
 # The postgres connection configs for connecting to the databases e.g a postgres:// URI
