@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -275,6 +276,13 @@ func (d *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID s
 
 func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
 	ctx := context.Background()
+	var extraHosts []string
+	if runtime.GOOS == "linux" {
+		// By default docker for linux does not expose this, so do it now.
+		// When https://github.com/moby/moby/pull/40007 lands in Docker 20, we should
+		// change this to be  `host.docker.internal:host-gateway`
+		extraHosts = []string{"host.docker.internal:172.17.0.1"}
+	}
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image:      imageID,
 		Domainname: hsName,
@@ -288,6 +296,7 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		},
 	}, &container.HostConfig{
 		PublishAllPorts: true,
+		ExtraHosts:      extraHosts,
 	}, &network.NetworkingConfig{
 		map[string]*network.EndpointSettings{
 			hsName: {
