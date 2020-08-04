@@ -4,7 +4,7 @@ If you've not run Complement tests yet, please do so. This document will outline
 
 ### Architecture
 
-Complement runs Docker containers every time you call `deployment := must.Deploy(...)`, which gets killed on `deployment.Destroy(...)`. These containers are snapshots of the target homeserver at a particular state. The state is determined by the `Blueprint`, which is a human-readable outline for what should be done prior to the test. Coming from Sytest, a `Blueprint` is similar to a `fixture`. A `deployment` has functions on it for creating deployment-scoped structs such as CS-API clients for interacting with specific Homeservers in the deployment. Assertions are done via the `must` and `match` packages. For testing outbound federation, Complement implements a bare-bones Federation server for homeservers to talk to. Unlike Sytest, you have to explicitly opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically. This is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
+Complement runs a Docker container every time you call `deployment := Deploy(...)`, which gets killed on `deployment.Destroy(...)`. These containers are snapshots of the target homeserver at a particular state. The state is determined by the `Blueprint`, which is a human-readable outline for what should be done prior to the test (such as creating users, rooms, etc). Coming from Sytest, a `Blueprint` is similar to a `fixture`. A `deployment` has functions on it for creating deployment-scoped structs such as CS-API clients for interacting with specific Homeservers in the deployment. Assertions are done via the `must` and `match` packages. For testing outbound federation, Complement implements a bare-bones Federation server for homeservers to talk to. Unlike Sytest, you have to explicitly opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically. This is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
 ```go
 // A federation server which handles serving up its own keys when requested,
 // automatically accepts make_join and send_join requests and deals with
@@ -153,7 +153,7 @@ Error will fail the test but continue execution, where Fatal will fail the test 
 
 #### Why do I get the error "Error response from daemon: Conflict. The container name "/complement_rooms_state_alice.hs1_1" is already in use by container "c2d1d90c6cff7b7de2678b56c702bd1ff76ca72b930e8f2ca32eef3f2514ff3b". You have to remove (or rename) that container to be able to reuse that name."?
 
-The Docker daemon has a lag time between removing containers and them actually being removed. This means you cannot remove a container called 'foo' and immediately recreate it as 'foo'. To get around this, you need to use a different name. This probably means the namespace you have given the deployment is used by another test. Try changing it to something else e.g `must.Deploy(t, "rooms_state_2", b.BlueprintAlice.Name)`
+The Docker daemon has a lag time between removing containers and them actually being removed. This means you cannot remove a container called 'foo' and immediately recreate it as 'foo'. To get around this, you need to use a different name. This probably means the namespace you have given the deployment is used by another test. Try changing it to something else e.g `Deploy(t, "rooms_state_2", b.BlueprintAlice.Name)`
 
 #### How do I run tests inside my IDE?
 
@@ -163,3 +163,7 @@ For VSCode, add to `settings.json`:
     "COMPLEMENT_BASE_IMAGE": "complement-dendrite:latest"
 }
 ```
+
+For Goland:
+ * Under "Run"->"Edit Configurations..."->"Templates"->"Go Test", add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest`
+ * Then you can right-click on any test file or test case and "Run <test name>".
