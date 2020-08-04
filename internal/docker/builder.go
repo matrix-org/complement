@@ -16,7 +16,6 @@ package docker
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	client "github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
@@ -373,7 +373,7 @@ func printLogs(docker *client.Client, containerID, contextStr string) {
 	}
 	log.Printf("============================================\n\n\n")
 	log.Printf("%s : Server logs:\n", contextStr)
-	io.Copy(log.Writer(), reader)
+	stdcopy.StdCopy(log.Writer(), log.Writer(), reader)
 	log.Printf("============== %s : END LOGS ==============\n\n\n", contextStr)
 }
 
