@@ -1,0 +1,45 @@
+## Server ##
+
+server_name: SERVER_NAME
+log_config: /conf/log_config.yaml
+report_stats: False
+signing_key_path: /conf/server.signing.key
+trusted_key_servers: []
+enable_registration: true
+
+## Listeners ##
+
+tls_certificate_path: /conf/server.tls.crt
+tls_private_key_path: /conf/server.tls.key
+
+listeners:
+  - port: 8448
+    bind_addresses: ['::']
+    type: http
+    tls: true
+    resources:
+      - names: [federation]
+
+  - port: 8008
+    bind_addresses: ['::']
+    type: http
+
+    resources:
+      - names: [client]
+
+## Database ##
+
+database:
+  name: "sqlite3"
+  args:
+    database: "/data/homeserver.db"
+
+## Federation ##
+
+# trust certs signed by the dummy CA
+federation_custom_ca_list:
+- /ca/ca.crt
+
+# unblacklist RFC1918 addresses
+federation_ip_range_blacklist: []
+
