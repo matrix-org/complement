@@ -12,6 +12,7 @@ matrix:
     private_key: "matrix_key.pem"
     # The x509 certificates used by the federation listeners for this server
     federation_certificates: ["server.crt"]
+    federation_disable_tls_validation: true
     # The list of identity servers trusted to verify third party identifiers by this server.
     # Defaults to no trusted servers.
     trusted_third_party_id_servers:
