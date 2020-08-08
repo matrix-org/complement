@@ -40,20 +40,9 @@ Because **M**<sup>*C*</sup> = **1** - **M**
 #### Sytest parity
 
 ```
-$ go run sytest_coverage.go
+$ go run sytest_coverage.go -v
 
-account_change_password_test.go 0/7 tests
-account_data_test.go 0/10 tests
-account_deactivate_test.go 0/4 tests
-admin_test.go 0/5 tests
-apidoc_content_test.go 0/2 tests
-apidoc_device_management_test.go 0/8 tests
-apidoc_events_initial_test.go 0/2 tests
-apidoc_login_test.go 0/6 tests
-apidoc_presence_test.go 0/2 tests
-apidoc_profile_avatar_url_test.go 0/2 tests
-apidoc_profile_displayname_test.go 0/2 tests
-apidoc_register_test.go 3/9 tests
+10apidoc/01register 3/9 tests
     × GET /register yields a set of flows
     ✓ POST /register can create a user
     ✓ POST /register downcases capitals in usernames
@@ -64,141 +53,34 @@ apidoc_register_test.go 3/9 tests
     × POST $ep_name with shared secret downcases capitals
     × POST $ep_name with shared secret disallows symbols
 
-apidoc_request_encoding_test.go 0/1 tests
-apidoc_room_alias_test.go 0/2 tests
-apidoc_room_create_test.go 0/10 tests
-apidoc_room_levels_test.go 0/4 tests
-apidoc_room_members_test.go 0/8 tests
-apidoc_room_messages_test.go 0/5 tests
-apidoc_room_read_marker_test.go 0/1 tests
-apidoc_room_receipts_test.go 0/1 tests
-apidoc_room_state_test.go 0/14 tests
-apidoc_room_typing_test.go 0/1 tests
-apidoc_server_capabilities_test.go 0/2 tests
-apidoc_ui_auth_test.go 0/4 tests
-apidoc_version_test.go 0/1 tests
-app_services_as_create_test.go 0/7 tests
-app_services_asuser_test.go 0/2 tests
-app_services_deactivate_test.go 0/1 tests
-app_services_ghost_test.go 0/6 tests
-app_services_lookuppe_test.go 0/4 tests
-app_services_passive_test.go 0/3 tests
-app_services_publicroomlist_test.go 0/2 tests
-direct_directmessage_test.go 0/3 tests
-direct_federation_test.go 0/2 tests
-direct_polling_test.go 0/1 tests
-direct_reliability_test.go 0/2 tests
-direct_wildcard_test.go 0/4 tests
-end_to_end_keys__backup_test.go 0/10 tests
-end_to_end_keys__cross_signing_test.go 0/8 tests
-end_to_end_keys__device_lists_test.go 0/15 tests
-end_to_end_keys__one_time_key_federation_test.go 0/1 tests
-end_to_end_keys__one_time_keys_test.go 0/1 tests
-end_to_end_keys__query_key_federation_test.go 0/1 tests
-end_to_end_keys__upload_key_test.go 0/5 tests
-federation_devicelists_test.go 0/11 tests
-federation_keys_test.go 1/4 tests
-    ✓ Federation key API allows unsigned requests for keys
-    × Federation key API can act as a notary server via a $method request
-    × Key notary server should return an expired key if it can't find any others
-    × Key notary server must not overwrite a valid key with a spurious result from the origin server
-
-federation_no_deextrem_outliers_test.go 0/1 tests
-federation_power_levels_test.go 0/2 tests
-federation_prepare_test.go 0/2 tests
-federation_public_rooms_test.go 0/1 tests
-federation_publicroomlist_test.go 0/1 tests
-federation_query_directory_test.go 0/2 tests
-federation_query_profile_test.go 1/2 tests
-    ✓ Outbound federation can query profile data
-    × Inbound federation can query profile data
-
-federation_receipts_test.go 0/2 tests
-federation_redactions_test.go 0/4 tests
-federation_room_backfill_test.go 0/5 tests
-federation_room_get_missing_events_test.go 1/4 tests
-    × Outbound federation can request missing events
-    × Inbound federation can return missing events for $vis visibility
-    × outliers whose auth_events are in a different room are correctly rejected
-    ✓ Outbound federation will ignore a missing event with bad JSON for room version 6
-
-federation_room_getevent_test.go 0/2 tests
-federation_room_invite_test.go 0/12 tests
-federation_room_join_test.go 0/17 tests
-federation_room_send_test.go 0/5 tests
-federation_server_acl_endpoints_test.go 0/1 tests
-federation_server_names_test.go 0/1 tests
-federation_soft_fail_test.go 0/3 tests
-federation_state_test.go 0/11 tests
-federation_transactions_test.go 0/2 tests
-federation_typing_test.go 0/1 tests
-groups_categories_test.go 0/3 tests
-groups_create_test.go 0/3 tests
-groups_joinable_test.go 0/4 tests
-groups_local_test.go 0/3 tests
-groups_publicise_test.go 0/2 tests
-groups_read_test.go 0/4 tests
-groups_remote_group_test.go 0/3 tests
-groups_roles_test.go 0/3 tests
-groups_room_upgrade_test.go 0/1 tests
-groups_summaries_test.go 0/11 tests
-groups_sync_test.go 0/3 tests
-identity_test.go 0/6 tests
-ignore_test.go 0/3 tests
-jira_SYN__test.go 0/9 tests
-login_cas_test.go 0/3 tests
-login_threepid_and_password_test.go 0/1 tests
-logout_test.go 0/4 tests
-media_admin_quarantine_test.go 0/1 tests
-media_ascii_test.go 0/5 tests
-media_config_test.go 0/1 tests
-media_nofilename_test.go 3/3 tests
-    ✓ Can upload without a file name
-    ✓ Can download without a file name locally
-    ✓ Can download without a file name over federation
-
-media_thumbnail_test.go 0/2 tests
-media_unicode_test.go 0/5 tests
-media_urlpreview_test.go 0/1 tests
-openid_test.go 0/3 tests
-presence_events_test.go 0/3 tests
-presence_test.go 0/5 tests
-push__get_pusher_test.go 0/1 tests
-push__notifications_api_test.go 0/1 tests
-push__push_rules_in_sync_test.go 0/5 tests
-push__rejected_pushers_test.go 0/1 tests
-push__set_actions_test.go 0/4 tests
-push__set_enabled_test.go 0/2 tests
-push__unread_count_test.go 0/2 tests
-push_add_rules_test.go 0/7 tests
-push_message_pushed_test.go 0/7 tests
-push_torture_test.go 0/3 tests
-register_test.go 0/8 tests
-room_versions_test.go 0/6 tests
-rooms_aliases_test.go 0/13 tests
-rooms_ban_test.go 0/2 tests
-rooms_context_test.go 0/4 tests
-rooms_erasure_test.go 0/1 tests
-rooms_event_test.go 0/3 tests
-rooms_eventstream_test.go 0/2 tests
-rooms_forget_test.go 0/5 tests
-rooms_guestaccess_test.go 0/13 tests
-rooms_history_visibility_test.go 0/2 tests
-rooms_invite_test.go 0/12 tests
-rooms_joinedapis_test.go 0/2 tests
-rooms_kick_test.go 0/2 tests
-rooms_leaving_test.go 0/7 tests
-rooms_levels_test.go 0/3 tests
-rooms_members_local_test.go 0/5 tests
-rooms_members_remote_test.go 0/8 tests
-rooms_members_test.go 0/3 tests
-rooms_messages_test.go 0/9 tests
-rooms_override_per_room_test.go 0/2 tests
-rooms_profile_test.go 0/1 tests
-rooms_publicroomslist_test.go 0/5 tests
-rooms_receipts_test.go 0/3 tests
-rooms_redactions_test.go 0/5 tests
-rooms_state_test.go 2/9 tests
+10apidoc/01request-encoding 0/1 tests
+10apidoc/02login 0/6 tests
+10apidoc/03events-initial 0/2 tests
+10apidoc/04version 0/1 tests
+10apidoc/10profile-displayname 0/2 tests
+10apidoc/11profile-avatar_url 0/2 tests
+10apidoc/12device_management 0/8 tests
+10apidoc/13ui-auth 0/4 tests
+10apidoc/20presence 0/2 tests
+10apidoc/30room-create 0/10 tests
+10apidoc/31room-state 0/14 tests
+10apidoc/32room-alias 0/2 tests
+10apidoc/33room-members 0/8 tests
+10apidoc/34room-messages 0/5 tests
+10apidoc/35room-typing 0/1 tests
+10apidoc/36room-levels 0/4 tests
+10apidoc/37room-receipts 0/1 tests
+10apidoc/38room-read-marker 0/1 tests
+10apidoc/40content 0/2 tests
+10apidoc/45server-capabilities 0/2 tests
+11register 0/8 tests
+12login/01threepid-and-password 0/1 tests
+12login/02cas 0/3 tests
+13logout 0/4 tests
+14account/01change-password 0/7 tests
+14account/02deactivate 0/4 tests
+21presence-events 0/3 tests
+30rooms/01state 2/9 tests
     ✓ Room creation reports m.room.create to myself
     ✓ Room creation reports m.room.member to myself
     × Setting room topic reports m.room.topic to myself
@@ -209,32 +91,159 @@ rooms_state_test.go 2/9 tests
     × Setting state twice is idempotent
     × Joining room twice is idempotent
 
-rooms_thirdpartyinvite_test.go 0/13 tests
-rooms_typing_test.go 0/3 tests
-rooms_version_upgrade_test.go 0/19 tests
-search_test.go 0/5 tests
-sync_archived_ban_test.go 0/3 tests
-sync_archived_test.go 0/8 tests
-sync_filter_test.go 0/2 tests
-sync_filtered_sync_test.go 0/2 tests
-sync_invited_test.go 0/3 tests
-sync_joined_test.go 0/6 tests
-sync_lazy_members_test.go 0/11 tests
-sync_polling_test.go 0/2 tests
-sync_presence_test.go 0/3 tests
-sync_read_markers_test.go 0/3 tests
-sync_receipts_test.go 0/2 tests
-sync_room_summary_test.go 0/4 tests
-sync_state_test.go 0/14 tests
-sync_sync_test.go 0/1 tests
-sync_timeline_test.go 0/8 tests
-sync_typing_test.go 0/3 tests
-tags_test.go 0/10 tests
-torture_events_test.go 0/5 tests
-torture_filters_test.go 0/1 tests
-torture_json_test.go 0/3 tests
-user_directory_private_test.go 0/3 tests
-user_directory_public_test.go 0/7 tests
+30rooms/02members-local 0/5 tests
+30rooms/03members-remote 0/8 tests
+30rooms/04messages 0/9 tests
+30rooms/05aliases 0/13 tests
+30rooms/06invite 0/12 tests
+30rooms/07ban 0/2 tests
+30rooms/08levels 0/3 tests
+30rooms/09eventstream 0/2 tests
+30rooms/10redactions 0/5 tests
+30rooms/11leaving 0/7 tests
+30rooms/12thirdpartyinvite 0/13 tests
+30rooms/13guestaccess 0/13 tests
+30rooms/14override-per-room 0/2 tests
+30rooms/15kick 0/2 tests
+30rooms/20typing 0/3 tests
+30rooms/21receipts 0/3 tests
+30rooms/22profile 0/1 tests
+30rooms/30history-visibility 0/2 tests
+30rooms/31forget 0/5 tests
+30rooms/32erasure 0/1 tests
+30rooms/40joinedapis 0/2 tests
+30rooms/50context 0/4 tests
+30rooms/51event 0/3 tests
+30rooms/52members 0/3 tests
+30rooms/60version_upgrade 0/19 tests
+30rooms/70publicroomslist 0/5 tests
+31sync/01filter 0/2 tests
+31sync/02sync 0/1 tests
+31sync/03joined 0/6 tests
+31sync/04timeline 0/8 tests
+31sync/05presence 0/3 tests
+31sync/06state 0/14 tests
+31sync/07invited 0/3 tests
+31sync/08polling 0/2 tests
+31sync/09archived 0/8 tests
+31sync/10archived-ban 0/3 tests
+31sync/11typing 0/3 tests
+31sync/12receipts 0/2 tests
+31sync/13filtered_sync 0/2 tests
+31sync/14read-markers 0/3 tests
+31sync/15lazy-members 0/11 tests
+31sync/16room-summary 0/4 tests
+32room-versions 0/6 tests
+40presence 0/5 tests
+41end-to-end-keys/01-upload-key 0/5 tests
+41end-to-end-keys/03-one-time-keys 0/1 tests
+41end-to-end-keys/04-query-key-federation 0/1 tests
+41end-to-end-keys/05-one-time-key-federation 0/1 tests
+41end-to-end-keys/06-device-lists 0/15 tests
+41end-to-end-keys/07-backup 0/10 tests
+41end-to-end-keys/08-cross-signing 0/8 tests
+42tags 0/10 tests
+43search 0/5 tests
+44account_data 0/10 tests
+45openid 0/3 tests
+46direct/01directmessage 0/3 tests
+46direct/02reliability 0/2 tests
+46direct/03polling 0/1 tests
+46direct/04federation 0/2 tests
+46direct/05wildcard 0/4 tests
+48admin 0/5 tests
+49ignore 0/3 tests
+50federation/00prepare 0/2 tests
+50federation/01keys 1/4 tests
+    ✓ Federation key API allows unsigned requests for keys
+    × Federation key API can act as a notary server via a $method request
+    × Key notary server should return an expired key if it can't find any others
+    × Key notary server must not overwrite a valid key with a spurious result from the origin server
 
-TOTAL: 11/694 tests converted
+50federation/02server-names 0/1 tests
+50federation/10query-profile 1/2 tests
+    ✓ Outbound federation can query profile data
+    × Inbound federation can query profile data
+
+50federation/11query-directory 0/2 tests
+50federation/30room-join 0/17 tests
+50federation/31room-send 0/5 tests
+50federation/32room-getevent 0/2 tests
+50federation/33room-get-missing-events 1/4 tests
+    × Outbound federation can request missing events
+    × Inbound federation can return missing events for $vis visibility
+    × outliers whose auth_events are in a different room are correctly rejected
+    ✓ Outbound federation will ignore a missing event with bad JSON for room version 6
+
+50federation/34room-backfill 0/5 tests
+50federation/35room-invite 0/12 tests
+50federation/36state 0/11 tests
+50federation/37public-rooms 0/1 tests
+50federation/38receipts 0/2 tests
+50federation/39redactions 0/4 tests
+50federation/40devicelists 0/11 tests
+50federation/40publicroomlist 0/1 tests
+50federation/41power-levels 0/2 tests
+50federation/43typing 0/1 tests
+50federation/50no-deextrem-outliers 0/1 tests
+50federation/50server-acl-endpoints 0/1 tests
+50federation/51transactions 0/2 tests
+50federation/52soft-fail 0/3 tests
+51media/01unicode 0/5 tests
+51media/02nofilename 3/3 tests
+    ✓ Can upload without a file name
+    ✓ Can download without a file name locally
+    ✓ Can download without a file name over federation
+
+51media/03ascii 0/5 tests
+51media/10thumbnail 0/2 tests
+51media/20urlpreview 0/1 tests
+51media/30config 0/1 tests
+51media/48admin-quarantine 0/1 tests
+52user-directory/01public 0/7 tests
+52user-directory/02private 0/3 tests
+53groups/01create 0/3 tests
+53groups/02read 0/4 tests
+53groups/03local 0/3 tests
+53groups/04remote-group 0/3 tests
+53groups/05categories 0/3 tests
+53groups/05roles 0/3 tests
+53groups/06summaries 0/11 tests
+53groups/10sync 0/3 tests
+53groups/11publicise 0/2 tests
+53groups/12joinable 0/4 tests
+53groups/20room-upgrade 0/1 tests
+54identity 0/6 tests
+60app-services/01as-create 0/7 tests
+60app-services/02ghost 0/6 tests
+60app-services/03passive 0/3 tests
+60app-services/04asuser 0/2 tests
+60app-services/05lookup3pe 0/4 tests
+60app-services/06publicroomlist 0/2 tests
+60app-services/07deactivate 0/1 tests
+61push/01message-pushed 0/7 tests
+61push/02add_rules 0/7 tests
+61push/03_unread_count 0/2 tests
+61push/05_set_actions 0/4 tests
+61push/06_get_pusher 0/1 tests
+61push/06_push_rules_in_sync 0/5 tests
+61push/07_set_enabled 0/2 tests
+61push/08_rejected_pushers 0/1 tests
+61push/09_notifications_api 0/1 tests
+61push/80torture 0/3 tests
+80torture/03events 0/5 tests
+80torture/10filters 0/1 tests
+80torture/20json 0/3 tests
+90jira/SYN-115 0/1 tests
+90jira/SYN-202 0/1 tests
+90jira/SYN-205 0/1 tests
+90jira/SYN-328 0/1 tests
+90jira/SYN-343 0/1 tests
+90jira/SYN-390 0/1 tests
+90jira/SYN-442 0/1 tests
+90jira/SYN-516 0/1 tests
+90jira/SYN-627 0/1 tests
+
+TOTAL: 11/690 tests converted
+
 ```

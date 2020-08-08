@@ -26,6 +26,7 @@ func TestOutboundFederationProfile(t *testing.T) {
 	cancel := srv.Listen()
 	defer cancel()
 
+	// sytest: Outbound federation can query profile data
 	t.Run("Outbound federation can query profile data", func(t *testing.T) {
 		remoteUserID := "@user:host.docker.internal"
 		remoteDisplayName := "my remote display name"

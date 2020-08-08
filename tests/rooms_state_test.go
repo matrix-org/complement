@@ -27,6 +27,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 	roomID := alice.CreateRoom(t, nil)
 
 	t.Run("parallel", func(t *testing.T) {
+		// sytest: Room creation reports m.room.create to myself
 		t.Run("Room creation reports m.room.create to myself", func(t *testing.T) {
 			t.Parallel()
 			alice := deployment.Client(t, "hs1", userID)
@@ -39,6 +40,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				return true
 			})
 		})
+		// sytest: Room creation reports m.room.member to myself
 		t.Run("Room creation reports m.room.member to myself", func(t *testing.T) {
 			t.Parallel()
 			alice := deployment.Client(t, "hs1", userID)

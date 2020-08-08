@@ -31,6 +31,7 @@ func TestRegistration(t *testing.T) {
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	t.Run("parallel", func(t *testing.T) {
+		// sytest: POST {} returns a set of flows
 		t.Run("POST {} returns a set of flows", func(t *testing.T) {
 			t.Parallel()
 			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{}`), nil)
@@ -50,6 +51,7 @@ func TestRegistration(t *testing.T) {
 				},
 			})
 		})
+		// sytest: POST /register can create a user
 		t.Run("POST /register can create a user", func(t *testing.T) {
 			t.Parallel()
 			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
@@ -66,6 +68,7 @@ func TestRegistration(t *testing.T) {
 				},
 			})
 		})
+		// sytest: POST /register downcases capitals in usernames
 		t.Run("POST /register downcases capitals in usernames", func(t *testing.T) {
 			t.Parallel()
 			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
@@ -82,6 +85,7 @@ func TestRegistration(t *testing.T) {
 				},
 			})
 		})
+		// sytest: POST /register returns the same device_id as that in the request
 		t.Run("POST /register returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
 			deviceID := "my_device_id"
@@ -100,6 +104,7 @@ func TestRegistration(t *testing.T) {
 				},
 			})
 		})
+		// sytest: POST /register rejects usernames with special characters
 		t.Run("POST /register rejects usernames with special characters", func(t *testing.T) {
 			t.Parallel()
 			specialChars := []string{

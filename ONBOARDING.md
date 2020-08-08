@@ -69,19 +69,23 @@ fedClient := srv.FederationClient(deployment, "hs1")
 
 #### How should I name the test files / test functions?
 
-There is a particular naming convention so that `sytest_coverage.go` can automatically pick up when tests have been added.
-
-You have to have `_test.go` on them else Go won't run the tests in that file. Other than that, if it's copying across sytest tests then remove `/` and digits and use an `_` separator e.g `tests/30rooms/20typing.pl` becomes `rooms_typing_test.go`, `tests/52user-directory/01public.pl` becomes `user_directory_public_test.go`, `tests/44account_data.pl` becomes `account_data_test.go`, etc. When you convert a test, make it a subtest with the perl test name e.g:
-
+Test files have to have `_test.go` else Go won't run the tests in that file. Other than that, there are no restrictions or naming convention.
+If you are converting a sytest be sure to add a comment _anywhere_ in the source code which has the form:
 ```go
-func TestFoo(t *testing.T) {
-    t.Run("Outbound federation can query profile data", func(t *testing.T) {
-        // ....
-    })
+// sytest: $test_name
+```
+e.g:
+```go
+// Test that a server can receive /keys requests:
+// https://matrix.org/docs/spec/server_server/latest#get-matrix-key-v2-server-keyid
+// sytest: Federation key API allows unsigned requests for keys
+func TestInboundFederationKeys(t *testing.T) {
+    ...
 }
 ```
-
-This slightly awkward structure means `sytest_coverage.go` will know the test is converted and automatically update the list when run! If you are struggling to get the script to pick up the file, just do `go run sytest_coverage.go -v` to see the exact filename and expected string.
+Adding `// sytest: ...` means `sytest_coverage.go` will know the test is converted and automatically update the list
+when run! Use `go run sytest_coverage.go -v` to see the exact string to use, as they may be different to the one produced
+by an actual sytest run due to parameterised tests.
 
 #### Should I always make a new blueprint for a test?
 

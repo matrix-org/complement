@@ -37,6 +37,7 @@ func TestMediaWithoutFileName(t *testing.T) {
 	contentType := "text/plain"
 
 	t.Run("parallel", func(t *testing.T) {
+		// sytest: Can upload without a file name
 		t.Run("Can upload without a file name", func(t *testing.T) {
 			t.Parallel()
 			alice := deployment.Client(t, "hs1", userID)
@@ -44,6 +45,7 @@ func TestMediaWithoutFileName(t *testing.T) {
 			must.NotEqualStr(t, mxc, "", "did not return an MXC URI")
 			must.StartWithStr(t, mxc, "mxc://", "returned invalid MXC URI")
 		})
+		// sytest: Can download without a file name locally
 		t.Run("Can download without a file name locally", func(t *testing.T) {
 			t.Parallel()
 			alice := deployment.Client(t, "hs1", userID)
@@ -54,6 +56,7 @@ func TestMediaWithoutFileName(t *testing.T) {
 			must.EqualStr(t, ct, contentType, "wrong Content-Type returned")
 			must.EqualStr(t, string(b), string(file), "wrong file content returned")
 		})
+		// sytest: Can download without a file name over federation
 		t.Run("Can download without a file name over federation", func(t *testing.T) {
 			t.Parallel()
 			alice := deployment.Client(t, "hs1", userID)

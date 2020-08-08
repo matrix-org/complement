@@ -5,6 +5,8 @@ package main
 
 import (
 	"fmt"
+	"go/parser"
+	"go/token"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -16,11 +18,13 @@ import (
 // $ grep -r 'test "' ./tests > test.list
 
 var (
-	testNameRegexp      = regexp.MustCompile(`.*"(.*)"`)
-	testFilenameRegexp  = regexp.MustCompile(`/tests/(.*)\.pl`)
-	cleanFilenameRegexp = regexp.MustCompile(`[^a-zA-Z_]+`)
+	testNameRegexp     = regexp.MustCompile(`.*"(.*)"`)
+	testFilenameRegexp = regexp.MustCompile(`/tests/(.*)\.pl`)
 )
 
+// Maps test names to filenames then looks for:
+//   sytest: $test_name
+// in all files in ./tests - if there's a match it marks that test as converted.
 func main() {
 	verbose := len(os.Args) == 2 && os.Args[1] == "-v"
 	body, err := ioutil.ReadFile("./sytest.list")
@@ -29,36 +33,56 @@ func main() {
 	}
 	testLines := strings.Split(string(body), "\n")
 	filenameToTestName := make(map[string][]string)
+	testNameToFilename := make(map[string]string)
 	for _, line := range testLines {
 		name, filename := extract(line)
 		if name == "" || filename == "" {
 			continue
 		}
-		gof := goFilename(filename)
-		filenameToTestName[gof] = append(filenameToTestName[gof], name)
+		name = "sytest: " + strings.TrimSpace(name)
+		filenameToTestName[filename] = append(filenameToTestName[filename], name)
+		testNameToFilename[name] = strings.TrimSpace(filename)
 	}
-	numComplementTests := 0
-	total := 0
-	for _, fname := range sorted(filenameToTestName) {
-		testNames := filenameToTestName[fname]
-		// try to find the filename
-		numTests := 0
-		goCode, _ := ioutil.ReadFile("./tests/" + fname)
-		if goCode != nil {
-			for i := range testNames {
-				// look for the sytest name contained in quotes
-				if strings.Contains(string(goCode), `"`+testNames[i]+`"`) {
-					numTests++
-					testNames[i] = "✓ " + testNames[i]
-				} else {
-					testNames[i] = "× " + testNames[i]
+	total := len(testNameToFilename)
+	files, err := ioutil.ReadDir("./tests")
+	if err != nil {
+		panic(err)
+	}
+	convertedTests := make(map[string]bool)
+	for _, file := range files {
+		fset := token.NewFileSet()
+		astFile, err := parser.ParseFile(fset, "./tests/"+file.Name(), nil, parser.ParseComments)
+		if err != nil {
+			panic(err)
+		}
+		for _, cmt := range astFile.Comments {
+			comment := strings.TrimSpace(cmt.Text())
+			lines := strings.Split(comment, "\n")
+			for _, line := range lines {
+				_, ok := testNameToFilename[line]
+				if !ok {
+					continue
 				}
+				convertedTests[line] = true
 			}
 		}
-		fmt.Printf("%s %d/%d tests\n", fname, numTests, len(testNames))
-		numComplementTests += numTests
-		total += len(testNames)
-		if numTests == 0 && !verbose {
+	}
+	numComplementTests := len(convertedTests)
+	for _, fname := range sorted(filenameToTestName) {
+		testNames := filenameToTestName[fname]
+		convertedTestsInFile := 0
+		// try to find the filename
+		for i := range testNames {
+			// see if this test was converted
+			if convertedTests[testNames[i]] {
+				convertedTestsInFile++
+				testNames[i] = "✓ " + strings.TrimPrefix(testNames[i], "sytest: ")
+			} else {
+				testNames[i] = "× " + strings.TrimPrefix(testNames[i], "sytest: ")
+			}
+		}
+		fmt.Printf("%s %d/%d tests\n", fname, convertedTestsInFile, len(testNames))
+		if !verbose || convertedTestsInFile == 0 {
 			continue
 		}
 		for _, tn := range testNames {
@@ -67,16 +91,6 @@ func main() {
 		fmt.Println()
 	}
 	fmt.Printf("\nTOTAL: %d/%d tests converted\n", numComplementTests, total)
-}
-
-// 53groups/11publicise -> groups_publicise_test.go
-// 10apidoc/31room-state -> apidoc_room_state_test.go
-func goFilename(perlFilename string) string {
-	perlFilename = strings.Replace(perlFilename, "/", "_", -1)
-	perlFilename = strings.Replace(perlFilename, "-", "_", -1)
-	perlFilename = strings.Replace(perlFilename, "/", "_", -1)
-	perlFilename = strings.Replace(perlFilename, "/", "_", -1)
-	return cleanFilenameRegexp.ReplaceAllString(perlFilename, "") + "_test.go"
 }
 
 func sorted(in map[string][]string) []string {
