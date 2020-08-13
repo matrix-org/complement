@@ -1,133 +1,188 @@
-# The config file format version
-# This is used by dendrite to tell if it understands the config format.
-# This will change if the structure of the config file changes or if the meaning
-# of an existing config key changes.
-version: 0
-
-# The matrix specific config
-matrix:
-    # The name of the server. This is usually the domain name, e.g 'matrix.org', 'localhost'.
-    server_name: "SERVER_NAME"
-    # The path to the PEM formatted matrix private key.
-    private_key: "matrix_key.pem"
-    # The x509 certificates used by the federation listeners for this server
-    federation_certificates: ["server.crt"]
-    federation_disable_tls_validation: true
-    # The list of identity servers trusted to verify third party identifiers by this server.
-    # Defaults to no trusted servers.
-    trusted_third_party_id_servers:
-      - vector.im
-      - matrix.org
-
-# The media repository config
-media:
-    # The base path to where the media files will be stored. May be relative or absolute.
-    base_path: ./media
-
-    # The maximum file size in bytes that is allowed to be stored on this server.
-    # Note: if max_file_size_bytes is set to 0, the size is unlimited.
-    # Note: if max_file_size_bytes is not set, it will default to 10485760 (10MB)
-    max_file_size_bytes: 10485760
-
-    # Whether to dynamically generate thumbnails on-the-fly if the requested resolution is not already generated
-    # NOTE: This is a possible denial-of-service attack vector - use at your own risk
-    dynamic_thumbnails: false
-
-    # A list of thumbnail sizes to be pre-generated for downloaded remote / uploaded content
-    # method is one of crop or scale. If omitted, it will default to scale.
-    # crop scales to fill the requested dimensions and crops the excess.
-    # scale scales to fit the requested dimensions and one dimension may be smaller than requested.
-    thumbnail_sizes:
-      - width: 32
-        height: 32
-        method: crop
-      - width: 96
-        height: 96
-        method: crop
-      - width: 320
-        height: 240
-        method: scale
-      - width: 640
-        height: 480
-        method: scale
-      - width: 800
-        height: 600
-        method: scale
-
-# The config for the TURN server
-turn:
-    # Whether or not guests can request TURN credentials
-    turn_allow_guests: true
-    # How long the authorization should last
-    turn_user_lifetime: "1h"
-    # The list of TURN URIs to pass to clients
+version: 1
+global:
+  server_name: SERVER_NAME
+  private_key: matrix_key.pem
+  key_id: ed25519:auto
+  key_validity_period: 168h0m0s
+  trusted_third_party_id_servers:
+  - matrix.org
+  - vector.im
+  kafka:
+    addresses:
+    - localhost:2181
+    topic_prefix: Dendrite
+    use_naffka: true
+    naffka_database:
+      connection_string: file:dendrite_naffka.db
+      max_open_conns: 100
+      max_idle_conns: 2
+      conn_max_lifetime: -1
+  metrics:
+    enabled: false
+    basic_auth:
+      username: metrics
+      password: metrics
+app_service_api:
+  internal_api:
+    listen: http://localhost:7777
+    connect: http://localhost:7777
+  database:
+    connection_string: file:dendrite_appservice.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
+  config_files: []
+client_api:
+  internal_api:
+    listen: http://localhost:7771
+    connect: http://localhost:7771
+  external_api:
+    listen: http://[::]:8071
+  registration_disabled: false
+  registration_shared_secret: ""
+  enable_registration_captcha: false
+  recaptcha_public_key: ""
+  recaptcha_private_key: ""
+  recaptcha_bypass_secret: ""
+  recaptcha_siteverify_api: ""
+  turn:
+    turn_user_lifetime: ""
     turn_uris: []
-
-    # Authorization via Shared Secret
-    # The shared secret from coturn
-    turn_shared_secret: "<SECRET STRING GOES HERE>"
-
-    # Authorization via Static Username & Password
-    # Hardcoded Username and Password
+    turn_shared_secret: ""
     turn_username: ""
     turn_password: ""
-
-# The config for communicating with kafka
-kafka:
-    # Where the kafka servers are running.
-    addresses: ["kafka:9092"]
-    # Whether to use naffka instead of kafka.
-    # Naffka can only be used when running dendrite as a single monolithic server.
-    # Kafka can be used both with a monolithic server and when running the
-    # components as separate servers.
-    # If enabled database.naffka must also be specified.
-    use_naffka: true
-    # The names of the kafka topics to use.
-    topics:
-        output_room_event: roomserverOutput
-        output_client_data: clientapiOutput
-        output_typing_event: typingServerOutput
-        user_updates: userUpdates
-        output_send_to_device_event: sendToDeviceOutput
-        output_key_change_event: keyChangeOutput
-
-
-# The postgres connection configs for connecting to the databases e.g a postgres:// URI
-database:
-    account: "file:dendrite_account.db"
-    current_state: "file:dendrite_current_state.db"
-    device: "file:dendrite_device.db"
-    media_api: "file:dendrite_mediaapi.db"
-    sync_api: "file:dendrite_syncapi.db"
-    room_server: "file:dendrite_roomserver.db"
-    server_key: "file:dendrite_key.db"
-    federation_sender: "file:dendrite_fedsender.db"
-    public_rooms_api: "file:dendrite_publicroomsapi.db"
-    appservice: "file:dendrite_appservice.db"
-    naffka: "file:dendrite_naffka.db"
-    e2e_key: "file:dendrite_e2e_key.db"
-
-# The TCP host:port pairs to bind the internal HTTP APIs to.
-# These shouldn't be exposed to the public internet.
-# These aren't needed when running dendrite as a monolithic server.
-listen:
-    room_server: "room_server:7770"
-    client_api: "client_api:7771"
-    federation_api: "federation_api:7772"
-    sync_api: "sync_api:7773"
-    media_api: "media_api:7774"
-    public_rooms_api: "public_rooms_api:7775"
-    federation_sender: "federation_sender:7776"
-    typing_server: "typing_server:7777"
-
-# The configuration for tracing the dendrite components.
+current_state_server:
+  internal_api:
+    listen: http://localhost:7782
+    connect: http://localhost:7782
+  database:
+    connection_string: file:dendrite_currentstate.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
+edu_server:
+  internal_api:
+    listen: http://localhost:7778
+    connect: http://localhost:7778
+federation_api:
+  internal_api:
+    listen: http://localhost:7772
+    connect: http://localhost:7772
+  external_api:
+    listen: http://[::]:8072
+  federation_certificates: []
+federation_sender:
+  internal_api:
+    listen: http://localhost:7775
+    connect: http://localhost:7775
+  database:
+    connection_string: file:dendrite_federationsender.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
+  send_max_retries: 16
+  disable_tls_validation: false
+  proxy_outbound:
+    enabled: false
+    protocol: http
+    host: localhost
+    port: 8080
+key_server:
+  internal_api:
+    listen: http://localhost:7779
+    connect: http://localhost:7779
+  database:
+    connection_string: file:dendrite_keyserver.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
+media_api:
+  internal_api:
+    listen: http://localhost:7774
+    connect: http://localhost:7774
+  external_api:
+    listen: http://[::]:8074
+  database:
+    connection_string: file:dendrite_mediaapi.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
+  base_path: ./media_store
+  max_file_size_bytes: 10485760
+  dynamic_thumbnails: false
+  max_thumbnail_generators: 10
+  thumbnail_sizes:
+  - width: 32
+    height: 32
+    method: crop
+  - width: 96
+    height: 96
+    method: crop
+  - width: 640
+    height: 480
+    method: scale
+room_server:
+  internal_api:
+    listen: http://localhost:7770
+    connect: http://localhost:7770
+  database:
+    connection_string: file:dendrite_roomserver.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
+server_key_api:
+  internal_api:
+    listen: http://localhost:7780
+    connect: http://localhost:7780
+  database:
+    connection_string: file:dendrite_serverkeyapi.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
+  key_perspectives:
+  - server_name: matrix.org
+    keys:
+    - key_id: ed25519:auto
+      public_key: Noi6WqcDj0QmPxCNQqgezwTlBKrfqehY1u2FyWP9uYw
+    - key_id: ed25519:a_RXGa
+      public_key: l8Hft5qXKn1vfHrg3p4+W8gELQVo8N13JkluMfmn2sQ
+sync_api:
+  internal_api:
+    listen: http://localhost:7773
+    connect: http://localhost:7773
+  database:
+    connection_string: file:dendrite_syncapi.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
+user_api:
+  internal_api:
+    listen: http://localhost:7781
+    connect: http://localhost:7781
+  account_database:
+    connection_string: file:dendrite_userapi_accounts.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
+  device_database:
+    connection_string: file:dendrite_userapi_devices.db
+    max_open_conns: 100
+    max_idle_conns: 2
+    conn_max_lifetime: -1
 tracing:
-    # Config for the jaeger opentracing reporter.
-    # See https://godoc.org/github.com/uber/jaeger-client-go/config#Configuration
-    # for documentation.
-    jaeger:
-        disabled: true
-
-# A list of application service config files to use
-application_services:
-    config_files: []
+  enabled: false
+  jaeger:
+    serviceName: ""
+    disabled: false
+    rpc_metrics: false
+    tags: []
+    sampler: null
+    reporter: null
+    headers: null
+    baggage_restrictions: null
+    throttler: null
+logging:
+- type: file
+  level: info
+  params:
+    path: /var/log/dendrite
