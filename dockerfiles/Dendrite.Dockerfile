@@ -2,10 +2,10 @@ FROM golang:1.13-stretch as build
 RUN apt-get update && apt-get install sqlite3
 WORKDIR /build
 
-ARG DENDRITE_SOURCE=master
+# pull files from branches
+ARG BRANCH=master
+ADD https://github.com/matrix-org/dendrite/archive/$BRANCH.tar.gz /build/dendrite.tar.gz
 
-
-ADD https://github.com/matrix-org/dendrite/archive/$DENDRITE_SOURCE.tar.gz /build/dendrite.tar.gz
 # strip the top-level directory which has the name of the branch in it
 RUN tar --strip=1 -xzf dendrite.tar.gz
 RUN go build ./cmd/dendrite-monolith-server
