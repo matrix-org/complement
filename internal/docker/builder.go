@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -34,6 +35,20 @@ import (
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/instruction"
 )
+
+var (
+	HostnameRunningComplement = "host.docker.internal"
+	HostnameRunningDocker     = "localhost"
+)
+
+func init() {
+	if os.Getenv("HOSTNAME") != "" {
+		HostnameRunningComplement = os.Getenv("HOSTNAME")
+	}
+	if os.Getenv("CI") == "true" {
+		HostnameRunningDocker = "172.17.0.1"
+	}
+}
 
 const complementLabel = "complement_context"
 
@@ -281,7 +296,7 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		// By default docker for linux does not expose this, so do it now.
 		// When https://github.com/moby/moby/pull/40007 lands in Docker 20, we should
 		// change this to be  `host.docker.internal:host-gateway`
-		extraHosts = []string{"host.docker.internal:172.17.0.1"}
+		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image:      imageID,
@@ -417,14 +432,14 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", csapiPort, p)
 	}
-	baseURL = fmt.Sprintf("http://172.17.0.1:%s", csapiPortInfo[0].HostPort)
+	baseURL = fmt.Sprintf("http://"+HostnameRunningDocker+":%s", csapiPortInfo[0].HostPort)
 
 	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
 	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", ssapiPort, p)
 	}
-	fedBaseURL = fmt.Sprintf("https://172.17.0.1:%s", ssapiPortInfo[0].HostPort)
+	fedBaseURL = fmt.Sprintf("https://"+HostnameRunningDocker+":%s", ssapiPortInfo[0].HostPort)
 	return
 }
 
