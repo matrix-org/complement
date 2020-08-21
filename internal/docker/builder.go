@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -34,6 +35,22 @@ import (
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/instruction"
 )
+
+var (
+	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
+	HostnameRunningComplement = "host.docker.internal"
+	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
+	HostnameRunningDocker = "localhost"
+)
+
+func init() {
+	if os.Getenv("CI") == "true" {
+		log.Println("Running under CI: redirecting localhost to docker host on 172.17.0.1")
+		// this assumes we are running inside docker so they have
+		// forwarded the docker socket to us and we're in a container.
+		HostnameRunningDocker = "172.17.0.1"
+	}
+}
 
 const complementLabel = "complement_context"
 
@@ -281,7 +298,7 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		// By default docker for linux does not expose this, so do it now.
 		// When https://github.com/moby/moby/pull/40007 lands in Docker 20, we should
 		// change this to be  `host.docker.internal:host-gateway`
-		extraHosts = []string{"host.docker.internal:172.17.0.1"}
+		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image:      imageID,
@@ -417,14 +434,14 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", csapiPort, p)
 	}
-	baseURL = fmt.Sprintf("http://localhost:%s", csapiPortInfo[0].HostPort)
+	baseURL = fmt.Sprintf("http://"+HostnameRunningDocker+":%s", csapiPortInfo[0].HostPort)
 
 	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
 	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", ssapiPort, p)
 	}
-	fedBaseURL = fmt.Sprintf("https://localhost:%s", ssapiPortInfo[0].HostPort)
+	fedBaseURL = fmt.Sprintf("https://"+HostnameRunningDocker+":%s", ssapiPortInfo[0].HostPort)
 	return
 }
 

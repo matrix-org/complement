@@ -59,7 +59,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 		Priv:                        priv,
 		KeyID:                       "ed25519:complement",
 		mux:                         mux.NewRouter(),
-		ServerName:                  "host.docker.internal",
+		ServerName:                  docker.HostnameRunningComplement,
 		rooms:                       make(map[string]*ServerRoom),
 		aliases:                     make(map[string]string),
 		UnexpectedRequestsAreErrors: true,
