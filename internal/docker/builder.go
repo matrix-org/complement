@@ -49,7 +49,6 @@ func init() {
 		// this assumes we are running inside docker so they have
 		// forwarded the docker socket to us and we're in a container.
 		HostnameRunningDocker = "172.17.0.1"
-		// HostnameRunningComplement = "172.17.0.1"
 	}
 }
 
