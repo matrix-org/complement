@@ -37,20 +37,19 @@ import (
 )
 
 var (
+	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
 	HostnameRunningComplement = "host.docker.internal"
-	HostnameRunningDocker     = "localhost"
+	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
+	HostnameRunningDocker = "localhost"
 )
 
 func init() {
-	if os.Getenv("HOSTNAME") != "" {
-		log.Println("Redirecting hostname to 172.17.0.1")
-		HostnameRunningComplement = "172.17.0.1" // os.Getenv("HOSTNAME")
-	}
 	if os.Getenv("CI") == "true" {
-		log.Println("Running under CI: redirecting host.docker.internal to docker host on 172.17.0.1")
-		// this assumes we are running docker-in-docker so they have
+		log.Println("Running under CI: redirecting host.docker.internal and localhost to docker host on 172.17.0.1")
+		// this assumes we are running inside docker so they have
 		// forwarded the docker socket to us and we're in a container.
 		HostnameRunningDocker = "172.17.0.1"
+		HostnameRunningComplement = "172.17.0.1"
 	}
 }
 

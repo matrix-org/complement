@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
@@ -30,7 +29,6 @@ import (
 func TestRegistration(t *testing.T) {
 	deployment := Deploy(t, "registration", b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	t.Logf("HostnameForDocker: %s, HostnameForComplement: %s", docker.HostnameRunningDocker, docker.HostnameRunningComplement)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: POST {} returns a set of flows
