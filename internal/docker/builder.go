@@ -45,7 +45,7 @@ var (
 
 func init() {
 	if os.Getenv("CI") == "true" {
-		log.Println("Running under CI: redirecting host.docker.internal and localhost to docker host on 172.17.0.1")
+		log.Println("Running under CI: redirecting localhost to docker host on 172.17.0.1")
 		// this assumes we are running inside docker so they have
 		// forwarded the docker socket to us and we're in a container.
 		HostnameRunningDocker = "172.17.0.1"
