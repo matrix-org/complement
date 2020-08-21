@@ -43,9 +43,13 @@ var (
 
 func init() {
 	if os.Getenv("HOSTNAME") != "" {
+		log.Println("Redirecting hostname to ", os.Getenv("HOSTNAME"))
 		HostnameRunningComplement = os.Getenv("HOSTNAME")
 	}
 	if os.Getenv("CI") == "true" {
+		log.Println("Running under CI: redirecting host.docker.internal to docker host on 172.17.0.1")
+		// this assumes we are running docker-in-docker so they have
+		// forwarded the docker socket to us and we're in a container.
 		HostnameRunningDocker = "172.17.0.1"
 	}
 }
