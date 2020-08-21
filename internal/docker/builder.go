@@ -417,14 +417,14 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", csapiPort, p)
 	}
-	baseURL = fmt.Sprintf("http://localhost:%s", csapiPortInfo[0].HostPort)
+	baseURL = fmt.Sprintf("http://172.17.0.1:%s", csapiPortInfo[0].HostPort)
 
 	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
 	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", ssapiPort, p)
 	}
-	fedBaseURL = fmt.Sprintf("https://localhost:%s", ssapiPortInfo[0].HostPort)
+	fedBaseURL = fmt.Sprintf("https://172.17.0.1:%s", ssapiPortInfo[0].HostPort)
 	return
 }
 
