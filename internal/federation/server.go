@@ -116,7 +116,7 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 }
 
 // MustMakeRoom will add a room to this server so it is accessible to other servers when prompted via federation.
-// The `events` will be added to this room. Returns the room ID of the created room.
+// The `events` will be added to this room. Returns the created room.
 func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
 	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.ServerName)
 	room := &ServerRoom{

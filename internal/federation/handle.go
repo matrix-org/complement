@@ -11,105 +11,117 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 )
 
+// MakeJoinRequestsHandler is the http.Handler implementation for the make_join part of
+// HandleMakeSendJoinRequests.
+func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
+	// Check federation signature
+	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
+		req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
+	)
+	if fedReq == nil {
+		w.WriteHeader(errResp.Code)
+		b, _ := json.Marshal(errResp.JSON)
+		w.Write(b)
+		return
+	}
+
+	vars := mux.Vars(req)
+	userID := vars["userID"]
+	roomID := vars["roomID"]
+
+	room, ok := s.rooms[roomID]
+	if !ok {
+		w.WriteHeader(404)
+		w.Write([]byte("complement: HandleMakeSendJoinRequests make_join unexpected room ID: " + roomID))
+		return
+	}
+
+	// Generate a join event
+	builder := gomatrixserverlib.EventBuilder{
+		Sender:     userID,
+		RoomID:     roomID,
+		Type:       "m.room.member",
+		StateKey:   &userID,
+		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
+	}
+	err := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot set membership content: " + err.Error()))
+		return
+	}
+	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot calculate auth_events: " + err.Error()))
+		return
+	}
+	builder.AuthEvents = room.AuthEvents(stateNeeded)
+
+	// Send it
+	res := map[string]interface{}{
+		"event":        builder,
+		"room_version": room.Version,
+	}
+	w.WriteHeader(200)
+	b, _ := json.Marshal(res)
+	w.Write(b)
+}
+
+// SendJoinRequestsHandler is the http.Handler implementation for the send_join part of
+// HandleMakeSendJoinRequests.
+func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
+	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
+		req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
+	)
+	if fedReq == nil {
+		w.WriteHeader(errResp.Code)
+		b, _ := json.Marshal(errResp.JSON)
+		w.Write(b)
+		return
+	}
+	vars := mux.Vars(req)
+	roomID := vars["roomID"]
+
+	room, ok := s.rooms[roomID]
+	if !ok {
+		w.WriteHeader(404)
+		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join unexpected room ID: " + roomID))
+		return
+	}
+	event, err := gomatrixserverlib.NewEventFromUntrustedJSON(fedReq.Content(), room.Version)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot parse event JSON: " + err.Error()))
+	}
+	// insert the join event into the room state
+	room.AddEvent(&event)
+
+	// return current state and auth chain
+	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
+		AuthEvents:  room.AuthChain(),
+		StateEvents: room.AllCurrentState(),
+		Origin:      gomatrixserverlib.ServerName(s.ServerName),
+	})
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot marshal RespSendJoin: " + err.Error()))
+	}
+	w.WriteHeader(200)
+	w.Write(b)
+}
+
 // HandleMakeSendJoinRequests is an option which will process make_join and send_join requests for rooms which are present
 // in this server. To add a room to this server, see Server.MustMakeRoom. No checks are done to see whether join requests
 // are allowed or not. If you wish to test that, write your own test.
 func HandleMakeSendJoinRequests() func(*Server) {
 	return func(s *Server) {
 		s.mux.Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			// Check federation signature
-			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
-			)
-			if fedReq == nil {
-				w.WriteHeader(errResp.Code)
-				b, _ := json.Marshal(errResp.JSON)
-				w.Write(b)
-				return
-			}
-
-			vars := mux.Vars(req)
-			userID := vars["userID"]
-			roomID := vars["roomID"]
-
-			room, ok := s.rooms[roomID]
-			if !ok {
-				w.WriteHeader(404)
-				w.Write([]byte("complement: HandleMakeSendJoinRequests make_join unexpected room ID: " + roomID))
-				return
-			}
-
-			// Generate a join event
-			builder := gomatrixserverlib.EventBuilder{
-				Sender:     userID,
-				RoomID:     roomID,
-				Type:       "m.room.member",
-				StateKey:   &userID,
-				PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
-			}
-			err := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot set membership content: " + err.Error()))
-				return
-			}
-			stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot calculate auth_events: " + err.Error()))
-				return
-			}
-			builder.AuthEvents = room.AuthEvents(stateNeeded)
-
-			// Send it
-			res := map[string]interface{}{
-				"event":        builder,
-				"room_version": room.Version,
-			}
-			w.WriteHeader(200)
-			b, _ := json.Marshal(res)
-			w.Write(b)
+			MakeJoinRequestsHandler(s, w, req)
 		})).Methods("GET")
 
 		s.mux.Handle("/_matrix/federation/v2/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
-			)
-			if fedReq == nil {
-				w.WriteHeader(errResp.Code)
-				b, _ := json.Marshal(errResp.JSON)
-				w.Write(b)
-				return
-			}
-			vars := mux.Vars(req)
-			roomID := vars["roomID"]
-
-			room, ok := s.rooms[roomID]
-			if !ok {
-				w.WriteHeader(404)
-				w.Write([]byte("complement: HandleMakeSendJoinRequests send_join unexpected room ID: " + roomID))
-				return
-			}
-			event, err := gomatrixserverlib.NewEventFromUntrustedJSON(fedReq.Content(), room.Version)
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot parse event JSON: " + err.Error()))
-			}
-			// insert the join event into the room state
-			room.AddEvent(&event)
-
-			// return current state and auth chain
-			b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
-				AuthEvents:  room.AuthChain(),
-				StateEvents: room.AllCurrentState(),
-				Origin:      gomatrixserverlib.ServerName(s.ServerName),
-			})
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot marshal RespSendJoin: " + err.Error()))
-			}
-			w.WriteHeader(200)
-			w.Write(b)
+			SendJoinRequestsHandler(s, w, req)
 		})).Methods("PUT")
 	}
 }
