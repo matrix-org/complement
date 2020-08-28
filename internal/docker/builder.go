@@ -263,7 +263,7 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 	d.log("%s : constructing homeserver...\n", contextStr)
 	dep, err := d.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
 	if err != nil {
-		d.log("%s : failed to deployBaseImage: %s\n", contextStr, err)
+		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
 		containerID := ""
 		if dep != nil {
 			containerID = dep.ContainerID
