@@ -301,10 +301,8 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
 	body, err := docker.ContainerCreate(ctx, &container.Config{
-		Image:      imageID,
-		Domainname: hsName,
-		Hostname:   hsName,
-		Env:        []string{"SERVER_NAME=" + hsName},
+		Image: imageID,
+		Env:   []string{"SERVER_NAME=" + hsName},
 		//Cmd:   d.ImageArgs,
 		Labels: map[string]string{
 			complementLabel:        contextStr,
