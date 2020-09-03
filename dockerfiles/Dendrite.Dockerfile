@@ -11,8 +11,7 @@ RUN tar --strip=1 -xzf dendrite.tar.gz
 RUN go build ./cmd/dendrite-monolith-server
 RUN go build ./cmd/generate-keys
 RUN go build ./cmd/generate-config
-RUN ./generate-config > dendrite.yaml
-RUN sed -i "s/disable_tls_validation: false/disable_tls_validation: true/g" dendrite.yaml
+RUN ./generate-config --ci > dendrite.yaml
 RUN ./generate-keys --private-key matrix_key.pem --tls-cert server.crt --tls-key server.key
 
 ENV SERVER_NAME=localhost
