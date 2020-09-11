@@ -1,15 +1,18 @@
 package tests
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/tidwall/sjson"
 )
 
 // This tests that joining a room with ?server_name= works correctly.
@@ -72,5 +75,117 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 		JSON: []match.JSON{
 			match.JSONKeyEqual("room_id", serverRoom.RoomID),
 		},
+	})
+}
+
+// This tests that joining a room over federation works in the presence of:
+// - Events with missing signatures
+// - Events with bad signatures
+// - Events with correct signatures but the keys cannot be obtained
+// None of these events will be critical to the integrity of the room: that
+// is to say these events are never pointed to as auth_events - therefore the
+// room should still be joinable.
+//
+// This test works by creating several federated rooms on Complement which have
+// the properties listed above, then asking HS1 to join them and make sure that
+// they 200 OK.
+func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
+	deployment := Deploy(t, "federation_room_join_unverifiable", b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+	)
+	srv.UnexpectedRequestsAreErrors = false
+	cancel := srv.Listen()
+	defer cancel()
+
+	ver := gomatrixserverlib.RoomVersionV6
+	charlie := srv.UserID("charlie")
+
+	// We explicitly do not run these in parallel in order to help debugging when these
+	// tests fail. It doesn't appear to save us much time either!
+
+	t.Run("/send_join response missing signatures shouldn't block room join", func(t *testing.T) {
+		//t.Parallel()
+		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
+		roomAlias := srv.MakeAliasMapping("MissingSignatures", room.RoomID)
+		// create a normal event then remove the signatures key
+		signedEvent := srv.MustCreateEvent(t, room, b.Event{
+			Sender:   charlie,
+			StateKey: b.Ptr(""),
+			Type:     "m.room.name",
+			Content: map[string]interface{}{
+				"name": "This event has no signature",
+			},
+		})
+		raw := signedEvent.JSON()
+		raw, err := sjson.SetRawBytes(raw, "signatures", []byte(`{}`))
+		must.NotError(t, "failed to strip signatures key from event", err)
+		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
+		must.NotError(t, "failed to make Event from unsigned event JSON", err)
+		room.AddEvent(&unsignedEvent)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice.JoinRoom(t, roomAlias)
+	})
+	t.Run("/send_join response with bad signatures shouldn't block room join", func(t *testing.T) {
+		//t.Parallel()
+		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
+		roomAlias := srv.MakeAliasMapping("BadSignatures", room.RoomID)
+		// create a normal event then modify the signatures
+		signedEvent := srv.MustCreateEvent(t, room, b.Event{
+			Sender:   charlie,
+			StateKey: b.Ptr(""),
+			Type:     "m.room.name",
+			Content: map[string]interface{}{
+				"name": "This event has a bad signature",
+			},
+		})
+		newSignaturesBlock := map[string]interface{}{
+			docker.HostnameRunningComplement: map[string]string{
+				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
+			},
+		}
+		rawSig, err := json.Marshal(newSignaturesBlock)
+		must.NotError(t, "failed to marshal bad signature block", err)
+		raw := signedEvent.JSON()
+		raw, err = sjson.SetRawBytes(raw, "signatures", rawSig)
+		must.NotError(t, "failed to modify signatures key from event", err)
+		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
+		must.NotError(t, "failed to make Event from unsigned event JSON", err)
+		room.AddEvent(&unsignedEvent)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice.JoinRoom(t, roomAlias)
+	})
+	t.Run("/send_join response with unobtainable keys shouldn't block room join", func(t *testing.T) {
+		//t.Parallel()
+		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
+		roomAlias := srv.MakeAliasMapping("UnobtainableKeys", room.RoomID)
+		// create a normal event then modify the signatures to have a bogus key ID which Complement does
+		// not have the keys for
+		signedEvent := srv.MustCreateEvent(t, room, b.Event{
+			Sender:   charlie,
+			StateKey: b.Ptr(""),
+			Type:     "m.room.name",
+			Content: map[string]interface{}{
+				"name": "This event has an unobtainable key ID",
+			},
+		})
+		newSignaturesBlock := map[string]interface{}{
+			docker.HostnameRunningComplement: map[string]string{
+				string(srv.KeyID) + "bogus": "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
+			},
+		}
+		rawSig, err := json.Marshal(newSignaturesBlock)
+		must.NotError(t, "failed to marshal bad signature block", err)
+		raw := signedEvent.JSON()
+		raw, err = sjson.SetRawBytes(raw, "signatures", rawSig)
+		must.NotError(t, "failed to modify signatures key from event", err)
+		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
+		must.NotError(t, "failed to make Event from unsigned event JSON", err)
+		room.AddEvent(&unsignedEvent)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice.JoinRoom(t, roomAlias)
 	})
 }
