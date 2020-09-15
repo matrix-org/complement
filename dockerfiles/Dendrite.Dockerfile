@@ -1,5 +1,5 @@
 FROM golang:1.13-stretch as build
-RUN apt-get update && apt-get install sqlite3
+RUN apt-get update && apt-get install -y sqlite3
 WORKDIR /build
 
 # pull files from branches
