@@ -195,6 +195,64 @@ func (s *Server) Listen() (cancel func()) {
 	}
 }
 
+func createCACert() (*x509.Certificate, *rsa.PrivateKey, error) {
+	tlsCACertPath := path.Join("./ca", "ca.crt")
+	tlsCAKeyPath := path.Join("./ca", "ca.key")
+	if os.Getenv("CI") == "true" {
+		tlsCACertPath = path.Join("/ca", "ca.crt")
+		tlsCAKeyPath = path.Join("/ca", "ca.key")
+	}
+
+	certificateDuration := time.Hour * 2
+	priv, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		return nil, nil, err
+	}
+	notBefore := time.Now()
+	notAfter := notBefore.Add(certificateDuration)
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, nil, err
+	}
+	caCert := x509.Certificate{
+		SerialNumber:          serialNumber,
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature | x509.KeyUsageCRLSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &caCert, &caCert, &priv.PublicKey, priv)
+	if err != nil {
+		return nil, nil, err
+	}
+	certOut, err := os.Create(tlsCACertPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer certOut.Close() // nolint: errcheck
+	if err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		return nil, nil, err
+	}
+
+	keyOut, err := os.OpenFile(tlsCAKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer keyOut.Close() // nolint: errcheck
+	err = pem.Encode(keyOut, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return &caCert, priv, nil
+}
+
 // federationServer creates a federation server with the given handler
 func federationServer(name string, h http.Handler) (*http.Server, string, string, error) {
 	srv := &http.Server{
@@ -215,6 +273,10 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 	if err != nil {
 		return nil, "", "", err
 	}
+	ca, caPrivKey, err := createCACert()
+	if err != nil {
+		return nil, "", "", err
+	}
 
 	template := x509.Certificate{
 		SerialNumber:          serialNumber,
@@ -224,7 +286,7 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
 	if err != nil {
 		return nil, "", "", err
 	}

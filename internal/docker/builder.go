@@ -19,6 +19,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	client "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -41,6 +43,8 @@ var (
 	HostnameRunningComplement = "host.docker.internal"
 	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
 	HostnameRunningDocker = "localhost"
+	// CACertificateDirContainer is the volume that is shared among all containers an contains the CA certs.
+	CACertificateDirContainer = "/ca"
 )
 
 func init() {
@@ -300,6 +304,39 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		// change this to be  `host.docker.internal:host-gateway`
 		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
+
+	var caVolume map[string]struct{}
+	var caMount []mount.Mount
+	if os.Getenv("CI") == "true" {
+		caVolume = map[string]struct{}{
+			CACertificateDirContainer: {},
+		}
+		caMount = []mount.Mount{
+			{
+				Type:   mount.TypeVolume,
+				Source: "ca",
+				Target: CACertificateDirContainer,
+			},
+		}
+	} else {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+		caCertificateDirHost := path.Join(cwd, "ca")
+		err = os.MkdirAll(caCertificateDirHost, 0770)
+		if err != nil {
+			return nil, err
+		}
+		caMount = []mount.Mount{
+			{
+				Type:   mount.TypeBind,
+				Source: path.Join(cwd, "ca"),
+				Target: CACertificateDirContainer,
+			},
+		}
+	}
+
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image: imageID,
 		Env:   []string{"SERVER_NAME=" + hsName},
@@ -309,9 +346,11 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 			"complement_blueprint": blueprintName,
 			"complement_hs_name":   hsName,
 		},
+		Volumes: caVolume,
 	}, &container.HostConfig{
 		PublishAllPorts: true,
 		ExtraHosts:      extraHosts,
+		Mounts:          caMount,
 	}, &network.NetworkingConfig{
 		map[string]*network.EndpointSettings{
 			hsName: {

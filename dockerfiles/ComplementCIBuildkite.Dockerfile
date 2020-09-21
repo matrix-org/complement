@@ -8,3 +8,5 @@ FROM golang:1.15-buster
 RUN curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
 ADD https://github.com/matrix-org/complement/archive/master.tar.gz .
 RUN tar -xzf master.tar.gz && cd complement-master && go mod download 
+
+VOLUME [ "/ca" ]
