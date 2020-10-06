@@ -43,7 +43,7 @@ var (
 	HostnameRunningComplement = "host.docker.internal"
 	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
 	HostnameRunningDocker = "localhost"
-	// CACertificateDirContainer is the volume that is shared among all containers an contains the CA certs.
+	// CACertificateDirContainer is the volume that is shared among all containers and contains the CA certs.
 	CACertificateDirContainer = "/ca"
 )
 
