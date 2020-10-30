@@ -15,8 +15,10 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -43,8 +45,6 @@ var (
 	HostnameRunningComplement = "host.docker.internal"
 	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
 	HostnameRunningDocker = "localhost"
-	// CACertificateDirContainer is the volume that is shared among all containers and contains the CA certs.
-	CACertificateDirContainer = "/ca"
 )
 
 func init() {
@@ -295,6 +295,80 @@ func (d *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID s
 	return deployImage(d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr, networkID)
 }
 
+// getCaVolume returns the correct mounts and volumes for providing a CA to homeserver containers.
+func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{}, []mount.Mount, error) {
+	var caVolume map[string]struct{}
+	var caMount []mount.Mount
+
+	if os.Getenv("CI") == "true" {
+		// When in CI, complement itself is a container with the CA volume mounted at /ca.
+		// We need to mount this volume to all homeserver containers
+		// to synchronize the CA cert. Needed to establish trust among all containers.
+		
+		// Get volume mounted at /ca, first get the container ID
+		// /proc/1/cpuset should be /docker/<containerId>
+		cpuset, err := ioutil.ReadFile("/proc/1/cpuset")
+		if err != nil {
+			return nil, nil, err
+		}
+		if !strings.Contains(string(cpuset), "docker") {
+			return nil, nil, errors.New("Could not identify container ID using /proc/1/cpuset")
+		}
+		cpusetList := strings.Split(strings.TrimSpace(string(cpuset)), "/")
+		containerId := cpusetList[len(cpusetList)-1]
+		container, err := docker.ContainerInspect(ctx, containerId)
+		if err != nil {
+			return nil, nil, err
+		}
+		// Get the volume that matches the destination in our complement container
+		var volumeName string
+		for i := range container.Mounts {
+			if container.Mounts[i].Destination == "/ca" {
+				volumeName = container.Mounts[i].Name
+			}
+		}
+		if volumeName == "" {
+			// We did not find a volume. Possible cause this container is created without a volume,
+			// or CI=true is passed but we are not running in a container.
+			// todo: log that we do not provide a CA volume mount?
+			return map[string]struct{}{}, []mount.Mount{}, nil
+		} else {
+			caVolume = map[string]struct{}{
+				"/ca": {},
+			}
+			caMount = []mount.Mount{
+				{
+					Type:   mount.TypeVolume,
+					Source: volumeName,
+					Target: "/ca",
+				},
+			}
+		}
+	} else {
+		// When not in CI, our CA cert is placed in the current wd.
+		// We bind mount this directory to all homeserver containers.
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, nil, err
+		}
+		caCertificateDirHost := path.Join(cwd, "ca")
+		if _, err := os.Stat(caCertificateDirHost); os.IsNotExist(err) {
+			err = os.Mkdir(caCertificateDirHost, 0770)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		caMount = []mount.Mount{
+			{
+				Type:   mount.TypeBind,
+				Source: path.Join(cwd, "ca"),
+				Target: "/ca",
+			},
+		}
+	}
+	return caVolume, caMount, nil
+}
+
 func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -305,36 +379,9 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
 
-	var caVolume map[string]struct{}
-	var caMount []mount.Mount
-	if os.Getenv("CI") == "true" {
-		caVolume = map[string]struct{}{
-			CACertificateDirContainer: {},
-		}
-		caMount = []mount.Mount{
-			{
-				Type:   mount.TypeVolume,
-				Source: "ca",
-				Target: CACertificateDirContainer,
-			},
-		}
-	} else {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, err
-		}
-		caCertificateDirHost := path.Join(cwd, "ca")
-		err = os.MkdirAll(caCertificateDirHost, 0770)
-		if err != nil {
-			return nil, err
-		}
-		caMount = []mount.Mount{
-			{
-				Type:   mount.TypeBind,
-				Source: path.Join(cwd, "ca"),
-				Target: CACertificateDirContainer,
-			},
-		}
+	caVolume, caMount, err := getCaVolume(docker, ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	body, err := docker.ContainerCreate(ctx, &container.Config{
