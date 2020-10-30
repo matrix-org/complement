@@ -301,11 +301,11 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 	var caMount []mount.Mount
 
 	if os.Getenv("CI") == "true" {
-		// When in CI, complement itself is a container with the CA volume mounted at /ca.
-		// We need to mount this volume to all homeserver containers
-		// to synchronize the CA cert. Needed to establish trust among all containers.
+		// When in CI, Complement itself is a container with the CA volume mounted at /ca.
+		// We need to mount this volume to all homeserver containers to synchronize the CA cert.
+		// This is needed to establish trust among all containers.
 		
-		// Get volume mounted at /ca, first get the container ID
+		// Get volume mounted at /ca. First we get the container ID
 		// /proc/1/cpuset should be /docker/<containerId>
 		cpuset, err := ioutil.ReadFile("/proc/1/cpuset")
 		if err != nil {
@@ -328,7 +328,7 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 			}
 		}
 		if volumeName == "" {
-			// We did not find a volume. Possible cause this container is created without a volume,
+			// We did not find a volume. This container might be created without a volume,
 			// or CI=true is passed but we are not running in a container.
 			// todo: log that we do not provide a CA volume mount?
 			return map[string]struct{}{}, []mount.Mount{}, nil
@@ -345,7 +345,7 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 			}
 		}
 	} else {
-		// When not in CI, our CA cert is placed in the current wd.
+		// When not in CI, our CA cert is placed in the current working dir.
 		// We bind mount this directory to all homeserver containers.
 		cwd, err := os.Getwd()
 		if err != nil {
