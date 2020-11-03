@@ -32,7 +32,9 @@ listeners:
 database:
   name: "sqlite3"
   args:
-    database: "/data/homeserver.db"
+    # We avoid /data, as it is a volume and is not transferred when the container is committed,
+    # which is a fundamental necessity in complement.
+    database: "/conf/homeserver.db"
 
 ## Federation ##
 
