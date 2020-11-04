@@ -38,6 +38,12 @@ database:
 
 ## Federation ##
 
+# disable verification of federation certificates
+#
+# TODO: this is temporary until https://github.com/matrix-org/complement/pull/28 lands and
+# allows homeservers spun up by complement access to the complement CA certificate to trust
+federation_verify_certificates: false
+
 # trust certs signed by the dummy CA
 federation_custom_ca_list:
 - /ca/ca.crt
