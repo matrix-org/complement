@@ -173,12 +173,16 @@ func (c *CSAPI) MustDoRaw(t *testing.T, method string, paths []string, body []by
 // DoWithAuth a JSON request. The access token for this user will automatically be added.
 func (c *CSAPI) DoWithAuth(t *testing.T, method string, paths []string, jsonBody interface{}) (*http.Response, error) {
 	t.Helper()
-	return c.Do(t, method, paths, jsonBody, url.Values{
-		"access_token": []string{c.AccessToken},
-	})
+	var query url.Values
+	if c.AccessToken != "" {
+		query = url.Values{
+			"access_token": []string{c.AccessToken},
+		}
+	}
+	return c.Do(t, method, paths, jsonBody, query)
 }
 
-func (c *CSAPI) DoWithAuthRaw(t *testing.T, method string, paths[] string, body []byte, contentType string, query url.Values) (*http.Response, error) {
+func (c *CSAPI) DoWithAuthRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) (*http.Response, error) {
 	t.Helper()
 	if query == nil {
 		query = url.Values{}
