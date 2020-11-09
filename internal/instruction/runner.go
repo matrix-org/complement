@@ -109,11 +109,14 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 		r.log("Stopping. Failed to form NewRequest for instruction: %s -- %+v \n", err, instr)
 		return nil, nil, 0
 	}
+	q := req.URL.Query()
 	if instr.accessToken != "" {
-		q := req.URL.Query()
 		q.Set("access_token", r.lookup[instr.accessToken])
-		req.URL.RawQuery = q.Encode()
 	}
+	for paramName, paramValue := range instr.queryParams {
+		q.Set(paramName, paramValue)
+	}
+	req.URL.RawQuery = q.Encode()
 
 	return req, &instr, i
 }
@@ -125,6 +128,8 @@ type instruction struct {
 	// The HTTP path, starting with '/', without the base URL. Will have placeholder values of the form $foo which need
 	// to be replaced based on 'substitutions'.
 	path string
+	// Any HTTP query parameters to use in the request
+	queryParams map[string]string
 	// The HTTP body which will be JSON.Marshal'd
 	body interface{}
 	// The access_token to use in the request, represented as a key to use in the lookup table e.g "user_@alice:localhost"
