@@ -9,7 +9,7 @@
 # To use it:
 #
 # (cd dockerfiles && docker build -t complement-synapse -f Synapse.Dockerfile .)
-# COMPLEMENT_VERSION_CHECK_ITERATIONS=100 COMPLEMENT_BASE_IMAGE=complement-synapse go test -v ./tests
+# COMPLEMENT_BASE_IMAGE=complement-synapse go test -v ./tests
 
 FROM matrixdotorg/synapse:latest
 
