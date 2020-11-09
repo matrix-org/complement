@@ -30,15 +30,19 @@ func TestMain(m *testing.M) {
 	}
 	// remove any old images/containers/networks in case we died horribly before
 	builder.Cleanup()
+
+	if os.Getenv("COMPLEMENT_CA") == "true" {
+		log.Printf("Running with Complement CA")
+		// make sure CA certs are generated
+		_, _, err = federation.GetOrCreateCaCert()
+		if err != nil {
+			fmt.Printf("Error: %s", err)
+			os.Exit(1)
+		}
+	}
+
 	// we use GMSL which uses logrus by default. We don't want those logs in our test output unless they are Serious.
 	logrus.SetLevel(logrus.ErrorLevel)
-
-	// make sure CA certs are generated
-	_, _, err = federation.GetOrCreateCaCert()
-	if err != nil {
-		fmt.Printf("Error: %s", err)
-		os.Exit(1)
-	}
 
 	exitCode := m.Run()
 	builder.Cleanup()

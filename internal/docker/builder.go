@@ -331,7 +331,7 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 			// We did not find a volume. This container might be created without a volume,
 			// or CI=true is passed but we are not running in a container.
 			// todo: log that we do not provide a CA volume mount?
-			return map[string]struct{}{}, []mount.Mount{}, nil
+			return nil, nil, nil
 		} else {
 			caVolume = map[string]struct{}{
 				"/ca": {},
@@ -372,6 +372,10 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
+	var caVolume map[string]struct{}
+	var caMount []mount.Mount
+	var err error
+
 	if runtime.GOOS == "linux" {
 		// By default docker for linux does not expose this, so do it now.
 		// When https://github.com/moby/moby/pull/40007 lands in Docker 20, we should
@@ -379,14 +383,16 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
 
-	caVolume, caMount, err := getCaVolume(docker, ctx)
-	if err != nil {
-		return nil, err
+	if os.Getenv("COMPLEMENT_CA") == "true" {
+		caVolume, caMount, err = getCaVolume(docker, ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image: imageID,
-		Env:   []string{"SERVER_NAME=" + hsName},
+		Env:   []string{"SERVER_NAME=" + hsName, "COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA")},
 		//Cmd:   d.ImageArgs,
 		Labels: map[string]string{
 			complementLabel:        contextStr,

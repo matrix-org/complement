@@ -197,8 +197,8 @@ func (s *Server) Listen() (cancel func()) {
 	}
 }
 
-// Get or create local CA cert. This is used to create the federation tls cert.
-// In addtion, it is passed to homesever containers to create tls certs 
+// Get or create local CA cert. This is used to create the federation TLS cert.
+// In addition, it is passed to homeserver containers to create TLS certs 
 // for the homeservers
 // This basically acts as a test only valid PKI.
 func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
@@ -309,6 +309,7 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 
 // federationServer creates a federation server with the given handler
 func federationServer(name string, h http.Handler) (*http.Server, string, string, error) {
+	var derBytes []byte
 	srv := &http.Server{
 		Addr:    ":8448",
 		Handler: h,
@@ -327,10 +328,6 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 	if err != nil {
 		return nil, "", "", err
 	}
-	ca, caPrivKey, err := GetOrCreateCaCert()
-	if err != nil {
-		return nil, "", "", err
-	}
 
 	template := x509.Certificate{
 		SerialNumber:          serialNumber,
@@ -340,10 +337,23 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
-	if err != nil {
-		return nil, "", "", err
+	if os.Getenv("COMPLEMENT_CA") == "true" {
+		// Gate COMPLEMENT_CA
+		ca, caPrivKey, err := GetOrCreateCaCert()
+		if err != nil {
+			return nil, "", "", err
+		}
+		derBytes, err = x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
+		if err != nil {
+			return nil, "", "", err
+		}
+	} else {
+		derBytes, err = x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		if err != nil {
+			return nil, "", "", err
+		}
 	}
+
 	certOut, err := os.Create(tlsCertPath)
 	if err != nil {
 		return nil, "", "", err
