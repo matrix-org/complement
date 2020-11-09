@@ -78,6 +78,13 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 			fetcher,
 		},
 	}
+	srv.mux.Use(func(h http.Handler) http.Handler {
+		// Return a json Content-Type header to all requests by default
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Add("Content-Type", "application/json")
+			h.ServeHTTP(w, r)
+		})
+	})
 	srv.mux.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if srv.UnexpectedRequestsAreErrors {
 			t.Errorf("Server.UnexpectedRequestsAreErrors=true received unexpected request to server: %s %s", req.Method, req.URL.Path)
