@@ -32,10 +32,36 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(
 - The homeserver needs to `200 OK` requests to `GET /_matrix/client/versions`.
 - The homeserver needs to manage its own storage within the image.
 - The homeserver needs to accept the server name given by the environment variable `SERVER_NAME` at runtime.
+- The homeserver can use the CA certificate mounted at /ca to create its own TLS cert (see [Complement PKI](README.md#complement-pki)).
 
 #### Why 'Complement'?
 
 Because **M**<sup>*C*</sup> = **1** - **M**
+
+#### Complement PKI
+
+As the Matrix federation protocol expects federation endpoints to be served with valid TLS certs,
+Complement will create a self-signed CA cert to use for creating valid TLS certs in homeserver containers.
+
+To enable it pass `COMPLEMENT_CA=true` to complement or the docker container.
+If not used, the homeserver needs to not validate the cert when federating.
+To check whether complements runs in PKI mode, `COMPLEMENT_CA` is passed through to the homeserver containers.
+
+The public key to add to the trusted cert store (e.g., /etc/ca-certificates) is mounted at: `/ca/ca.crt`
+The private key to sign the created TLS cert is mounted at: `/ca/ca.key`
+
+For example, to sign your certificate for the homeserver, run at each container start (Ubuntu):
+```
+openssl genrsa -out $SERVER_NAME.key 2048
+openssl req -new -sha256 -key $SERVER_NAME.key -subj "/C=US/ST=CA/O=MyOrg, Inc./CN=$SERVER_NAME" -out $SERVER_NAME.csr
+openssl x509 -req -in $SERVER_NAME.csr -CA /ca/ca.crt -CAkey /ca/ca.key -CAcreateserial -out $SERVER_NAME.crt -days 1 -sha256
+```
+
+To add the CA cert to your trust store (Ubuntu):
+```
+cp /root/ca.crt /usr/local/share/ca-certificates/complement.crt
+update-ca-certificates
+```
 
 #### Sytest parity
 
