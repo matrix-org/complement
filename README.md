@@ -43,7 +43,7 @@ Because **M**<sup>*C*</sup> = **1** - **M**
 As the Matrix federation protocol expects federation endpoints to be served with valid TLS certs,
 Complement will create a self-signed CA cert to use for creating valid TLS certs in homeserver containers.
 
-To enabled it pass `COMPLEMENT_CA=true` to complement or the docker container.
+To enable it pass `COMPLEMENT_CA=true` to complement or the docker container.
 If not used, the homeserver needs to not validate the cert when federating.
 To check whether complements runs in PKI mode, `COMPLEMENT_CA` is passed through to the homeserver containers.
 
