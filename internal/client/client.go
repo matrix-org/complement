@@ -166,7 +166,7 @@ func (c *CSAPI) MustDoWithStatusRaw(t *testing.T, method string, paths []string,
 		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
 	}
 	if res.StatusCode != status {
-		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s returned HTTP %d, expected %d", method, res.Request.URL.String(), res.StatusCode, status)
 	}
 	return res
 }
