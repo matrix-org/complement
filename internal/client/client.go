@@ -163,10 +163,10 @@ func (c *CSAPI) MustDoWithStatusRaw(t *testing.T, method string, paths []string,
 	t.Helper()
 	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
 	if err != nil {
-		t.Fatalf("CSAPI.MustDo %s %s error: %s", method, strings.Join(paths, "/"), err)
+		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
 	}
 	if res.StatusCode != status {
-		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
 	}
 	return res
 }
@@ -188,10 +188,10 @@ func (c *CSAPI) MustDoRaw(t *testing.T, method string, paths []string, body []by
 	t.Helper()
 	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
 	if err != nil {
-		t.Fatalf("CSAPI.MustDo %s %s error: %s", method, strings.Join(paths, "/"), err)
+		t.Fatalf("CSAPI.MustDoRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+		t.Fatalf("CSAPI.MustDoRaw %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
 	}
 	return res
 }
