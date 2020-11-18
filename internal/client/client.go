@@ -145,6 +145,32 @@ func (c *CSAPI) syncUntil(t *testing.T, since, key string, check func(gjson.Resu
 	}
 }
 
+// MustDoWithStatus is the same as MustDo but fails the test if the response code does not match that provided
+func (c *CSAPI) MustDoWithStatus(t *testing.T, method string, paths []string, jsonBody interface{}, status int) *http.Response {
+	t.Helper()
+	res, err := c.DoWithAuth(t, method, paths, jsonBody)
+	if err != nil {
+		t.Fatalf("CSAPI.MustDoWithStatus %s %s error: %s", method, strings.Join(paths, "/"), err)
+	}
+	if res.StatusCode != status {
+		t.Fatalf("CSAPI.MustDoWithStatus %s %s returned HTTP %d, expected %d", method, res.Request.URL.String(), res.StatusCode, status)
+	}
+	return res
+}
+
+// MustDoWithStatusRaw is the same as MustDoRaw but fails the test if the response code does not match that provided
+func (c *CSAPI) MustDoWithStatusRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values, status int) *http.Response {
+	t.Helper()
+	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
+	if err != nil {
+		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
+	}
+	if res.StatusCode != status {
+		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s returned HTTP %d, expected %d", method, res.Request.URL.String(), res.StatusCode, status)
+	}
+	return res
+}
+
 // MustDo is the same as Do but fails the test if the response is not 2xx
 func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
 	t.Helper()
@@ -162,10 +188,10 @@ func (c *CSAPI) MustDoRaw(t *testing.T, method string, paths []string, body []by
 	t.Helper()
 	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
 	if err != nil {
-		t.Fatalf("CSAPI.MustDo %s %s error: %s", method, strings.Join(paths, "/"), err)
+		t.Fatalf("CSAPI.MustDoRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+		t.Fatalf("CSAPI.MustDoRaw %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
 	}
 	return res
 }
