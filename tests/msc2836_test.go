@@ -4,7 +4,10 @@ package tests
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -16,31 +19,40 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// This test checks that federated threading works
-
 // This test checks that the homeserver makes a federated request to /event_relationships
-// when walking a thread when it encounters an unknown event ID.
+// when walking a thread when it encounters an unknown event ID. The test configures a
+// room on the Complement server with a thread which has following shape:
+//     A
+//    / \
+//   B   C
+//       |
+//       D <- Test server joins here
+//       |
+//       E
+// The test server is notified of event E in a /send transaction after joining the room.
+// The client on the test server then hits /event_relationships with event ID 'E' and direction 'up'.
+// This *should* cause the server to walk up the thread, realise it is missing event D and then ask
+// another server in the room about event D via a federated /event_relationships call with D as the
+// argument. This test then returns D,C,B,A to the server. This allows the client request to be satisfied
+// and return D,C,A as the response (note: not B because it isn't a parent of D).
+//
+// We then check that B, which wasn't on the return path on the previous request, was persisted by calling
+// /event_relationships again with event ID 'A' and direction 'down'.
 func TestFederatedEventRelationships(t *testing.T) {
 	deployment := Deploy(t, "msc2836_fed", b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
-		federation.HandleEventRequests(),
 	)
 	cancel := srv.Listen()
 	defer cancel()
 
 	// create a room on Complement, add some events to walk.
-	//     A
-	//    / \
-	//   B   C
-	//       |
-	//       D
 	roomVer := gomatrixserverlib.RoomVersionV6
 	charlie := srv.UserID("charlie")
 	room := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, charlie))
-	root := srv.MustCreateEvent(t, room, b.Event{
+	eventA := srv.MustCreateEvent(t, room, b.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -48,8 +60,8 @@ func TestFederatedEventRelationships(t *testing.T) {
 			"msgtype": "m.text",
 		},
 	})
-	room.AddEvent(root)
-	room.AddEvent(srv.MustCreateEvent(t, room, b.Event{
+	room.AddEvent(eventA)
+	eventB := srv.MustCreateEvent(t, room, b.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -57,11 +69,14 @@ func TestFederatedEventRelationships(t *testing.T) {
 			"msgtype": "m.text",
 			"m.relationship": map[string]interface{}{
 				"rel_type": "m.reference",
-				"event_id": root.EventID(),
+				"event_id": eventA.EventID(),
 			},
 		},
-	}))
-	topLevelReply := srv.MustCreateEvent(t, room, b.Event{
+	})
+	room.AddEvent(eventB)
+	// wait 1ms to ensure that the timestamp changes, which is important when using the recent_first flag
+	time.Sleep(1 * time.Millisecond)
+	eventC := srv.MustCreateEvent(t, room, b.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -69,12 +84,12 @@ func TestFederatedEventRelationships(t *testing.T) {
 			"msgtype": "m.text",
 			"m.relationship": map[string]interface{}{
 				"rel_type": "m.reference",
-				"event_id": root.EventID(),
+				"event_id": eventA.EventID(),
 			},
 		},
 	})
-	room.AddEvent(topLevelReply)
-	sndLevelReply := srv.MustCreateEvent(t, room, b.Event{
+	room.AddEvent(eventC)
+	eventD := srv.MustCreateEvent(t, room, b.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -82,18 +97,61 @@ func TestFederatedEventRelationships(t *testing.T) {
 			"msgtype": "m.text",
 			"m.relationship": map[string]interface{}{
 				"rel_type": "m.reference",
-				"event_id": topLevelReply.EventID(),
+				"event_id": eventC.EventID(),
 			},
 		},
 	})
-	room.AddEvent(sndLevelReply)
+	room.AddEvent(eventD)
+	t.Logf("A: %s", eventA.EventID())
+	t.Logf("B: %s", eventB.EventID())
+	t.Logf("C: %s", eventC.EventID())
+	t.Logf("D: %s", eventD.EventID())
+
+	// we expect to be called with event D, and will return D,C,B,A
+	waiter := NewWaiter()
+	srv.Mux().HandleFunc("/_matrix/federation/unstable/event_relationships", func(w http.ResponseWriter, req *http.Request) {
+		defer waiter.Finish()
+		must.MatchRequest(t, req, match.HTTPRequest{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("event_id", eventD.EventID()),
+			},
+		})
+
+		eventsJSON := []json.RawMessage{
+			eventD.JSON(),
+			eventC.JSON(),
+			eventB.JSON(),
+			eventA.JSON(),
+		}
+
+		var chainJSON []json.RawMessage
+		for _, ev := range room.AuthChain() {
+			chainJSON = append(chainJSON, ev.JSON())
+		}
+
+		result := struct {
+			Events    []json.RawMessage `json:"events"`
+			Limited   bool              `json:"limited"`
+			AuthChain []json.RawMessage `json:"auth_chain"`
+		}{
+			Events:    eventsJSON,
+			Limited:   false,
+			AuthChain: chainJSON,
+		}
+		resBytes, err := json.Marshal(result)
+		must.NotError(t, "failed to marshal JSON", err)
+
+		w.WriteHeader(200)
+		w.Write(resBytes)
+	})
 
 	// join the room on HS1
+	// HS1 will not have any of these messages, only the room state.
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	alice.JoinRoom(t, room.RoomID)
 
-	// send a new child in the thread (child of D)
-	trigger := srv.MustCreateEvent(t, room, b.Event{
+	// send a new child in the thread (child of D) so the HS has something to latch on to.
+	eventE := srv.MustCreateEvent(t, room, b.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -101,11 +159,11 @@ func TestFederatedEventRelationships(t *testing.T) {
 			"msgtype": "m.text",
 			"m.relationship": map[string]interface{}{
 				"rel_type": "m.reference",
-				"event_id": sndLevelReply.EventID(),
+				"event_id": eventD.EventID(),
 			},
 		},
 	})
-	room.AddEvent(trigger)
+	room.AddEvent(eventE)
 	fedClient := srv.FederationClient(deployment, "hs1")
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement",
@@ -113,33 +171,55 @@ func TestFederatedEventRelationships(t *testing.T) {
 		Destination:    gomatrixserverlib.ServerName("hs1"),
 		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
-			trigger.JSON(),
+			eventE.JSON(),
 		},
 	})
 	must.NotError(t, "failed to SendTransaction", err)
 
 	// Hit /event_relationships to make sure it spiders the whole thing by asking /event_relationships on Complement
 	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
-		"event_id":       trigger.EventID(),
-		"max_depth":      10,
-		"include_parent": true,
+		"event_id":  eventE.EventID(),
+		"max_depth": 10,
+		"direction": "up",
 	})
-	var events []gomatrixserverlib.Event
+	var gotEventIDs []string
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONKeyEqual("limited", false),
 			match.JSONArrayEach("events", func(r gjson.Result) error {
-				ev, err := gomatrixserverlib.NewEventFromTrustedJSON([]byte(r.Raw), false, roomVer)
-				if err != nil {
-					return err
-				}
-				events = append(events, ev)
+				eventID := r.Get("event_id").Str
+				gotEventIDs = append(gotEventIDs, eventID)
 				return nil
 			}),
 		},
 	})
-	for _, ev := range events {
-		t.Logf("event: %s", string(ev.JSON()))
-	}
-	//t.Fatalf("nah")
+	waiter.Wait(t, time.Second)
+	// we should have got events E,D,C,A (walk parents up to the top)
+	must.HaveInOrder(t, gotEventIDs, []string{eventE.EventID(), eventD.EventID(), eventC.EventID(), eventA.EventID()})
+
+	// now querying for the children of A should return A,B,C (it should've been remembered B from the previous /event_relationships request)
+	res = alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
+		"event_id":     eventA.EventID(),
+		"max_depth":    1,
+		"direction":    "down",
+		"recent_first": false,
+	})
+	gotEventIDs = []string{}
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONKeyEqual("limited", false),
+			match.JSONArrayEach("events", func(r gjson.Result) error {
+				eventID := r.Get("event_id").Str
+				gotEventIDs = append(gotEventIDs, eventID)
+				return nil
+			}),
+		},
+	})
+	must.HaveInOrder(t, gotEventIDs, []string{eventA.EventID(), eventB.EventID(), eventC.EventID()})
+}
+
+func sha256hash(in string) string {
+	return fmt.Sprintf(
+		"%x", sha256.Sum256([]byte(in)),
+	)
 }
