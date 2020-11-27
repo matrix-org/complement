@@ -188,6 +188,7 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	for i := 0; i < len(bs); i++ {
 		errs = append(errs, <-errc...)
 	}
+	close(errc)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			d.log("could not construct blueprint: %s", err)
@@ -233,8 +234,10 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
 		if res.err != nil {
 			errs = append(errs, res.err)
-			// print docker logs because something went wrong
-			printLogs(d.Docker, res.containerID, res.contextStr)
+			if res.containerID != "" {
+				// something went wrong, but we have a container which may have interesting logs
+				printLogs(d.Docker, res.containerID, res.contextStr)
+			}
 		}
 		// kill the container
 		defer func(r result) {
@@ -488,7 +491,7 @@ func createNetwork(docker *client.Client, blueprintName string) (networkID strin
 	}
 	if nw.Warning != "" {
 		if nw.ID == "" {
-			return "", fmt.Errorf("%s: fatal warning while creating docker network. %w", blueprintName, err)
+			return "", fmt.Errorf("%s: fatal warning while creating docker network. %s", blueprintName, nw.Warning)
 		}
 		log.Printf("WARNING: %s\n", nw.Warning)
 	}
