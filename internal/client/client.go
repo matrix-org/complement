@@ -101,6 +101,14 @@ func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjs
 	c.syncUntil(t, "", "rooms.join."+gjsonEscape(roomID)+".timeline.events", check)
 }
 
+// SyncUntilKnockHas blocks and continually calls /sync until the `check` function returns true.
+// If the `check` function fails the test, the failing event will be automatically logged.
+// Will time out after CSAPI.SyncUntilTimeout.
+func (c *CSAPI) SyncUntilKnockHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
+	t.Helper()
+	c.syncUntil(t, "", "rooms."+gjsonEscape("xyz.amorgan.knock")+"."+gjsonEscape(roomID)+".knock_state.events", check)
+}
+
 func (c *CSAPI) syncUntil(t *testing.T, since, key string, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
