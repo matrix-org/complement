@@ -65,13 +65,20 @@ func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 }
 
 // JoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
-func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string) string {
+func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []string) string {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, struct{}{})
+	// construct URL query parameters
+	query := make(url.Values, len(serverNames))
+	for _, serverName := range serverNames {
+		query.Add("server_name", serverName)
+	}
+	// join the room
+	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, nil, "application/json", query)
+	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
 	}
-	// we should be told the room ID if we joined via an alias
+	// otherwise we should be told the room ID if we joined via an alias
 	body := parseJSON(t, res)
 	return getJSONFieldStr(t, body, "room_id")
 }

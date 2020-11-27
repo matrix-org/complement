@@ -36,7 +36,7 @@ func TestOutboundFederationSend(t *testing.T) {
 
 	// join the room
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	alice.JoinRoom(t, roomAlias)
+	alice.JoinRoom(t, roomAlias, nil)
 
 	wantEventType := "m.room.message"
 
