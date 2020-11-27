@@ -44,7 +44,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	roomAlias := srv.MakeAliasMapping("flibble", room.RoomID)
 	// join the room
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	alice.JoinRoom(t, roomAlias)
+	alice.JoinRoom(t, roomAlias, nil)
 
 	latestEvent := room.Timeline[len(room.Timeline)-1]
 

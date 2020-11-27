@@ -53,9 +53,9 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	charlie := srv.UserID("charlie")
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 
-	// join the room by room ID alone - the server will need to extract the domain for this to work.
+	// join the room by room ID, providing the serverName to join via
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	alice.JoinRoom(t, serverRoom.RoomID)
+	alice.JoinRoom(t, serverRoom.RoomID, []string{srv.ServerName})
 
 	// remove the make/send join paths from the Complement server to force HS2 to join via HS1
 	acceptMakeSendJoinRequests = false
