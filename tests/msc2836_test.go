@@ -4,9 +4,7 @@ package tests
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -216,10 +214,4 @@ func TestFederatedEventRelationships(t *testing.T) {
 		},
 	})
 	must.HaveInOrder(t, gotEventIDs, []string{eventA.EventID(), eventB.EventID(), eventC.EventID()})
-}
-
-func sha256hash(in string) string {
-	return fmt.Sprintf(
-		"%x", sha256.Sum256([]byte(in)),
-	)
 }
