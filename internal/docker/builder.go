@@ -186,6 +186,9 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	}
 	var errs []error
 	for i := 0; i < len(bs); i++ {
+		// the channel returns a slice of errors;
+		// spread and append them to the error slice
+		// (nothing will be appended if the slice is empty)
 		errs = append(errs, <-errc...)
 	}
 	close(errc)
