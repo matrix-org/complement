@@ -21,14 +21,9 @@ func TestKnockingLocal(t *testing.T) {
 	roomID := alice.CreateRoom(t, struct {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
-		Name        string `json:"name"`
-		Topic       string `json:"topic"`
 	}{
 		"private_chat",      // Set to private in order to get an invite-only room
 		"xyz.amorgan.knock", // Room version required for knocking. TODO: Remove when knocking is in a stable room version
-		// Add some state to the room. We'll later check that this comes down sync correctly.
-		"knocking test room",
-		"Who's there?",
 	})
 
 	bobUserID := "@bob:hs1"
@@ -195,6 +190,33 @@ func TestKnockingLocal(t *testing.T) {
 				bobUserID,
 				"Seems like a trustworthy fellow",
 			},
+		)
+	})
+
+	t.Run("A user that is banned from a room cannot knock on it", func(t *testing.T) {
+		alice.MustDo(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "r0", "rooms", roomID, "invite"},
+			struct {
+				UserID string `json:"user_id"`
+				Reason string `json:"reason"`
+			}{
+				bobUserID,
+				"Turns out Bob wasn't that trustworthy after all!",
+			},
+		)
+
+		bob.MustDoWithStatus(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "r0", "knock", roomID},
+			struct {
+				Reason string `json:"reason"`
+			}{
+				"I didn't mean it!",
+			},
+			400,
 		)
 	})
 }
