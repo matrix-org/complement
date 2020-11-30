@@ -98,18 +98,13 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
 	t.Helper()
-	c.syncUntil(t, "", "rooms.join."+gjsonEscape(roomID)+".timeline.events", check)
+	c.SyncUntil(t, "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
 }
 
-// SyncUntilKnockHas blocks and continually calls /sync until the `check` function returns true.
+// SyncUntil blocks and continually calls /sync until the `check` function returns true.
 // If the `check` function fails the test, the failing event will be automatically logged.
 // Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntilKnockHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
-	t.Helper()
-	c.syncUntil(t, "", "rooms."+gjsonEscape("xyz.amorgan.knock")+"."+gjsonEscape(roomID)+".knock_state.events", check)
-}
-
-func (c *CSAPI) syncUntil(t *testing.T, since, key string, check func(gjson.Result) bool) {
+func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
 	checkCounter := 0
@@ -327,8 +322,8 @@ func parseJSON(t *testing.T, res *http.Response) []byte {
 	return body
 }
 
-// gjsonEscape escapes . and * from the input so it can be used with gjson.Get
-func gjsonEscape(in string) string {
+// GjsonEscape escapes . and * from the input so it can be used with gjson.Get
+func GjsonEscape(in string) string {
 	in = strings.ReplaceAll(in, ".", `\.`)
 	in = strings.ReplaceAll(in, "*", `\*`)
 	return in

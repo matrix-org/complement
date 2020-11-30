@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 )
@@ -115,11 +116,16 @@ func TestKnockingLocal(t *testing.T) {
 
 		t.Run("Users see state events from the room that they knocked on in /sync", func(t *testing.T) {
 			t.Parallel()
-			bob.SyncUntilKnockHas(t, roomID, func(ev gjson.Result) bool {
-				// We don't current define any required state event types to be sent
-				// If we've reached this point, then an entry for this room was found
-				return true
-			})
+			bob.SyncUntil(
+				t,
+				"",
+				"rooms."+client.GjsonEscape("xyz.amorgan.knock")+"."+client.GjsonEscape(roomID)+".knock_state.events",
+				func(ev gjson.Result) bool {
+					// We don't current define any required state event types to be sent
+					// If we've reached this point, then an entry for this room was found
+					return true
+				},
+			)
 		})
 	})
 
