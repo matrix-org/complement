@@ -1,4 +1,4 @@
-// +build knock
+// +build msc2403
 
 package tests
 
