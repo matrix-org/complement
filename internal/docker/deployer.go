@@ -67,9 +67,9 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	if len(images) == 0 {
 		return nil, fmt.Errorf("Deploy: No images have been built for blueprint %s", blueprintName)
 	}
-	networkID := createNetwork(d.Docker, blueprintName)
-	if networkID == "" {
-		return nil, fmt.Errorf("Deploy: failed to create network")
+	networkID, err := createNetwork(d.Docker, blueprintName)
+	if err != nil {
+		return nil, fmt.Errorf("Deploy: %w", err)
 	}
 	d.networkID = networkID
 	for _, img := range images {

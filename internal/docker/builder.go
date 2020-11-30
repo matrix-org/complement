@@ -17,14 +17,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -179,12 +178,27 @@ func (d *Builder) ConstructBlueprintsIfNotExist(bs []b.Blueprint) error {
 }
 
 func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
-	var bpWg sync.WaitGroup
-	bpWg.Add(len(bs))
+	errc := make(chan []error, len(bs))
 	for _, bprint := range bs {
-		go d.construct(bprint, &bpWg)
+		go (func(bprint b.Blueprint) {
+			errc <- d.construct(bprint)
+		})(bprint)
 	}
-	bpWg.Wait()
+	var errs []error
+	for i := 0; i < len(bs); i++ {
+		// the channel returns a slice of errors;
+		// spread and append them to the error slice
+		// (nothing will be appended if the slice is empty)
+		errs = append(errs, <-errc...)
+	}
+	close(errc)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			d.log("could not construct blueprint: %s", err)
+		}
+		return errs[0]
+	}
+
 	// wait a bit for images/containers to show up in 'image ls'
 	foundImages := false
 	for i := 0; i < 50; i++ { // max 5s
@@ -211,20 +225,22 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 }
 
 // construct all Homeservers sequentially then commits them
-func (d *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
-	defer bpWg.Done()
-	networkID := createNetwork(d.Docker, bprint.Name)
-	if networkID == "" {
-		return
+func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
+	networkID, err := createNetwork(d.Docker, bprint.Name)
+	if err != nil {
+		return []error{err}
 	}
 
 	runner := instruction.NewRunner(bprint.Name, d.debugLogging)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
 		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
-		if res.err != nil && res.containerID != "" {
-			// print docker logs because something went wrong
-			printLogs(d.Docker, res.containerID, res.contextStr)
+		if res.err != nil {
+			errs = append(errs, res.err)
+			if res.containerID != "" {
+				// something went wrong, but we have a container which may have interesting logs
+				printLogs(d.Docker, res.containerID, res.contextStr)
+			}
 		}
 		// kill the container
 		defer func(r result) {
@@ -254,11 +270,13 @@ func (d *Builder) construct(bprint b.Blueprint, bpWg *sync.WaitGroup) {
 		})
 		if err != nil {
 			d.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
-			return
+			errs = append(errs, fmt.Errorf("%s : failed to ContainerCommit: %w", res.contextStr, err))
+			continue
 		}
 		imageID := strings.Replace(commit.ID, "sha256:", "", 1)
 		d.log("%s => %s\n", res.contextStr, imageID)
 	}
+	return errs
 }
 
 // construct this homeserver and execute its instructions, keeping the container alive.
@@ -272,9 +290,11 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 		if dep != nil {
 			containerID = dep.ContainerID
 		}
-		printLogs(d.Docker, containerID, contextStr)
 		return result{
-			err: err,
+			err:         err,
+			containerID: containerID,
+			contextStr:  contextStr,
+			homeserver:  hs,
 		}
 	}
 	d.log("%s : deployed base image to %s (%s)\n", contextStr, dep.BaseURL, dep.ContainerID)
@@ -304,7 +324,7 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 		// When in CI, Complement itself is a container with the CA volume mounted at /ca.
 		// We need to mount this volume to all homeserver containers to synchronize the CA cert.
 		// This is needed to establish trust among all containers.
-		
+
 		// Get volume mounted at /ca. First we get the container ID
 		// /proc/1/cpuset should be /docker/<containerId>
 		cpuset, err := ioutil.ReadFile("/proc/1/cpuset")
@@ -459,7 +479,9 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 	return d, nil
 }
 
-func createNetwork(docker *client.Client, blueprintName string) (networkID string) {
+// createNetwork creates a docker network and returns its id.
+// ID is guaranteed not to be emtpy when err == nil
+func createNetwork(docker *client.Client, blueprintName string) (networkID string, err error) {
 	// make a user-defined network so we get DNS based on the container name
 	nw, err := docker.NetworkCreate(context.Background(), "complement_"+blueprintName, types.NetworkCreate{
 		Labels: map[string]string{
@@ -468,13 +490,18 @@ func createNetwork(docker *client.Client, blueprintName string) (networkID strin
 		},
 	})
 	if err != nil {
-		log.Printf("Failed to create docker network: %s\n", err)
-		return ""
+		return "", fmt.Errorf("%s: failed to create docker network. %w", blueprintName, err)
 	}
 	if nw.Warning != "" {
+		if nw.ID == "" {
+			return "", fmt.Errorf("%s: fatal warning while creating docker network. %s", blueprintName, nw.Warning)
+		}
 		log.Printf("WARNING: %s\n", nw.Warning)
 	}
-	return nw.ID
+	if nw.ID == "" {
+		return "", fmt.Errorf("%s: unexpected empty ID while creating networkID", blueprintName)
+	}
+	return nw.ID, nil
 }
 
 func printLogs(docker *client.Client, containerID, contextStr string) {
