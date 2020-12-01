@@ -214,6 +214,11 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		)
 	})
 
+	t.Run("A user cannot knock on a room they are already in", func(t *testing.T) {
+		reason := "I'm sticking my hand out the window and knocking again!"
+		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{"hs1"}, 403)
+	})
+
 	t.Run("A user that is banned from a room cannot knock on it", func(t *testing.T) {
 		inRoomUser.MustDo(
 			t,
