@@ -61,6 +61,8 @@ type Event struct {
 	Sender   string
 	StateKey *string
 	Content  map[string]interface{}
+	// This field is ignored in blueprints as clients are unable to set it. Used with federation.Server
+	Unsigned map[string]interface{}
 }
 
 func MustValidate(bp Blueprint) Blueprint {

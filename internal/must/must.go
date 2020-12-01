@@ -136,3 +136,16 @@ func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	}
 	return res.Str
 }
+
+// HaveInOrder checks that the two string slices match exactly, failing the test on mismatches or omissions.
+func HaveInOrder(t *testing.T, gots []string, wants []string) {
+	t.Helper()
+	if len(gots) != len(wants) {
+		t.Fatalf("HaveEventsInOrder: length mismatch, got %v want %v", gots, wants)
+	}
+	for i := range gots {
+		if gots[i] != wants[i] {
+			t.Errorf("HaveEventsInOrder: index %d got %s want %s", i, gots[i], wants[i])
+		}
+	}
+}

@@ -84,7 +84,8 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 }
 
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
-func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
+// Returns the event ID of the sent event.
+func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
 	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
@@ -98,6 +99,7 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
 	c.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID
 	})
+	return eventID
 }
 
 // SyncUntilTimelineHas blocks and continually calls /sync until the `check` function returns true.
