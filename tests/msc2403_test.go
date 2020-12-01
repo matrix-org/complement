@@ -13,10 +13,12 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// A reason to include in the response body while knocking
+// A reason to include in the request body when testing knock reason parameters
 var testKnockReason string = "Let me in... LET ME IN!!!"
 
-// TestKnocking tests that a user knocking on a room which the homeserver is already a part of works
+// TestKnocking tests sending knock membership events and transitioning from knock to other membership states.
+// Knocking is currently an experimental feature and not in the matrix spec.
+// This function tests knocking on local and remote room.
 func TestKnocking(t *testing.T) {
 	deployment := Deploy(t, "test_knocking", b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
@@ -45,7 +47,7 @@ func TestKnocking(t *testing.T) {
 	// Test knocking between two users on the same homeserver
 	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, false)
 
-	// Create a room for alice and remoteAlice to test knocking with
+	// Create a room for alice and charlie to test knocking with
 	roomIDTwo := alice.CreateRoom(t, struct {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
@@ -103,7 +105,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		knockOnRoomWithStatus(t, knockingUser, roomID, "I really like knock knock jokes", []string{"hs1"}, 403)
 	})
 
-	// Now that Bob's knocked on the room successfully, let's check that everything went right
+	// Now that the user has knocked on the room successfully, let's check that everything went right
 
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
@@ -135,7 +137,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 
 	if !federation {
 		// Rescinding a knock over federation is currently not supported in Synapse
-		//
+		// TODO: Preventing another homeserver from running this test just because Synapse cannot is unfortunate
 		t.Run("A user that has knocked on a local room can rescind their knock and then knock again", func(t *testing.T) {
 			// Rescind knock
 			knockingUser.MustDo(
@@ -237,10 +239,16 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 }
 
+// knockOnRoom will knock on a given room on the behalf of a user.
+// serverNames should be populated if knocking on a room that the user's homeserver isn't currently a part of.
+// Fails the test if the knock response does not return a 200 status code.
 func knockOnRoom(t *testing.T, client *client.CSAPI, roomID string, reason string, serverNames []string) {
 	knockOnRoomWithStatus(t, client, roomID, reason, serverNames, 200)
 }
 
+// knockOnRoomWithStatus will knock on a given room on the behalf of a user.
+// serverNames should be populated if knocking on a room that the user's homeserver isn't currently a part of.
+// expectedStatus allows setting an expected status code. If the response code differs, the test will fail.
 func knockOnRoomWithStatus(t *testing.T, client *client.CSAPI, roomID string, reason string, serverNames []string, expectedStatus int) {
 	// Add the reason to the request body
 	requestBody := struct {
