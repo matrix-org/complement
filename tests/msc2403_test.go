@@ -218,7 +218,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		inRoomUser.MustDo(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "invite"},
+			[]string{"_matrix", "client", "r0", "rooms", roomID, "ban"},
 			struct {
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
