@@ -173,6 +173,32 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		knockOnRoom(t, knockingUser, roomID, "Pleeease let me in?", []string{"hs1"})
 	})
 
+	t.Run("A user can knock on a room without a reason", func(t *testing.T) {
+		// Reject the knock
+		inRoomUser.MustDo(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "r0", "rooms", roomID, "kick"},
+			struct {
+				UserID string `json:"user_id"`
+				Reason string `json:"reason"`
+			}{
+				knockingUserID,
+				"Please try again",
+			},
+		)
+
+		// Knock again, this time without a reason
+		knockingUser.MustDoRaw(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "unstable", "xyz.amorgan.knock", roomID},
+			[]byte("{}"),
+			"application/json",
+			url.Values{"server_name": []string{"hs1"}},
+		)
+	})
+
 	t.Run("A user in the room can accept a knock", func(t *testing.T) {
 		inRoomUser.MustDo(
 			t,
