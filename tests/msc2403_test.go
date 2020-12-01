@@ -13,6 +13,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// A reason to include in the response body while knocking
 var testKnockReason string = "Let me in... LET ME IN!!!"
 
 // TestKnocking tests that a user knocking on a room which the homeserver is already a part of works
@@ -58,7 +59,7 @@ func TestKnocking(t *testing.T) {
 }
 
 func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, federation bool) {
-	knockingUserUserID := knockingUser.UserID
+	knockingUserID := knockingUser.UserID
 
 	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
 		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{"hs1"}, 403)
@@ -108,7 +109,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
 			t.Parallel()
 			inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUserUserID {
+				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUserID {
 					return false
 				}
 				must.EqualStr(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
@@ -163,7 +164,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
 			}{
-				knockingUserUserID,
+				knockingUserID,
 				"I don't think so",
 			},
 		)
@@ -181,7 +182,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
 			}{
-				knockingUserUserID,
+				knockingUserID,
 				"Seems like a trustworthy fellow",
 			},
 		)
@@ -196,7 +197,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
 			}{
-				knockingUserUserID,
+				knockingUserID,
 				"Turns out Bob wasn't that trustworthy after all!",
 			},
 		)
