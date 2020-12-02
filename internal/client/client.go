@@ -65,19 +65,27 @@ func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 }
 
 // JoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
-func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string) string {
+func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []string) string {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, struct{}{})
+	// construct URL query parameters
+	query := make(url.Values, len(serverNames))
+	for _, serverName := range serverNames {
+		query.Add("server_name", serverName)
+	}
+	// join the room
+	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, nil, "application/json", query)
+	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
 	}
-	// we should be told the room ID if we joined via an alias
+	// otherwise we should be told the room ID if we joined via an alias
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
-func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
+// Returns the event ID of the sent event.
+func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
 	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
@@ -91,6 +99,7 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
 	c.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID
 	})
+	return eventID
 }
 
 // SyncUntilTimelineHas blocks and continually calls /sync until the `check` function returns true.

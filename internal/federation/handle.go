@@ -3,6 +3,7 @@ package federation
 import (
 	"crypto/ed25519"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -157,6 +158,43 @@ func HandleDirectoryLookups() func(*Server) {
 				"error": "Room alias not found."
 			}`))
 		})).Methods("GET")
+	}
+}
+
+// HandleEventRequests is an optino which will process GET /_matrix/federation/v1/event/{eventId} requests universally when requested.
+func HandleEventRequests() func(*Server) {
+	return func(srv *Server) {
+		srv.mux.Handle("/_matrix/federation/v1/event/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			eventID := vars["eventID"]
+			var event *gomatrixserverlib.Event
+			// find the event
+		RoomLoop:
+			for _, room := range srv.rooms {
+				for _, ev := range room.Timeline {
+					if ev.EventID() == eventID {
+						event = ev
+						break RoomLoop
+					}
+				}
+			}
+
+			txn := gomatrixserverlib.Transaction{
+				Origin:         gomatrixserverlib.ServerName(srv.ServerName),
+				OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
+				PDUs: []json.RawMessage{
+					event.JSON(),
+				},
+			}
+			resp, err := json.Marshal(txn)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte(fmt.Sprintf(`complement: failed to marshal JSON response: %s`, err)))
+				return
+			}
+			w.WriteHeader(200)
+			w.Write(resp)
+		}))
 	}
 }
 

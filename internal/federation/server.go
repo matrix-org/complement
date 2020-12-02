@@ -155,7 +155,14 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 	t.Helper()
 	content, err := json.Marshal(ev.Content)
 	if err != nil {
-		t.Fatalf("MustCreateEvent: failed to marshal event content %+v", ev.Content)
+		t.Fatalf("MustCreateEvent: failed to marshal event content %s - %+v", err, ev.Content)
+	}
+	var unsigned []byte
+	if ev.Unsigned != nil {
+		unsigned, err = json.Marshal(ev.Unsigned)
+		if err != nil {
+			t.Fatalf("MustCreateEvent: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
+		}
 	}
 	eb := gomatrixserverlib.EventBuilder{
 		Sender:     ev.Sender,
@@ -165,6 +172,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		Content:    content,
 		RoomID:     room.RoomID,
 		PrevEvents: room.ForwardExtremities,
+		Unsigned:   unsigned,
 	}
 	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
 	if err != nil {
@@ -205,7 +213,7 @@ func (s *Server) Listen() (cancel func()) {
 }
 
 // Get or create local CA cert. This is used to create the federation TLS cert.
-// In addition, it is passed to homeserver containers to create TLS certs 
+// In addition, it is passed to homeserver containers to create TLS certs
 // for the homeservers
 // This basically acts as a test only valid PKI.
 func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
@@ -220,7 +228,7 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 			return nil, nil, err
 		}
 		tlsCACertPath = path.Join(wd, "ca", "ca.crt")
-		tlsCAKeyPath = path.Join(wd,"ca", "ca.key")
+		tlsCAKeyPath = path.Join(wd, "ca", "ca.key")
 		if _, err := os.Stat(path.Join(wd, "ca")); os.IsNotExist(err) {
 			err = os.Mkdir(path.Join(wd, "ca"), 0770)
 			if err != nil {
@@ -293,7 +301,7 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	defer certOut.Close() // nolint: errcheck
 	if err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
 		return nil, nil, err
