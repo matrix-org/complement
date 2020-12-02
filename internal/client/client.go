@@ -37,8 +37,8 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 		query.Set("filename", fileName)
 	}
 	res := c.MustDoRaw(t, "POST", []string{"_matrix", "media", "r0", "upload"}, fileBody, contentType, query)
-	body := parseJSON(t, res)
-	return getJSONFieldStr(t, body, "content_uri")
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "content_uri")
 }
 
 // DownloadContent downloads media from the server, returning the raw bytes and the Content-Type. Fails the test on error.
@@ -60,8 +60,8 @@ func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 	t.Helper()
 	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, creationContent)
-	body := parseJSON(t, res)
-	return getJSONFieldStr(t, body, "room_id")
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "room_id")
 }
 
 // JoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
@@ -72,8 +72,8 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string) string {
 		return roomIDOrAlias
 	}
 	// we should be told the room ID if we joined via an alias
-	body := parseJSON(t, res)
-	return getJSONFieldStr(t, body, "room_id")
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "room_id")
 }
 
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
@@ -85,8 +85,8 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
 		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
 	res := c.MustDo(t, "PUT", paths, e.Content)
-	body := parseJSON(t, res)
-	eventID := getJSONFieldStr(t, body, "event_id")
+	body := ParseJSON(t, res)
+	eventID := GetJSONFieldStr(t, body, "event_id")
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
 	c.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID
@@ -126,8 +126,8 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
 			t.Fatalf("CSAPI.syncUntil since=%s returned HTTP %d", since, res.StatusCode)
 		}
-		body := parseJSON(t, res)
-		since = getJSONFieldStr(t, body, "next_batch")
+		body := ParseJSON(t, res)
+		since = GetJSONFieldStr(t, body, "next_batch")
 		keyRes := gjson.GetBytes(body, key)
 		if keyRes.IsArray() {
 			events := keyRes.Array()
@@ -297,7 +297,8 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	return res, err
 }
 
-func getJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
+// GetJSONFieldStr extracts a value from a byte-encoded JSON body given a search key
+func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	t.Helper()
 	res := gjson.GetBytes(body, wantKey)
 	if !res.Exists() {
@@ -309,7 +310,8 @@ func getJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	return res.Str
 }
 
-func parseJSON(t *testing.T, res *http.Response) []byte {
+// ParseJSON parses a JSON-encoded HTTP Response body into a byte slice
+func ParseJSON(t *testing.T, res *http.Response) []byte {
 	t.Helper()
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)

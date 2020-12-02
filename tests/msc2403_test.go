@@ -61,8 +61,6 @@ func TestKnocking(t *testing.T) {
 }
 
 func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, federation bool) {
-	knockingUserID := knockingUser.UserID
-
 	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
 		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{"hs1"}, 403)
 	})
@@ -110,7 +108,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
 			t.Parallel()
 			inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUserID {
+				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
 					return false
 				}
 				must.EqualStr(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
@@ -138,6 +136,10 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		// Rescinding a knock over federation is currently not supported in Synapse
 		// TODO: Preventing another homeserver from running this test just because Synapse cannot is unfortunate
 		t.Run("A user that has knocked on a local room can rescind their knock and then knock again", func(t *testing.T) {
+			// We need to carry out an incremental sync after knocking in order to get leave information
+			// Carry out an initial sync here and save the since token
+			since := doInitialSync(t, knockingUser)
+
 			// Rescind knock
 			knockingUser.MustDo(
 				t,
@@ -150,7 +152,22 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				},
 			)
 
-			// Knock again
+			// Use our sync token from earlier to carry out an incremental sync. Initial syncs may not contain room
+			// leave information for obvious reasons
+			knockingUser.SyncUntil(
+				t,
+				since,
+				"rooms.leave."+client.GjsonEscape(roomID)+".timeline.events",
+				func(ev gjson.Result) bool {
+					if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
+						return false
+					}
+					must.EqualStr(t, ev.Get("content").Get("membership").Str, "leave", "expected leave membership after rescinding a knock")
+					return true
+				},
+			)
+
+			// Knock again to return us to the knocked state
 			knockOnRoom(t, knockingUser, roomID, "Let me in... again?", []string{"hs1"})
 		})
 	}
@@ -165,7 +182,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
 			}{
-				knockingUserID,
+				knockingUser.UserID,
 				"I don't think so",
 			},
 		)
@@ -184,7 +201,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
 			}{
-				knockingUserID,
+				knockingUser.UserID,
 				"Please try again",
 			},
 		)
@@ -209,7 +226,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
 			}{
-				knockingUserID,
+				knockingUser.UserID,
 				"Seems like a trustworthy fellow",
 			},
 		)
@@ -229,7 +246,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
 			}{
-				knockingUserID,
+				knockingUser.UserID,
 				"Turns out Bob wasn't that trustworthy after all!",
 			},
 		)
@@ -258,9 +275,7 @@ func knockOnRoomWithStatus(t *testing.T, client *client.CSAPI, roomID string, re
 		reason,
 	}
 	b, err := json.Marshal(requestBody)
-	if err != nil {
-		t.Fatalf("knockOnRoomWithStatus failed to marshal JSON body: %s", err)
-	}
+	must.NotError(t, "knockOnRoomWithStatus failed to marshal JSON body", err)
 
 	// Add any server names to the query parameters
 	query := url.Values{
@@ -277,4 +292,18 @@ func knockOnRoomWithStatus(t *testing.T, client *client.CSAPI, roomID string, re
 		query,
 		expectedStatus,
 	)
+}
+
+// doInitialSync will carry out an initial sync and return the next_batch token
+func doInitialSync(t *testing.T, c *client.CSAPI) string {
+	query := url.Values{
+		"access_token": []string{c.AccessToken},
+		"timeout":      []string{"1000"},
+	}
+	res, err := c.Do(t, "GET", []string{"_matrix", "client", "r0", "sync"}, nil, query)
+	must.NotError(t, "doInitialSync failed to marshal JSON body", err)
+
+	body := client.ParseJSON(t, res)
+	since := client.GetJSONFieldStr(t, body, "next_batch")
+	return since
 }
