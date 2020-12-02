@@ -109,40 +109,21 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("Knocking on a room with join rule '"+knockUnstableIdentifier+"' should succeed", func(t *testing.T) {
-		knockOnRoom(t, knockingUser, roomID, testKnockReason, []string{"hs1"})
+		knockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []string{"hs1"})
 	})
 
 	t.Run("A user that has already knocked cannot immediately knock again on the same room", func(t *testing.T) {
 		knockOnRoomWithStatus(t, knockingUser, roomID, "I really like knock knock jokes", []string{"hs1"}, 403)
 	})
 
-	// Now that the user has knocked on the room successfully, let's check that everything went right
-
-	t.Run("parallel", func(t *testing.T) {
-		t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
-			t.Parallel()
-			inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
-					return false
-				}
-				must.EqualStr(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
-				must.EqualStr(t, ev.Get("content").Get("membership").Str, knockUnstableIdentifier, "incorrect membership for knocking user")
-				return true
-			})
-		})
-
-		t.Run("Users see state events from the room that they knocked on in /sync", func(t *testing.T) {
-			t.Parallel()
-			knockingUser.SyncUntil(
-				t,
-				"",
-				"rooms."+client.GjsonEscape(knockUnstableIdentifier)+"."+client.GjsonEscape(roomID)+".knock_state.events",
-				func(ev gjson.Result) bool {
-					// We don't current define any required state event types to be sent
-					// If we've reached this point, then an entry for this room was found
-					return true
-				},
-			)
+	t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
+		inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+			if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
+				return false
+			}
+			must.EqualStr(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
+			must.EqualStr(t, ev.Get("content").Get("membership").Str, knockUnstableIdentifier, "incorrect membership for knocking user")
+			return true
 		})
 	})
 
@@ -182,7 +163,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			)
 
 			// Knock again to return us to the knocked state
-			knockOnRoom(t, knockingUser, roomID, "Let me in... again?", []string{"hs1"})
+			knockOnRoomSynced(t, knockingUser, roomID, "Let me in... again?", []string{"hs1"})
 		})
 	}
 
@@ -213,7 +194,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		})
 
 		// Knock again
-		knockOnRoom(t, knockingUser, roomID, "Pleeease let me in?", []string{"hs1"})
+		knockOnRoomSynced(t, knockingUser, roomID, "Pleeease let me in?", []string{"hs1"})
 	})
 
 	t.Run("A user can knock on a room without a reason", func(t *testing.T) {
@@ -280,17 +261,29 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 }
 
-// knockOnRoom will knock on a given room on the behalf of a user.
+// knockOnRoomSynced will knock on a given room on the behalf of a user, and block until the knock has persisted.
 // serverNames should be populated if knocking on a room that the user's homeserver isn't currently a part of.
 // Fails the test if the knock response does not return a 200 status code.
-func knockOnRoom(t *testing.T, client *client.CSAPI, roomID string, reason string, serverNames []string) {
-	knockOnRoomWithStatus(t, client, roomID, reason, serverNames, 200)
+func knockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID string, reason string, serverNames []string) {
+	knockOnRoomWithStatus(t, c, roomID, reason, serverNames, 200)
+
+	// The knock should have succeeded. Block until we see the knock appear down sync
+	c.SyncUntil(
+		t,
+		"",
+		"rooms."+client.GjsonEscape(knockUnstableIdentifier)+"."+client.GjsonEscape(roomID)+".knock_state.events",
+		func(ev gjson.Result) bool {
+			// We don't currently define any required state event types to be sent.
+			// If we've reached this point, then an entry for this room was found
+			return true
+		},
+	)
 }
 
 // knockOnRoomWithStatus will knock on a given room on the behalf of a user.
 // serverNames should be populated if knocking on a room that the user's homeserver isn't currently a part of.
 // expectedStatus allows setting an expected status code. If the response code differs, the test will fail.
-func knockOnRoomWithStatus(t *testing.T, client *client.CSAPI, roomID string, reason string, serverNames []string, expectedStatus int) {
+func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID string, reason string, serverNames []string, expectedStatus int) {
 	// Add the reason to the request body
 	requestBody := struct {
 		Reason string `json:"reason"`
@@ -308,7 +301,7 @@ func knockOnRoomWithStatus(t *testing.T, client *client.CSAPI, roomID string, re
 	}
 
 	// Knock on the room
-	client.MustDoWithStatusRaw(
+	c.MustDoWithStatusRaw(
 		t,
 		"POST",
 		[]string{"_matrix", "client", "unstable", knockUnstableIdentifier, roomID},
@@ -317,6 +310,7 @@ func knockOnRoomWithStatus(t *testing.T, client *client.CSAPI, roomID string, re
 		query,
 		expectedStatus,
 	)
+
 }
 
 // doInitialSync will carry out an initial sync and return the next_batch token
