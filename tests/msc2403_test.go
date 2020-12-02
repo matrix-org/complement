@@ -173,7 +173,11 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	}
 
 	t.Run("A user in the room can reject a knock", func(t *testing.T) {
-		// Reject the knock
+		// Reject the knock. Note that the knocking homeserver will *not* receive the leave
+		// event over federation due to event validation complications.
+		//
+		// In the case of federation, this test will still check that a knock can be
+		// carried out after a previous knock is rejected.
 		inRoomUser.MustDo(
 			t,
 			"POST",
@@ -186,6 +190,13 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				"I don't think so",
 			},
 		)
+
+		// Wait until the leave membership event has come down sync
+		inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str != "m.room.member" ||
+				ev.Get("state_key").Str != knockingUser.UserID ||
+				ev.Get("content").Get("membership").Str != "leave"
+		})
 
 		// Knock again
 		knockOnRoom(t, knockingUser, roomID, "Pleeease let me in?", []string{"hs1"})
