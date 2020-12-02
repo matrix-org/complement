@@ -68,16 +68,15 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("Change the join rule of a room from 'invite' to 'xyz.amorgan.knock'", func(t *testing.T) {
-		inRoomUser.MustDo(
-			t,
-			"PUT",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.join_rules", ""},
-			struct {
-				JoinRule string `json:"join_rule"`
-			}{
-				"xyz.amorgan.knock",
+		emptyStateKey := ""
+		inRoomUser.SendEventSynced(t, roomID, b.Event{
+			Type:     "m.room.join_rules",
+			Sender:   inRoomUser.UserID,
+			StateKey: &emptyStateKey,
+			Content: map[string]interface{}{
+				"join_rule": "xyz.amorgan.knock",
 			},
-		)
+		})
 	})
 
 	t.Run("Attempting to join a room with join rule 'xyz.amorgan.knock' without an invite should fail", func(t *testing.T) {
