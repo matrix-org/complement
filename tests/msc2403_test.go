@@ -213,14 +213,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		)
 
 		// Knock again, this time without a reason
-		knockingUser.MustDoRaw(
-			t,
-			"POST",
-			[]string{"_matrix", "client", "unstable", knockUnstableIdentifier, roomID},
-			[]byte("{}"),
-			"application/json",
-			url.Values{"server_name": []string{"hs1"}},
-		)
+		knockOnRoomSynced(t, knockingUser, roomID, "", []string{"hs1"})
 	})
 
 	t.Run("A user in the room can accept a knock", func(t *testing.T) {
@@ -236,6 +229,13 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				"Seems like a trustworthy fellow",
 			},
 		)
+
+		// Wait until the invite membership event has come down sync
+		inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str != "m.room.member" ||
+				ev.Get("state_key").Str != knockingUser.UserID ||
+				ev.Get("content").Get("membership").Str != "invite"
+		})
 	})
 
 	t.Run("A user cannot knock on a room they are already in", func(t *testing.T) {
@@ -244,6 +244,11 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("A user that is banned from a room cannot knock on it", func(t *testing.T) {
+		// Ban the user. Note that the knocking homeserver will *not* receive the ban
+		// event over federation due to event validation complications.
+		//
+		// In the case of federation, this test will still check that a knock can not be
+		// carried out after a ban.
 		inRoomUser.MustDo(
 			t,
 			"POST",
@@ -257,6 +262,13 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			},
 		)
 
+		// Wait until the ban membership event has come down sync
+		inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str != "m.room.member" ||
+				ev.Get("state_key").Str != knockingUser.UserID ||
+				ev.Get("content").Get("membership").Str != "ban"
+		})
+
 		knockOnRoomWithStatus(t, knockingUser, roomID, "I didn't mean it!", []string{"hs1"}, 403)
 	})
 }
@@ -264,7 +276,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 // knockOnRoomSynced will knock on a given room on the behalf of a user, and block until the knock has persisted.
 // serverNames should be populated if knocking on a room that the user's homeserver isn't currently a part of.
 // Fails the test if the knock response does not return a 200 status code.
-func knockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID string, reason string, serverNames []string) {
+func knockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []string) {
 	knockOnRoomWithStatus(t, c, roomID, reason, serverNames, 200)
 
 	// The knock should have succeeded. Block until we see the knock appear down sync
@@ -283,17 +295,21 @@ func knockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID string, reason stri
 // knockOnRoomWithStatus will knock on a given room on the behalf of a user.
 // serverNames should be populated if knocking on a room that the user's homeserver isn't currently a part of.
 // expectedStatus allows setting an expected status code. If the response code differs, the test will fail.
-func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID string, reason string, serverNames []string, expectedStatus int) {
-	// Add the reason to the request body
-	requestBody := struct {
-		Reason string `json:"reason"`
-	}{
-		// We specify a reason here instead of using the same one each time as implementations can
-		// cache responses to identical requests
-		reason,
+func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []string, expectedStatus int) {
+	b := []byte("{}")
+	var err error
+	if reason != "" {
+		// Add the reason to the request body
+		requestBody := struct {
+			Reason string `json:"reason"`
+		}{
+			// We specify a reason here instead of using the same one each time as implementations can
+			// cache responses to identical requests
+			reason,
+		}
+		b, err = json.Marshal(requestBody)
+		must.NotError(t, "knockOnRoomWithStatus failed to marshal JSON body", err)
 	}
-	b, err := json.Marshal(requestBody)
-	must.NotError(t, "knockOnRoomWithStatus failed to marshal JSON body", err)
 
 	// Add any server names to the query parameters
 	query := url.Values{
