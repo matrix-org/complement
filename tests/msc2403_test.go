@@ -1,5 +1,16 @@
 // +build msc2403
 
+// This file contains tests for knocking, a currently experimental feature defined by MSC2403,
+// which you can read here: https://github.com/matrix-org/matrix-doc/pull/2403
+
+// Once this feature is included in a released version of the Matrix specification, the following
+// will need to be carried out for these tests:
+// * Update instances of `xyz.amorgan.knock` to `knock`.
+// * Update endpoints from `/_matrix/client/unstable/xyz.amorgan.knock/...` to `/_matrix/client/rX/...`.
+// * Remove the `build ...` line at the top so the tests are built by default.
+// * Update the name of the test file to `knock_test.go` or similar.
+// * Remove the conditional on rescinding knocks over federation. Synapse will need to support that if the spec says it's possible.
+
 package tests
 
 import (
