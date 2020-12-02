@@ -16,6 +16,9 @@ import (
 // A reason to include in the request body when testing knock reason parameters
 var testKnockReason string = "Let me in... LET ME IN!!!"
 
+// The unstable identifier to use while this feature is still unstable
+var knockUnstableIdentifier string = "xyz.amorgan.knock"
+
 // TestKnocking tests sending knock membership events and transitioning from knock to other membership states.
 // Knocking is currently an experimental feature and not in the matrix spec.
 // This function tests knocking on local and remote room.
@@ -40,8 +43,8 @@ func TestKnocking(t *testing.T) {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
-		"private_chat",      // Set to private in order to get an invite-only room
-		"xyz.amorgan.knock", // Room version required for knocking. TODO: Remove when knocking is in a stable room version
+		"private_chat",          // Set to private in order to get an invite-only room
+		knockUnstableIdentifier, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
 	})
 
 	// Test knocking between two users on the same homeserver
@@ -52,8 +55,8 @@ func TestKnocking(t *testing.T) {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
-		"private_chat",      // Set to private in order to get an invite-only room
-		"xyz.amorgan.knock", // Room version required for knocking. TODO: Remove when knocking is in a stable room version
+		"private_chat",          // Set to private in order to get an invite-only room
+		knockUnstableIdentifier, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
 	})
 
 	// Test knocking between two users, each on a separate homeserver
@@ -61,23 +64,23 @@ func TestKnocking(t *testing.T) {
 }
 
 func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, federation bool) {
-	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
+	t.Run("Knocking on a room with a join rule other than '"+knockUnstableIdentifier+"' should fail", func(t *testing.T) {
 		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{"hs1"}, 403)
 	})
 
-	t.Run("Change the join rule of a room from 'invite' to 'xyz.amorgan.knock'", func(t *testing.T) {
+	t.Run("Change the join rule of a room from 'invite' to '"+knockUnstableIdentifier+"'", func(t *testing.T) {
 		emptyStateKey := ""
 		inRoomUser.SendEventSynced(t, roomID, b.Event{
 			Type:     "m.room.join_rules",
 			Sender:   inRoomUser.UserID,
 			StateKey: &emptyStateKey,
 			Content: map[string]interface{}{
-				"join_rule": "xyz.amorgan.knock",
+				"join_rule": knockUnstableIdentifier,
 			},
 		})
 	})
 
-	t.Run("Attempting to join a room with join rule 'xyz.amorgan.knock' without an invite should fail", func(t *testing.T) {
+	t.Run("Attempting to join a room with join rule '"+knockUnstableIdentifier+"' without an invite should fail", func(t *testing.T) {
 		// Set server_name so we can find rooms via ID over federation
 		query := url.Values{
 			"server_name": []string{"hs1"},
@@ -94,7 +97,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		)
 	})
 
-	t.Run("Knocking on a room with join rule 'xyz.amorgan.xyz' should succeed", func(t *testing.T) {
+	t.Run("Knocking on a room with join rule '"+knockUnstableIdentifier+"' should succeed", func(t *testing.T) {
 		knockOnRoom(t, knockingUser, roomID, testKnockReason, []string{"hs1"})
 	})
 
@@ -112,7 +115,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 					return false
 				}
 				must.EqualStr(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
-				must.EqualStr(t, ev.Get("content").Get("membership").Str, "xyz.amorgan.knock", "incorrect membership for knocking user")
+				must.EqualStr(t, ev.Get("content").Get("membership").Str, knockUnstableIdentifier, "incorrect membership for knocking user")
 				return true
 			})
 		})
@@ -122,7 +125,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			knockingUser.SyncUntil(
 				t,
 				"",
-				"rooms."+client.GjsonEscape("xyz.amorgan.knock")+"."+client.GjsonEscape(roomID)+".knock_state.events",
+				"rooms."+client.GjsonEscape(knockUnstableIdentifier)+"."+client.GjsonEscape(roomID)+".knock_state.events",
 				func(ev gjson.Result) bool {
 					// We don't current define any required state event types to be sent
 					// If we've reached this point, then an entry for this room was found
@@ -221,7 +224,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		knockingUser.MustDoRaw(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "unstable", "xyz.amorgan.knock", roomID},
+			[]string{"_matrix", "client", "unstable", knockUnstableIdentifier, roomID},
 			[]byte("{}"),
 			"application/json",
 			url.Values{"server_name": []string{"hs1"}},
@@ -297,7 +300,7 @@ func knockOnRoomWithStatus(t *testing.T, client *client.CSAPI, roomID string, re
 	client.MustDoWithStatusRaw(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "unstable", "xyz.amorgan.knock", roomID},
+		[]string{"_matrix", "client", "unstable", knockUnstableIdentifier, roomID},
 		b,
 		"application/json",
 		query,
