@@ -14,10 +14,10 @@ import (
 )
 
 // A reason to include in the request body when testing knock reason parameters
-var testKnockReason string = "Let me in... LET ME IN!!!"
+const testKnockReason string = "Let me in... LET ME IN!!!"
 
 // The unstable identifier to use while this feature is still unstable
-var knockUnstableIdentifier string = "xyz.amorgan.knock"
+const knockUnstableIdentifier string = "xyz.amorgan.knock"
 
 // TestKnocking tests sending knock membership events and transitioning from knock to other membership states.
 // Knocking is currently an experimental feature and not in the matrix spec.
