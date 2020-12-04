@@ -374,6 +374,6 @@ func HandleTransactionRequests() func(*Server) {
 			}
 			w.WriteHeader(200)
 			w.Write(resp)
-		}))
+		})).Methods("PUT")
 	}
 }
