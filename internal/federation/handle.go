@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/util"
 )
 
 // MakeJoinRequestsHandler is the http.Handler implementation for the make_join part of
@@ -161,7 +163,7 @@ func HandleDirectoryLookups() func(*Server) {
 	}
 }
 
-// HandleEventRequests is an optino which will process GET /_matrix/federation/v1/event/{eventId} requests universally when requested.
+// HandleEventRequests is an option which will process GET /_matrix/federation/v1/event/{eventId} requests universally when requested.
 func HandleEventRequests() func(*Server) {
 	return func(srv *Server) {
 		srv.mux.Handle("/_matrix/federation/v1/event/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -275,5 +277,103 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 		// route.
 		mediamux.Handle("/v1/download/{origin}/{mediaId}", downloadFn).Methods("GET")
 		mediamux.Handle("/r0/download/{origin}/{mediaId}", downloadFn).Methods("GET")
+	}
+}
+
+// HandleTransactionRequests is an option which will process GET /_matrix/federation/v1/send/{transactionID} requests universally when requested.
+func HandleTransactionRequests() func(*Server) {
+	return func(srv *Server) {
+		srv.mux.Handle("/_matrix/federation/v1/send/{transactionID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			// Check federation signature
+			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
+				req, time.Now(), gomatrixserverlib.ServerName(srv.ServerName), srv.keyRing,
+			)
+			if fedReq == nil {
+				w.WriteHeader(errResp.Code)
+				b, _ := json.Marshal(errResp.JSON)
+				w.Write(b)
+				return
+			}
+
+			// Read the request body
+			body, err := ioutil.ReadAll(req.Body)
+			if err != nil {
+				errResp := util.MessageResponse(400, err.Error())
+				w.WriteHeader(errResp.Code)
+				b, _ := json.Marshal(errResp.JSON)
+				w.Write(b)
+				return
+			}
+
+			// Unmarshal the request body into a transaction object
+			var transaction gomatrixserverlib.Transaction
+			err = json.Unmarshal(body, &transaction)
+			if err != nil {
+				errResp := util.MessageResponse(400, err.Error())
+				w.WriteHeader(errResp.Code)
+				b, _ := json.Marshal(errResp.JSON)
+				w.Write(b)
+				return
+			}
+
+			// Extract the transaction ID from the request vars
+			vars := mux.Vars(req)
+			transaction.TransactionID = gomatrixserverlib.TransactionID(vars["transactionID"])
+
+			// Transactions are limited in size; they can have at most 50 PDUs and 100 EDUs.
+			// https://matrix.org/docs/spec/server_server/latest#transactions
+			if len(transaction.PDUs) > 50 || len(transaction.EDUs) > 100 {
+				errResp := util.MessageResponse(400, "Transactions are limited to 50 PDUs and 100 EDUs")
+				w.WriteHeader(errResp.Code)
+				b, _ := json.Marshal(errResp.JSON)
+				w.Write(b)
+				return
+			}
+
+			// Construct a response and fill as we process each PDU
+			response := gomatrixserverlib.RespSend{}
+			response.PDUs = make(map[string]gomatrixserverlib.PDUResult, 0)
+			for _, pdu := range transaction.PDUs {
+				var header struct {
+					RoomID string `json:"room_id"`
+				}
+				if err := json.Unmarshal(pdu, &header); err != nil {
+					log.Printf("Transaction '%s': Failed to extract room ID from event", transaction.TransactionID)
+					// We don't know the event ID at this point so we can't return the
+					// failure in the PDU results
+				}
+
+				// Retrieve the room version from the server
+				room := srv.rooms[header.RoomID]
+				roomVersion := gomatrixserverlib.RoomVersion(room.Version)
+
+				event, err := gomatrixserverlib.NewEventFromUntrustedJSON(pdu, roomVersion)
+				if err != nil {
+					// We were unable to verify or process this event.
+					// Add this PDU to the response along with an error message.
+					response.PDUs[event.EventID()] = gomatrixserverlib.PDUResult{
+						Error: err.Error(),
+					}
+					continue
+				}
+
+				// Store this PDU in the room's timeline
+				room.Timeline = append(room.Timeline, &event)
+
+				// Add this PDU as a success to the response
+				response.PDUs[event.EventID()] = gomatrixserverlib.PDUResult{}
+			}
+
+			// TODO: Handle EDUs
+
+			resp, err := json.Marshal(response)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte(fmt.Sprintf(`complement: failed to marshal JSON response: %s`, err)))
+				return
+			}
+			w.WriteHeader(200)
+			w.Write(resp)
+		}))
 	}
 }
