@@ -129,9 +129,10 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
 	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.ServerName)
 	room := &ServerRoom{
-		RoomID:  roomID,
-		Version: roomVer,
-		State:   make(map[string]*gomatrixserverlib.Event),
+		RoomID:             roomID,
+		Version:            roomVer,
+		State:              make(map[string]*gomatrixserverlib.Event),
+		ForwardExtremities: make([]string, 0),
 	}
 	// sign all these events
 	for _, ev := range events {
