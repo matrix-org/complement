@@ -281,7 +281,8 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 }
 
 // HandleTransactionRequests is an option which will process GET /_matrix/federation/v1/send/{transactionID} requests universally when requested.
-func HandleTransactionRequests() func(*Server) {
+// eventCallback is a function that will be called and passed each event that is received in the transaction
+func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCallback func(gomatrixserverlib.EDU)) func(*Server) {
 	return func(srv *Server) {
 		srv.mux.Handle("/_matrix/federation/v1/send/{transactionID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			// Check federation signature
@@ -345,26 +346,32 @@ func HandleTransactionRequests() func(*Server) {
 
 				// Retrieve the room version from the server
 				room := srv.rooms[header.RoomID]
+				if room == nil {
+					continue
+				}
 				roomVersion := gomatrixserverlib.RoomVersion(room.Version)
 
 				event, err := gomatrixserverlib.NewEventFromUntrustedJSON(pdu, roomVersion)
 				if err != nil {
 					// We were unable to verify or process this event.
-					// Add this PDU to the response along with an error message.
-					response.PDUs[event.EventID()] = gomatrixserverlib.PDUResult{
-						Error: err.Error(),
-					}
-					continue
+					// Tell the sending server that we accepted it anyways, as we're just looking to populate the timeline here
+					log.Printf("Unable to process event '%s' in transaction '%s': %s", event.EventID(), transaction.TransactionID, err.Error())
 				}
 
 				// Store this PDU in the room's timeline
-				room.Timeline = append(room.Timeline, &event)
+				room.AddEvent(&event)
 
 				// Add this PDU as a success to the response
 				response.PDUs[event.EventID()] = gomatrixserverlib.PDUResult{}
+
+				// Run the PDU callback function with this event
+				pduCallback(event)
 			}
 
-			// TODO: Handle EDUs
+			for _, edu := range transaction.EDUs {
+				// Run the EDU callback function with this EDU
+				eduCallback(edu)
+			}
 
 			resp, err := json.Marshal(response)
 			if err != nil {
