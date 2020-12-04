@@ -34,6 +34,9 @@ func (r *ServerRoom) AddEvent(ev *gomatrixserverlib.Event) {
 
 // AuthEvents returns the state event IDs of the auth events which authenticate this event
 func (r *ServerRoom) AuthEvents(sn gomatrixserverlib.StateNeeded) (eventIDs []string) {
+	// Guard against returning a nil string slice
+	eventIDs = make([]string, 0)
+
 	appendIfExists := func(evType, stateKey string) {
 		ev := r.CurrentState(evType, stateKey)
 		if ev == nil {
