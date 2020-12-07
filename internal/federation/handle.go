@@ -345,6 +345,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 					log.Printf("complement: Transaction '%s': Failed to extract room ID from event: %s", transaction.TransactionID, err.Error())
 					// We don't know the event ID at this point so we can't return the
 					// failure in the PDU results
+					continue
 				}
 
 				// Retrieve the room version from the server
@@ -357,11 +358,13 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 				event, err := gomatrixserverlib.NewEventFromUntrustedJSON(pdu, roomVersion)
 				if err != nil {
 					// We were unable to verify or process this event.
-					// Tell the sending server that we accepted it anyways, as we're just looking to populate the timeline here
 					log.Printf(
 						"complement: Transaction '%s': Unable to process event '%s': %s",
 						transaction.TransactionID, event.EventID(), err.Error(),
 					)
+
+					// We still don't know the event ID, and cannot add the failure to the PDU results
+					continue
 				}
 
 				// Store this PDU in the room's timeline
