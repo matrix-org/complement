@@ -355,6 +355,8 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 				// Retrieve the room version from the server
 				room := srv.rooms[header.RoomID]
 				if room == nil {
+					// An invalid room ID may have been provided
+					log.Printf("complement: Transaction '%s': Failed to find local room: %s", transaction.TransactionID, header.RoomID)
 					continue
 				}
 				roomVersion := gomatrixserverlib.RoomVersion(room.Version)
