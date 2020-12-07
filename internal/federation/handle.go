@@ -298,6 +298,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 					"complement: Transaction '%s': HTTP Code %d. Invalid http request: %s",
 					transactionID, errResp.Code, errResp.JSON,
 				)
+
 				w.WriteHeader(errResp.Code)
 				b, _ := json.Marshal(errResp.JSON)
 				w.Write(b)
@@ -312,6 +313,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 					"complement: Transaction '%s': Unable to unmarshal transaction body bytes into Transaction object: %s",
 					transaction.TransactionID, err.Error(),
 				)
+
 				errResp := util.MessageResponse(400, err.Error())
 				w.WriteHeader(errResp.Code)
 				b, _ := json.Marshal(errResp.JSON)
@@ -327,6 +329,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 					"complement: Transaction '%s': Transaction too large. PDUs: %d/50, EDUs: %d/100",
 					transaction.TransactionID, (transaction.PDUs), len(transaction.EDUs),
 				)
+
 				errResp := util.MessageResponse(400, "Transactions are limited to 50 PDUs and 100 EDUs")
 				w.WriteHeader(errResp.Code)
 				b, _ := json.Marshal(errResp.JSON)
@@ -343,6 +346,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 				}
 				if err := json.Unmarshal(pdu, &header); err != nil {
 					log.Printf("complement: Transaction '%s': Failed to extract room ID from event: %s", transaction.TransactionID, err.Error())
+
 					// We don't know the event ID at this point so we can't return the
 					// failure in the PDU results
 					continue
