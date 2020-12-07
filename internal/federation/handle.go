@@ -296,20 +296,11 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 				return
 			}
 
-			// Read the request body
-			body, err := ioutil.ReadAll(req.Body)
-			if err != nil {
-				errResp := util.MessageResponse(400, err.Error())
-				w.WriteHeader(errResp.Code)
-				b, _ := json.Marshal(errResp.JSON)
-				w.Write(b)
-				return
-			}
-
 			// Unmarshal the request body into a transaction object
 			var transaction gomatrixserverlib.Transaction
-			err = json.Unmarshal(body, &transaction)
+			err := json.Unmarshal(fedReq.Content(), &transaction)
 			if err != nil {
+				log.Printf("Unable to unmarshal transaction body bytes into Transaction object: %s", err.Error())
 				errResp := util.MessageResponse(400, err.Error())
 				w.WriteHeader(errResp.Code)
 				b, _ := json.Marshal(errResp.JSON)
@@ -324,6 +315,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 			// Transactions are limited in size; they can have at most 50 PDUs and 100 EDUs.
 			// https://matrix.org/docs/spec/server_server/latest#transactions
 			if len(transaction.PDUs) > 50 || len(transaction.EDUs) > 100 {
+				log.Printf("Transaction too large. PDUs: %d/50, EDUs: %d/100", len(transaction.PDUs), len(transaction.EDUs))
 				errResp := util.MessageResponse(400, "Transactions are limited to 50 PDUs and 100 EDUs")
 				w.WriteHeader(errResp.Code)
 				b, _ := json.Marshal(errResp.JSON)
@@ -365,16 +357,21 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 				response.PDUs[event.EventID()] = gomatrixserverlib.PDUResult{}
 
 				// Run the PDU callback function with this event
-				pduCallback(event)
+				if pduCallback != nil {
+					pduCallback(event)
+				}
 			}
 
 			for _, edu := range transaction.EDUs {
 				// Run the EDU callback function with this EDU
-				eduCallback(edu)
+				if eduCallback != nil {
+					eduCallback(edu)
+				}
 			}
 
 			resp, err := json.Marshal(response)
 			if err != nil {
+				log.Printf("Failed to marshal JSON response to transaction: %s", err.Error())
 				w.WriteHeader(500)
 				w.Write([]byte(fmt.Sprintf(`complement: failed to marshal JSON response: %s`, err)))
 				return
