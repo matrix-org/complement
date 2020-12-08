@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -52,8 +53,19 @@ func TestMediaWithoutFileName(t *testing.T) {
 			mxc := alice.UploadContent(t, file, fileName, contentType)
 			must.NotEqualStr(t, mxc, "", "did not return an MXC URI")
 			must.StartWithStr(t, mxc, "mxc://", "returned invalid MXC URI")
+
 			b, ct := alice.DownloadContent(t, mxc)
-			must.EqualStr(t, ct, contentType, "wrong Content-Type returned")
+
+			// Check the Content-Type response header.
+			// Homeservers are free to add other directives. All we want to check is the mimetype.
+			mimeType := strings.Split(ct, ";")[0]
+			must.EqualStr(
+				t, mimeType, contentType,
+				fmt.Sprintf(
+					"Wrong mime-type returned in Content-Type returned. got Content-Type '%s', extracted mime-type '%s', expected mime-type: '%s'",
+					ct, mimeType, contentType,
+				),
+			)
 			must.EqualStr(t, string(b), string(file), "wrong file content returned")
 		})
 		// sytest: Can download without a file name over federation
@@ -62,7 +74,17 @@ func TestMediaWithoutFileName(t *testing.T) {
 			alice := deployment.Client(t, "hs1", userID)
 
 			b, ct := alice.DownloadContent(t, fmt.Sprintf("mxc://%s/%s", srv.ServerName, remoteMediaId))
-			must.EqualStr(t, ct, remoteContentType, "wrong Content-Type returned")
+
+			// Check the Content-Type response header.
+			// Homeservers are free to add other directives. All we want to check is the mimetype.
+			mimeType := strings.Split(ct, ";")[0]
+			must.EqualStr(
+				t, mimeType, contentType,
+				fmt.Sprintf(
+					"Wrong mime-type returned in Content-Type returned. got Content-Type '%s', extracted mime-type '%s', expected mime-type: '%s'",
+					ct, mimeType, contentType,
+				),
+			)
 			must.EqualStr(t, string(b), string(remoteFile), "wrong file content returned")
 		})
 	})
