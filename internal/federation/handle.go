@@ -281,7 +281,7 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 }
 
 // HandleTransactionRequests is an option which will process GET /_matrix/federation/v1/send/{transactionID} requests universally when requested.
-// eventCallback is a function that will be called and passed each event that is received in the transaction
+// pduCallback and eduCallback are functions that if non-nil will be called and passed each PDU or EDU event received in the transaction
 func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCallback func(gomatrixserverlib.EDU)) func(*Server) {
 	return func(srv *Server) {
 		srv.mux.Handle("/_matrix/federation/v1/send/{transactionID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -327,7 +327,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 			if len(transaction.PDUs) > 50 || len(transaction.EDUs) > 100 {
 				log.Printf(
 					"complement: Transaction '%s': Transaction too large. PDUs: %d/50, EDUs: %d/100",
-					transaction.TransactionID, (transaction.PDUs), len(transaction.EDUs),
+					transaction.TransactionID, len(transaction.PDUs), len(transaction.EDUs),
 				)
 
 				errResp := util.MessageResponse(400, "Transactions are limited to 50 PDUs and 100 EDUs")
