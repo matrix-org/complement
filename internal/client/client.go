@@ -115,7 +115,7 @@ func (c *CSAPI) syncUntil(t *testing.T, since, key string, check func(gjson.Resu
 	start := time.Now()
 	checkCounter := 0
 	for {
-		if time.Now().Sub(start) > c.SyncUntilTimeout {
+		if time.Since(start) > c.SyncUntilTimeout {
 			t.Fatalf("syncUntil timed out. Called check function %d times", checkCounter)
 		}
 		query := url.Values{
@@ -296,9 +296,9 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	start := time.Now()
 	res, err := t.wrap.RoundTrip(req)
 	if err != nil {
-		t.t.Logf("%s %s => error: %s (%s)", req.Method, req.URL.Path, err, time.Now().Sub(start))
+		t.t.Logf("%s %s => error: %s (%s)", req.Method, req.URL.Path, err, time.Since(start))
 	} else {
-		t.t.Logf("%s %s => %s (%s)", req.Method, req.URL.Path, res.Status, time.Now().Sub(start))
+		t.t.Logf("%s %s => %s (%s)", req.Method, req.URL.Path, res.Status, time.Since(start))
 	}
 	return res, err
 }
