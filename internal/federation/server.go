@@ -214,9 +214,9 @@ func (s *Server) Listen() (cancel func()) {
 	}
 }
 
-// Get or create local CA cert. This is used to create the federation TLS cert.
+// GetOrCreateCaCert is used to create the federation TLS cert.
 // In addition, it is passed to homeserver containers to create TLS certs
-// for the homeservers
+// for the homeservers.
 // This basically acts as a test only valid PKI.
 func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 	var tlsCACertPath, tlsCAKeyPath string
