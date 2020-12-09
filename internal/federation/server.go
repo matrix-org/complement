@@ -201,7 +201,9 @@ func (s *Server) Listen() (cancel func()) {
 		defer wg.Done()
 		err := s.srv.ListenAndServeTLS(s.certPath, s.keyPath)
 		if err != nil && err != http.ErrServerClosed {
-			s.t.Fatalf("ListenFederationServer: ListenAndServeTLS failed: %s", err)
+			s.t.Logf("ListenFederationServer: ListenAndServeTLS failed: %s", err)
+			// Note that running s.t.FailNow is not allowed in a separate goroutine
+			// TODO: Figure out a way to fail the test here
 		}
 	}()
 
