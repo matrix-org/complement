@@ -480,7 +480,7 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 }
 
 // createNetwork creates a docker network and returns its id.
-// ID is guaranteed not to be emtpy when err == nil
+// ID is guaranteed not to be empty when err == nil
 func createNetwork(docker *client.Client, blueprintName string) (networkID string, err error) {
 	// make a user-defined network so we get DNS based on the container name
 	nw, err := docker.NetworkCreate(context.Background(), "complement_"+blueprintName, types.NetworkCreate{
