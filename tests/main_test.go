@@ -86,7 +86,7 @@ type Waiter struct {
 // with built-in timeouts.
 func NewWaiter() *Waiter {
 	return &Waiter{
-		ch: make(chan bool, 0),
+		ch: make(chan bool),
 		mu: sync.Mutex{},
 	}
 }
