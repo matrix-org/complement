@@ -262,7 +262,8 @@ func (c *CSAPI) DoRaw(t *testing.T, method string, paths []string, body []byte, 
 	req.Header.Set("Content-Type", contentType)
 	res, err := c.Client.Do(req)
 	if c.Debug && res != nil {
-		dump, err := httputil.DumpResponse(res, true)
+		var dump []byte
+		dump, err = httputil.DumpResponse(res, true)
 		if err != nil {
 			t.Fatalf("CSAPI.Do failed to dump response body: %s", err)
 		}

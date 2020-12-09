@@ -356,7 +356,9 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 	}
 	if os.Getenv("COMPLEMENT_CA") == "true" {
 		// Gate COMPLEMENT_CA
-		ca, caPrivKey, err := GetOrCreateCaCert()
+		var ca *x509.Certificate
+		var caPrivKey *rsa.PrivateKey
+		ca, caPrivKey, err = GetOrCreateCaCert()
 		if err != nil {
 			return nil, "", "", err
 		}

@@ -108,9 +108,10 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		}{
 			Events: []gomatrixserverlib.Event{signedBadEvent},
 		}
-		b, err := json.Marshal(&res)
+		var responseBytes []byte
+		responseBytes, err = json.Marshal(&res)
 		must.NotError(t, "failed to marshal response", err)
-		w.Write(b)
+		w.Write(responseBytes)
 	}).Methods("POST")
 
 	fedClient := srv.FederationClient(deployment, "hs1")

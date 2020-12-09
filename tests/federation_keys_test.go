@@ -47,7 +47,8 @@ func TestInboundFederationKeys(t *testing.T) {
 				if !strings.HasPrefix(k.Str, "ed25519:") {
 					return fmt.Errorf("complement: unknown key ID type, only ed25519 is supported, got '%s'", k.Str)
 				}
-				keyBytes, err := base64.RawStdEncoding.DecodeString(v.Get("key").Str)
+				var keyBytes []byte
+				keyBytes, err = base64.RawStdEncoding.DecodeString(v.Get("key").Str)
 				if err != nil {
 					return fmt.Errorf("Failed to decode ed25519 key as base64: %s", err)
 				}
