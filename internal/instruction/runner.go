@@ -12,8 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/matrix-org/complement/internal/b"
 	"github.com/tidwall/gjson"
+
+	"github.com/matrix-org/complement/internal/b"
 )
 
 type Runner struct {

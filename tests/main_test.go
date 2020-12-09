@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/sirupsen/logrus"
 )
 
 // TestMain is the main entry point for Complement.

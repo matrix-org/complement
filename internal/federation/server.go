@@ -21,9 +21,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/matrix-org/gomatrixserverlib"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // Server represents a federation server

@@ -34,6 +34,7 @@ import (
 	client "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/instruction"

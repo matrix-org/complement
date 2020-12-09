@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 )
 
 // TODO:

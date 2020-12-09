@@ -12,8 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/internal/b"
 	"github.com/tidwall/gjson"
+
+	"github.com/matrix-org/complement/internal/b"
 )
 
 type CSAPI struct {
