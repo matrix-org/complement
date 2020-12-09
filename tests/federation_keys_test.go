@@ -71,7 +71,7 @@ func TestInboundFederationKeys(t *testing.T) {
 	if !sigBase64.Exists() {
 		t.Fatalf("missing signature for hs1.%s", keyID)
 	}
-	sigBytes, err := base64.RawStdEncoding.DecodeString(sigBase64.Str)
+	sigBytes, _ := base64.RawStdEncoding.DecodeString(sigBase64.Str)
 
 	bodyWithoutSig, err := sjson.DeleteBytes(body, "signatures")
 	if err != nil {

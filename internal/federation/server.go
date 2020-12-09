@@ -98,7 +98,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	})
 
 	// generate certs and an http.Server
-	httpServer, certPath, keyPath, err := federationServer("name", srv.mux)
+	httpServer, certPath, keyPath, _ := federationServer("name", srv.mux)
 	srv.certPath = certPath
 	srv.keyPath = keyPath
 	srv.srv = httpServer
