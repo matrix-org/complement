@@ -31,7 +31,7 @@ func TestInboundFederationKeys(t *testing.T) {
 	defer deployment.Destroy(t)
 	fedClient := &http.Client{
 		Timeout:   10 * time.Second,
-		Transport: &docker.RoundTripper{deployment},
+		Transport: &docker.RoundTripper{Deployment: deployment},
 	}
 	res, err := fedClient.Get("https://hs1/_matrix/key/v2/server")
 	must.NotError(t, "failed to GET /keys", err)

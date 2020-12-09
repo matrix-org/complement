@@ -147,7 +147,7 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 // FederationClient returns a client which will sign requests using this server and accept certs from hsName.
 func (s *Server) FederationClient(deployment *docker.Deployment, hsName string) *gomatrixserverlib.FederationClient {
 	f := gomatrixserverlib.NewFederationClient(gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv)
-	f.Client = *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{deployment})
+	f.Client = *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{Deployment: deployment})
 	return f
 }
 

@@ -426,7 +426,7 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		ExtraHosts:      extraHosts,
 		Mounts:          caMount,
 	}, &network.NetworkingConfig{
-		map[string]*network.EndpointSettings{
+		EndpointsConfig: map[string]*network.EndpointSettings{
 			hsName: {
 				NetworkID: networkID,
 				Aliases:   []string{hsName},
