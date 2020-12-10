@@ -57,7 +57,11 @@ func TestMediaWithoutFileName(t *testing.T) {
 			b, ct := alice.DownloadContent(t, mxc)
 
 			// Check the Content-Type response header.
-			// Homeservers are free to add other directives. All we want to check is the mimetype.
+			// NOTSPEC: There is ambiguity over whether the homeserver is allowed to change the
+			// Content-Type header here from what is sent by the client during upload. Synapse does
+			// so, and there are benefits to doing so, but the spec needs to pick a side.
+			// For now, we're operating under the assumption that homeservers are free to add other
+			// directives. All we're going to check is the mime-type.
 			mimeType := strings.Split(ct, ";")[0]
 			must.EqualStr(
 				t, mimeType, contentType,
@@ -76,7 +80,11 @@ func TestMediaWithoutFileName(t *testing.T) {
 			b, ct := alice.DownloadContent(t, fmt.Sprintf("mxc://%s/%s", srv.ServerName, remoteMediaId))
 
 			// Check the Content-Type response header.
-			// Homeservers are free to add other directives. All we want to check is the mimetype.
+			// NOTSPEC: There is ambiguity over whether the homeserver is allowed to change the
+			// Content-Type header here from what is sent by the client during upload. Synapse does
+			// so, and there are benefits to doing so, but the spec needs to pick a side.
+			// For now, we're operating under the assumption that homeservers are free to add other
+			// directives. All we're going to check is the mime-type.
 			mimeType := strings.Split(ct, ";")[0]
 			must.EqualStr(
 				t, mimeType, contentType,
