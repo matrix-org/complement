@@ -99,7 +99,10 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	})
 
 	// generate certs and an http.Server
-	httpServer, certPath, keyPath, _ := federationServer("name", srv.mux)
+	httpServer, certPath, keyPath, err := federationServer("name", srv.mux)
+	if err != nil {
+		t.Fatalf("complement: unable to create federation server and certificates: %s", err.Error())
+	}
 	srv.certPath = certPath
 	srv.keyPath = keyPath
 	srv.srv = httpServer
@@ -203,7 +206,7 @@ func (s *Server) Listen() (cancel func()) {
 		if err != nil && err != http.ErrServerClosed {
 			s.t.Logf("ListenFederationServer: ListenAndServeTLS failed: %s", err)
 			// Note that running s.t.FailNow is not allowed in a separate goroutine
-			// TODO: Figure out a way to fail the test here
+			// Tests will likely fail if the server is not listening anyways
 		}
 	}()
 
