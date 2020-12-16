@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/gomatrixserverlib"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // TODO:
@@ -109,9 +110,10 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		}{
 			Events: []gomatrixserverlib.Event{signedBadEvent},
 		}
-		b, err := json.Marshal(&res)
+		var responseBytes []byte
+		responseBytes, err = json.Marshal(&res)
 		must.NotError(t, "failed to marshal response", err)
-		w.Write(b)
+		w.Write(responseBytes)
 	}).Methods("POST")
 
 	fedClient := srv.FederationClient(deployment, "hs1")

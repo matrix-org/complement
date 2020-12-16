@@ -12,8 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/internal/b"
 	"github.com/tidwall/gjson"
+
+	"github.com/matrix-org/complement/internal/b"
 )
 
 type CSAPI struct {
@@ -118,7 +119,7 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 	start := time.Now()
 	checkCounter := 0
 	for {
-		if time.Now().Sub(start) > c.SyncUntilTimeout {
+		if time.Since(start) > c.SyncUntilTimeout {
 			t.Fatalf("syncUntil timed out. Called check function %d times", checkCounter)
 		}
 		query := url.Values{
@@ -264,7 +265,8 @@ func (c *CSAPI) DoRaw(t *testing.T, method string, paths []string, body []byte, 
 	req.Header.Set("Content-Type", contentType)
 	res, err := c.Client.Do(req)
 	if c.Debug && res != nil {
-		dump, err := httputil.DumpResponse(res, true)
+		var dump []byte
+		dump, err = httputil.DumpResponse(res, true)
 		if err != nil {
 			t.Fatalf("CSAPI.Do failed to dump response body: %s", err)
 		}
@@ -299,9 +301,9 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	start := time.Now()
 	res, err := t.wrap.RoundTrip(req)
 	if err != nil {
-		t.t.Logf("%s %s => error: %s (%s)", req.Method, req.URL.Path, err, time.Now().Sub(start))
+		t.t.Logf("%s %s => error: %s (%s)", req.Method, req.URL.Path, err, time.Since(start))
 	} else {
-		t.t.Logf("%s %s => %s (%s)", req.Method, req.URL.Path, res.Status, time.Now().Sub(start))
+		t.t.Logf("%s %s => %s (%s)", req.Method, req.URL.Path, res.Status, time.Since(start))
 	}
 	return res, err
 }

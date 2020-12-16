@@ -21,9 +21,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/matrix-org/gomatrixserverlib"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // Server represents a federation server
@@ -99,6 +100,9 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 
 	// generate certs and an http.Server
 	httpServer, certPath, keyPath, err := federationServer("name", srv.mux)
+	if err != nil {
+		t.Fatalf("complement: unable to create federation server and certificates: %s", err.Error())
+	}
 	srv.certPath = certPath
 	srv.keyPath = keyPath
 	srv.srv = httpServer
@@ -146,7 +150,7 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 // FederationClient returns a client which will sign requests using this server and accept certs from hsName.
 func (s *Server) FederationClient(deployment *docker.Deployment, hsName string) *gomatrixserverlib.FederationClient {
 	f := gomatrixserverlib.NewFederationClient(gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv)
-	f.Client = *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{deployment})
+	f.Client = *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{Deployment: deployment})
 	return f
 }
 
@@ -200,7 +204,9 @@ func (s *Server) Listen() (cancel func()) {
 		defer wg.Done()
 		err := s.srv.ListenAndServeTLS(s.certPath, s.keyPath)
 		if err != nil && err != http.ErrServerClosed {
-			s.t.Fatalf("ListenFederationServer: ListenAndServeTLS failed: %s", err)
+			s.t.Logf("ListenFederationServer: ListenAndServeTLS failed: %s", err)
+			// Note that running s.t.FailNow is not allowed in a separate goroutine
+			// Tests will likely fail if the server is not listening anyways
 		}
 	}()
 
@@ -213,9 +219,9 @@ func (s *Server) Listen() (cancel func()) {
 	}
 }
 
-// Get or create local CA cert. This is used to create the federation TLS cert.
+// GetOrCreateCaCert is used to create the federation TLS cert.
 // In addition, it is passed to homeserver containers to create TLS certs
-// for the homeservers
+// for the homeservers.
 // This basically acts as a test only valid PKI.
 func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 	var tlsCACertPath, tlsCAKeyPath string
@@ -355,7 +361,9 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 	}
 	if os.Getenv("COMPLEMENT_CA") == "true" {
 		// Gate COMPLEMENT_CA
-		ca, caPrivKey, err := GetOrCreateCaCert()
+		var ca *x509.Certificate
+		var caPrivKey *rsa.PrivateKey
+		ca, caPrivKey, err = GetOrCreateCaCert()
 		if err != nil {
 			return nil, "", "", err
 		}

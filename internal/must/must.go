@@ -9,8 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/match"
 	"github.com/tidwall/gjson"
+
+	"github.com/matrix-org/complement/internal/match"
 )
 
 // NotError will ensure `err` is nil else terminate the test with `msg`.

@@ -33,7 +33,7 @@ func (d *Deployment) Destroy(t *testing.T) {
 	d.Deployer.Destroy(d, t.Failed())
 }
 
-// Client returns a CSAPI client targetting the given hsName, using the access token for the given userID.
+// Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
 // Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
 // if the userID is otherwise not found.
 func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {

@@ -34,6 +34,7 @@ import (
 	client "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/instruction"
@@ -425,7 +426,7 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 		ExtraHosts:      extraHosts,
 		Mounts:          caMount,
 	}, &network.NetworkingConfig{
-		map[string]*network.EndpointSettings{
+		EndpointsConfig: map[string]*network.EndpointSettings{
 			hsName: {
 				NetworkID: networkID,
 				Aliases:   []string{hsName},
@@ -480,7 +481,7 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 }
 
 // createNetwork creates a docker network and returns its id.
-// ID is guaranteed not to be emtpy when err == nil
+// ID is guaranteed not to be empty when err == nil
 func createNetwork(docker *client.Client, blueprintName string) (networkID string, err error) {
 	// make a user-defined network so we get DNS based on the container name
 	nw, err := docker.NetworkCreate(context.Background(), "complement_"+blueprintName, types.NetworkCreate{

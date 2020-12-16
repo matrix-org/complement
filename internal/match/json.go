@@ -69,10 +69,7 @@ func JSONArrayEach(wantKey string, fn func(gjson.Result) error) JSON {
 		var err error
 		res.ForEach(func(_, val gjson.Result) bool {
 			err = fn(val)
-			if err == nil {
-				return true
-			}
-			return false
+			return err == nil
 		})
 		return err
 	}
@@ -92,10 +89,7 @@ func JSONMapEach(wantKey string, fn func(k, v gjson.Result) error) JSON {
 		var err error
 		res.ForEach(func(key, val gjson.Result) bool {
 			err = fn(key, val)
-			if err == nil {
-				return true
-			}
-			return false
+			return err == nil
 		})
 		return err
 	}
