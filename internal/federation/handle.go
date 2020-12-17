@@ -339,12 +339,12 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 
 			// Construct a response and fill as we process each PDU
 			response := gomatrixserverlib.RespSend{}
-			response.PDUs = make(map[string]gomatrixserverlib.PDUResult, 0)
+			response.PDUs = make(map[string]gomatrixserverlib.PDUResult)
 			for _, pdu := range transaction.PDUs {
 				var header struct {
 					RoomID string `json:"room_id"`
 				}
-				if err := json.Unmarshal(pdu, &header); err != nil {
+				if err = json.Unmarshal(pdu, &header); err != nil {
 					log.Printf("complement: Transaction '%s': Failed to extract room ID from event: %s", transaction.TransactionID, err.Error())
 
 					// We don't know the event ID at this point so we can't return the
@@ -361,7 +361,8 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 				}
 				roomVersion := gomatrixserverlib.RoomVersion(room.Version)
 
-				event, err := gomatrixserverlib.NewEventFromUntrustedJSON(pdu, roomVersion)
+				var event gomatrixserverlib.Event
+				event, err = gomatrixserverlib.NewEventFromUntrustedJSON(pdu, roomVersion)
 				if err != nil {
 					// We were unable to verify or process this event.
 					log.Printf(
