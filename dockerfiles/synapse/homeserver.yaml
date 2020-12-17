@@ -51,3 +51,43 @@ federation_custom_ca_list:
 # unblacklist RFC1918 addresses
 federation_ip_range_blacklist: []
 
+# Disable server rate-limiting
+rc_federation:
+  window_size: 1000
+  sleep_limit: 10
+  sleep_delay: 500
+  reject_limit: 99999
+  concurrent: 3
+
+rc_message:
+  per_second: 9999
+  burst_count: 9999
+
+rc_registration:
+  per_second: 9999
+  burst_count: 9999
+
+rc_login:
+  address:
+    per_second: 9999
+    burst_count: 9999
+  account:
+    per_second: 9999
+    burst_count: 9999
+  failed_attempts:
+    per_second: 9999
+    burst_count: 9999
+
+rc_admin_redaction:
+  per_second: 9999
+  burst_count: 9999
+
+rc_joins:
+  local:
+    per_second: 9999
+    burst_count: 9999
+  remote:
+    per_second: 9999
+    burst_count: 9999
+
+federation_rr_transactions_per_room_per_second: 9999
