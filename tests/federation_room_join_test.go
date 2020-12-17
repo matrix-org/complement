@@ -6,12 +6,13 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/matrix-org/gomatrixserverlib"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/sjson"
 )
 
@@ -56,9 +57,9 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	charlie := srv.UserID("charlie")
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 
-	// join the room by room ID alone - the server will need to extract the domain for this to work.
+	// join the room by room ID, providing the serverName to join via
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	alice.JoinRoom(t, serverRoom.RoomID)
+	alice.JoinRoom(t, serverRoom.RoomID, []string{srv.ServerName})
 
 	// remove the make/send join paths from the Complement server to force HS2 to join via HS1
 	acceptMakeSendJoinRequests = false
@@ -127,7 +128,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(&unsignedEvent)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
-		alice.JoinRoom(t, roomAlias)
+		alice.JoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with bad signatures shouldn't block room join", func(t *testing.T) {
 		//t.Parallel()
@@ -156,7 +157,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(&unsignedEvent)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
-		alice.JoinRoom(t, roomAlias)
+		alice.JoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with unobtainable keys shouldn't block room join", func(t *testing.T) {
 		//t.Parallel()
@@ -186,6 +187,6 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(&unsignedEvent)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
-		alice.JoinRoom(t, roomAlias)
+		alice.JoinRoom(t, roomAlias, nil)
 	})
 }

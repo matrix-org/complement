@@ -3,9 +3,10 @@ package tests
 import (
 	"testing"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/gjson"
 )
 
 // TODO:
@@ -24,7 +25,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
-	roomID := alice.CreateRoom(t, nil)
+	roomID := alice.CreateRoom(t, struct{}{})
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Room creation reports m.room.create to myself

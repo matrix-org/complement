@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/gomatrixserverlib"
+
+	"github.com/matrix-org/complement/internal/b"
 )
 
 // ServerRoom represents a room on this test federation server
@@ -34,6 +35,9 @@ func (r *ServerRoom) AddEvent(ev *gomatrixserverlib.Event) {
 
 // AuthEvents returns the state event IDs of the auth events which authenticate this event
 func (r *ServerRoom) AuthEvents(sn gomatrixserverlib.StateNeeded) (eventIDs []string) {
+	// Guard against returning a nil string slice
+	eventIDs = make([]string, 0)
+
 	appendIfExists := func(evType, stateKey string) {
 		ev := r.CurrentState(evType, stateKey)
 		if ev == nil {

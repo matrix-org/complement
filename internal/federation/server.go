@@ -9,7 +9,9 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"net/http"
 	"os"
@@ -19,9 +21,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/matrix-org/gomatrixserverlib"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // Server represents a federation server
@@ -78,6 +81,13 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 			fetcher,
 		},
 	}
+	srv.mux.Use(func(h http.Handler) http.Handler {
+		// Return a json Content-Type header to all requests by default
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Add("Content-Type", "application/json")
+			h.ServeHTTP(w, r)
+		})
+	})
 	srv.mux.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if srv.UnexpectedRequestsAreErrors {
 			t.Errorf("Server.UnexpectedRequestsAreErrors=true received unexpected request to server: %s %s", req.Method, req.URL.Path)
@@ -90,6 +100,9 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 
 	// generate certs and an http.Server
 	httpServer, certPath, keyPath, err := federationServer("name", srv.mux)
+	if err != nil {
+		t.Fatalf("complement: unable to create federation server and certificates: %s", err.Error())
+	}
 	srv.certPath = certPath
 	srv.keyPath = keyPath
 	srv.srv = httpServer
@@ -120,9 +133,10 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
 	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.ServerName)
 	room := &ServerRoom{
-		RoomID:  roomID,
-		Version: roomVer,
-		State:   make(map[string]*gomatrixserverlib.Event),
+		RoomID:             roomID,
+		Version:            roomVer,
+		State:              make(map[string]*gomatrixserverlib.Event),
+		ForwardExtremities: make([]string, 0),
 	}
 	// sign all these events
 	for _, ev := range events {
@@ -136,7 +150,7 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 // FederationClient returns a client which will sign requests using this server and accept certs from hsName.
 func (s *Server) FederationClient(deployment *docker.Deployment, hsName string) *gomatrixserverlib.FederationClient {
 	f := gomatrixserverlib.NewFederationClient(gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv)
-	f.Client = *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{deployment})
+	f.Client = *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{Deployment: deployment})
 	return f
 }
 
@@ -146,7 +160,14 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 	t.Helper()
 	content, err := json.Marshal(ev.Content)
 	if err != nil {
-		t.Fatalf("MustCreateEvent: failed to marshal event content %+v", ev.Content)
+		t.Fatalf("MustCreateEvent: failed to marshal event content %s - %+v", err, ev.Content)
+	}
+	var unsigned []byte
+	if ev.Unsigned != nil {
+		unsigned, err = json.Marshal(ev.Unsigned)
+		if err != nil {
+			t.Fatalf("MustCreateEvent: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
+		}
 	}
 	eb := gomatrixserverlib.EventBuilder{
 		Sender:     ev.Sender,
@@ -156,6 +177,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		Content:    content,
 		RoomID:     room.RoomID,
 		PrevEvents: room.ForwardExtremities,
+		Unsigned:   unsigned,
 	}
 	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
 	if err != nil {
@@ -182,7 +204,9 @@ func (s *Server) Listen() (cancel func()) {
 		defer wg.Done()
 		err := s.srv.ListenAndServeTLS(s.certPath, s.keyPath)
 		if err != nil && err != http.ErrServerClosed {
-			s.t.Fatalf("ListenFederationServer: ListenAndServeTLS failed: %s", err)
+			s.t.Logf("ListenFederationServer: ListenAndServeTLS failed: %s", err)
+			// Note that running s.t.FailNow is not allowed in a separate goroutine
+			// Tests will likely fail if the server is not listening anyways
 		}
 	}()
 
@@ -195,8 +219,119 @@ func (s *Server) Listen() (cancel func()) {
 	}
 }
 
+// GetOrCreateCaCert is used to create the federation TLS cert.
+// In addition, it is passed to homeserver containers to create TLS certs
+// for the homeservers.
+// This basically acts as a test only valid PKI.
+func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
+	var tlsCACertPath, tlsCAKeyPath string
+	if os.Getenv("CI") == "true" {
+		// When in CI we create the cert dir in the root directory instead.
+		tlsCACertPath = path.Join("/ca", "ca.crt")
+		tlsCAKeyPath = path.Join("/ca", "ca.key")
+	} else {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, nil, err
+		}
+		tlsCACertPath = path.Join(wd, "ca", "ca.crt")
+		tlsCAKeyPath = path.Join(wd, "ca", "ca.key")
+		if _, err := os.Stat(path.Join(wd, "ca")); os.IsNotExist(err) {
+			err = os.Mkdir(path.Join(wd, "ca"), 0770)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	if _, err := os.Stat(tlsCACertPath); err == nil {
+		if _, err := os.Stat(tlsCAKeyPath); err == nil {
+			// We already created a CA cert, let's use that.
+			dat, err := ioutil.ReadFile(tlsCACertPath)
+			if err != nil {
+				return nil, nil, err
+			}
+			block, _ := pem.Decode([]byte(dat))
+			if block == nil || block.Type != "CERTIFICATE" {
+				return nil, nil, errors.New("ca.crt is not a valid pem encoded x509 cert")
+			}
+			caCerts, err := x509.ParseCertificates(block.Bytes)
+			if err != nil {
+				return nil, nil, err
+			}
+			if len(caCerts) != 1 {
+				return nil, nil, errors.New("ca.crt contains none or more than one cert")
+			}
+			caCert := caCerts[0]
+			dat, err = ioutil.ReadFile(tlsCAKeyPath)
+			if err != nil {
+				return nil, nil, err
+			}
+			block, _ = pem.Decode([]byte(dat))
+			if block == nil || block.Type != "RSA PRIVATE KEY" {
+				return nil, nil, errors.New("ca.key is not a valid pem encoded rsa private key")
+			}
+			priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+			if err != nil {
+				return nil, nil, err
+			}
+			return caCert, priv, nil
+		}
+	}
+
+	certificateDuration := time.Hour * 5
+	priv, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		return nil, nil, err
+	}
+	notBefore := time.Now()
+	notAfter := notBefore.Add(certificateDuration)
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, nil, err
+	}
+	caCert := x509.Certificate{
+		SerialNumber:          serialNumber,
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature | x509.KeyUsageCRLSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &caCert, &caCert, &priv.PublicKey, priv)
+	if err != nil {
+		return nil, nil, err
+	}
+	certOut, err := os.Create(tlsCACertPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	defer certOut.Close() // nolint: errcheck
+	if err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		return nil, nil, err
+	}
+
+	keyOut, err := os.OpenFile(tlsCAKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer keyOut.Close() // nolint: errcheck
+	err = pem.Encode(keyOut, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return &caCert, priv, nil
+}
+
 // federationServer creates a federation server with the given handler
 func federationServer(name string, h http.Handler) (*http.Server, string, string, error) {
+	var derBytes []byte
 	srv := &http.Server{
 		Addr:    ":8448",
 		Handler: h,
@@ -224,10 +359,25 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
-	if err != nil {
-		return nil, "", "", err
+	if os.Getenv("COMPLEMENT_CA") == "true" {
+		// Gate COMPLEMENT_CA
+		var ca *x509.Certificate
+		var caPrivKey *rsa.PrivateKey
+		ca, caPrivKey, err = GetOrCreateCaCert()
+		if err != nil {
+			return nil, "", "", err
+		}
+		derBytes, err = x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
+		if err != nil {
+			return nil, "", "", err
+		}
+	} else {
+		derBytes, err = x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		if err != nil {
+			return nil, "", "", err
+		}
 	}
+
 	certOut, err := os.Create(tlsCertPath)
 	if err != nil {
 		return nil, "", "", err

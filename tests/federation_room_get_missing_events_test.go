@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/gomatrixserverlib"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // TODO:
@@ -34,6 +35,8 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
+		// Handle any transactions that the homeserver may send when connecting to another homeserver (such as presence)
+		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
 	defer cancel()
@@ -44,7 +47,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	roomAlias := srv.MakeAliasMapping("flibble", room.RoomID)
 	// join the room
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	alice.JoinRoom(t, roomAlias)
+	alice.JoinRoom(t, roomAlias, nil)
 
 	latestEvent := room.Timeline[len(room.Timeline)-1]
 
@@ -107,9 +110,10 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		}{
 			Events: []gomatrixserverlib.Event{signedBadEvent},
 		}
-		b, err := json.Marshal(&res)
+		var responseBytes []byte
+		responseBytes, err = json.Marshal(&res)
 		must.NotError(t, "failed to marshal response", err)
-		w.Write(b)
+		w.Write(responseBytes)
 	}).Methods("POST")
 
 	fedClient := srv.FederationClient(deployment, "hs1")

@@ -12,8 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/internal/b"
 	"github.com/tidwall/gjson"
+
+	"github.com/matrix-org/complement/internal/b"
 )
 
 type CSAPI struct {
@@ -37,8 +38,8 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 		query.Set("filename", fileName)
 	}
 	res := c.MustDoRaw(t, "POST", []string{"_matrix", "media", "r0", "upload"}, fileBody, contentType, query)
-	body := parseJSON(t, res)
-	return getJSONFieldStr(t, body, "content_uri")
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "content_uri")
 }
 
 // DownloadContent downloads media from the server, returning the raw bytes and the Content-Type. Fails the test on error.
@@ -60,24 +61,32 @@ func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 	t.Helper()
 	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, creationContent)
-	body := parseJSON(t, res)
-	return getJSONFieldStr(t, body, "room_id")
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "room_id")
 }
 
 // JoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
-func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string) string {
+func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []string) string {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, struct{}{})
+	// construct URL query parameters
+	query := make(url.Values, len(serverNames))
+	for _, serverName := range serverNames {
+		query.Add("server_name", serverName)
+	}
+	// join the room
+	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, nil, "application/json", query)
+	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
 	}
-	// we should be told the room ID if we joined via an alias
-	body := parseJSON(t, res)
-	return getJSONFieldStr(t, body, "room_id")
+	// otherwise we should be told the room ID if we joined via an alias
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "room_id")
 }
 
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
-func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
+// Returns the event ID of the sent event.
+func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
 	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
@@ -85,12 +94,13 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
 		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
 	res := c.MustDo(t, "PUT", paths, e.Content)
-	body := parseJSON(t, res)
-	eventID := getJSONFieldStr(t, body, "event_id")
+	body := ParseJSON(t, res)
+	eventID := GetJSONFieldStr(t, body, "event_id")
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
 	c.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID
 	})
+	return eventID
 }
 
 // SyncUntilTimelineHas blocks and continually calls /sync until the `check` function returns true.
@@ -98,15 +108,18 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) {
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
 	t.Helper()
-	c.syncUntil(t, "", "rooms.join."+gjsonEscape(roomID)+".timeline.events", check)
+	c.SyncUntil(t, "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
 }
 
-func (c *CSAPI) syncUntil(t *testing.T, since, key string, check func(gjson.Result) bool) {
+// SyncUntil blocks and continually calls /sync until the `check` function returns true.
+// If the `check` function fails the test, the failing event will be automatically logged.
+// Will time out after CSAPI.SyncUntilTimeout.
+func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
 	checkCounter := 0
 	for {
-		if time.Now().Sub(start) > c.SyncUntilTimeout {
+		if time.Since(start) > c.SyncUntilTimeout {
 			t.Fatalf("syncUntil timed out. Called check function %d times", checkCounter)
 		}
 		query := url.Values{
@@ -123,8 +136,8 @@ func (c *CSAPI) syncUntil(t *testing.T, since, key string, check func(gjson.Resu
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
 			t.Fatalf("CSAPI.syncUntil since=%s returned HTTP %d", since, res.StatusCode)
 		}
-		body := parseJSON(t, res)
-		since = getJSONFieldStr(t, body, "next_batch")
+		body := ParseJSON(t, res)
+		since = GetJSONFieldStr(t, body, "next_batch")
 		keyRes := gjson.GetBytes(body, key)
 		if keyRes.IsArray() {
 			events := keyRes.Array()
@@ -145,6 +158,32 @@ func (c *CSAPI) syncUntil(t *testing.T, since, key string, check func(gjson.Resu
 	}
 }
 
+// MustDoWithStatus is the same as MustDo but fails the test if the response code does not match that provided
+func (c *CSAPI) MustDoWithStatus(t *testing.T, method string, paths []string, jsonBody interface{}, status int) *http.Response {
+	t.Helper()
+	res, err := c.DoWithAuth(t, method, paths, jsonBody)
+	if err != nil {
+		t.Fatalf("CSAPI.MustDoWithStatus %s %s error: %s", method, strings.Join(paths, "/"), err)
+	}
+	if res.StatusCode != status {
+		t.Fatalf("CSAPI.MustDoWithStatus %s %s returned HTTP %d, expected %d", method, res.Request.URL.String(), res.StatusCode, status)
+	}
+	return res
+}
+
+// MustDoWithStatusRaw is the same as MustDoRaw but fails the test if the response code does not match that provided
+func (c *CSAPI) MustDoWithStatusRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values, status int) *http.Response {
+	t.Helper()
+	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
+	if err != nil {
+		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
+	}
+	if res.StatusCode != status {
+		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s returned HTTP %d, expected %d", method, res.Request.URL.String(), res.StatusCode, status)
+	}
+	return res
+}
+
 // MustDo is the same as Do but fails the test if the response is not 2xx
 func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
 	t.Helper()
@@ -162,10 +201,10 @@ func (c *CSAPI) MustDoRaw(t *testing.T, method string, paths []string, body []by
 	t.Helper()
 	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
 	if err != nil {
-		t.Fatalf("CSAPI.MustDo %s %s error: %s", method, strings.Join(paths, "/"), err)
+		t.Fatalf("CSAPI.MustDoRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+		t.Fatalf("CSAPI.MustDoRaw %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
 	}
 	return res
 }
@@ -173,12 +212,16 @@ func (c *CSAPI) MustDoRaw(t *testing.T, method string, paths []string, body []by
 // DoWithAuth a JSON request. The access token for this user will automatically be added.
 func (c *CSAPI) DoWithAuth(t *testing.T, method string, paths []string, jsonBody interface{}) (*http.Response, error) {
 	t.Helper()
-	return c.Do(t, method, paths, jsonBody, url.Values{
-		"access_token": []string{c.AccessToken},
-	})
+	var query url.Values
+	if c.AccessToken != "" {
+		query = url.Values{
+			"access_token": []string{c.AccessToken},
+		}
+	}
+	return c.Do(t, method, paths, jsonBody, query)
 }
 
-func (c *CSAPI) DoWithAuthRaw(t *testing.T, method string, paths[] string, body []byte, contentType string, query url.Values) (*http.Response, error) {
+func (c *CSAPI) DoWithAuthRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) (*http.Response, error) {
 	t.Helper()
 	if query == nil {
 		query = url.Values{}
@@ -222,7 +265,8 @@ func (c *CSAPI) DoRaw(t *testing.T, method string, paths []string, body []byte, 
 	req.Header.Set("Content-Type", contentType)
 	res, err := c.Client.Do(req)
 	if c.Debug && res != nil {
-		dump, err := httputil.DumpResponse(res, true)
+		var dump []byte
+		dump, err = httputil.DumpResponse(res, true)
 		if err != nil {
 			t.Fatalf("CSAPI.Do failed to dump response body: %s", err)
 		}
@@ -257,14 +301,15 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	start := time.Now()
 	res, err := t.wrap.RoundTrip(req)
 	if err != nil {
-		t.t.Logf("%s %s => error: %s (%s)", req.Method, req.URL.Path, err, time.Now().Sub(start))
+		t.t.Logf("%s %s => error: %s (%s)", req.Method, req.URL.Path, err, time.Since(start))
 	} else {
-		t.t.Logf("%s %s => %s (%s)", req.Method, req.URL.Path, res.Status, time.Now().Sub(start))
+		t.t.Logf("%s %s => %s (%s)", req.Method, req.URL.Path, res.Status, time.Since(start))
 	}
 	return res, err
 }
 
-func getJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
+// GetJSONFieldStr extracts a value from a byte-encoded JSON body given a search key
+func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	t.Helper()
 	res := gjson.GetBytes(body, wantKey)
 	if !res.Exists() {
@@ -276,7 +321,8 @@ func getJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	return res.Str
 }
 
-func parseJSON(t *testing.T, res *http.Response) []byte {
+// ParseJSON parses a JSON-encoded HTTP Response body into a byte slice
+func ParseJSON(t *testing.T, res *http.Response) []byte {
 	t.Helper()
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
@@ -289,8 +335,8 @@ func parseJSON(t *testing.T, res *http.Response) []byte {
 	return body
 }
 
-// gjsonEscape escapes . and * from the input so it can be used with gjson.Get
-func gjsonEscape(in string) string {
+// GjsonEscape escapes . and * from the input so it can be used with gjson.Get
+func GjsonEscape(in string) string {
 	in = strings.ReplaceAll(in, ".", `\.`)
 	in = strings.ReplaceAll(in, "*", `\*`)
 	return in

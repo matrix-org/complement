@@ -9,10 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/sirupsen/logrus"
+	"github.com/matrix-org/complement/internal/federation"
 )
 
 // TestMain is the main entry point for Complement.
@@ -29,8 +31,20 @@ func TestMain(m *testing.M) {
 	}
 	// remove any old images/containers/networks in case we died horribly before
 	builder.Cleanup()
+
+	if os.Getenv("COMPLEMENT_CA") == "true" {
+		log.Printf("Running with Complement CA")
+		// make sure CA certs are generated
+		_, _, err = federation.GetOrCreateCaCert()
+		if err != nil {
+			fmt.Printf("Error: %s", err)
+			os.Exit(1)
+		}
+	}
+
 	// we use GMSL which uses logrus by default. We don't want those logs in our test output unless they are Serious.
 	logrus.SetLevel(logrus.ErrorLevel)
+
 	exitCode := m.Run()
 	builder.Cleanup()
 	os.Exit(exitCode)
@@ -72,7 +86,7 @@ type Waiter struct {
 // with built-in timeouts.
 func NewWaiter() *Waiter {
 	return &Waiter{
-		ch: make(chan bool, 0),
+		ch: make(chan bool),
 		mu: sync.Mutex{},
 	}
 }
