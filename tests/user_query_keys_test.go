@@ -1,3 +1,7 @@
+// +build !synapse_blacklist
+
+// Rationale for being included in Synapse's blacklist: https://github.com/matrix-org/complement/issues/38
+
 package tests
 
 import (
