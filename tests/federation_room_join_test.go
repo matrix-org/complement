@@ -8,12 +8,13 @@ import (
 
 	"github.com/matrix-org/gomatrixserverlib"
 
+	"github.com/tidwall/sjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/sjson"
 )
 
 // This tests that joining a room with ?server_name= works correctly.
