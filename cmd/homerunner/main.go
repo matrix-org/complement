@@ -62,8 +62,8 @@ func main() {
 	cleanup(cfg)
 
 	srv := &http.Server{
-		ReadTimeout:  1 * time.Minute,
-		WriteTimeout: 1 * time.Minute,
+		ReadTimeout:  10 * time.Minute,
+		WriteTimeout: 10 * time.Minute,
 		Handler:      Routes(rt, cfg),
 		Addr:         fmt.Sprintf("0.0.0.0:%d", cfg.Port),
 	}
