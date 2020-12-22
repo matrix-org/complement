@@ -28,6 +28,7 @@ var KnownBlueprints = map[string]*Blueprint{
 	BlueprintFederationTwoLocalOneRemote.Name: &BlueprintFederationTwoLocalOneRemote,
 	BlueprintOneToOneRoom.Name:                &BlueprintOneToOneRoom,
 	BlueprintPerfManyMessages.Name:            &BlueprintPerfManyMessages,
+	BlueprintPerfManyRooms.Name:               &BlueprintPerfManyRooms,
 }
 
 // Blueprint represents an entire deployment to make.
