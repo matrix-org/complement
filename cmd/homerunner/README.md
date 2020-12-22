@@ -4,9 +4,10 @@ An HTTP server which can spin up homeservers and execute blueprints on them. Pow
 
 Environment variables:
 ```
-HOMERUNNER_LIFETIME_MINS=30          # how long networks can exist for before being destroyed
-HOMERUNNER_PORT=54321                # port to listen on
-HOMERUNNER_VER_CHECK_ITERATIONS=100  # how long to wait for the base image to spin up
+HOMERUNNER_LIFETIME_MINS=30                                       # how long networks can exist for before being destroyed
+HOMERUNNER_PORT=54321                                             # port to listen on
+HOMERUNNER_VER_CHECK_ITERATIONS=100                               # how long to wait for the base image to spin up
+HOMERUNNER_KEEP_BLUEPRINTS='clean_hs federation_one_to_one_room'  # space delimited blueprint names to keep images for
 ```
 
 ### API

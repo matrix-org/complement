@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/matrix-org/complement/internal/config"
@@ -16,6 +17,7 @@ type Config struct {
 	HomeserverLifetimeMins int
 	Port                   int
 	VersionCheckIterations int
+	KeepBlueprints         []string
 }
 
 func NewConfig() *Config {
@@ -23,6 +25,7 @@ func NewConfig() *Config {
 		HomeserverLifetimeMins: 30,
 		Port:                   54321,
 		VersionCheckIterations: 100,
+		KeepBlueprints:         strings.Split(os.Getenv("HOMERUNNER_KEEP_BLUEPRINTS"), " "),
 	}
 	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_LIFETIME_MINS")); val != 0 {
 		cfg.HomeserverLifetimeMins = val
@@ -36,11 +39,12 @@ func NewConfig() *Config {
 	return cfg
 }
 
-func cleanup() {
+func cleanup(c *Config) {
 	cfg := &config.Complement{
 		BaseImageURI:           "nothing",
 		DebugLoggingEnabled:    true,
-		VersionCheckIterations: 100,
+		VersionCheckIterations: c.VersionCheckIterations,
+		KeepBlueprints:         c.KeepBlueprints,
 	}
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
@@ -55,7 +59,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("failed to setup new runtime: %s", err)
 	}
-	cleanup()
+	cleanup(cfg)
 
 	srv := &http.Server{
 		ReadTimeout:  1 * time.Minute,

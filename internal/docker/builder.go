@@ -61,6 +61,7 @@ const complementLabel = "complement_context"
 type Builder struct {
 	BaseImage      string
 	ImageArgs      []string
+	KeepBlueprints []string
 	CSAPIPort      int
 	FederationPort int
 	Docker         *client.Client
@@ -77,6 +78,7 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 		Docker:         cli,
 		BaseImage:      cfg.BaseImageURI,
 		ImageArgs:      cfg.BaseImageArgs,
+		KeepBlueprints: cfg.KeepBlueprints,
 		CSAPIPort:      8008,
 		FederationPort: 8448,
 		debugLogging:   cfg.DebugLoggingEnabled,
@@ -133,6 +135,18 @@ func (d *Builder) removeImages() error {
 		return err
 	}
 	for _, img := range images {
+		bprintName := img.Labels["complement_blueprint"]
+		keep := false
+		for _, keepBprint := range d.KeepBlueprints {
+			if bprintName == keepBprint {
+				keep = true
+				break
+			}
+		}
+		if keep {
+			d.log("Keeping image created from blueprint %s", bprintName)
+			continue
+		}
 		_, err = d.Docker.ImageRemove(context.Background(), img.ID, types.ImageRemoveOptions{
 			Force: true,
 		})
