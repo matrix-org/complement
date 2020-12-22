@@ -39,11 +39,10 @@ func RouteCreate(ctx context.Context, rt *Runtime, rc *ReqCreate) util.JSONRespo
 	if rc.Blueprint == nil {
 		return util.MessageResponse(400, "missing blueprint")
 	}
-	dep, err := rt.CreateDeployment(rc.BaseImageURI, rc.Blueprint)
+	dep, expires, err := rt.CreateDeployment(rc.BaseImageURI, rc.Blueprint)
 	if err != nil {
 		return util.MessageResponse(400, fmt.Sprintf("failed to create deployment: %s", err))
 	}
-	expires := time.Now().Add(time.Duration(rt.Config.HomeserverLifetimeMins) * time.Minute)
 	return util.JSONResponse{
 		Code: 200,
 		JSON: ResCreate{
