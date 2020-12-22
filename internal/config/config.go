@@ -11,6 +11,7 @@ type Complement struct {
 	BaseImageArgs          []string
 	DebugLoggingEnabled    bool
 	VersionCheckIterations int
+	KeepBlueprints         []string
 }
 
 func NewConfigFromEnvVars() *Complement {
@@ -19,6 +20,7 @@ func NewConfigFromEnvVars() *Complement {
 	cfg.BaseImageArgs = strings.Split(os.Getenv("COMPLEMENT_BASE_IMAGE_ARGS"), " ")
 	cfg.DebugLoggingEnabled = os.Getenv("COMPLEMENT_DEBUG") == "1"
 	cfg.VersionCheckIterations = parseEnvWithDefault("COMPLEMENT_VERSION_CHECK_ITERATIONS", 100)
+	cfg.KeepBlueprints = strings.Split(os.Getenv("COMPLEMENT_KEEP_BLUEPRINTS"), " ")
 	if cfg.BaseImageURI == "" {
 		panic("COMPLEMENT_BASE_IMAGE must be set")
 	}

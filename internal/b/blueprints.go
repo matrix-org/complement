@@ -16,8 +16,20 @@ package b
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
+
+// KnownBlueprints lists static blueprints
+var KnownBlueprints = map[string]*Blueprint{
+	BlueprintCleanHS.Name:                     &BlueprintCleanHS,
+	BlueprintAlice.Name:                       &BlueprintAlice,
+	BlueprintFederationOneToOneRoom.Name:      &BlueprintFederationOneToOneRoom,
+	BlueprintFederationTwoLocalOneRemote.Name: &BlueprintFederationTwoLocalOneRemote,
+	BlueprintOneToOneRoom.Name:                &BlueprintOneToOneRoom,
+	BlueprintPerfManyMessages.Name:            &BlueprintPerfManyMessages,
+	BlueprintPerfManyRooms.Name:               &BlueprintPerfManyRooms,
+}
 
 // Blueprint represents an entire deployment to make.
 type Blueprint struct {
@@ -143,4 +155,20 @@ func normaliseUser(u string, hsName string) (string, error) {
 // Ptr returns a pointer to `in`, because Go doesn't allow you to inline this.
 func Ptr(in string) *string {
 	return &in
+}
+
+func manyMessages(senders []string, count int) []Event {
+	evs := make([]Event, count)
+	for i := 0; i < len(evs); i++ {
+		sender := senders[i%len(senders)]
+		evs[i] = Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"body":    "Hello world " + strconv.Itoa(i),
+				"msgtype": "m.text",
+			},
+			Sender: sender,
+		}
+	}
+	return evs
 }

@@ -64,7 +64,7 @@ func Deploy(t *testing.T, namespace string, blueprint b.Blueprint) *docker.Deplo
 	if err = builder.ConstructBlueprintsIfNotExist([]b.Blueprint{blueprint}); err != nil {
 		t.Fatalf("Deploy: Failed to construct blueprint: %s", err)
 	}
-	d, err := docker.NewDeployer(namespace, cfg.DebugLoggingEnabled)
+	d, err := docker.NewDeployer(namespace, cfg)
 	if err != nil {
 		t.Fatalf("Deploy: NewDeployer returned error %s", err)
 	}
