@@ -16,6 +16,6 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/tidwall/gjson v1.6.0
 	github.com/tidwall/sjson v1.0.3
-	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
-	golang.org/x/sys v0.0.0-20200615200032-f1bc736245b1 // indirect
+	golang.org/x/net v0.0.0-20201021035429-f5854403a974 // indirect
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9 // indirect
 )

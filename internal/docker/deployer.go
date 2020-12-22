@@ -22,7 +22,7 @@ import (
 	"net/url"
 
 	"github.com/docker/docker/api/types"
-	client "github.com/docker/docker/client"
+	"github.com/docker/docker/client"
 	"github.com/matrix-org/complement/internal/config"
 )
 
