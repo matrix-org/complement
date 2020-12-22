@@ -5,61 +5,75 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
+	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 )
 
 type Runtime struct {
-	Client         *client.Client
-	Config         *Config
-	NetworkID      string
-	mu             *sync.Mutex
-	HSToDeployment map[string]*docker.HomeserverDeployment
+	Config                *Config
+	mu                    *sync.Mutex
+	BlueprintToDeployment map[string]*docker.Deployment
 }
 
 // NewRuntime makes a homerunner runtime
 func NewRuntime(cfg *Config) (*Runtime, error) {
-	cli, err := client.NewEnvClient()
-	if err != nil {
-		return nil, err
-	}
-	nwID, err := docker.CreateNetwork(cli, "homerunner")
-	if err != nil {
-		return nil, err
-	}
 	return &Runtime{
-		Client:         cli,
-		NetworkID:      nwID,
-		Config:         cfg,
-		HSToDeployment: make(map[string]*docker.HomeserverDeployment),
-		mu:             &sync.Mutex{},
+		Config:                cfg,
+		BlueprintToDeployment: make(map[string]*docker.Deployment),
+		mu:                    &sync.Mutex{},
 	}, nil
 }
 
-func (r *Runtime) AddDeployment(hsName string, d *docker.HomeserverDeployment) error {
+func (r *Runtime) CreateDeployment(imageURI string, blueprint *b.Blueprint) (*docker.Deployment, error) {
+	if blueprint == nil {
+		return nil, fmt.Errorf("blueprint must be supplied")
+	}
+	namespace := "homerunner_" + blueprint.Name
+	cfg := &config.Complement{
+		BaseImageURI:           imageURI,
+		DebugLoggingEnabled:    true,
+		VersionCheckIterations: r.Config.VersionCheckIterations,
+	}
+	builder, err := docker.NewBuilder(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err = builder.ConstructBlueprintsIfNotExist([]b.Blueprint{*blueprint}); err != nil {
+		return nil, fmt.Errorf("CreateDeployment: Failed to construct blueprint: %s", err)
+	}
+	d, err := docker.NewDeployer(namespace, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("CreateDeployment: NewDeployer returned error %s", err)
+	}
+	dep, err := d.Deploy(context.Background(), blueprint.Name)
+	if err != nil {
+		return nil, fmt.Errorf("CreateDeployment: Deploy returned error %s", err)
+	}
+	if err := r.addDeployment(blueprint.Name, dep); err != nil {
+		return nil, err
+	}
+	return dep, nil
+}
+
+func (r *Runtime) addDeployment(blueprintName string, d *docker.Deployment) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.HSToDeployment[hsName]; ok {
-		return fmt.Errorf("deployment with name %s already exists", hsName)
+	if _, ok := r.BlueprintToDeployment[blueprintName]; ok {
+		return fmt.Errorf("deployment with name %s already exists", blueprintName)
 	}
-	r.HSToDeployment[hsName] = d
+	r.BlueprintToDeployment[blueprintName] = d
 	return nil
 }
 
-func (r *Runtime) DestroyDeployment(hsName string) error {
+func (r *Runtime) DestroyDeployment(blueprintName string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	d, ok := r.HSToDeployment[hsName]
+	d, ok := r.BlueprintToDeployment[blueprintName]
 	if !ok {
-		return fmt.Errorf("no deployment with name '%s' exists", hsName)
+		return fmt.Errorf("no deployment with name '%s' exists", blueprintName)
 	}
-	delete(r.HSToDeployment, hsName)
-	err := r.Client.ContainerKill(context.Background(), d.ContainerID, "KILL")
-	if err != nil {
-		return err
-	}
-	return r.Client.ContainerRemove(context.Background(), d.ContainerID, types.ContainerRemoveOptions{
-		Force: true,
-	})
+	d.Deployer.Destroy(d, false)
+	delete(r.BlueprintToDeployment, blueprintName)
+	return nil
 }

@@ -5,38 +5,50 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/util"
 )
 
 type ReqCreate struct {
-	Image  string `json:"image"`
-	HSName string `json:"hs_name"`
+	BaseImageURI  string       `json:"base_image_uri"`
+	BlueprintName string       `json:"blueprint_name"`
+	Blueprint     *b.Blueprint `json:"blueprint"`
 }
 
 type ResCreate struct {
-	HSURL   string    `json:"hs_url"`
-	Expires time.Time `json:"expires"`
+	Homeservers map[string]docker.HomeserverDeployment `json:"homeservers"`
+	Expires     time.Time                              `json:"expires"`
 }
 
 func RouteCreate(ctx context.Context, rt *Runtime, rc *ReqCreate) util.JSONResponse {
-	if rc.Image == "" || rc.HSName == "" {
-		return util.MessageResponse(400, "missing image/hs name")
+	if rc.BaseImageURI == "" {
+		return util.MessageResponse(400, "missing base image uri")
 	}
-	dep, err := docker.DeployImage(rt.Client, rc.Image, 8008, rc.HSName, rc.HSName, rc.HSName, rc.HSName, rt.NetworkID, rt.Config.VersionCheckIterations)
+	if rc.BlueprintName == "" && rc.Blueprint == nil {
+		return util.MessageResponse(400, "one of 'blueprint_name' or 'blueprint' must be specified")
+	}
+	knownBlueprints := map[string]*b.Blueprint{
+		b.BlueprintCleanHS.Name:                &b.BlueprintCleanHS,
+		b.BlueprintFederationOneToOneRoom.Name: &b.BlueprintFederationOneToOneRoom,
+	}
+	knownBlueprint, ok := knownBlueprints[rc.BlueprintName]
+	if ok {
+		rc.Blueprint = knownBlueprint
+	}
+	if rc.Blueprint == nil {
+		return util.MessageResponse(400, "missing blueprint")
+	}
+	dep, err := rt.CreateDeployment(rc.BaseImageURI, rc.Blueprint)
 	if err != nil {
-		return util.MessageResponse(500, fmt.Sprintf("failed to deploy image: %s", err))
+		return util.MessageResponse(400, fmt.Sprintf("failed to create deployment: %s", err))
 	}
 	expires := time.Now().Add(time.Duration(rt.Config.HomeserverLifetimeMins) * time.Minute)
-	err = rt.AddDeployment(rc.HSName, dep)
-	if err != nil {
-		return util.MessageResponse(400, fmt.Sprintf("failed to add deployment: %s", err))
-	}
 	return util.JSONResponse{
 		Code: 200,
 		JSON: ResCreate{
-			HSURL:   dep.BaseURL,
-			Expires: expires,
+			Homeservers: dep.HS,
+			Expires:     expires,
 		},
 	}
 }

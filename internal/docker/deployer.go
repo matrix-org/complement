@@ -80,7 +80,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		contextStr := img.Labels["complement_context"]
 		hsName := img.Labels["complement_hs_name"]
 		// TODO: Make CSAPI port configurable
-		deployment, err := DeployImage(
+		deployment, err := deployImage(
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
 			blueprintName, hsName, contextStr, networkID, d.config.VersionCheckIterations)
 		if err != nil {
@@ -105,6 +105,12 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 		err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
 		if err != nil {
 			log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
+		}
+		err = d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
+			Force: true,
+		})
+		if err != nil {
+			log.Printf("Destroy: Failed to remove container %s : %s\n", hsDep.ContainerID, err)
 		}
 	}
 	if d.networkID != "" {

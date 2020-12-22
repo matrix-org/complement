@@ -315,7 +315,7 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
 func (d *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
-	return DeployImage(
+	return deployImage(
 		d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr,
 		networkID, d.config.VersionCheckIterations,
 	)
@@ -395,7 +395,7 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 	return caVolume, caMount, nil
 }
 
-func DeployImage(
+func deployImage(
 	docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string, versionCheckIterations int,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
