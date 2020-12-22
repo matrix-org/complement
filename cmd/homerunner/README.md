@@ -10,7 +10,6 @@ HOMERUNNER_VER_CHECK_ITERATIONS=100                               # how long to 
 HOMERUNNER_KEEP_BLUEPRINTS='clean_hs federation_one_to_one_room'  # space delimited blueprint names to keep images for
 ```
 
-### API
 
 Create a homeserver network:
 ```
