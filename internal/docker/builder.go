@@ -65,6 +65,7 @@ type Builder struct {
 	FederationPort int
 	Docker         *client.Client
 	debugLogging   bool
+	config         *config.Complement
 }
 
 func NewBuilder(cfg *config.Complement) (*Builder, error) {
@@ -79,6 +80,7 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 		CSAPIPort:      8008,
 		FederationPort: 8448,
 		debugLogging:   cfg.DebugLoggingEnabled,
+		config:         cfg,
 	}, nil
 }
 
@@ -227,7 +229,7 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 
 // construct all Homeservers sequentially then commits them
 func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
-	networkID, err := createNetwork(d.Docker, bprint.Name)
+	networkID, err := CreateNetwork(d.Docker, bprint.Name)
 	if err != nil {
 		return []error{err}
 	}
@@ -313,7 +315,10 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
 func (d *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
-	return deployImage(d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr, networkID)
+	return DeployImage(
+		d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr,
+		networkID, d.config.VersionCheckIterations,
+	)
 }
 
 // getCaVolume returns the correct mounts and volumes for providing a CA to homeserver containers.
@@ -390,7 +395,9 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 	return caVolume, caMount, nil
 }
 
-func deployImage(docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
+func DeployImage(
+	docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string, versionCheckIterations int,
+) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
 	var caVolume map[string]struct{}
@@ -451,9 +458,8 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 	}
 	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
 	// hit /versions to check it is up
-	cfg := config.NewConfigFromEnvVars()
 	var lastErr error
-	for i := 0; i < cfg.VersionCheckIterations; i++ {
+	for i := 0; i < versionCheckIterations; i++ {
 		res, err := http.Get(versionsURL)
 		if err != nil {
 			lastErr = fmt.Errorf("GET %s => error: %s", versionsURL, err)
@@ -480,9 +486,9 @@ func deployImage(docker *client.Client, imageID string, csPort int, containerNam
 	return d, nil
 }
 
-// createNetwork creates a docker network and returns its id.
+// CreateNetwork creates a docker network and returns its id.
 // ID is guaranteed not to be empty when err == nil
-func createNetwork(docker *client.Client, blueprintName string) (networkID string, err error) {
+func CreateNetwork(docker *client.Client, blueprintName string) (networkID string, err error) {
 	// make a user-defined network so we get DNS based on the container name
 	nw, err := docker.NetworkCreate(context.Background(), "complement_"+blueprintName, types.NetworkCreate{
 		Labels: map[string]string{

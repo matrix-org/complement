@@ -23,6 +23,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	client "github.com/docker/docker/client"
+	"github.com/matrix-org/complement/internal/config"
 )
 
 type Deployer struct {
@@ -31,9 +32,10 @@ type Deployer struct {
 	Counter      int
 	networkID    string
 	debugLogging bool
+	config       *config.Complement
 }
 
-func NewDeployer(namespace string, debugLogging bool) (*Deployer, error) {
+func NewDeployer(namespace string, cfg *config.Complement) (*Deployer, error) {
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		return nil, err
@@ -41,7 +43,8 @@ func NewDeployer(namespace string, debugLogging bool) (*Deployer, error) {
 	return &Deployer{
 		Namespace:    namespace,
 		Docker:       cli,
-		debugLogging: debugLogging,
+		debugLogging: cfg.DebugLoggingEnabled,
+		config:       cfg,
 	}, nil
 }
 
@@ -67,7 +70,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	if len(images) == 0 {
 		return nil, fmt.Errorf("Deploy: No images have been built for blueprint %s", blueprintName)
 	}
-	networkID, err := createNetwork(d.Docker, blueprintName)
+	networkID, err := CreateNetwork(d.Docker, blueprintName)
 	if err != nil {
 		return nil, fmt.Errorf("Deploy: %w", err)
 	}
@@ -77,9 +80,9 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		contextStr := img.Labels["complement_context"]
 		hsName := img.Labels["complement_hs_name"]
 		// TODO: Make CSAPI port configurable
-		deployment, err := deployImage(
+		deployment, err := DeployImage(
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
-			blueprintName, hsName, contextStr, networkID)
+			blueprintName, hsName, contextStr, networkID, d.config.VersionCheckIterations)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
 				// print logs to help debug
