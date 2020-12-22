@@ -28,11 +28,7 @@ func RouteCreate(ctx context.Context, rt *Runtime, rc *ReqCreate) util.JSONRespo
 	if rc.BlueprintName == "" && rc.Blueprint == nil {
 		return util.MessageResponse(400, "one of 'blueprint_name' or 'blueprint' must be specified")
 	}
-	knownBlueprints := map[string]*b.Blueprint{
-		b.BlueprintCleanHS.Name:                &b.BlueprintCleanHS,
-		b.BlueprintFederationOneToOneRoom.Name: &b.BlueprintFederationOneToOneRoom,
-	}
-	knownBlueprint, ok := knownBlueprints[rc.BlueprintName]
+	knownBlueprint, ok := b.KnownBlueprints[rc.BlueprintName]
 	if ok {
 		rc.Blueprint = knownBlueprint
 	}
