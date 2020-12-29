@@ -53,7 +53,7 @@ func (r *Runner) AccessTokens(hsDomain string) map[string]string {
 // Run all instructions until completion. Return an error if there was a problem executing any instruction.
 func (r *Runner) Run(hs b.Homeserver, hsURL string) error {
 	contextStr := fmt.Sprintf("%s.%s", r.blueprintName, hs.Name)
-	instrs := calculateInstructions(hs)
+	instrs := calculateInstructions(r, hs)
 	i := 0
 	cli := http.Client{
 		Timeout: 10 * time.Second,
@@ -110,15 +110,24 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 		r.log("Stopping. Failed to form NewRequest for instruction: %s -- %+v \n", err, instr)
 		return nil, nil, 0
 	}
+
 	q := req.URL.Query()
 	if instr.accessToken != "" {
 		q.Set("access_token", r.lookup[instr.accessToken])
 	}
 	for paramName, paramValue := range instr.queryParams {
-		q.Set(paramName, paramValue)
+		// if the variable starts with a '.' then use the lookup table, else use the string literally
+		// this handles scenarios like:
+		// { $roomId: ".room_0", $eventType: "m.room.message" }
+		var valToEncode string
+		if paramValue[0] == '.' {
+			valToEncode = r.lookup[strings.TrimPrefix(paramValue, ".")]
+		} else {
+			valToEncode = paramValue
+		}
+		q.Set(paramName, valToEncode)
 	}
 	req.URL.RawQuery = q.Encode()
-
 	return req, &instr, i
 }
 
@@ -145,11 +154,12 @@ type instruction struct {
 	storeResponse map[string]string
 }
 
-// url returns the complete resolved url for this instruction,
+// url returns the complete path resolved url for this instruction. Query parameters must be
+// added separately.
 func (i *instruction) url(hsURL string, lookup map[string]string) string {
 	pathTemplate := i.path
 	for k, v := range i.substitutions {
-		// if the variable start with a '.' then use the lookup table, else use the string literally
+		// if the variable starts with a '.' then use the lookup table, else use the string literally
 		// this handles scenarios like:
 		// { $roomId: ".room_0", $eventType: "m.room.message" }
 		var valToEncode string
@@ -166,7 +176,7 @@ func (i *instruction) url(hsURL string, lookup map[string]string) string {
 // calculateInstructions returns the entire set of HTTP requests to be executed in order. Various substitutions
 // and placeholders are returned in these instructions as it's impossible to know at this time what room IDs etc
 // will be allocated, so use an instruction loader to load the right requests.
-func calculateInstructions(hs b.Homeserver) []instruction {
+func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 	var instrs []instruction
 	// add instructions to create users
 	for _, user := range hs.Users {
@@ -188,12 +198,17 @@ func calculateInstructions(hs b.Homeserver) []instruction {
 	}
 	// add instructions to create rooms and send events
 	for roomIndex, room := range hs.Rooms {
+		var queryParams = make(map[string]string)
 		if room.Creator != "" {
 			storeRes := map[string]string{
 				fmt.Sprintf("room_%d", roomIndex): ".room_id",
 			}
 			if room.Ref != "" {
 				storeRes[fmt.Sprintf("room_ref_%s", room.Ref)] = ".room_id"
+
+				// Store the homeserver's server_name, so that remote homeservers that attempt
+				// to join this room know which server to contact
+				r.lookup[fmt.Sprintf("room_ref_%s_server_name", room.Ref)] = hs.Name
 			}
 			instrs = append(instrs, instruction{
 				method:        "POST",
@@ -231,6 +246,10 @@ func calculateInstructions(hs b.Homeserver) []instruction {
 				if membership == "join" {
 					path = "/_matrix/client/r0/join/$roomId"
 					method = "POST"
+
+					// Set server_name to the homeserver that created the room, as they're a pretty
+					// good candidate to join the room through
+					queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
 				}
 			}
 			instrs = append(instrs, instruction{
@@ -239,6 +258,7 @@ func calculateInstructions(hs b.Homeserver) []instruction {
 				body:          event.Content,
 				accessToken:   fmt.Sprintf("user_%s", event.Sender),
 				substitutions: subs,
+				queryParams:   queryParams,
 			})
 		}
 	}
