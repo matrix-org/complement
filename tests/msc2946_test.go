@@ -29,6 +29,7 @@ import (
 // - R3 -> SS1 is a parent link without a child.
 // - R2 <---> Root is a two-way link.
 // - The remaining links are just children links.
+// - SS1 is marked as a "space", but SS2 is not.
 //
 // Tests that:
 // - Querying the root returns the entire graph
@@ -61,6 +62,9 @@ func TestClientSpacesSummary(t *testing.T) {
 		"preset": "public_chat",
 		"name":   "Sub-Space 1",
 		"topic":  "Some topic for sub-space 1",
+		"creation_content": map[string]interface{}{
+			"org.matrix.msc1772.type": "org.matrix.msc1772.space",
+		},
 	})
 	roomNames[ss1] = "Sub-Space 1"
 	r2 := alice.CreateRoom(t, map[string]interface{}{
@@ -147,6 +151,15 @@ func TestClientSpacesSummary(t *testing.T) {
 		wantRooms := []string{
 			root, r1, r2, r3, r4, ss1, ss2,
 		}
+		roomRefs := map[string]int{
+			root: 4, // r1,r2,ss1,parent r2
+			r1:   1, // root
+			r2:   2, // root,parent
+			ss1:  3, // root,ss2,r3
+			r3:   1, // ss1
+			ss2:  2, // ss1,r4
+			r4:   1, // ss2
+		}
 		wantEvents := []string{
 			rootToR1, rootToR2, rootToSS1, r2ToRoot,
 			ss1ToSS2, r3ToSS1,
@@ -174,6 +187,18 @@ func TestClientSpacesSummary(t *testing.T) {
 					if name, ok := roomNames[roomID]; ok {
 						if room.Get("name").Str != name {
 							return fmt.Errorf("room %s got name %s want %s", roomID, room.Get("name").Str, name)
+						}
+					}
+					if refs, ok := roomRefs[roomID]; ok {
+						gotRefs := room.Get("num_refs").Int()
+						if int64(refs) != gotRefs {
+							return fmt.Errorf("room %s got %d refs want %d", roomID, gotRefs, refs)
+						}
+					}
+					if roomID == ss1 {
+						wantType := "org.matrix.msc1772.space"
+						if room.Get("room_type").Str != wantType {
+							return fmt.Errorf("room %s got type %s want %s", roomID, room.Get("room_type").Str, wantType)
 						}
 					}
 
