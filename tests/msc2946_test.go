@@ -148,9 +148,6 @@ func TestClientSpacesSummary(t *testing.T) {
 	// - Rooms are returned correctly along with the custom fields `num_refs` and `room_type`.
 	// - Events are returned correctly.
 	t.Run("query whole graph", func(t *testing.T) {
-		wantRooms := []string{
-			root, r1, r2, r3, r4, ss1, ss2,
-		}
 		roomRefs := map[string]int{
 			root: 4, // r1,r2,ss1,parent r2
 			r1:   1, // root
@@ -160,84 +157,58 @@ func TestClientSpacesSummary(t *testing.T) {
 			ss2:  2, // ss1,r4
 			r4:   1, // ss2
 		}
-		wantEvents := []string{
-			rootToR1, rootToR2, rootToSS1, r2ToRoot,
-			ss1ToSS2, r3ToSS1,
-			ss2ToR4,
-		}
 		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", root, "spaces"}, map[string]interface{}{})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONArrayEach("rooms", func(room gjson.Result) error {
-					roomID := room.Get("room_id").Str
-					want := -1
-					for i, w := range wantRooms {
-						if w == roomID {
-							want = i
-							break
-						}
-					}
-					if want == -1 {
-						return fmt.Errorf("did not want room %s", roomID)
-					}
-					// delete the wanted room
-					wantRooms = append(wantRooms[:want], wantRooms[want+1:]...)
-
+				match.JSONCheckOff("rooms", []interface{}{
+					root, r1, r2, r3, r4, ss1, ss2,
+				}, func(r gjson.Result) interface{} {
+					return r.Get("room_id").Str
+				}, func(roomInt interface{}, data gjson.Result) error {
+					roomID := roomInt.(string)
 					// check fields
 					if name, ok := roomNames[roomID]; ok {
-						if room.Get("name").Str != name {
-							return fmt.Errorf("room %s got name %s want %s", roomID, room.Get("name").Str, name)
+						if data.Get("name").Str != name {
+							return fmt.Errorf("room %s got name %s want %s", roomID, data.Get("name").Str, name)
 						}
 					}
 					if refs, ok := roomRefs[roomID]; ok {
-						gotRefs := room.Get("num_refs").Int()
+						gotRefs := data.Get("num_refs").Int()
 						if int64(refs) != gotRefs {
 							return fmt.Errorf("room %s got %d refs want %d", roomID, gotRefs, refs)
 						}
 					}
 					if roomID == ss1 {
 						wantType := "org.matrix.msc1772.space"
-						if room.Get("room_type").Str != wantType {
-							return fmt.Errorf("room %s got type %s want %s", roomID, room.Get("room_type").Str, wantType)
+						if data.Get("room_type").Str != wantType {
+							return fmt.Errorf("room %s got type %s want %s", roomID, data.Get("room_type").Str, wantType)
 						}
 					}
-
 					return nil
 				}),
-				match.JSONArrayEach("events", func(event gjson.Result) error {
-					eventID := event.Get("event_id").Str
-					want := -1
-					for i, w := range wantEvents {
-						if w == eventID {
-							want = i
-							break
-						}
-					}
-					if want == -1 {
-						return fmt.Errorf("did not want event %s", eventID)
-					}
-					// delete the wanted event
-					wantEvents = append(wantEvents[:want], wantEvents[want+1:]...)
-					return nil
-				}),
+				match.JSONCheckOff("events", []interface{}{
+					rootToR1, rootToR2, rootToSS1, r2ToRoot,
+					ss1ToSS2, r3ToSS1,
+					ss2ToR4,
+				}, func(r gjson.Result) interface{} {
+					return r.Get("event_id").Str
+				}, nil),
 			},
 		})
-		if len(wantEvents) > 0 {
-			t.Errorf("Wanted more events: %v", wantEvents)
-		}
-		if len(wantRooms) > 0 {
-			t.Errorf("Wanted more rooms: %v", wantRooms)
-		}
 	})
 
+	// TODO:
 	// - Setting max_rooms_per_space works correctly
 	t.Run("max_rooms_per_space", func(t *testing.T) {
 
 	})
 
-	// - Setting limit works correctly
-	t.Run("limit", func(t *testing.T) {
-
-	})
-
+	/*
+		// - Setting limit works correctly
+		t.Run("limit", func(t *testing.T) {
+			// should omit R4 due to limit
+			res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", root, "spaces"}, map[string]interface{}{
+				"limit": 6,
+			})
+		}) */
 }
