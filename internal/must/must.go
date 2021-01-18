@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -149,4 +150,25 @@ func HaveInOrder(t *testing.T, gots []string, wants []string) {
 			t.Errorf("HaveEventsInOrder: index %d got %s want %s", i, gots[i], wants[i])
 		}
 	}
+}
+
+// CheckOff an item from the list. If the item is not present the test is failed.
+// The updated list with the matched item removed from it is returned. Items are
+// compared using reflect.DeepEqual
+func CheckOff(t *testing.T, items []interface{}, wantItem interface{}) []interface{} {
+	// check off the item
+	want := -1
+	for i, w := range items {
+		if reflect.DeepEqual(w, wantItem) {
+			want = i
+			break
+		}
+	}
+	if want == -1 {
+		t.Errorf("CheckOff: unexpected item %s", wantItem)
+		return items
+	}
+	// delete the wanted item
+	items = append(items[:want], items[want+1:]...)
+	return items
 }

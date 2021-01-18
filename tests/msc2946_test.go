@@ -142,8 +142,6 @@ func TestClientSpacesSummary(t *testing.T) {
 		},
 	})
 
-	// Run tests in parallel
-
 	// - Querying the root returns the entire graph
 	// - Rooms are returned correctly along with the custom fields `num_refs` and `room_type`.
 	// - Events are returned correctly.
@@ -197,18 +195,76 @@ func TestClientSpacesSummary(t *testing.T) {
 		})
 	})
 
-	// TODO:
 	// - Setting max_rooms_per_space works correctly
 	t.Run("max_rooms_per_space", func(t *testing.T) {
-
+		// should omit either R1 or R2 if we start from R4 because we only return 1 link per room which will be:
+		// R4 -> SS2
+		// SS2 -> SS1
+		// SS1 -> root
+		// root -> R1,R2 (but only 1 is allowed)
+		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", r4, "spaces"}, map[string]interface{}{
+			"max_rooms_per_space": 1,
+		})
+		wantItems := []interface{}{
+			ss2ToR4, ss1ToSS2, rootToSS1,
+			rootToR1, rootToR2, // one of these
+		}
+		body := must.ParseJSON(t, res.Body)
+		gjson.GetBytes(body, "events").ForEach(func(_, val gjson.Result) bool {
+			wantItems = must.CheckOff(t, wantItems, val.Get("event_id").Str)
+			return true
+		})
+		if len(wantItems) != 1 {
+			if wantItems[0] != rootToR1 && wantItems[0] != rootToR2 {
+				t.Errorf("expected fewer events to be returned: %s", string(body))
+			}
+		}
 	})
 
-	/*
-		// - Setting limit works correctly
-		t.Run("limit", func(t *testing.T) {
-			// should omit R4 due to limit
-			res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", root, "spaces"}, map[string]interface{}{
-				"limit": 6,
-			})
-		}) */
+	// - Setting limit works correctly
+	t.Run("limit", func(t *testing.T) {
+		// should omit R4 due to limit
+		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", root, "spaces"}, map[string]interface{}{
+			"limit": 6,
+		})
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONCheckOff("rooms", []interface{}{
+					root, r1, r2, r3, ss1, ss2,
+				}, func(r gjson.Result) interface{} {
+					return r.Get("room_id").Str
+				}, nil),
+				match.JSONCheckOff("events", []interface{}{
+					rootToR1, rootToR2, rootToSS1, r2ToRoot,
+					ss1ToSS2, r3ToSS1,
+				}, func(r gjson.Result) interface{} {
+					return r.Get("event_id").Str
+				}, nil),
+			},
+		})
+	})
+
+	t.Run("redact link", func(t *testing.T) {
+		// Remove the root -> SS1 link
+		alice.SendEventSynced(t, root, b.Event{
+			Type:     spaceChildEventType,
+			StateKey: &ss1,
+			Content:  map[string]interface{}{},
+		})
+		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", root, "spaces"}, map[string]interface{}{})
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONCheckOff("rooms", []interface{}{
+					root, r1, r2,
+				}, func(r gjson.Result) interface{} {
+					return r.Get("room_id").Str
+				}, nil),
+				match.JSONCheckOff("events", []interface{}{
+					rootToR1, rootToR2, r2ToRoot,
+				}, func(r gjson.Result) interface{} {
+					return r.Get("event_id").Str
+				}, nil),
+			},
+		})
+	})
 }
