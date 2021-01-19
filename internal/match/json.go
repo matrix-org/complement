@@ -55,6 +55,81 @@ func JSONKeyTypeEqual(wantKey string, wantType gjson.Type) JSON {
 	}
 }
 
+// JSONCheckOff returns a matcher which will loop over `wantKey` and ensure that the items
+// (which can be array elements or object keys)
+// are present exactly once in any order in `wantItems`. If there are unexpected items or items
+// appear more than once then the match fails. This matcher can be used to check off items in
+// an array/object. The `mapper` function should map the item to an interface which will be
+// comparable via `reflect.DeepEqual` with items in `wantItems`. The optional `fn` callback
+// allows more checks to be performed other than checking off the item from the list. It is
+// called with 2 args: the result of the `mapper` function and the element itself (or value if
+// it's an object).
+//
+// Usage: (ensures `events` has these events in any order, with the right event type)
+//    JSONCheckOff("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
+//        return r.Get("event_id").Str
+//    }, func(eventID interface{}, eventBody gjson.Result) error {
+//        if eventBody.Get("type").Str != "m.room.message" {
+//	          return fmt.Errorf("expected event to be 'm.room.message'")
+//        }
+//    })
+func JSONCheckOff(wantKey string, wantItems []interface{}, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
+	return func(body []byte) error {
+		res := gjson.GetBytes(body, wantKey)
+		if !res.Exists() {
+			return fmt.Errorf("missing key '%s'", wantKey)
+		}
+		if !res.IsArray() && !res.IsObject() {
+			return fmt.Errorf("JSONCheckOff: key '%s' is not an array or object", wantKey)
+		}
+		var err error
+		res.ForEach(func(key, val gjson.Result) bool {
+			itemRes := key
+			if res.IsArray() {
+				itemRes = val
+			}
+			// convert it to something we can check off
+			item := mapper(itemRes)
+			if item == nil {
+				err = fmt.Errorf("JSONCheckOff: mapper function mapped %v to nil", itemRes.Raw)
+				return false
+			}
+
+			// check off the item
+			want := -1
+			for i, w := range wantItems {
+				if reflect.DeepEqual(w, item) {
+					want = i
+					break
+				}
+			}
+			if want == -1 {
+				err = fmt.Errorf("JSONCheckOff: unexpected item %s", item)
+				return false
+			}
+			// delete the wanted item
+			wantItems = append(wantItems[:want], wantItems[want+1:]...)
+
+			// do further checks
+			if fn != nil {
+				err = fn(item, val)
+				if err != nil {
+					return false
+				}
+			}
+			return true
+		})
+
+		// at this point we should have gone through all of wantItems.
+		// If we haven't then we expected to see some items but didn't.
+		if err == nil && len(wantItems) > 0 {
+			err = fmt.Errorf("JSONCheckOff: did not see items: %v", wantItems)
+		}
+
+		return err
+	}
+}
+
 // JSONArrayEach returns a matcher which will check that `wantKey` is an array then loops over each
 // item calling `fn`. If `fn` returns an error, iterating stops and an error is returned.
 func JSONArrayEach(wantKey string, fn func(gjson.Result) error) JSON {
