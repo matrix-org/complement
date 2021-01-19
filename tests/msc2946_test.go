@@ -91,50 +91,63 @@ func TestClientSpacesSummary(t *testing.T) {
 		},
 	})
 
+	// the API doesn't return event IDs so we need to key off the
+	// 3-uple of room ID, event type and state key
+	eventKey := func(srcRoomID, dstRoomID, evType string) string {
+		return srcRoomID + "|" + dstRoomID + "|" + evType
+	}
+
 	// create the links
-	rootToR1 := alice.SendEventSynced(t, root, b.Event{
+	rootToR1 := eventKey(root, r1, spaceChildEventType)
+	alice.SendEventSynced(t, root, b.Event{
 		Type:     spaceChildEventType,
 		StateKey: &r1,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
 		},
 	})
-	rootToSS1 := alice.SendEventSynced(t, root, b.Event{
+	rootToSS1 := eventKey(root, ss1, spaceChildEventType)
+	alice.SendEventSynced(t, root, b.Event{
 		Type:     spaceChildEventType,
 		StateKey: &ss1,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
 		},
 	})
-	rootToR2 := alice.SendEventSynced(t, root, b.Event{
+	rootToR2 := eventKey(root, r2, spaceChildEventType)
+	alice.SendEventSynced(t, root, b.Event{
 		Type:     spaceChildEventType,
 		StateKey: &r2,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
 		},
 	})
-	r2ToRoot := alice.SendEventSynced(t, r2, b.Event{ // parent link
+	r2ToRoot := eventKey(r2, root, spaceParentEventType)
+	alice.SendEventSynced(t, r2, b.Event{ // parent link
 		Type:     spaceParentEventType,
 		StateKey: &root,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
 		},
 	})
-	ss1ToSS2 := alice.SendEventSynced(t, ss1, b.Event{
+	ss1ToSS2 := eventKey(ss1, ss2, spaceChildEventType)
+	alice.SendEventSynced(t, ss1, b.Event{
 		Type:     spaceChildEventType,
 		StateKey: &ss2,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
 		},
 	})
-	r3ToSS1 := alice.SendEventSynced(t, r3, b.Event{ // parent link only
+	r3ToSS1 := eventKey(r3, ss1, spaceParentEventType)
+	alice.SendEventSynced(t, r3, b.Event{ // parent link only
 		Type:     spaceParentEventType,
 		StateKey: &ss1,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
 		},
 	})
-	ss2ToR4 := alice.SendEventSynced(t, ss2, b.Event{
+	ss2ToR4 := eventKey(ss2, r4, spaceChildEventType)
+	alice.SendEventSynced(t, ss2, b.Event{
 		Type:     spaceChildEventType,
 		StateKey: &r4,
 		Content: map[string]interface{}{
@@ -189,7 +202,7 @@ func TestClientSpacesSummary(t *testing.T) {
 					ss1ToSS2, r3ToSS1,
 					ss2ToR4,
 				}, func(r gjson.Result) interface{} {
-					return r.Get("event_id").Str
+					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
 				}, nil),
 			},
 		})
@@ -211,7 +224,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		}
 		body := must.ParseJSON(t, res.Body)
 		gjson.GetBytes(body, "events").ForEach(func(_, val gjson.Result) bool {
-			wantItems = must.CheckOff(t, wantItems, val.Get("event_id").Str)
+			wantItems = must.CheckOff(t, wantItems, eventKey(val.Get("room_id").Str, val.Get("state_key").Str, val.Get("type").Str))
 			return true
 		})
 		if len(wantItems) != 1 {
@@ -238,7 +251,7 @@ func TestClientSpacesSummary(t *testing.T) {
 					rootToR1, rootToR2, rootToSS1, r2ToRoot,
 					ss1ToSS2, r3ToSS1,
 				}, func(r gjson.Result) interface{} {
-					return r.Get("event_id").Str
+					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
 				}, nil),
 			},
 		})
@@ -262,7 +275,7 @@ func TestClientSpacesSummary(t *testing.T) {
 				match.JSONCheckOff("events", []interface{}{
 					rootToR1, rootToR2, r2ToRoot,
 				}, func(r gjson.Result) interface{} {
-					return r.Get("event_id").Str
+					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
 				}, nil),
 			},
 		})
