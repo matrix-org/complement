@@ -5,6 +5,12 @@ FROM matrixdotorg/synapse:workers
 # Tell Complement that we are using its custom CA
 ENV COMPLEMENT_CA=true
 
+# Download a caddy server to stand in front of nginx and terminate TLS using Complement's
+# custom CA.
+# We include this near the top of the file in order to cache the result.
+RUN curl -OL "https://github.com/caddyserver/caddy/releases/download/v2.3.0/caddy_2.3.0_linux_amd64.tar.gz" && \
+  tar xzf caddy_2.3.0_linux_amd64.tar.gz && rm caddy_2.3.0_linux_amd64.tar.gz && mv caddy /root
+
 # Install postgresql
 RUN apt-get update
 RUN apt-get install -y postgresql
@@ -22,21 +28,10 @@ RUN pg_ctlcluster 11 main start &&  su postgres -c "echo \
 # and the disabling of rate-limiting
 COPY synapse/workers-shared.yaml /conf/workers/shared.yaml
 
-# Set up TLS certificates using the custom CA
-COPY keys/* /ca/
-
-# SSL key for the server (can't make the cert until we know the server name)
-RUN openssl genrsa -out /conf/server.tls.key 2048
-
 # Generate a signing key
 RUN generate_signing_key.py -o /conf/server.signing.key
 
 WORKDIR /root
-
-# Download a caddy server to stand in front of nginx and terminate TLS using Complement's
-# custom CA
-RUN curl -OL "https://github.com/caddyserver/caddy/releases/download/v2.3.0/caddy_2.3.0_linux_amd64.tar.gz" && \
-  tar xzf caddy_2.3.0_linux_amd64.tar.gz && rm caddy_2.3.0_linux_amd64.tar.gz
 
 # Copy the caddy config
 COPY synapse/caddy.complement.json /root/caddy.json
