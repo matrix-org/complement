@@ -3,6 +3,7 @@
 FROM matrixdotorg/synapse:workers
 
 # Tell Complement that we are using its custom CA
+# TODO: This doesn't seem to actually enable COMPLEMENT_CA...
 ENV COMPLEMENT_CA=true
 
 # Download a caddy server to stand in front of nginx and terminate TLS using Complement's
@@ -52,8 +53,12 @@ ENTRYPOINT \
   SYNAPSE_REPORT_STATS=no \
   # Set postgres authentication details which will be placed in the homeserver config file
   POSTGRES_PASSWORD=somesecret POSTGRES_USER=postgres POSTGRES_HOST=localhost \
-  # Use all available workers
-  SYNAPSE_WORKERS=* \
-  # The script that write the necessary config files and starts supervisord, which in turn
+  # Note: This list currently includes all worker types other than federation_sender, as
+  # Synapse fails to send federation transactions with it enabled.
+  # https://github.com/matrix-org/synapse/issues/9192
+  SYNAPSE_WORKERS=pusher,user_dir,media_repository,appservice,synchrotron,federation_reader,federation_inbound \
+  # To use all available workers:
+  #SYNAPSE_WORKERS=* \
+  # Run the script that writes the necessary config files and starts supervisord, which in turn
   # starts everything else
   /configure_workers_and_start.py
