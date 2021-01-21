@@ -2,10 +2,6 @@
 # as well as sets up the homeserver so that it is ready for testing via Complement
 FROM matrixdotorg/synapse:workers
 
-# Tell Complement that we are using its custom CA
-# TODO: This doesn't seem to actually enable COMPLEMENT_CA...
-ENV COMPLEMENT_CA=true
-
 # Download a caddy server to stand in front of nginx and terminate TLS using Complement's
 # custom CA.
 # We include this near the top of the file in order to cache the result.
