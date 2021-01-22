@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -98,7 +97,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot parse event JSON: " + err.Error()))
 	}
 	// insert the join event into the room state
-	room.AddEvent(&event)
+	room.AddEvent(event)
 
 	// return current state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
@@ -204,12 +203,6 @@ func HandleEventRequests() func(*Server) {
 func HandleKeyRequests() func(*Server) {
 	return func(srv *Server) {
 		keymux := srv.mux.PathPrefix("/_matrix/key/v2").Subrouter()
-
-		certData, err := ioutil.ReadFile(srv.certPath)
-		if err != nil {
-			panic("failed to read cert file: " + err.Error())
-		}
-
 		keyFn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			k := gomatrixserverlib.ServerKeys{}
 			k.ServerName = gomatrixserverlib.ServerName(srv.ServerName)
@@ -220,7 +213,6 @@ func HandleKeyRequests() func(*Server) {
 				},
 			}
 			k.OldVerifyKeys = map[gomatrixserverlib.KeyID]gomatrixserverlib.OldVerifyKey{}
-			k.TLSFingerprints = fingerprintPEM(certData)
 			k.ValidUntilTS = gomatrixserverlib.AsTimestamp(time.Now().Add(24 * time.Hour))
 			toSign, err := json.Marshal(k.ServerKeyFields)
 			if err != nil {
@@ -282,7 +274,7 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 
 // HandleTransactionRequests is an option which will process GET /_matrix/federation/v1/send/{transactionID} requests universally when requested.
 // pduCallback and eduCallback are functions that if non-nil will be called and passed each PDU or EDU event received in the transaction
-func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCallback func(gomatrixserverlib.EDU)) func(*Server) {
+func HandleTransactionRequests(pduCallback func(*gomatrixserverlib.Event), eduCallback func(gomatrixserverlib.EDU)) func(*Server) {
 	return func(srv *Server) {
 		srv.mux.Handle("/_matrix/federation/v1/send/{transactionID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			// Extract the transaction ID from the request vars
@@ -361,7 +353,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 				}
 				roomVersion := gomatrixserverlib.RoomVersion(room.Version)
 
-				var event gomatrixserverlib.Event
+				var event *gomatrixserverlib.Event
 				event, err = gomatrixserverlib.NewEventFromUntrustedJSON(pdu, roomVersion)
 				if err != nil {
 					// We were unable to verify or process this event.
@@ -375,7 +367,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.Event), eduCal
 				}
 
 				// Store this PDU in the room's timeline
-				room.AddEvent(&event)
+				room.AddEvent(event)
 
 				// Add this PDU as a success to the response
 				response.PDUs[event.EventID()] = gomatrixserverlib.PDUResult{}

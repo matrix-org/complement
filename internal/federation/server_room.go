@@ -74,15 +74,15 @@ func (r *ServerRoom) CurrentState(evType, stateKey string) *gomatrixserverlib.Ev
 }
 
 // AllCurrentState returns all the current state events
-func (r *ServerRoom) AllCurrentState() (events []gomatrixserverlib.Event) {
+func (r *ServerRoom) AllCurrentState() (events []*gomatrixserverlib.Event) {
 	for _, ev := range r.State {
-		events = append(events, *ev)
+		events = append(events, ev)
 	}
 	return
 }
 
 // AuthChain returns all auth events for all events in the current state TODO: recursively
-func (r *ServerRoom) AuthChain() (chain []gomatrixserverlib.Event) {
+func (r *ServerRoom) AuthChain() (chain []*gomatrixserverlib.Event) {
 	chainMap := make(map[string]bool)
 	// get all the auth event IDs
 	for _, ev := range r.AllCurrentState() {
@@ -96,7 +96,7 @@ func (r *ServerRoom) AuthChain() (chain []gomatrixserverlib.Event) {
 	// find them in the timeline
 	for _, tev := range r.Timeline {
 		if chainMap[tev.EventID()] {
-			chain = append(chain, *tev)
+			chain = append(chain, tev)
 		}
 	}
 	return

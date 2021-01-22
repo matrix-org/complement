@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -69,9 +68,11 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	}
 	fetcher := &basicKeyFetcher{
 		KeyFetcher: &gomatrixserverlib.DirectKeyFetcher{
-			Client: *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{
-				Deployment: deployment,
-			}),
+			Client: gomatrixserverlib.NewClient(
+				gomatrixserverlib.WithTransport(&docker.RoundTripper{
+					Deployment: deployment,
+				}),
+			),
 		},
 		srv: srv,
 	}
@@ -149,8 +150,13 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 
 // FederationClient returns a client which will sign requests using this server and accept certs from hsName.
 func (s *Server) FederationClient(deployment *docker.Deployment, hsName string) *gomatrixserverlib.FederationClient {
-	f := gomatrixserverlib.NewFederationClient(gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv)
-	f.Client = *gomatrixserverlib.NewClientWithTransport(&docker.RoundTripper{Deployment: deployment})
+	f := gomatrixserverlib.NewFederationClient(
+		gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv,
+		gomatrixserverlib.WithSkipVerify(true),
+	)
+	f.Client = *gomatrixserverlib.NewClient(
+		gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}),
+	)
 	return f
 }
 
@@ -188,7 +194,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 	if err != nil {
 		t.Fatalf("MustCreateEvent: failed to sign event: %s", err)
 	}
-	return &signedEvent
+	return signedEvent
 }
 
 // Mux returns this server's router so you can attach additional paths
@@ -401,22 +407,6 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 	}
 
 	return srv, tlsCertPath, tlsKeyPath, nil
-}
-
-func fingerprintPEM(data []byte) []gomatrixserverlib.TLSFingerprint {
-	for {
-		var certDERBlock *pem.Block
-		certDERBlock, data = pem.Decode(data)
-		if data == nil {
-			return nil
-		}
-		if certDERBlock.Type == "CERTIFICATE" {
-			digest := sha256.Sum256(certDERBlock.Bytes)
-			return []gomatrixserverlib.TLSFingerprint{
-				{SHA256: digest[:]},
-			}
-		}
-	}
 }
 
 type nopKeyDatabase struct {

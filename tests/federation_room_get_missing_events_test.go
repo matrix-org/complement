@@ -83,7 +83,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	if err != nil {
 		t.Fatalf("failed to sign event: %s", err)
 	}
-	room.AddEvent(&signedBadEvent)
+	room.AddEvent(signedBadEvent)
 
 	sentEvent := srv.MustCreateEvent(t, room, b.Event{
 		Type:   "m.room.message",
@@ -106,9 +106,9 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		// return the bad event, which should result in the transaction failing.
 		w.WriteHeader(200)
 		res := struct {
-			Events []gomatrixserverlib.Event `json:"events"`
+			Events []*gomatrixserverlib.Event `json:"events"`
 		}{
-			Events: []gomatrixserverlib.Event{signedBadEvent},
+			Events: []*gomatrixserverlib.Event{signedBadEvent},
 		}
 		var responseBytes []byte
 		responseBytes, err = json.Marshal(&res)
