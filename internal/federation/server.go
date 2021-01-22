@@ -69,9 +69,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	fetcher := &basicKeyFetcher{
 		KeyFetcher: &gomatrixserverlib.DirectKeyFetcher{
 			Client: gomatrixserverlib.NewClient(
-				gomatrixserverlib.WithTransport(&docker.RoundTripper{
-					Deployment: deployment,
-				}),
+				gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}),
 			),
 		},
 		srv: srv,
@@ -152,9 +150,6 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 func (s *Server) FederationClient(deployment *docker.Deployment, hsName string) *gomatrixserverlib.FederationClient {
 	f := gomatrixserverlib.NewFederationClient(
 		gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv,
-		gomatrixserverlib.WithSkipVerify(true),
-	)
-	f.Client = *gomatrixserverlib.NewClient(
 		gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}),
 	)
 	return f
