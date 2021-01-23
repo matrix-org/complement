@@ -25,7 +25,7 @@
                             "handler": "reverse_proxy",
                             "upstreams": [
                               {
-                                "dial": "localhost:8080"
+                                "dial": "localhost:8008"
                               }
                             ]
                           }
