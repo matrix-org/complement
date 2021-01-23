@@ -25,9 +25,6 @@ RUN pg_ctlcluster 11 main start &&  su postgres -c "echo \
 # and the disabling of rate-limiting
 COPY synapse/workers-shared.yaml /conf/workers/shared.yaml
 
-# Generate a signing key
-RUN generate_signing_key.py -o /conf/server.signing.key
-
 WORKDIR /root
 
 # Copy the caddy config
