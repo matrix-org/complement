@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -360,6 +361,13 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 	}
+	host := docker.HostnameRunningComplement
+	if ip := net.ParseIP(host); ip != nil {
+		template.IPAddresses = append(template.IPAddresses, ip)
+	} else {
+		template.DNSNames = append(template.DNSNames, host)
+	}
+
 	if os.Getenv("COMPLEMENT_CA") == "true" {
 		// Gate COMPLEMENT_CA
 		var ca *x509.Certificate
