@@ -30,7 +30,12 @@ type HomeserverDeployment struct {
 // will print container logs before killing the container.
 func (d *Deployment) Destroy(t *testing.T) {
 	t.Helper()
-	d.Deployer.Destroy(d, t.Failed())
+	d.Deployer.Destroy(
+		d,
+		// TODO: Revert this back to `t.Failed()`.
+		// I did this so I can always see the homersever logs regardless of outcome
+		true,
+	)
 }
 
 // Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.

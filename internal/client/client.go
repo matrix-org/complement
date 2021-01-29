@@ -93,7 +93,18 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
-	res := c.MustDo(t, "PUT", paths, e.Content)
+
+	query := make(url.Values, len(e.PrevEvents))
+	for _, prevEvent := range e.PrevEvents {
+		query.Add("prev_event", prevEvent)
+	}
+
+	b, err := json.Marshal(e.Content)
+	if err != nil {
+		t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
+	}
+
+	res := c.MustDoRaw(t, "PUT", paths, b, "application/json", query)
 	body := ParseJSON(t, res)
 	eventID := GetJSONFieldStr(t, body, "event_id")
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
