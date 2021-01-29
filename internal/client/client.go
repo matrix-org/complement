@@ -84,9 +84,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
-// SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
-// Returns the event ID of the sent event.
-func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
+func (c *CSAPI) SendEvent(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
 	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
@@ -107,6 +105,15 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	res := c.MustDoRaw(t, "PUT", paths, b, "application/json", query)
 	body := ParseJSON(t, res)
 	eventID := GetJSONFieldStr(t, body, "event_id")
+
+	return eventID
+}
+
+// SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
+// Returns the event ID of the sent event.
+func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
+	t.Helper()
+	eventID := c.SendEvent(t, roomID, e)
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
 	c.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID

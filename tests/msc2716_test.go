@@ -7,10 +7,12 @@
 package tests
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
@@ -49,7 +51,7 @@ func TestBackfillingHistory(t *testing.T) {
 	})
 
 	// event1
-	alice.SendEventSynced(t, roomID, b.Event{
+	event1 := alice.SendEvent(t, roomID, b.Event{
 		Type: "m.room.message",
 		PrevEvents: []string{
 			eventA,
@@ -60,11 +62,47 @@ func TestBackfillingHistory(t *testing.T) {
 		},
 	})
 
+	// event2
+	event2 := alice.SendEvent(t, roomID, b.Event{
+		Type: "m.room.message",
+		PrevEvents: []string{
+			event1,
+		},
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Message 2",
+		},
+	})
+
+	// event3
+	alice.SendEvent(t, roomID, b.Event{
+		Type: "m.room.message",
+		PrevEvents: []string{
+			event2,
+		},
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Message 3",
+		},
+	})
+
+	res := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+		"dir":   []string{"b"},
+		"limit": []string{"100"},
+	})
+
+	t.Logf("aweawfeefwaweafeafw")
+	logrus.WithFields(logrus.Fields{
+		"res": res,
+	}).Error("messages res")
+
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Room creation reports m.room.create to myself
 		t.Run("Room creation reports m.room.create to myself", func(t *testing.T) {
 			t.Parallel()
+
 			alice := deployment.Client(t, "hs1", userID)
+
 			alice.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
 				if ev.Get("type").Str != "m.room.create" {
 					return false
