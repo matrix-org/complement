@@ -281,7 +281,8 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 		}
 	}
 
-	certificateDuration := time.Hour * 5
+	// valid for 10 years
+	certificateDuration := time.Hour * 24 * 365 * 10
 	priv, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return nil, nil, err
