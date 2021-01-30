@@ -97,6 +97,10 @@ func (c *CSAPI) SendEvent(t *testing.T, roomID string, e b.Event) string {
 		query.Add("prev_event", prevEvent)
 	}
 
+	if e.OriginServerTS != 0 {
+		query.Add("origin_server_ts", strconv.FormatUint(e.OriginServerTS, 10))
+	}
+
 	b, err := json.Marshal(e.Content)
 	if err != nil {
 		t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)

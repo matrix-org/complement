@@ -69,11 +69,12 @@ type Room struct {
 }
 
 type Event struct {
-	Type       string
-	Sender     string
-	StateKey   *string
-	PrevEvents []string
-	Content    map[string]interface{}
+	Type           string
+	Sender         string
+	OriginServerTS uint64
+	StateKey       *string
+	PrevEvents     []string
+	Content        map[string]interface{}
 	// This field is ignored in blueprints as clients are unable to set it. Used with federation.Server
 	Unsigned map[string]interface{}
 }

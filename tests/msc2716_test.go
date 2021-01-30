@@ -9,8 +9,10 @@ package tests
 import (
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
@@ -33,6 +35,13 @@ func TestBackfillingHistory(t *testing.T) {
 			"body":    "Message A",
 		},
 	})
+
+	insertTime := time.Now()
+	insertOriginServerTs := uint64(insertTime.UnixNano() / 1000000)
+
+	// wait 3ms to ensure that the timestamp changes enough intervals for each message we try to insert later
+	time.Sleep(3 * time.Millisecond)
+
 	// eventB
 	alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
@@ -56,6 +65,7 @@ func TestBackfillingHistory(t *testing.T) {
 		PrevEvents: []string{
 			eventA,
 		},
+		OriginServerTS: insertOriginServerTs,
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Message 1",
@@ -68,6 +78,7 @@ func TestBackfillingHistory(t *testing.T) {
 		PrevEvents: []string{
 			event1,
 		},
+		OriginServerTS: insertOriginServerTs + 1,
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Message 2",
@@ -80,6 +91,7 @@ func TestBackfillingHistory(t *testing.T) {
 		PrevEvents: []string{
 			event2,
 		},
+		OriginServerTS: insertOriginServerTs + 2,
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Message 3",
@@ -92,8 +104,11 @@ func TestBackfillingHistory(t *testing.T) {
 	})
 
 	t.Logf("aweawfeefwaweafeafw")
+	body := client.ParseJSON(t, res)
 	logrus.WithFields(logrus.Fields{
-		"res": res,
+		"insertOriginServerTs": insertOriginServerTs,
+		"res":                  res,
+		"body":                 string(body),
 	}).Error("messages res")
 
 	t.Run("parallel", func(t *testing.T) {
