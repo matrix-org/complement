@@ -98,6 +98,15 @@ func TestBackfillingHistory(t *testing.T) {
 		},
 	})
 
+	// eventStar
+	eventStar := alice.SendEventSynced(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Message *",
+		},
+	})
+
 	res := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
 		"dir":   []string{"b"},
 		"limit": []string{"100"},
@@ -110,6 +119,14 @@ func TestBackfillingHistory(t *testing.T) {
 		"res":                  res,
 		"body":                 string(body),
 	}).Error("messages res")
+
+	contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventStar}, nil, "application/json", url.Values{
+		"limit": []string{"100"},
+	})
+	contextResBody := client.ParseJSON(t, contextRes)
+	logrus.WithFields(logrus.Fields{
+		"contextResBody": string(contextResBody),
+	}).Error("context res")
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Room creation reports m.room.create to myself
