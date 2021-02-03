@@ -67,8 +67,9 @@ func TestBackfillingHistory(t *testing.T) {
 		},
 		OriginServerTS: insertOriginServerTs,
 		Content: map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    "Message 1",
+			"msgtype":      "m.text",
+			"body":         "Message 1",
+			"m.historical": true,
 		},
 	})
 
@@ -80,8 +81,9 @@ func TestBackfillingHistory(t *testing.T) {
 		},
 		OriginServerTS: insertOriginServerTs + 1,
 		Content: map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    "Message 2",
+			"msgtype":      "m.text",
+			"body":         "Message 2",
+			"m.historical": true,
 		},
 	})
 
@@ -93,8 +95,9 @@ func TestBackfillingHistory(t *testing.T) {
 		},
 		OriginServerTS: insertOriginServerTs + 2,
 		Content: map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    "Message 3",
+			"msgtype":      "m.text",
+			"body":         "Message 3",
+			"m.historical": true,
 		},
 	})
 
