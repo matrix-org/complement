@@ -7,18 +7,18 @@
 package tests
 
 import (
+	"fmt"
 	"net/url"
 	"testing"
 	"time"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
-// Test that the m.room.create and m.room.member events for a room we created comes down /sync
+// Test that the message events we insert between A and B come back in the correct order from /messages
 func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, "rooms_state", b.BlueprintAlice)
 	defer deployment.Destroy(t)
@@ -39,11 +39,11 @@ func TestBackfillingHistory(t *testing.T) {
 	insertTime := time.Now()
 	insertOriginServerTs := uint64(insertTime.UnixNano() / 1000000)
 
-	// wait 3ms to ensure that the timestamp changes enough intervals for each message we try to insert later
+	// wait 3ms to ensure that the timestamp changes enough for each of the 3 message we try to insert later
 	time.Sleep(3 * time.Millisecond)
 
 	// eventB
-	alice.SendEventSynced(t, roomID, b.Event{
+	eventB := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
@@ -51,7 +51,7 @@ func TestBackfillingHistory(t *testing.T) {
 		},
 	})
 	// eventC
-	alice.SendEventSynced(t, roomID, b.Event{
+	eventC := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
@@ -86,7 +86,7 @@ func TestBackfillingHistory(t *testing.T) {
 	})
 
 	// event3
-	alice.SendEvent(t, roomID, b.Event{
+	event3 := alice.SendEvent(t, roomID, b.Event{
 		Type: "m.room.message",
 		PrevEvents: []string{
 			event2,
@@ -107,41 +107,36 @@ func TestBackfillingHistory(t *testing.T) {
 		},
 	})
 
-	res := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
-		"dir":   []string{"b"},
-		"limit": []string{"100"},
-	})
-
-	t.Logf("aweawfeefwaweafeafw")
-	body := client.ParseJSON(t, res)
-	logrus.WithFields(logrus.Fields{
-		"insertOriginServerTs": insertOriginServerTs,
-		"res":                  res,
-		"body":                 string(body),
-	}).Error("messages res")
-
-	contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventStar}, nil, "application/json", url.Values{
-		"limit": []string{"100"},
-	})
-	contextResBody := client.ParseJSON(t, contextRes)
-	logrus.WithFields(logrus.Fields{
-		"contextResBody": string(contextResBody),
-	}).Error("context res")
-
 	t.Run("parallel", func(t *testing.T) {
-		// sytest: Room creation reports m.room.create to myself
-		t.Run("Room creation reports m.room.create to myself", func(t *testing.T) {
+		t.Run("Backfilled messages come back in correct order", func(t *testing.T) {
 			t.Parallel()
 
-			alice := deployment.Client(t, "hs1", userID)
+			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			})
 
-			alice.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.create" {
-					return false
-				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("content").Get("creator").Str, userID, "wrong content.creator")
-				return true
+			expectedMessageOrder := []string{
+				eventStar, eventC, eventB, event3, event2, event1, eventA,
+			}
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONArrayEach("chunk", func(r gjson.Result) error {
+						// Find all events in order
+						if len(r.Get("content").Get("body").Str) > 0 {
+							// Pop the next message off the expected list
+							nextEventInOrder := expectedMessageOrder[0]
+							expectedMessageOrder = expectedMessageOrder[1:]
+
+							if r.Get("event_id").Str != nextEventInOrder {
+								return fmt.Errorf("Next event found was %s but expected %s", r.Get("event_id").Str, nextEventInOrder)
+							}
+						}
+
+						return nil
+					}),
+				},
 			})
 		})
 	})
