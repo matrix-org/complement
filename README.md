@@ -5,13 +5,13 @@
 Complement is a black box integration testing framework for Matrix homeservers.
 
 
-## adsf
+#### Getting started
 
 To get started developing, see https://github.com/matrix-org/complement/blob/master/ONBOARDING.md
 
-If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh)
+If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
 
-If you want to develop Complement tests while working on a local dev instance of Synapse, edit `scripts-dev/complement.sh` to point to your local Complement checkout.
+If you want to develop Complement tests while working on a local dev instance of Synapse, edit [`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh) to point to your local Complement checkout (`cd ../complement`) instead of downloading from GitHub.
 
 
 #### Running

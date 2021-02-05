@@ -105,11 +105,11 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 
 			// Sync until we find the star message. If we're able to see the star message
-			// after event1 without seeing event1 in the mean-time, I think we're safe to
+			// that occurs after event1 without seeing event1 in the mean-time, I think we're safe to
 			// assume it won't sync
 			alice.SyncUntil(t, "", "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
 				if r.Get("event_id").Str == event1 {
-					t.Fatalf("We should not see the %s event in /sync response", event1)
+					t.Fatalf("We should not see the %s event in /sync response but it was present", event1)
 				}
 
 				return r.Get("event_id").Str == eventStar
