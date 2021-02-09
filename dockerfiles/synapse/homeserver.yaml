@@ -94,6 +94,6 @@ federation_rr_transactions_per_room_per_second: 9999
 
 ## Experimental Features ##
 
-experimental:
+experimental_features:
   # Enable knocking support
   msc2403_enabled: true
