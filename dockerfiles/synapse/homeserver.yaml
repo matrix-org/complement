@@ -91,3 +91,9 @@ rc_joins:
     burst_count: 9999
 
 federation_rr_transactions_per_room_per_second: 9999
+
+## Experimental Features ##
+
+experimental:
+  # Enable knocking support
+  msc2403_enabled: true
