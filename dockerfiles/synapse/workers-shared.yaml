@@ -1,50 +1,16 @@
 ## Server ##
-
-server_name: SERVER_NAME
-log_config: /conf/log_config.yaml
 report_stats: False
-signing_key_path: /conf/server.signing.key
 trusted_key_servers: []
 enable_registration: true
-
-## Listeners ##
-
-tls_certificate_path: /conf/server.tls.crt
-tls_private_key_path: /conf/server.tls.key
-
-listeners:
-  - port: 8448
-    bind_addresses: ['::']
-    type: http
-    tls: true
-    resources:
-      - names: [federation]
-
-  - port: 8008
-    bind_addresses: ['::']
-    type: http
-
-    resources:
-      - names: [client]
-
-## Database ##
-
-database:
-  name: "sqlite3"
-  args:
-    # We avoid /data, as it is a volume and is not transferred when the container is committed,
-    # which is a fundamental necessity in complement.
-    database: "/conf/homeserver.db"
 
 ## Federation ##
 
 # disable verification of federation certificates
 #
-# TODO: this is temporary until https://github.com/matrix-org/complement/pull/28 lands and
-# allows homeservers spun up by complement access to the complement CA certificate to trust
+# TODO: Figure out why this is still needed even though we are making use of the custom CA
 federation_verify_certificates: false
 
-# trust certs signed by the dummy CA
+# trust certs signed by Complement's CA
 federation_custom_ca_list:
 - /ca/ca.crt
 
