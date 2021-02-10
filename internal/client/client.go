@@ -84,40 +84,18 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
-func (c *CSAPI) SendEvent(t *testing.T, roomID string, e b.Event) string {
+// SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
+// Returns the event ID of the sent event.
+func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
 	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
-
-	query := make(url.Values, len(e.PrevEvents))
-	for _, prevEvent := range e.PrevEvents {
-		query.Add("prev_event", prevEvent)
-	}
-
-	if e.OriginServerTS != 0 {
-		query.Add("ts", strconv.FormatUint(e.OriginServerTS, 10))
-	}
-
-	b, err := json.Marshal(e.Content)
-	if err != nil {
-		t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
-	}
-
-	res := c.MustDoRaw(t, "PUT", paths, b, "application/json", query)
+	res := c.MustDo(t, "PUT", paths, e.Content)
 	body := ParseJSON(t, res)
 	eventID := GetJSONFieldStr(t, body, "event_id")
-
-	return eventID
-}
-
-// SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
-// Returns the event ID of the sent event.
-func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
-	t.Helper()
-	eventID := c.SendEvent(t, roomID, e)
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
 	c.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID

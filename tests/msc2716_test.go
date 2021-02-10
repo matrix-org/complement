@@ -7,8 +7,10 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
@@ -82,7 +84,7 @@ func TestBackfillingHistory(t *testing.T) {
 			insertOriginServerTs := uint64(timeAfterEventA.UnixNano() / 1000000)
 
 			// If we see this message in the /sync, then something went wrong
-			event1 := alice.SendEvent(t, roomID, b.Event{
+			event1 := sendEvent(t, alice, roomID, b.Event{
 				Type: "m.room.message",
 				PrevEvents: []string{
 					eventA,
@@ -96,7 +98,7 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 
 			// This is just a dummy event we search for after event1
-			eventStar := alice.SendEvent(t, roomID, b.Event{
+			eventStar := sendEvent(t, alice, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
 					"msgtype": "m.text",
@@ -138,6 +140,33 @@ func TestBackfillingHistory(t *testing.T) {
 	})
 }
 
+var txnID int = 0
+var txnPrefix string = "msc2716-txn"
+
+func sendEvent(t *testing.T, c *client.CSAPI, roomID string, e b.Event) string {
+	txnID++
+
+	query := make(url.Values, len(e.PrevEvents))
+	for _, prevEvent := range e.PrevEvents {
+		query.Add("prev_event", prevEvent)
+	}
+
+	if e.OriginServerTS != 0 {
+		query.Add("ts", strconv.FormatUint(e.OriginServerTS, 10))
+	}
+
+	b, err := json.Marshal(e.Content)
+	if err != nil {
+		t.Fatalf("msc2716.sendEvent failed to marshal JSON body: %s", err)
+	}
+
+	res := c.MustDoRaw(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + strconv.Itoa(txnID)}, b, "application/json", query)
+	body := client.ParseJSON(t, res)
+	eventID := client.GetJSONFieldStr(t, body, "event_id")
+
+	return eventID
+}
+
 func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string) (string, string, string, time.Time) {
 	// eventA
 	eventA := c.SendEventSynced(t, roomID, b.Event{
@@ -177,7 +206,7 @@ func backfillMessagesAtTime(t *testing.T, c *client.CSAPI, roomID string, insert
 	insertOriginServerTs := uint64(insertTime.UnixNano() / 1000000)
 
 	// event1
-	event1 := c.SendEvent(t, roomID, b.Event{
+	event1 := sendEvent(t, c, roomID, b.Event{
 		Type: "m.room.message",
 		PrevEvents: []string{
 			insertAfterEvent,
@@ -191,7 +220,7 @@ func backfillMessagesAtTime(t *testing.T, c *client.CSAPI, roomID string, insert
 	})
 
 	// event2
-	event2 := c.SendEvent(t, roomID, b.Event{
+	event2 := sendEvent(t, c, roomID, b.Event{
 		Type: "m.room.message",
 		PrevEvents: []string{
 			event1,
@@ -205,7 +234,7 @@ func backfillMessagesAtTime(t *testing.T, c *client.CSAPI, roomID string, insert
 	})
 
 	// event3
-	event3 := c.SendEvent(t, roomID, b.Event{
+	event3 := sendEvent(t, c, roomID, b.Event{
 		Type: "m.room.message",
 		PrevEvents: []string{
 			event2,
