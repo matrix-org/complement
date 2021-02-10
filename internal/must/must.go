@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"reflect"
 	"strings"
@@ -73,6 +74,8 @@ func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byt
 	if err != nil {
 		t.Fatalf("MatchResponse: Failed to read response body: %s", err)
 	}
+
+	log.Printf("got response body: %s", string(body))
 
 	contextStr := fmt.Sprintf("%s => %s", res.Request.URL.String(), string(body))
 
