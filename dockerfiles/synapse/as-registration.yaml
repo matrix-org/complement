@@ -1,0 +1,10 @@
+id: 24c97215fcec1025b19df73c574b5bf5b3d69f1648921461ac9beabaf11466b7
+hs_token: 27562ff25dd2eb69361ac1eb67e3a3cd38ab9509c1483234ec8dfec0f247c73e
+as_token: f872531e387377686989e792c723e646f7823643e747a0521e94770a721f40fc
+url: 'http://localhost:9000'
+sender_localpart: the-bridge-user
+rate_limited: false
+namespaces:
+  users: []
+  rooms: []
+  aliases: []

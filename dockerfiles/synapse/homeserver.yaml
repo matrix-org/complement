@@ -92,6 +92,13 @@ rc_joins:
 
 federation_rr_transactions_per_room_per_second: 9999
 
+## API Configuration ##
+
+# A list of application service config files to use
+#
+app_service_config_files:
+  AS_REGISTRATION_FILES
+
 ## Experimental Features ##
 
 experimental_features:

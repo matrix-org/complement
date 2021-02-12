@@ -251,6 +251,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 	runner := instruction.NewRunner(bprint.Name, d.debugLogging)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
+
 		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
 		if res.err != nil {
 			errs = append(errs, res.err)
@@ -259,6 +260,20 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 				printLogs(d.Docker, res.containerID, res.contextStr)
 			}
 		}
+
+		// Create the application service files
+		for _, as := range hs.ApplicationServices {
+			yamlRegistrationContent := generateASRegistrationYaml(as)
+			err := d.Docker.CopyToContainer(context.Background(), res.containerID, "/conf/${as.ID}.yaml", strings.NewReader(yamlRegistrationContent), types.CopyToContainerOptions{
+				AllowOverwriteDirWithFile: false,
+			})
+
+			if err != nil {
+				errs = append(errs, err)
+				d.log("Failed to add application service registration file %s in %s\n", as.ID, res.containerID)
+			}
+		}
+
 		// kill the container
 		defer func(r result) {
 			killErr := d.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
@@ -300,7 +315,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
 	d.log("%s : constructing homeserver...\n", contextStr)
-	dep, err := d.deployBaseImage(blueprintName, hs.Name, contextStr, networkID)
+	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
 		containerID := ""
@@ -328,9 +343,9 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 }
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
-func (d *Builder) deployBaseImage(blueprintName, hsName, contextStr, networkID string) (*HomeserverDeployment, error) {
+func (d *Builder) deployBaseImage(blueprintName, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
 	return deployImage(
-		d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hsName, contextStr,
+		d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hs, contextStr,
 		networkID, d.config.VersionCheckIterations,
 	)
 }
@@ -409,14 +424,29 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 	return caVolume, caMount, nil
 }
 
+func generateASRegistrationYaml(as b.ApplicationService) string {
+	return "id: ${as.ID}\n" +
+		"hs_token: 27562ff25dd2eb69361ac1eb67e3a3cd38ab9509c1483234ec8dfec0f247c73e\n" +
+		"as_token: f872531e387377686989e792c723e646f7823643e747a0521e94770a721f40fc\n" +
+		"url: '${as.URL}'\n" +
+		"sender_localpart: ${as.SenderLocalpart}\n" +
+		"rate_limited: ${as.RateLimited}\n" +
+		"namespaces:\n" +
+		"\tusers: []\n" +
+		"\trooms: []\n" +
+		"\taliases: []\n"
+}
+
 func deployImage(
-	docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName, contextStr, networkID string, versionCheckIterations int,
+	docker *client.Client, imageID string, csPort int, containerName, blueprintName, hs b.Homeserver, contextStr, networkID string, versionCheckIterations int,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
 	var caVolume map[string]struct{}
 	var caMount []mount.Mount
 	var err error
+
+	hsName = hs.Name
 
 	if runtime.GOOS == "linux" {
 		// By default docker for linux does not expose this, so do it now.
@@ -434,7 +464,12 @@ func deployImage(
 
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image: imageID,
-		Env:   []string{"SERVER_NAME=" + hsName, "COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA")},
+		Env:   []string{
+			"SERVER_NAME=" + hsName,
+			"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
+			// TODO
+			"AS_REGISTRATION_FILES=" + hs.ApplicationServices
+		},
 		//Cmd:   d.ImageArgs,
 		Labels: map[string]string{
 			complementLabel:        contextStr,
@@ -493,6 +528,7 @@ func deployImage(
 		FedBaseURL:   fedBaseURL,
 		ContainerID:  containerID,
 		AccessTokens: tokensFromLabels(inspect.Config.Labels),
+		//ApplicationServices
 	}
 	if lastErr != nil {
 		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)

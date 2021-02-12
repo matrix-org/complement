@@ -46,6 +46,8 @@ type Homeserver struct {
 	Users []User
 	// The list of rooms to create on this homeserver
 	Rooms []Room
+	// The list of application services to create on the homeserver
+	ApplicationServices []ApplicationService
 }
 
 type User struct {
@@ -66,6 +68,13 @@ type Room struct {
 	Creator    string
 	CreateRoom map[string]interface{}
 	Events     []Event
+}
+
+type ApplicationService struct {
+	ID              string
+	URL             string
+	SenderLocalpart string
+	RateLimited     bool
 }
 
 type Event struct {
