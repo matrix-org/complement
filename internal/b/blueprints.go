@@ -26,6 +26,7 @@ var KnownBlueprints = map[string]*Blueprint{
 	BlueprintAlice.Name:                       &BlueprintAlice,
 	BlueprintFederationOneToOneRoom.Name:      &BlueprintFederationOneToOneRoom,
 	BlueprintFederationTwoLocalOneRemote.Name: &BlueprintFederationTwoLocalOneRemote,
+	BlueprintHSWithApplicationService.Name:    &BlueprintHSWithApplicationService,
 	BlueprintOneToOneRoom.Name:                &BlueprintOneToOneRoom,
 	BlueprintPerfManyMessages.Name:            &BlueprintPerfManyMessages,
 	BlueprintPerfManyRooms.Name:               &BlueprintPerfManyRooms,

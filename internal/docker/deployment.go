@@ -20,11 +20,11 @@ type Deployment struct {
 
 // HomeserverDeployment represents a running homeserver in a container.
 type HomeserverDeployment struct {
-	BaseURL             string                       // e.g http://localhost:38646
-	FedBaseURL          string                       // e.g https://localhost:48373
-	ContainerID         string                       // e.g 10de45efba
-	AccessTokens        map[string]string            // e.g { "@alice:hs1": "myAcc3ssT0ken" }
-	ApplicationServices map[string]map[string]string // e.g { "my-as-id": { "hs_token": "xxx", "as_token": "xxx" } }
+	BaseURL             string            // e.g http://localhost:38646
+	FedBaseURL          string            // e.g https://localhost:48373
+	ContainerID         string            // e.g 10de45efba
+	AccessTokens        map[string]string // e.g { "@alice:hs1": "myAcc3ssT0ken" }
+	ApplicationServices []string          // e.g ["my-as-id"]
 }
 
 // Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,

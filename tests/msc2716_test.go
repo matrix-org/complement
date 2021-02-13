@@ -23,7 +23,7 @@ import (
 
 // Test that the message events we insert between A and B come back in the correct order from /messages
 func TestBackfillingHistory(t *testing.T) {
-	deployment := Deploy(t, "rooms_state", b.BlueprintAlice)
+	deployment := Deploy(t, "rooms_state", b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
 	userID := "@alice:hs1"

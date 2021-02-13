@@ -81,10 +81,12 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		d.Counter++
 		contextStr := img.Labels["complement_context"]
 		hsName := img.Labels["complement_hs_name"]
+		asIDs := applicationServiceIDsFromLabels(img.Labels)
+
 		// TODO: Make CSAPI port configurable
 		deployment, err := deployImage(
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
-			blueprintName, hsName, contextStr, networkID, d.config.VersionCheckIterations)
+			blueprintName, hsName, asIDs, contextStr, networkID, d.config.VersionCheckIterations)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
 				// print logs to help debug

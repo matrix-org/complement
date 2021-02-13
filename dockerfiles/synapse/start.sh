@@ -4,6 +4,18 @@ set -e
 
 sed -i "s/SERVER_NAME/${SERVER_NAME}/g" /conf/homeserver.yaml
 
+for as_id in $AS_REGISTRATION_IDS
+do
+  touch "/conf/${as_id}.yaml"
+  echo "id: ${as_id}\nhs_token: 123abc\nas_token: 123abc" > "/conf/${as_id}.yaml"
+  # Insert the registration file and the AS_REGISTRATION_FILES marker in order 
+  # to add other application services in the next iteration of the loop
+  sed -i "s/AS_REGISTRATION_FILES/  - \/conf\/${as_id}.yaml\nAS_REGISTRATION_FILES/g" /conf/homeserver.yaml
+done
+# Remove the AS_REGISTRATION_FILES entry
+sed -i "s/AS_REGISTRATION_FILES//g" /conf/homeserver.yaml
+
+
 # generate an ssl cert for the server, signed by our dummy CA
 openssl req -new -key /conf/server.tls.key -out /conf/server.tls.csr \
   -subj "/CN=${SERVER_NAME}"
