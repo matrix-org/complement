@@ -24,7 +24,7 @@ type HomeserverDeployment struct {
 	FedBaseURL          string            // e.g https://localhost:48373
 	ContainerID         string            // e.g 10de45efba
 	AccessTokens        map[string]string // e.g { "@alice:hs1": "myAcc3ssT0ken" }
-	ApplicationServices []string          // e.g ["my-as-id"]
+	ApplicationServices map[string]string // e.g { "my-as-id": "id: xxx\nas_token: xxx ..."} }
 }
 
 // Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,

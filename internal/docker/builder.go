@@ -251,28 +251,12 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 	runner := instruction.NewRunner(bprint.Name, d.debugLogging)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
-		log.Printf("nbtbtrtbrddbtrbtrd %s", idsFromApplicationServices(hs.ApplicationServices))
-
 		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
 		if res.err != nil {
 			errs = append(errs, res.err)
 			if res.containerID != "" {
 				// something went wrong, but we have a container which may have interesting logs
 				printLogs(d.Docker, res.containerID, res.contextStr)
-			}
-		}
-
-		log.Printf("hhtrhtddhtrhdhrt %s", idsFromApplicationServices(hs.ApplicationServices))
-		// Create the application service files
-		for _, as := range hs.ApplicationServices {
-			yamlRegistrationContent := generateASRegistrationYaml(as)
-			err := d.Docker.CopyToContainer(context.Background(), res.containerID, "/conf/${as.ID}.yaml", strings.NewReader(yamlRegistrationContent), types.CopyToContainerOptions{
-				AllowOverwriteDirWithFile: false,
-			})
-
-			if err != nil {
-				errs = append(errs, err)
-				d.log("Failed to add application service registration file %s in %s\n", as.ID, res.containerID)
 			}
 		}
 
@@ -293,6 +277,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		}
 		labels := labelsForTokens(runner.AccessTokens(res.homeserver.Name))
 
+		// Combine the labels for tokens and application services
 		asLabels := labelsForApplicationServices(res.homeserver.ApplicationServices)
 		for k, v := range asLabels {
 			labels[k] = v
@@ -351,8 +336,10 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
+	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs.ApplicationServices))
+
 	return deployImage(
-		d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hs.Name, idsFromApplicationServices(hs.ApplicationServices), contextStr,
+		d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
 		networkID, d.config.VersionCheckIterations,
 	)
 }
@@ -454,7 +441,7 @@ func idsFromApplicationServices(asList []b.ApplicationService) []string {
 }
 
 func deployImage(
-	docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName string, hsApplicationServiceIDs []string, contextStr, networkID string, versionCheckIterations int,
+	docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName string, asIDToRegistrationMap map[string]string, contextStr, networkID string, versionCheckIterations int,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -476,13 +463,25 @@ func deployImage(
 		}
 	}
 
+	env := []string{
+		"SERVER_NAME=" + hsName,
+		"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
+	}
+
+	i := 0
+	var asIDs []string
+	for asID, registration := range asIDToRegistrationMap {
+		env = append(env, "AS_REGISTRATION_${i}="+registration)
+		asIDs = append(asIDs, asID)
+
+		i++
+	}
+
+	env = append(env, "AS_REGISTRATION_IDS="+strings.Join(asIDs, " "))
+
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image: imageID,
-		Env: []string{
-			"SERVER_NAME=" + hsName,
-			"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
-			"AS_REGISTRATION_IDS=" + strings.Join(hsApplicationServiceIDs, " "),
-		},
+		Env:   env,
 		//Cmd:   d.ImageArgs,
 		Labels: map[string]string{
 			complementLabel:        contextStr,
@@ -541,7 +540,7 @@ func deployImage(
 		FedBaseURL:          fedBaseURL,
 		ContainerID:         containerID,
 		AccessTokens:        tokensFromLabels(inspect.Config.Labels),
-		ApplicationServices: applicationServiceIDsFromLabels(inspect.Config.Labels),
+		ApplicationServices: asIDToRegistrationFromLabels(inspect.Config.Labels),
 	}
 	if lastErr != nil {
 		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
@@ -615,21 +614,21 @@ func labelsForTokens(userIDToToken map[string]string) map[string]string {
 	return labels
 }
 
-func applicationServiceIDsFromLabels(labels map[string]string) []string {
-	asIDs := make([]string, 0)
+func asIDToRegistrationFromLabels(labels map[string]string) map[string]string {
+	asMap := make(map[string]string)
 	for k, v := range labels {
 		if strings.HasPrefix(k, "access_token_") {
-			asIDs = append(asIDs, v)
+			asMap[strings.TrimPrefix(k, "application_service_")] = v
 		}
 	}
-	return asIDs
+	return asMap
 }
 
 func labelsForApplicationServices(asList []b.ApplicationService) map[string]string {
 	labels := make(map[string]string)
 	// collect and store access tokens as labels 'access_token_$userid: $token'
 	for _, as := range asList {
-		labels["application_service_"+as.ID] = as.ID
+		labels["application_service_"+as.ID] = generateASRegistrationYaml(as)
 	}
 	return labels
 }
