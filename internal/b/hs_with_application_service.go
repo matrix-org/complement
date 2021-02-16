@@ -14,7 +14,7 @@ var BlueprintHSWithApplicationService = MustValidate(Blueprint{
 			},
 			ApplicationServices: []ApplicationService{
 				{
-					ID:              "my-as-id",
+					ID:              "my_as_id",
 					URL:             "http://localhost:9000",
 					SenderLocalpart: "the-bridge-user",
 					RateLimited:     false,

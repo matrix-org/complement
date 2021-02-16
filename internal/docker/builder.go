@@ -419,16 +419,16 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 }
 
 func generateASRegistrationYaml(as b.ApplicationService) string {
-	return "id: ${as.ID}\n" +
+	return fmt.Sprintf("id: %s\n", as.ID) +
 		"hs_token: 27562ff25dd2eb69361ac1eb67e3a3cd38ab9509c1483234ec8dfec0f247c73e\n" +
 		"as_token: f872531e387377686989e792c723e646f7823643e747a0521e94770a721f40fc\n" +
-		"url: '${as.URL}'\n" +
-		"sender_localpart: ${as.SenderLocalpart}\n" +
-		"rate_limited: ${as.RateLimited}\n" +
+		fmt.Sprintf("url: '%s'\n", as.URL) +
+		fmt.Sprintf("sender_localpart: %s\n", as.SenderLocalpart) +
+		fmt.Sprintf("rate_limited: %v\n", as.RateLimited) +
 		"namespaces:\n" +
-		"\tusers: []\n" +
-		"\trooms: []\n" +
-		"\taliases: []\n"
+		"  users: []\n" +
+		"  rooms: []\n" +
+		"  aliases: []\n"
 }
 
 func idsFromApplicationServices(asList []b.ApplicationService) []string {
@@ -468,13 +468,10 @@ func deployImage(
 		"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
 	}
 
-	i := 0
 	var asIDs []string
 	for asID, registration := range asIDToRegistrationMap {
-		env = append(env, "AS_REGISTRATION_${i}="+registration)
+		env = append(env, fmt.Sprintf("AS_REGISTRATION_%s=", asID)+registration)
 		asIDs = append(asIDs, asID)
-
-		i++
 	}
 
 	env = append(env, "AS_REGISTRATION_IDS="+strings.Join(asIDs, " "))
@@ -617,7 +614,7 @@ func labelsForTokens(userIDToToken map[string]string) map[string]string {
 func asIDToRegistrationFromLabels(labels map[string]string) map[string]string {
 	asMap := make(map[string]string)
 	for k, v := range labels {
-		if strings.HasPrefix(k, "access_token_") {
+		if strings.HasPrefix(k, "application_service_") {
 			asMap[strings.TrimPrefix(k, "application_service_")] = v
 		}
 	}
