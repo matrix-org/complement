@@ -34,6 +34,7 @@ import (
 	client "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
+	"github.com/sirupsen/logrus"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
@@ -420,8 +421,8 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 
 func generateASRegistrationYaml(as b.ApplicationService) string {
 	return fmt.Sprintf("id: %s\n", as.ID) +
-		"hs_token: 27562ff25dd2eb69361ac1eb67e3a3cd38ab9509c1483234ec8dfec0f247c73e\n" +
-		"as_token: f872531e387377686989e792c723e646f7823643e747a0521e94770a721f40fc\n" +
+		fmt.Sprintf("hs_token: %s\n", as.HSToken) +
+		fmt.Sprintf("as_token: %s\n", as.ASToken) +
 		fmt.Sprintf("url: '%s'\n", as.URL) +
 		fmt.Sprintf("sender_localpart: %s\n", as.SenderLocalpart) +
 		fmt.Sprintf("rate_limited: %v\n", as.RateLimited) +
@@ -532,6 +533,11 @@ func deployImage(
 		lastErr = nil
 		break
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"inspect.Config.Labels": inspect.Config.Labels,
+	}).Error("fwewfeaafewffffwewfe")
+
 	d := &HomeserverDeployment{
 		BaseURL:             baseURL,
 		FedBaseURL:          fedBaseURL,
@@ -623,9 +629,16 @@ func asIDToRegistrationFromLabels(labels map[string]string) map[string]string {
 
 func labelsForApplicationServices(asList []b.ApplicationService) map[string]string {
 	labels := make(map[string]string)
-	// collect and store access tokens as labels 'access_token_$userid: $token'
+	// collect and store app service registrations as labels 'application_service_$as_id: $registration'
+	// collect and store app service access tokens as labels 'access_token_$sender_localpart: $as_token'
 	for _, as := range asList {
+		// TODO: Genereate unique tokens each run
+		as.HSToken = "27562ff25dd2eb69361ac1eb67e3a3cd38ab9509c1483234ec8dfec0f247c73e"
+		as.ASToken = "f872531e387377686989e792c723e646f7823643e747a0521e94770a721f40fc"
+
 		labels["application_service_"+as.ID] = generateASRegistrationYaml(as)
+
+		labels["access_token_@"+as.SenderLocalpart+":hs1"] = as.ASToken
 	}
 	return labels
 }

@@ -73,6 +73,8 @@ type Room struct {
 
 type ApplicationService struct {
 	ID              string
+	HSToken         string
+	ASToken         string
 	URL             string
 	SenderLocalpart string
 	RateLimited     bool

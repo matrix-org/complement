@@ -32,7 +32,9 @@ func TestBackfillingHistory(t *testing.T) {
 
 	eventA, eventB, eventC, timeAfterEventA := createMessagesInRoom(t, alice, roomID)
 
-	event1, event2, event3 := backfillMessagesAtTime(t, alice, roomID, eventA, timeAfterEventA)
+	asUserID := "@the-bridge-user:hs1"
+	as := deployment.Client(t, "hs1", asUserID)
+	event1, event2, event3 := backfillMessagesAtTime(t, as, roomID, eventA, timeAfterEventA)
 
 	// eventStar
 	eventStar := alice.SendEventSynced(t, roomID, b.Event{
