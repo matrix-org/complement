@@ -279,7 +279,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		labels := labelsForTokens(runner.AccessTokens(res.homeserver.Name))
 
 		// Combine the labels for tokens and application services
-		asLabels := labelsForApplicationServices(res.homeserver.ApplicationServices)
+		asLabels := labelsForApplicationServices(res.homeserver)
 		for k, v := range asLabels {
 			labels[k] = v
 		}
@@ -337,7 +337,7 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
-	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs.ApplicationServices))
+	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 
 	return deployImage(
 		d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
@@ -627,18 +627,18 @@ func asIDToRegistrationFromLabels(labels map[string]string) map[string]string {
 	return asMap
 }
 
-func labelsForApplicationServices(asList []b.ApplicationService) map[string]string {
+func labelsForApplicationServices(hs b.Homeserver) map[string]string {
 	labels := make(map[string]string)
 	// collect and store app service registrations as labels 'application_service_$as_id: $registration'
 	// collect and store app service access tokens as labels 'access_token_$sender_localpart: $as_token'
-	for _, as := range asList {
-		// TODO: Genereate unique tokens each run
+	for _, as := range hs.ApplicationServices {
+		// TODO: Generate unique tokens on each run
 		as.HSToken = "27562ff25dd2eb69361ac1eb67e3a3cd38ab9509c1483234ec8dfec0f247c73e"
 		as.ASToken = "f872531e387377686989e792c723e646f7823643e747a0521e94770a721f40fc"
 
 		labels["application_service_"+as.ID] = generateASRegistrationYaml(as)
 
-		labels["access_token_@"+as.SenderLocalpart+":hs1"] = as.ASToken
+		labels["access_token_@"+as.SenderLocalpart+":"+hs.Name] = as.ASToken
 	}
 	return labels
 }
