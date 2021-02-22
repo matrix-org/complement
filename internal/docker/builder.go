@@ -310,6 +310,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
 	d.log("%s : constructing homeserver...\n", contextStr)
+
 	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
@@ -669,10 +670,6 @@ func labelsForApplicationServices(hs b.Homeserver) map[string]string {
 	// collect and store app service registrations as labels 'application_service_$as_id: $registration'
 	// collect and store app service access tokens as labels 'access_token_$sender_localpart: $as_token'
 	for _, as := range hs.ApplicationServices {
-		// TODO: Generate unique tokens on each run
-		as.HSToken = "27562ff25dd2eb69361ac1eb67e3a3cd38ab9509c1483234ec8dfec0f247c73e"
-		as.ASToken = "f872531e387377686989e792c723e646f7823643e747a0521e94770a721f40fc"
-
 		labels["application_service_"+as.ID] = generateASRegistrationYaml(as)
 
 		labels["access_token_@"+as.SenderLocalpart+":"+hs.Name] = as.ASToken

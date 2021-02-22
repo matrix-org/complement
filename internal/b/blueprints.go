@@ -15,9 +15,13 @@
 package b
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 // KnownBlueprints lists static blueprints
@@ -121,7 +125,31 @@ func Validate(bp Blueprint) (Blueprint, error) {
 				return bp, err
 			}
 		}
+
+		for i, as := range hs.ApplicationServices {
+			hsToken := make([]byte, 32)
+			_, err := rand.Read(hsToken)
+			if err != nil {
+				return bp, err
+			}
+
+			asToken := make([]byte, 32)
+			_, err = rand.Read(asToken)
+			if err != nil {
+				return bp, err
+			}
+
+			as.HSToken = hex.EncodeToString(hsToken)
+			as.ASToken = hex.EncodeToString(asToken)
+
+			hs.ApplicationServices[i] = as
+		}
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"bp": bp.Homeservers[0].ApplicationServices,
+	}).Error("after modfiying bp")
+
 	return bp, nil
 }
 
