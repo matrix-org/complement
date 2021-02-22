@@ -20,17 +20,23 @@ type Deployment struct {
 
 // HomeserverDeployment represents a running homeserver in a container.
 type HomeserverDeployment struct {
-	BaseURL      string            // e.g http://localhost:38646
-	FedBaseURL   string            // e.g https://localhost:48373
-	ContainerID  string            // e.g 10de45efba
-	AccessTokens map[string]string // e.g { "@alice:hs1": "myAcc3ssT0ken" }
+	BaseURL             string            // e.g http://localhost:38646
+	FedBaseURL          string            // e.g https://localhost:48373
+	ContainerID         string            // e.g 10de45efba
+	AccessTokens        map[string]string // e.g { "@alice:hs1": "myAcc3ssT0ken" }
+	ApplicationServices map[string]string // e.g { "my-as-id": "id: xxx\nas_token: xxx ..."} }
 }
 
 // Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
 // will print container logs before killing the container.
 func (d *Deployment) Destroy(t *testing.T) {
 	t.Helper()
-	d.Deployer.Destroy(d, t.Failed())
+	d.Deployer.Destroy(
+		d,
+		// TODO: Revert this back to `t.Failed()`.
+		// I did this so I can always see the homersever logs regardless of outcome
+		true,
+	)
 }
 
 // Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.

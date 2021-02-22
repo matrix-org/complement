@@ -15,9 +15,13 @@
 package b
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 // KnownBlueprints lists static blueprints
@@ -26,6 +30,7 @@ var KnownBlueprints = map[string]*Blueprint{
 	BlueprintAlice.Name:                       &BlueprintAlice,
 	BlueprintFederationOneToOneRoom.Name:      &BlueprintFederationOneToOneRoom,
 	BlueprintFederationTwoLocalOneRemote.Name: &BlueprintFederationTwoLocalOneRemote,
+	BlueprintHSWithApplicationService.Name:    &BlueprintHSWithApplicationService,
 	BlueprintOneToOneRoom.Name:                &BlueprintOneToOneRoom,
 	BlueprintPerfManyMessages.Name:            &BlueprintPerfManyMessages,
 	BlueprintPerfManyRooms.Name:               &BlueprintPerfManyRooms,
@@ -46,6 +51,8 @@ type Homeserver struct {
 	Users []User
 	// The list of rooms to create on this homeserver
 	Rooms []Room
+	// The list of application services to create on the homeserver
+	ApplicationServices []ApplicationService
 }
 
 type User struct {
@@ -68,11 +75,22 @@ type Room struct {
 	Events     []Event
 }
 
+type ApplicationService struct {
+	ID              string
+	HSToken         string
+	ASToken         string
+	URL             string
+	SenderLocalpart string
+	RateLimited     bool
+}
+
 type Event struct {
-	Type     string
-	Sender   string
-	StateKey *string
-	Content  map[string]interface{}
+	Type           string
+	Sender         string
+	OriginServerTS uint64
+	StateKey       *string
+	PrevEvents     []string
+	Content        map[string]interface{}
 	// This field is ignored in blueprints as clients are unable to set it. Used with federation.Server
 	Unsigned map[string]interface{}
 }
@@ -107,7 +125,18 @@ func Validate(bp Blueprint) (Blueprint, error) {
 				return bp, err
 			}
 		}
+		for i, as := range hs.ApplicationServices {
+			hs.ApplicationServices[i], err = normalizeApplicationService(as)
+			if err != nil {
+				return bp, err
+			}
+		}
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"bp": bp.Homeservers[0].ApplicationServices,
+	}).Error("after modfiying bp")
+
 	return bp, nil
 }
 
@@ -150,6 +179,25 @@ func normaliseUser(u string, hsName string) (string, error) {
 		u += ":" + hsName
 	}
 	return u, nil
+}
+
+func normalizeApplicationService(as ApplicationService) (ApplicationService, error) {
+	hsToken := make([]byte, 32)
+	_, err := rand.Read(hsToken)
+	if err != nil {
+		return as, err
+	}
+
+	asToken := make([]byte, 32)
+	_, err = rand.Read(asToken)
+	if err != nil {
+		return as, err
+	}
+
+	as.HSToken = hex.EncodeToString(hsToken)
+	as.ASToken = hex.EncodeToString(asToken)
+
+	return as, err
 }
 
 // Ptr returns a pointer to `in`, because Go doesn't allow you to inline this.
