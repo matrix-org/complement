@@ -463,7 +463,9 @@ func deployImage(
 	}
 
 	if os.Getenv("COMPLEMENT_CA") == "true" {
-		caVolume, caMount, err := getCaVolume(docker, ctx)
+		var caVolume string
+		var caMount mount.Mount
+		caVolume, caMount, err = getCaVolume(docker, ctx)
 		if err != nil {
 			return nil, err
 		}
