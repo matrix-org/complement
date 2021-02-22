@@ -262,7 +262,6 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 				printLogs(d.Docker, res.containerID, res.contextStr)
 			}
 		}
-
 		// kill the container
 		defer func(r result) {
 			killErr := d.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
@@ -310,7 +309,6 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
 	d.log("%s : constructing homeserver...\n", contextStr)
-
 	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
