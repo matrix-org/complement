@@ -125,24 +125,11 @@ func Validate(bp Blueprint) (Blueprint, error) {
 				return bp, err
 			}
 		}
-
 		for i, as := range hs.ApplicationServices {
-			hsToken := make([]byte, 32)
-			_, err := rand.Read(hsToken)
+			hs.ApplicationServices[i], err = normalizeApplicationService(as)
 			if err != nil {
 				return bp, err
 			}
-
-			asToken := make([]byte, 32)
-			_, err = rand.Read(asToken)
-			if err != nil {
-				return bp, err
-			}
-
-			as.HSToken = hex.EncodeToString(hsToken)
-			as.ASToken = hex.EncodeToString(asToken)
-
-			hs.ApplicationServices[i] = as
 		}
 	}
 
@@ -192,6 +179,25 @@ func normaliseUser(u string, hsName string) (string, error) {
 		u += ":" + hsName
 	}
 	return u, nil
+}
+
+func normalizeApplicationService(as ApplicationService) (ApplicationService, error) {
+	hsToken := make([]byte, 32)
+	_, err := rand.Read(hsToken)
+	if err != nil {
+		return as, err
+	}
+
+	asToken := make([]byte, 32)
+	_, err = rand.Read(asToken)
+	if err != nil {
+		return as, err
+	}
+
+	as.HSToken = hex.EncodeToString(hsToken)
+	as.ASToken = hex.EncodeToString(asToken)
+
+	return as, err
 }
 
 // Ptr returns a pointer to `in`, because Go doesn't allow you to inline this.
