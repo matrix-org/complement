@@ -347,29 +347,27 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 }
 
 // getCaVolume returns the correct mounts and volumes for providing a CA to homeserver containers.
-func getCaVolume(docker *client.Client, ctx context.Context) (string, mount.Mount, error) {
-	var caVolume string
-	var caMount mount.Mount
-
+// Returns the
+func getCaVolume(ctx context.Context, docker *client.Client) (caMount mount.Mount, err error) {
 	if os.Getenv("CI") == "true" {
 		// When in CI, Complement itself is a container with the CA volume mounted at /ca.
 		// We need to mount this volume to all homeserver containers to synchronize the CA cert.
 		// This is needed to establish trust among all containers.
 
 		// Get volume mounted at /ca. First we get the container ID
-		// /proc/1/cpuset should be /docker/<containerId>
+		// /proc/1/cpuset should be /docker/<containerID>
 		cpuset, err := ioutil.ReadFile("/proc/1/cpuset")
 		if err != nil {
-			return caVolume, caMount, err
+			return caMount, err
 		}
 		if !strings.Contains(string(cpuset), "docker") {
-			return caVolume, caMount, errors.New("Could not identify container ID using /proc/1/cpuset")
+			return caMount, errors.New("Could not identify container ID using /proc/1/cpuset")
 		}
 		cpusetList := strings.Split(strings.TrimSpace(string(cpuset)), "/")
-		containerId := cpusetList[len(cpusetList)-1]
-		container, err := docker.ContainerInspect(ctx, containerId)
+		containerID := cpusetList[len(cpusetList)-1]
+		container, err := docker.ContainerInspect(ctx, containerID)
 		if err != nil {
-			return caVolume, caMount, err
+			return caMount, err
 		}
 		// Get the volume that matches the destination in our complement container
 		var volumeName string
@@ -382,27 +380,26 @@ func getCaVolume(docker *client.Client, ctx context.Context) (string, mount.Moun
 			// We did not find a volume. This container might be created without a volume,
 			// or CI=true is passed but we are not running in a container.
 			// todo: log that we do not provide a CA volume mount?
-			return caVolume, caMount, nil
-		} else {
-			caVolume = "/ca"
-			caMount = mount.Mount{
-				Type:   mount.TypeVolume,
-				Source: volumeName,
-				Target: "/ca",
-			}
+			return caMount, nil
+		}
+
+		caMount = mount.Mount{
+			Type:   mount.TypeVolume,
+			Source: volumeName,
+			Target: "/ca",
 		}
 	} else {
 		// When not in CI, our CA cert is placed in the current working dir.
 		// We bind mount this directory to all homeserver containers.
 		cwd, err := os.Getwd()
 		if err != nil {
-			return caVolume, caMount, err
+			return caMount, err
 		}
 		caCertificateDirHost := path.Join(cwd, "ca")
 		if _, err := os.Stat(caCertificateDirHost); os.IsNotExist(err) {
 			err = os.Mkdir(caCertificateDirHost, 0770)
 			if err != nil {
-				return caVolume, caMount, err
+				return caMount, err
 			}
 		}
 
@@ -412,25 +409,23 @@ func getCaVolume(docker *client.Client, ctx context.Context) (string, mount.Moun
 			Target: "/ca",
 		}
 	}
-	return caVolume, caMount, nil
+	return caMount, nil
 }
 
 // getAppServiceVolume returns the correct mounts and volumes for providing the `/appservice` directory to homeserver containers
 // containing application service registration files to be used by the homeserver
-func getAppServiceVolume(docker *client.Client, ctx context.Context) (string, mount.Mount, error) {
+func getAppServiceVolume(ctx context.Context, docker *client.Client) (asMount mount.Mount, err error) {
 	asVolume, err := docker.VolumeCreate(context.Background(), volume.VolumesCreateBody{
-		//Driver:     "overlay2",
-		DriverOpts: map[string]string{},
-		Name:       "appservices",
+		Name: "appservices",
 	})
 
-	asMount := mount.Mount{
+	asMount = mount.Mount{
 		Type:   mount.TypeVolume,
 		Source: asVolume.Name,
 		Target: "/appservices",
 	}
 
-	return "/appservices", asMount, err
+	return asMount, err
 }
 
 func generateASRegistrationYaml(as b.ApplicationService) string {
@@ -451,7 +446,6 @@ func deployImage(
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
-	var volumes = make(map[string]struct{})
 	var mounts []mount.Mount
 	var err error
 
@@ -463,22 +457,19 @@ func deployImage(
 	}
 
 	if os.Getenv("COMPLEMENT_CA") == "true" {
-		var caVolume string
 		var caMount mount.Mount
-		caVolume, caMount, err = getCaVolume(docker, ctx)
+		caMount, err = getCaVolume(ctx, docker)
 		if err != nil {
 			return nil, err
 		}
 
-		volumes[caVolume] = struct{}{}
 		mounts = append(mounts, caMount)
 	}
 
-	asVolume, asMount, err := getAppServiceVolume(docker, ctx)
+	asMount, err := getAppServiceVolume(ctx, docker)
 	if err != nil {
 		return nil, err
 	}
-	volumes[asVolume] = struct{}{}
 	mounts = append(mounts, asMount)
 
 	env := []string{
@@ -495,7 +486,6 @@ func deployImage(
 			"complement_blueprint": blueprintName,
 			"complement_hs_name":   hsName,
 		},
-		Volumes: volumes,
 	}, &container.HostConfig{
 		PublishAllPorts: true,
 		ExtraHosts:      extraHosts,
