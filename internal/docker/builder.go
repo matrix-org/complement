@@ -39,6 +39,7 @@ import (
 	"github.com/docker/go-connections/nat"
 
 	"github.com/matrix-org/complement/internal/b"
+	internalClient "github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/instruction"
 )
@@ -346,8 +347,9 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	)
 }
 
-// getCaVolume returns the correct mounts and volumes for providing a CA to homeserver containers.
-// Returns the
+// getCaVolume returns the correct volume mount for providing a CA to homeserver containers.
+// If running CI, returns an error if it's unable to find a volume that has /ca
+// Otherwise, returns an error if we're unable to find the <cwd>/ca directory on the local host
 func getCaVolume(ctx context.Context, docker *client.Client) (caMount mount.Mount, err error) {
 	if os.Getenv("CI") == "true" {
 		// When in CI, Complement itself is a container with the CA volume mounted at /ca.
@@ -412,12 +414,16 @@ func getCaVolume(ctx context.Context, docker *client.Client) (caMount mount.Moun
 	return caMount, nil
 }
 
-// getAppServiceVolume returns the correct mounts and volumes for providing the `/appservice` directory to homeserver containers
-// containing application service registration files to be used by the homeserver
+// getAppServiceVolume returns a volume mount for providing the `/appservice` directory to homeserver containers.
+// This directory will contain application service registration config files.
+// Returns an error if the volume failed to create
 func getAppServiceVolume(ctx context.Context, docker *client.Client) (asMount mount.Mount, err error) {
 	asVolume, err := docker.VolumeCreate(context.Background(), volume.VolumesCreateBody{
 		Name: "appservices",
 	})
+	if err != nil {
+		return asMount, err
+	}
 
 	asMount = mount.Mount{
 		Type:   mount.TypeVolume,
@@ -506,10 +512,12 @@ func deployImage(
 
 	// Create the application service files
 	for asID, registration := range asIDToRegistrationMap {
+		// Create a fake/virtual file in memory that we can copy to the container
+		// via https://stackoverflow.com/a/52131297/796832
 		var buf bytes.Buffer
 		tw := tar.NewWriter(&buf)
 		err = tw.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("/appservices/%s.yaml", asID),
+			Name: fmt.Sprintf("/appservices/%s.yaml", internalClient.GjsonEscape(asID)),
 			Mode: 0777,
 			Size: int64(len(registration)),
 		})
@@ -519,6 +527,7 @@ func deployImage(
 		tw.Write([]byte(registration))
 		tw.Close()
 
+		// Put our new fake file in the container volume
 		err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
 			AllowOverwriteDirWithFile: false,
 		})
