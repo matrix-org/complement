@@ -4,15 +4,18 @@ set -e
 
 sed -i "s/SERVER_NAME/${SERVER_NAME}/g" /conf/homeserver.yaml
 
-for as_id in $AS_REGISTRATION_IDS
-do
-  # Insert the path to the registration file and the AS_REGISTRATION_FILES marker in order 
-  # to add other application services in the next iteration of the loop
-  sed -i "s/AS_REGISTRATION_FILES/  - \/conf\/${as_id}.yaml\nAS_REGISTRATION_FILES/g" /conf/homeserver.yaml
+# Add the application service registration files to the homeserver.yaml config
+for filename in /appservices/*.yaml; do
+  [ -f "$filename" ] || break
+
+  as_id=$(basename "$filename" .yaml)
+
+  # Insert the path to the registration file and the AS_REGISTRATION_FILES marker after 
+  # so we can add the next application service in the next iteration of this for loop
+  sed -i "s/AS_REGISTRATION_FILES/  - \/appservices\/${as_id}.yaml\nAS_REGISTRATION_FILES/g" /conf/homeserver.yaml
 done
 # Remove the AS_REGISTRATION_FILES entry
 sed -i "s/AS_REGISTRATION_FILES//g" /conf/homeserver.yaml
-
 
 # generate an ssl cert for the server, signed by our dummy CA
 openssl req -new -key /conf/server.tls.key -out /conf/server.tls.csr \
