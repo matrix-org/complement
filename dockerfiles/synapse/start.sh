@@ -6,12 +6,7 @@ sed -i "s/SERVER_NAME/${SERVER_NAME}/g" /conf/homeserver.yaml
 
 for as_id in $AS_REGISTRATION_IDS
 do
-  as_registration_varname=AS_REGISTRATION_${as_id}
-  
-  touch "/conf/${as_id}.yaml"
-  echo "${!as_registration_varname}" > "/conf/${as_id}.yaml"
-
-  # Insert the registration file and the AS_REGISTRATION_FILES marker in order 
+  # Insert the path to the registration file and the AS_REGISTRATION_FILES marker in order 
   # to add other application services in the next iteration of the loop
   sed -i "s/AS_REGISTRATION_FILES/  - \/conf\/${as_id}.yaml\nAS_REGISTRATION_FILES/g" /conf/homeserver.yaml
 done

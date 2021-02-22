@@ -14,6 +14,8 @@
 package docker
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -408,6 +410,7 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 				return nil, nil, err
 			}
 		}
+
 		caMount = []mount.Mount{
 			{
 				Type:   mount.TypeBind,
@@ -417,6 +420,33 @@ func getCaVolume(docker *client.Client, ctx context.Context) (map[string]struct{
 		}
 	}
 	return caVolume, caMount, nil
+}
+
+func getAppServiceVolume(docker *client.Client, ctx context.Context) (map[string]struct{}, []mount.Mount, error) {
+	var asVolume map[string]struct{}
+
+	// Our application service registration is placed in the current working dir.
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, nil, err
+	}
+	asDirHost := path.Join(cwd, "as")
+	if _, err := os.Stat(asDirHost); os.IsNotExist(err) {
+		err = os.Mkdir(asDirHost, 0770)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	asMount := []mount.Mount{
+		{
+			Type:   mount.TypeBind,
+			Source: asDirHost,
+			Target: "/as",
+		},
+	}
+
+	return asVolume, asMount, nil
 }
 
 func generateASRegistrationYaml(as b.ApplicationService) string {
@@ -464,14 +494,19 @@ func deployImage(
 		}
 	}
 
+	// asVolume, asMount, err := getAppServiceVolume(docker, ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
 	env := []string{
 		"SERVER_NAME=" + hsName,
 		"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
 	}
 
 	var asIDs []string
-	for asID, registration := range asIDToRegistrationMap {
-		env = append(env, fmt.Sprintf("AS_REGISTRATION_%s=", asID)+registration)
+	for asID, _ := range asIDToRegistrationMap {
+		//env = append(env, fmt.Sprintf("AS_REGISTRATION_%s=", asID)+registration)
 		asIDs = append(asIDs, asID)
 	}
 
@@ -502,7 +537,33 @@ func deployImage(
 	if err != nil {
 		return nil, err
 	}
+
 	containerID := body.ID
+
+	// Create the application service files
+	for asID, registration := range asIDToRegistrationMap {
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		err = tw.WriteHeader(&tar.Header{
+			Name: fmt.Sprintf("/conf/%s.yaml", asID), // filename
+			Mode: 0777,                               // permissions
+			Size: int64(len(registration)),           // filesize
+		})
+		if err != nil {
+			return nil, fmt.Errorf("docker copy: %v", err)
+		}
+		tw.Write([]byte(registration))
+		tw.Close()
+
+		err := docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
+			AllowOverwriteDirWithFile: false,
+		})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
 	if err != nil {
 		return nil, err

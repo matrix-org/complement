@@ -26,14 +26,16 @@ func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, "rooms_state", b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
+	asUserID := "@the-bridge-user:hs1"
+	as := deployment.Client(t, "hs1", asUserID)
+	roomID := as.CreateRoom(t, struct{}{})
+
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
-	roomID := alice.CreateRoom(t, struct{}{})
+	alice.JoinRoom(t, roomID, nil)
 
 	eventA, eventB, eventC, timeAfterEventA := createMessagesInRoom(t, alice, roomID)
 
-	asUserID := "@the-bridge-user:hs1"
-	as := deployment.Client(t, "hs1", asUserID)
 	event1, event2, event3 := backfillMessagesAtTime(t, as, roomID, eventA, timeAfterEventA)
 
 	// eventStar
