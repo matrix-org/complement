@@ -21,6 +21,15 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+type event struct {
+	Type           string
+	Sender         string
+	OriginServerTS uint64
+	StateKey       *string
+	PrevEvents     []string
+	Content        map[string]interface{}
+}
+
 // Test that the message events we insert between A and B come back in the correct order from /messages
 func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, "rooms_state", b.BlueprintHSWithApplicationService)
@@ -88,7 +97,7 @@ func TestBackfillingHistory(t *testing.T) {
 			insertOriginServerTs := uint64(timeAfterEventA.UnixNano() / 1000000)
 
 			// If we see this message in the /sync, then something went wrong
-			event1 := sendEvent(t, alice, roomID, b.Event{
+			event1 := sendEvent(t, alice, roomID, event{
 				Type: "m.room.message",
 				PrevEvents: []string{
 					eventA,
@@ -102,7 +111,7 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 
 			// This is just a dummy event we search for after event1
-			eventStar := sendEvent(t, alice, roomID, b.Event{
+			eventStar := sendEvent(t, alice, roomID, event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
 					"msgtype": "m.text",
@@ -129,7 +138,7 @@ func TestBackfillingHistory(t *testing.T) {
 			eventA, _, _, timeAfterEventA := createMessagesInRoom(t, alice, roomID)
 			insertOriginServerTs := uint64(timeAfterEventA.UnixNano() / 1000000)
 
-			alice.SendEventSynced(t, roomID, b.Event{
+			eventID := sendEvent(t, alice, roomID, event{
 				Type: "m.room.message",
 				PrevEvents: []string{
 					eventA,
@@ -140,6 +149,10 @@ func TestBackfillingHistory(t *testing.T) {
 					"body":    "Message 1",
 				},
 			})
+
+			alice.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
+				return r.Get("event_id").Str == eventID
+			})
 		})
 	})
 }
@@ -147,7 +160,7 @@ func TestBackfillingHistory(t *testing.T) {
 var txnID int = 0
 var txnPrefix string = "msc2716-txn"
 
-func sendEvent(t *testing.T, c *client.CSAPI, roomID string, e b.Event) string {
+func sendEvent(t *testing.T, c *client.CSAPI, roomID string, e event) string {
 	txnID++
 
 	query := make(url.Values, len(e.PrevEvents))
@@ -210,7 +223,7 @@ func backfillMessagesAtTime(t *testing.T, c *client.CSAPI, roomID string, insert
 	insertOriginServerTs := uint64(insertTime.UnixNano() / 1000000)
 
 	// event1
-	event1 := sendEvent(t, c, roomID, b.Event{
+	event1 := sendEvent(t, c, roomID, event{
 		Type: "m.room.message",
 		PrevEvents: []string{
 			insertAfterEvent,
@@ -224,7 +237,7 @@ func backfillMessagesAtTime(t *testing.T, c *client.CSAPI, roomID string, insert
 	})
 
 	// event2
-	event2 := sendEvent(t, c, roomID, b.Event{
+	event2 := sendEvent(t, c, roomID, event{
 		Type: "m.room.message",
 		PrevEvents: []string{
 			event1,
@@ -238,7 +251,7 @@ func backfillMessagesAtTime(t *testing.T, c *client.CSAPI, roomID string, insert
 	})
 
 	// event3
-	event3 := sendEvent(t, c, roomID, b.Event{
+	event3 := sendEvent(t, c, roomID, event{
 		Type: "m.room.message",
 		PrevEvents: []string{
 			event2,
