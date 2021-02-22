@@ -415,6 +415,8 @@ func getCaVolume(docker *client.Client, ctx context.Context) (string, mount.Moun
 	return caVolume, caMount, nil
 }
 
+// getAppServiceVolume returns the correct mounts and volumes for providing the `/appservice` directory to homeserver containers
+// containing application service registration files to be used by the homeserver
 func getAppServiceVolume(docker *client.Client, ctx context.Context) (string, mount.Mount, error) {
 	asVolume, err := docker.VolumeCreate(context.Background(), volume.VolumesCreateBody{
 		//Driver:     "overlay2",
