@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/sirupsen/logrus"
 )
 
 // KnownBlueprints lists static blueprints
@@ -132,10 +130,6 @@ func Validate(bp Blueprint) (Blueprint, error) {
 			}
 		}
 	}
-
-	logrus.WithFields(logrus.Fields{
-		"bp": bp.Homeservers[0].ApplicationServices,
-	}).Error("after modfiying bp")
 
 	return bp, nil
 }

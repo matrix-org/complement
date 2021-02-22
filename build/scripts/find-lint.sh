@@ -19,7 +19,10 @@ if [ ${1:-""} = "fast" ]
 then args="--fast"
 fi
 
-if [[ -v COMPLEMENT_LINT_CONCURRENCY ]]; then
+if [ -z ${COMPLEMENT_LINT_CONCURRENCY+x} ]; then
+  # COMPLEMENT_LINT_CONCURRENCY was not set
+  :
+else
   args="${args} --concurrency $COMPLEMENT_LINT_CONCURRENCY"
 fi
 
