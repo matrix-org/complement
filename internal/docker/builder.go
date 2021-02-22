@@ -446,15 +446,6 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 		"  aliases: []\n"
 }
 
-func idsFromApplicationServices(asList []b.ApplicationService) []string {
-	ids := make([]string, len(asList))
-	for i, as := range asList {
-		ids[i] = as.ID
-	}
-
-	return ids
-}
-
 func deployImage(
 	docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName string, asIDToRegistrationMap map[string]string, contextStr, networkID string, versionCheckIterations int,
 ) (*HomeserverDeployment, error) {
@@ -536,10 +527,9 @@ func deployImage(
 		tw.Write([]byte(registration))
 		tw.Close()
 
-		err := docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
+		err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
 			AllowOverwriteDirWithFile: false,
 		})
-
 		if err != nil {
 			return nil, err
 		}
