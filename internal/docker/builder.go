@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"runtime"
@@ -39,7 +40,6 @@ import (
 	"github.com/docker/go-connections/nat"
 
 	"github.com/matrix-org/complement/internal/b"
-	internalClient "github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/instruction"
 )
@@ -517,7 +517,7 @@ func deployImage(
 		var buf bytes.Buffer
 		tw := tar.NewWriter(&buf)
 		err = tw.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("/appservices/%s.yaml", internalClient.GjsonEscape(asID)),
+			Name: fmt.Sprintf("/appservices/%s.yaml", url.PathEscape(asID)),
 			Mode: 0777,
 			Size: int64(len(registration)),
 		})
