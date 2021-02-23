@@ -15,11 +15,13 @@ package tests
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 )
@@ -341,4 +343,102 @@ func doInitialSync(t *testing.T, c *client.CSAPI) string {
 	body := client.ParseJSON(t, res)
 	since := client.GetJSONFieldStr(t, body, "next_batch")
 	return since
+}
+
+// TestKnockRoomsInPublicRoomsDirectory will create a knock room, attempt to publish it to the public rooms directory,
+// and then check that the room appears in the directory. The room's entry should also have a 'join_rule' field
+// representing a knock room. For sanity-checking, this test will also create a public room and ensure it has a
+// 'join_rule' representing a publicly-joinable room.
+func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
+	deployment := Deploy(t, "test_knock_rooms_in_public_rooms_directory", b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	// Create a client for a local user
+	aliceUserID := "@alice:hs1"
+	alice := deployment.Client(t, "hs1", aliceUserID)
+
+	// Create an invite-only room with the knock room version
+	roomID := alice.CreateRoom(t, struct {
+		Preset      string `json:"preset"`
+		RoomVersion string `json:"room_version"`
+	}{
+		"private_chat",          // Set to private in order to get an invite-only room
+		knockUnstableIdentifier, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
+	})
+
+	// Change the join_rule to allow knocking
+	emptyStateKey := ""
+	alice.SendEventSynced(t, roomID, b.Event{
+		Type:     "m.room.join_rules",
+		Sender:   alice.UserID,
+		StateKey: &emptyStateKey,
+		Content: map[string]interface{}{
+			"join_rule": knockUnstableIdentifier,
+		},
+	})
+
+	// Publish the room to the public room directory and check that the 'join_rule' key is knock
+	publishAndCheckRoomJoinRule(t, alice, roomID, knockUnstableIdentifier)
+
+	// Create a public room
+	roomID = alice.CreateRoom(t, struct {
+		Preset string `json:"preset"`
+	}{
+		"public_chat", // Set to public in order to get a public room
+	})
+
+	// Publish the room, and check that the public room directory presents a 'join_rule' key of public
+	publishAndCheckRoomJoinRule(t, alice, roomID, "public")
+}
+
+// publishAndCheckRoomJoinRule will publish a given room ID to the given user's public room directory.
+// It will then query the directory and ensure the room is listed, and has a given 'join_rule' entry
+func publishAndCheckRoomJoinRule(t *testing.T, c *client.CSAPI, roomID, expectedJoinRule string) {
+	// Publish the room to the public room directory
+	c.MustDo(
+		t,
+		"PUT",
+		[]string{"_matrix", "client", "r0", "directory", "list", "room", roomID},
+		struct {
+			Visibility string `json:"visibility"`
+		}{
+			"public",
+		},
+	)
+
+	// Check that we can see the room in the directory
+	res := c.MustDo(
+		t,
+		"GET",
+		[]string{"_matrix", "client", "r0", "publicRooms"},
+		nil,
+	)
+
+	roomFound := false
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			// For each public room directory chunk (representing a single room entry)
+			match.JSONArrayEach("chunk", func(r gjson.Result) error {
+				// If this is our room
+				if r.Get("room_id").Str == roomID {
+					roomFound = true
+
+					// Check that the join_rule key exists and is as we expect
+					if roomJoinRule := r.Get("join_rule").Str; roomJoinRule != expectedJoinRule {
+						return fmt.Errorf(
+							"'join_rule' key for room in public room chunk is '%s', expected '%s'",
+							roomJoinRule, expectedJoinRule,
+						)
+					}
+				}
+				return nil
+			}),
+		},
+	})
+
+	// Check that we did in fact see the room
+	if !roomFound {
+		t.Fatalf("Room was not present in public room directory response")
+	}
+
 }
