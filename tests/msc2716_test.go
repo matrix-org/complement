@@ -35,9 +35,11 @@ func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, "rooms_state", b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
+	// Create the application service bridge user that is able to backfill messages
 	asUserID := "@the-bridge-user:hs1"
 	as := deployment.Client(t, "hs1", asUserID)
 
+	// Create the normal user which will send messages in the room
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
 
@@ -48,6 +50,7 @@ func TestBackfillingHistory(t *testing.T) {
 			roomID := as.CreateRoom(t, struct{}{})
 			alice.JoinRoom(t, roomID, nil)
 
+			// Create the "live" event we are going to insert our backfilled events next to
 			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
@@ -56,9 +59,10 @@ func TestBackfillingHistory(t *testing.T) {
 			// wait X number of ms to ensure that the timestamp changes enough for each of the messages we try to backfill later
 			time.Sleep(time.Duration(numBackfilledMessages) * time.Millisecond)
 
+			// Create some more "live" events after our insertion point
 			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
-			// We backfill a bunch of events after eventBefore
+			// Then backfill a bunch of events between eventBefore and eventsAfter
 			backfilledEvents := backfillMessagesAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, numBackfilledMessages)
 
 			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
@@ -75,6 +79,9 @@ func TestBackfillingHistory(t *testing.T) {
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
+					// We're using this weird custom matcher function because we want to iterate the full response
+					// to see all of the events from the response. This way we can use it to easily compare in
+					// the fail error message when the test fails and compare the actual order to the expected order.
 					func(body []byte) error {
 						eventIDsFromResponse, err := getEventIDsFromResponseBody(body)
 						if err != nil {
@@ -82,6 +89,7 @@ func TestBackfillingHistory(t *testing.T) {
 						}
 
 						// Copy the array by value so we can modify it as we iterate in the foreach loop
+						// We save the full untouched `expectedMessageOrder` for use in the log messages
 						workingExpectedMessageOrder := expectedMessageOrder
 
 						// Match each event from the response in order to the list of expected events
@@ -90,7 +98,6 @@ func TestBackfillingHistory(t *testing.T) {
 							if len(r.Get("content").Get("body").Str) > 0 {
 								// Pop the next message off the expected list
 								nextEventInOrder := workingExpectedMessageOrder[0]
-								// Update the list as we go for the next loop
 								workingExpectedMessageOrder = workingExpectedMessageOrder[1:]
 
 								if r.Get("event_id").Str != nextEventInOrder {
@@ -115,11 +122,12 @@ func TestBackfillingHistory(t *testing.T) {
 			roomID := as.CreateRoom(t, struct{}{})
 			alice.JoinRoom(t, roomID, nil)
 
+			// Create the "live" event we are going to insert our backfilled events next to
 			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			// Create some more events to fill up the /sync response
+			// Create some "live" events to saturate and fill up the /sync response
 			createMessagesInRoom(t, alice, roomID, 5)
 
 			// Insert a backfilled event
@@ -153,7 +161,9 @@ func TestBackfillingHistory(t *testing.T) {
 			timeAfterEventBefore := time.Now()
 			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / 1000000)
 
-			event1 := sendEvent(t, alice, roomID, event{
+			// Send an event that has `prev_event` and `ts` set but not `m.historical`.
+			// We should see these type of events in the `/sync` response
+			eventWeShouldSee := sendEvent(t, alice, roomID, event{
 				Type: "m.room.message",
 				PrevEvents: []string{
 					eventBefore,
@@ -169,7 +179,7 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 
 			alice.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
-				return r.Get("event_id").Str == event1
+				return r.Get("event_id").Str == eventWeShouldSee
 			})
 		})
 	})
@@ -204,6 +214,8 @@ func getEventIDsFromResponseBody(body []byte) (eventIDsFromResponse []string, er
 }
 
 var txnID int = 0
+
+// The transactions need to be prefixed so they don't collide with the txnID in client.go
 var txnPrefix string = "msc2716-txn"
 
 func sendEvent(t *testing.T, c *client.CSAPI, roomID string, e event) string {
