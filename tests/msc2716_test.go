@@ -163,7 +163,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// Send an event that has `prev_event` and `ts` set but not `m.historical`.
 			// We should see these type of events in the `/sync` response
-			eventWeShouldSee := sendEvent(t, alice, roomID, event{
+			eventWeShouldSee := sendEvent(t, as, roomID, event{
 				Type: "m.room.message",
 				PrevEvents: []string{
 					eventBefore,
@@ -171,7 +171,7 @@ func TestBackfillingHistory(t *testing.T) {
 				OriginServerTS: insertOriginServerTs,
 				Content: map[string]interface{}{
 					"msgtype": "m.text",
-					"body":    "Message 1",
+					"body":    "Message with prev_event and ts but no m.historical",
 					// This is commented out on purpse.
 					// We are explicitely testing when m.historical isn't present
 					//"m.historical": true,
@@ -181,6 +181,25 @@ func TestBackfillingHistory(t *testing.T) {
 			alice.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
 				return r.Get("event_id").Str == eventWeShouldSee
 			})
+		})
+
+		t.Run("Normal users aren't allowed to backfill messages", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, struct{}{})
+			alice.JoinRoom(t, roomID, nil)
+
+			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventBefore := eventsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// Normal user alice should not be able to backfill messages
+			backfillMessagesAtTime(t, alice, roomID, eventBefore, timeAfterEventBefore, 1)
+
+			// TODO: Check that prev_events not on message
+			// Also check response to https://github.com/matrix-org/synapse/pull/9247#discussion_r581761053
+			// because it would be nice to just throw a 403 at the user when they try to do this
+
 		})
 	})
 }
