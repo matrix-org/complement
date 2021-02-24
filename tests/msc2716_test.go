@@ -37,28 +37,30 @@ func TestBackfillingHistory(t *testing.T) {
 
 	asUserID := "@the-bridge-user:hs1"
 	as := deployment.Client(t, "hs1", asUserID)
-	roomID := as.CreateRoom(t, struct{}{})
 
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
-	alice.JoinRoom(t, roomID, nil)
-
-	eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
-	eventBefore := eventsBefore[0]
-	timeAfterEventBefore := time.Now()
-
-	numBackfilledMessages := 3
-	// wait X number of ms to ensure that the timestamp changes enough for each of the messages we try to backfill later
-	time.Sleep(time.Duration(numBackfilledMessages) * time.Millisecond)
-
-	eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
-
-	// We backfill a bunch of events after eventBefore
-	backfilledEvents := backfillMessagesAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, numBackfilledMessages)
 
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("Backfilled messages come back in correct order", func(t *testing.T) {
 			t.Parallel()
+
+			roomID := as.CreateRoom(t, struct{}{})
+
+			alice.JoinRoom(t, roomID, nil)
+
+			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventBefore := eventsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			numBackfilledMessages := 3
+			// wait X number of ms to ensure that the timestamp changes enough for each of the messages we try to backfill later
+			time.Sleep(time.Duration(numBackfilledMessages) * time.Millisecond)
+
+			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
+
+			// We backfill a bunch of events after eventBefore
+			backfilledEvents := backfillMessagesAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, numBackfilledMessages)
 
 			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
 				"dir":   []string{"b"},
