@@ -108,13 +108,13 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
 	t.Helper()
-	c.SyncUntil(t, "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
+	c.SyncUntil(t, "", "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
 }
 
 // SyncUntil blocks and continually calls /sync until the `check` function returns true.
 // If the `check` function fails the test, the failing event will be automatically logged.
 // Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Result) bool) {
+func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
 	checkCounter := 0
@@ -129,6 +129,10 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 		if since != "" {
 			query["since"] = []string{since}
 		}
+		if filter != "" {
+			query["filter"] = []string{filter}
+		}
+
 		res, err := c.Do(t, "GET", []string{"_matrix", "client", "r0", "sync"}, nil, query)
 		if err != nil {
 			t.Fatalf("CSAPI.syncUntil since=%s error: %s", since, err)

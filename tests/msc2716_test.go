@@ -46,7 +46,6 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, struct{}{})
-
 			alice.JoinRoom(t, roomID, nil)
 
 			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -67,10 +66,12 @@ func TestBackfillingHistory(t *testing.T) {
 				"limit": []string{"100"},
 			})
 
-			// Order events from newest to oldest
 			var expectedMessageOrder []string
-			expectedMessageOrder = append(reversed(eventsAfter), reversed(backfilledEvents)...)
-			expectedMessageOrder = append(expectedMessageOrder, reversed(eventsBefore)...)
+			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
+			expectedMessageOrder = append(expectedMessageOrder, backfilledEvents...)
+			expectedMessageOrder = append(expectedMessageOrder, eventsAfter...)
+			// Order events from newest to oldest
+			expectedMessageOrder = reversed(expectedMessageOrder)
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -111,51 +112,42 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Backfilled events with m.historical do not come down /sync", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := alice.CreateRoom(t, struct{}{})
+			roomID := as.CreateRoom(t, struct{}{})
+			alice.JoinRoom(t, roomID, nil)
+
 			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
-			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / 1000000)
 
-			// If we see this message in the /sync response, then something went wrong
-			event1 := sendEvent(t, alice, roomID, event{
-				Type: "m.room.message",
-				PrevEvents: []string{
-					eventBefore,
-				},
-				OriginServerTS: insertOriginServerTs,
-				Content: map[string]interface{}{
-					"msgtype":      "m.text",
-					"body":         "Message 1",
-					"m.historical": true,
-				},
-			})
+			// Create some more events to fill up the /sync response
+			createMessagesInRoom(t, alice, roomID, 5)
 
-			// This is just a dummy event we search for after event1
-			eventStar := sendEvent(t, alice, roomID, event{
-				Type: "m.room.message",
-				Content: map[string]interface{}{
-					"msgtype": "m.text",
-					"body":    "Message *",
-				},
-			})
+			// Insert a backfilled event
+			backfilledEvents := backfillMessagesAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, 1)
+			backfilledEvent := backfilledEvents[0]
 
-			// Sync until we find the star message. If we're able to see the star message
-			// that occurs after event1 without seeing event1 in the mean-time, I think we're safe to
-			// assume it won't sync
-			alice.SyncUntil(t, "", "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
-				if r.Get("event_id").Str == event1 {
-					t.Fatalf("We should not see the %s event in /sync response but it was present", event1)
+			// This is just a dummy event we search for after the backfilledEvent
+			eventsAfterBackfill := createMessagesInRoom(t, alice, roomID, 1)
+			eventAfterBackfill := eventsAfterBackfill[0]
+
+			// Sync until we find the eventAfterBackfill. If we're able to see the eventAfterBackfill
+			// that occurs after the backfilledEvent without seeing eventAfterBackfill in between,
+			// we're probably safe to assume it won't sync
+			alice.SyncUntil(t, "", `{ "room": { "timeline": { "limit": 3 } } }`, "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
+				if r.Get("event_id").Str == backfilledEvent {
+					t.Fatalf("We should not see the %s backfilled event in /sync response but it was present", backfilledEvent)
 				}
 
-				return r.Get("event_id").Str == eventStar
+				return r.Get("event_id").Str == eventAfterBackfill
 			})
 		})
 
 		t.Run("Backfilled events without m.historical come down /sync", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := alice.CreateRoom(t, struct{}{})
+			roomID := as.CreateRoom(t, struct{}{})
+			alice.JoinRoom(t, roomID, nil)
+
 			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
