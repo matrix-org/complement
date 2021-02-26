@@ -114,8 +114,8 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		knockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []string{"hs1"})
 	})
 
-	t.Run("A user that has already knocked cannot immediately knock again on the same room", func(t *testing.T) {
-		knockOnRoomWithStatus(t, knockingUser, roomID, "I really like knock knock jokes", []string{"hs1"}, 403)
+	t.Run("A user that has already knocked is allowed to knock again on the same room", func(t *testing.T) {
+		knockOnRoomSynced(t, knockingUser, roomID, "I really like knock knock jokes", []string{"hs1"})
 	})
 
 	t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
