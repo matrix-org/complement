@@ -29,6 +29,7 @@ var KnownBlueprints = map[string]*Blueprint{
 	BlueprintOneToOneRoom.Name:                &BlueprintOneToOneRoom,
 	BlueprintPerfManyMessages.Name:            &BlueprintPerfManyMessages,
 	BlueprintPerfManyRooms.Name:               &BlueprintPerfManyRooms,
+	BlueprintPerfE2EERoom.Name:                &BlueprintPerfE2EERoom,
 }
 
 // Blueprint represents an entire deployment to make.
@@ -53,6 +54,8 @@ type User struct {
 	DisplayName string
 	AvatarURL   string
 	AccountData AccountData
+	DeviceId    *string
+	E2E         bool
 }
 
 type AccountData struct {
