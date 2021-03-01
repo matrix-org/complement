@@ -48,11 +48,8 @@ var BlueprintPerfE2EERoom = MustValidate(Blueprint{
 							Sender: "@bob",
 						},
 						{
-							Type: "m.room.encryption",
-							// Complement crashes because it doesn't
-							// know how to URL encode an empty string, Element seems
-							// to allow a state key with a space in it so use it instead
-							StateKey: Ptr(" "),
+							Type:     "m.room.encryption",
+							StateKey: Ptr(""),
 							Content: map[string]interface{}{
 								"algorithm": "m.megolm.v1.aes-sha2",
 							},

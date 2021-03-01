@@ -164,7 +164,7 @@ func (i *instruction) url(hsURL string, lookup map[string]string) string {
 		// this handles scenarios like:
 		// { $roomId: ".room_0", $eventType: "m.room.message" }
 		var valToEncode string
-		if v[0] == '.' {
+		if v != "" && v[0] == '.' {
 			valToEncode = lookup[strings.TrimPrefix(v, ".")]
 		} else {
 			valToEncode = v
