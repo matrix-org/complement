@@ -203,7 +203,7 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 			},
 		})
 
-		if user.E2E {
+		if user.OneTimeKeys > 0 {
 			account := olm.NewAccount()
 			ed25519Key, curveKey := account.IdentityKeys()
 
@@ -231,7 +231,7 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 				},
 			}
 
-			account.GenOneTimeKeys(50)
+			account.GenOneTimeKeys(user.OneTimeKeys)
 
 			oneTimeKeys := map[string]interface{}{}
 

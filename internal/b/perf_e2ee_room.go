@@ -15,7 +15,7 @@ var BlueprintPerfE2EERoom = MustValidate(Blueprint{
 				{
 					Localpart:   "@alice",
 					DisplayName: "Alice",
-					E2E:         true,
+					OneTimeKeys: 50,
 					DeviceId:    Ptr("ALDJLSKJD"),
 				},
 				{
@@ -95,7 +95,7 @@ func manyUsers(count int) []User {
 		users[i] = User{
 			Localpart:   localPart,
 			DisplayName: displayName,
-			E2E:         true,
+			OneTimeKeys: 50,
 			DeviceId:    Ptr(deviceId),
 		}
 	}
