@@ -161,16 +161,13 @@ func TestRegistration(t *testing.T) {
 					match.JSONKeyTypeEqual("user_id", gjson.String),
 				},
 			})
-			res = unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
+			unauthedClient.MustDoWithStatus(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
 				"username": "post-can-create-a-user-once",
 				"password": "anotherSuperSecret"
-			}`))
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 401,
-			})
+			}`), 400)
 		})
 	})
 }
