@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -280,7 +281,8 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 		}
 	}
 
-	certificateDuration := time.Hour * 5
+	// valid for 10 years
+	certificateDuration := time.Hour * 24 * 365 * 10
 	priv, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return nil, nil, err
@@ -300,6 +302,14 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature | x509.KeyUsageCRLSign,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
+		Subject: pkix.Name{
+			Organization:  []string{"matrix.org"},
+			Country:       []string{"GB"},
+			Province:      []string{"London"},
+			Locality:      []string{"London"},
+			StreetAddress: []string{"123 Street"},
+			PostalCode:    []string{"12345"},
+		},
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &caCert, &caCert, &priv.PublicKey, priv)
@@ -360,6 +370,14 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
+		Subject: pkix.Name{
+			Organization:  []string{"matrix.org"},
+			Country:       []string{"GB"},
+			Province:      []string{"London"},
+			Locality:      []string{"London"},
+			StreetAddress: []string{"123 Street"},
+			PostalCode:    []string{"12345"},
+		},
 	}
 	host := docker.HostnameRunningComplement
 	if ip := net.ParseIP(host); ip != nil {
