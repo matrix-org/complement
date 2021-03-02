@@ -146,5 +146,31 @@ func TestRegistration(t *testing.T) {
 				})
 			}
 		})
+		t.Run("POST /register rejects if user already exists", func(t *testing.T) {
+			t.Parallel()
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
+				"auth": {
+					"type": "m.login.dummy"
+				},
+				"username": "post-can-create-a-user-once",
+				"password": "sUp3rs3kr1t"
+			}`))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual("access_token", gjson.String),
+					match.JSONKeyTypeEqual("user_id", gjson.String),
+				},
+			})
+			res = unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
+				"auth": {
+					"type": "m.login.dummy"
+				},
+				"username": "post-can-create-a-user-once",
+				"password": "anotherSuperSecret"
+			}`))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 401,
+			})
+		})
 	})
 }
