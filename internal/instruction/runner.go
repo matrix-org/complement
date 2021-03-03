@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tidwall/gjson"
+	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/matrix-org/complement/internal/b"
 )
@@ -163,7 +164,7 @@ func (i *instruction) url(hsURL string, lookup map[string]string) string {
 		// this handles scenarios like:
 		// { $roomId: ".room_0", $eventType: "m.room.message" }
 		var valToEncode string
-		if v[0] == '.' {
+		if v != "" && v[0] == '.' {
 			valToEncode = lookup[strings.TrimPrefix(v, ".")]
 		} else {
 			valToEncode = v
@@ -180,21 +181,87 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 	var instrs []instruction
 	// add instructions to create users
 	for _, user := range hs.Users {
+		body := map[string]interface{}{
+			"username": user.Localpart,
+			"password": "complement_meets_min_pasword_req_" + user.Localpart,
+			"auth": map[string]string{
+				"type": "m.login.dummy",
+			},
+		}
+
+		if user.DeviceId != nil {
+			body["device_id"] = user.DeviceId
+		}
+
 		instrs = append(instrs, instruction{
 			method:      "POST",
 			path:        "/_matrix/client/r0/register",
 			accessToken: "",
-			body: map[string]interface{}{
-				"username": user.Localpart,
-				"password": "complement_meets_min_pasword_req_" + user.Localpart,
-				"auth": map[string]string{
-					"type": "m.login.dummy",
-				},
-			},
+			body:        body,
 			storeResponse: map[string]string{
 				"user_@" + user.Localpart + ":" + hs.Name: ".access_token",
 			},
 		})
+
+		if user.OneTimeKeys > 0 {
+			account := olm.NewAccount()
+			ed25519Key, curveKey := account.IdentityKeys()
+
+			userId := fmt.Sprintf("@%s:%s", user.Localpart, hs.Name)
+			deviceId := *user.DeviceId
+
+			ed25519KeyId := fmt.Sprintf("ed25519:%s", deviceId)
+			curveKeyId := fmt.Sprintf("curve25519:%s", deviceId)
+
+			deviceKeys := map[string]interface{}{
+				"user_id":    userId,
+				"device_id":  deviceId,
+				"algorithms": []string{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
+				"keys": map[string]string{
+					ed25519KeyId: ed25519Key.String(),
+					curveKeyId:   curveKey.String(),
+				},
+			}
+
+			signature, _ := account.SignJSON(deviceKeys)
+
+			deviceKeys["signatures"] = map[string]map[string]string{
+				userId: {
+					ed25519KeyId: signature,
+				},
+			}
+
+			account.GenOneTimeKeys(user.OneTimeKeys)
+
+			oneTimeKeys := map[string]interface{}{}
+
+			for keyId, key := range account.OneTimeKeys() {
+				keyId := fmt.Sprintf("signed_curve25519:%s", keyId)
+				keyMap := map[string]interface{}{
+					"key": key.String(),
+				}
+
+				signature, _ = account.SignJSON(keyMap)
+
+				keyMap["signatures"] = map[string]interface{}{
+					userId: map[string]string{
+						ed25519KeyId: signature,
+					},
+				}
+
+				oneTimeKeys[keyId] = keyMap
+			}
+
+			instrs = append(instrs, instruction{
+				method:      "POST",
+				path:        "/_matrix/client/r0/keys/upload",
+				accessToken: fmt.Sprintf("user_@%s:%s", user.Localpart, hs.Name),
+				body: map[string]interface{}{
+					"device_keys":   deviceKeys,
+					"one_time_keys": oneTimeKeys,
+				},
+			})
+		}
 	}
 	// add instructions to create rooms and send events
 	for roomIndex, room := range hs.Rooms {
