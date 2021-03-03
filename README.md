@@ -16,10 +16,15 @@ If you want to develop Complement tests while working on a local dev instance of
 
 #### Running
 
-You need to have Go and Docker installed. Then:
+You need to have Go and Docker installed, as well as `libolm3` and `libolm-dev`. Then:
 
 ```
 $ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl COMPLEMENT_BASE_IMAGE_ARGS='-foo bar -baz 1' go test -v ./tests
+```
+
+You can install `libolm3` on Debian using something like:
+```
+echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/complement.list && apt-get update && apt-get install -y libolm3 libolm-dev/buster-backports
 ```
 
 You can either use your own image, or one of the ones supplied in the [dockerfiles](./dockerfiles) directory.
