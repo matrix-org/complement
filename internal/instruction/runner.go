@@ -207,27 +207,27 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 			account := olm.NewAccount()
 			ed25519Key, curveKey := account.IdentityKeys()
 
-			userId := fmt.Sprintf("@%s:%s", user.Localpart, hs.Name)
-			deviceId := *user.DeviceId
+			userID := fmt.Sprintf("@%s:%s", user.Localpart, hs.Name)
+			deviceID := *user.DeviceId
 
-			ed25519KeyId := fmt.Sprintf("ed25519:%s", deviceId)
-			curveKeyId := fmt.Sprintf("curve25519:%s", deviceId)
+			ed25519KeyID := fmt.Sprintf("ed25519:%s", deviceID)
+			curveKeyID := fmt.Sprintf("curve25519:%s", deviceID)
 
 			deviceKeys := map[string]interface{}{
-				"user_id":    userId,
-				"device_id":  deviceId,
+				"user_id":    userID,
+				"device_id":  deviceID,
 				"algorithms": []string{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
 				"keys": map[string]string{
-					ed25519KeyId: ed25519Key.String(),
-					curveKeyId:   curveKey.String(),
+					ed25519KeyID: ed25519Key.String(),
+					curveKeyID:   curveKey.String(),
 				},
 			}
 
 			signature, _ := account.SignJSON(deviceKeys)
 
 			deviceKeys["signatures"] = map[string]map[string]string{
-				userId: {
-					ed25519KeyId: signature,
+				userID: {
+					ed25519KeyID: signature,
 				},
 			}
 
@@ -235,8 +235,8 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 
 			oneTimeKeys := map[string]interface{}{}
 
-			for keyId, key := range account.OneTimeKeys() {
-				keyId := fmt.Sprintf("signed_curve25519:%s", keyId)
+			for kid, key := range account.OneTimeKeys() {
+				keyID := fmt.Sprintf("signed_curve25519:%s", kid)
 				keyMap := map[string]interface{}{
 					"key": key.String(),
 				}
@@ -244,12 +244,12 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 				signature, _ = account.SignJSON(keyMap)
 
 				keyMap["signatures"] = map[string]interface{}{
-					userId: map[string]string{
-						ed25519KeyId: signature,
+					userID: map[string]string{
+						ed25519KeyID: signature,
 					},
 				}
 
-				oneTimeKeys[keyId] = keyMap
+				oneTimeKeys[keyID] = keyMap
 			}
 
 			instrs = append(instrs, instruction{
