@@ -189,8 +189,8 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 			},
 		}
 
-		if user.DeviceId != nil {
-			body["device_id"] = user.DeviceId
+		if user.DeviceID != nil {
+			body["device_id"] = user.DeviceID
 		}
 
 		instrs = append(instrs, instruction{
@@ -208,7 +208,7 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 			ed25519Key, curveKey := account.IdentityKeys()
 
 			userID := fmt.Sprintf("@%s:%s", user.Localpart, hs.Name)
-			deviceID := *user.DeviceId
+			deviceID := *user.DeviceID
 
 			ed25519KeyID := fmt.Sprintf("ed25519:%s", deviceID)
 			curveKeyID := fmt.Sprintf("curve25519:%s", deviceID)

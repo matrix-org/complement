@@ -16,12 +16,12 @@ var BlueprintPerfE2EERoom = MustValidate(Blueprint{
 					Localpart:   "@alice",
 					DisplayName: "Alice",
 					OneTimeKeys: 50,
-					DeviceId:    Ptr("ALDJLSKJD"),
+					DeviceID:    Ptr("ALDJLSKJD"),
 				},
 				{
 					Localpart:   "@bob",
 					DisplayName: "Bob",
-					DeviceId:    Ptr("BOBDASLDKJ"),
+					DeviceID:    Ptr("BOBDASLDKJ"),
 				},
 			}, manyUsers(userCount)...),
 			Rooms: []Room{
@@ -90,13 +90,13 @@ func manyUsers(count int) []User {
 	for i := 0; i < count; i++ {
 		localPart := fmt.Sprintf("@alice_%d", i)
 		displayName := fmt.Sprintf("Alice %d", i)
-		deviceId := fmt.Sprintf("ALICEDEVICE%d", i)
+		deviceID := fmt.Sprintf("ALICEDEVICE%d", i)
 
 		users[i] = User{
 			Localpart:   localPart,
 			DisplayName: displayName,
 			OneTimeKeys: 50,
-			DeviceId:    Ptr(deviceId),
+			DeviceID:    Ptr(deviceID),
 		}
 	}
 
