@@ -26,6 +26,10 @@ You can install `libolm3` on Debian using something like:
 ```
 echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/complement.list && apt-get update && apt-get install -y libolm3 libolm-dev/buster-backports
 ```
+or on Mac:
+```
+brew install libolm
+```
 
 You can either use your own image, or one of the ones supplied in the [dockerfiles](./dockerfiles) directory.
 

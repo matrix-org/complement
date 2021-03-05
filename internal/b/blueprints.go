@@ -58,8 +58,8 @@ type User struct {
 	Localpart   string
 	DisplayName string
 	AvatarURL   string
-	AccountData AccountData
-	DeviceId    *string
+	AccountData []AccountData
+	DeviceID    *string
 	// Enable end-to end encryption for this user and upload the given
 	// amount of one-time keys. This requires the DeviceId to be set as
 	// well.
