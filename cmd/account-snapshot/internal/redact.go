@@ -39,6 +39,7 @@ func Redact(syncData []byte, anonMappings AnonMappings) *Snapshot {
 		return true
 	})
 	sort.Strings(joinedRooms)
+	joinedRooms = joinedRooms[:10]
 	for i, roomID := range joinedRooms {
 		log.Printf("Processing room %s %d/%d\n", roomID, i+1, len(joinedRooms))
 		roomData := gjson.GetBytes(syncData, "rooms.join."+gjsonEscape(roomID))

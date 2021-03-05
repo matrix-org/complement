@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/matrix-org/complement/cmd/account-snapshot/internal"
+	"github.com/matrix-org/complement/internal/b"
 )
 
 /*
@@ -20,6 +21,7 @@ var (
 	flagAccessToken = flag.String("token", "", "Account access token")
 	flagHSURL       = flag.String("url", "https://matrix.org", "HS URL")
 	flagUserID      = flag.String("user", "", "Matrix User ID, needed to configure blueprints correctly for account data")
+	imageURI        = "complement-dendrite:latest"
 )
 
 func main() {
@@ -57,7 +59,15 @@ func main() {
 		log.Panicf("FATAL: ConvertToBlueprint %s\n", err)
 	}
 
-	b, err := json.MarshalIndent(bp, "", "  ")
+	homerunnerReq := struct {
+		Blueprint    *b.Blueprint `json:"blueprint"`
+		BaseImageURI string       `json:"base_image_uri"`
+	}{
+		Blueprint:    bp,
+		BaseImageURI: imageURI,
+	}
+
+	b, err := json.MarshalIndent(homerunnerReq, "", "  ")
 	if err != nil {
 		log.Printf("WARNING: failed to marshal anonymous snapshot: %s", err)
 	} else {
