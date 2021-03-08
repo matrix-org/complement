@@ -49,7 +49,7 @@ federation_custom_ca_list:
 - /ca/ca.crt
 
 # unblacklist RFC1918 addresses
-federation_ip_range_blacklist: []
+ip_range_blacklist: []
 
 # Disable server rate-limiting
 rc_federation:
