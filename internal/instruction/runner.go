@@ -35,8 +35,6 @@ type Runner struct {
 	bestEffort bool
 	// set to true if the runner should stop
 	terminate atomic.Value
-	// Set of user IDs to retain access tokens for, if blank all tokens are grabbed
-	accessTokenSet map[string]bool
 }
 
 func NewRunner(blueprintName string, bestEffort, debugLogging bool) *Runner {
@@ -50,7 +48,6 @@ func NewRunner(blueprintName string, bestEffort, debugLogging bool) *Runner {
 		roomConcurrency: 36,
 		terminate:       v,
 		bestEffort:      bestEffort,
-		accessTokenSet:  make(map[string]bool),
 	}
 }
 
