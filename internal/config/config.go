@@ -10,6 +10,7 @@ type Complement struct {
 	BaseImageURI           string
 	BaseImageArgs          []string
 	DebugLoggingEnabled    bool
+	BestEffort             bool
 	VersionCheckIterations int
 	KeepBlueprints         []string
 }

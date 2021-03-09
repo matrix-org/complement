@@ -70,6 +70,7 @@ type Builder struct {
 	FederationPort int
 	Docker         *client.Client
 	debugLogging   bool
+	bestEffort     bool
 	config         *config.Complement
 }
 
@@ -86,6 +87,7 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 		CSAPIPort:      8008,
 		FederationPort: 8448,
 		debugLogging:   cfg.DebugLoggingEnabled,
+		bestEffort:     cfg.BestEffort,
 		config:         cfg,
 	}, nil
 }
@@ -252,7 +254,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		return []error{err}
 	}
 
-	runner := instruction.NewRunner(bprint.Name, d.debugLogging)
+	runner := instruction.NewRunner(bprint.Name, d.bestEffort, d.debugLogging)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
 		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)

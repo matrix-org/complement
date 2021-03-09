@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -24,15 +25,29 @@ type Runner struct {
 	blueprintName string
 	lookup        *sync.Map // string -> string
 	debugLogging  bool
-	concurrency   int
+	// number of in-flight HTTP requests at any one time
+	// this is cpu bounded due to bcrypting passwords
+	userConcurrency int
+	// number of in-flight HTTP requests at any one time
+	// this is not cpu bounded so can be higher than userConcurrency
+	roomConcurrency int
+	// if true, does not treat non 2xx as fatal
+	bestEffort bool
+	// set to true if the runner should stop
+	terminate atomic.Value
 }
 
-func NewRunner(blueprintName string, debugLogging bool) *Runner {
+func NewRunner(blueprintName string, bestEffort, debugLogging bool) *Runner {
+	var v atomic.Value
+	v.Store(false)
 	return &Runner{
-		lookup:        &sync.Map{},
-		blueprintName: blueprintName,
-		debugLogging:  debugLogging,
-		concurrency:   8, // number of in-flight HTTP requests at any one time
+		lookup:          &sync.Map{},
+		blueprintName:   blueprintName,
+		debugLogging:    debugLogging,
+		userConcurrency: 12,
+		roomConcurrency: 36,
+		terminate:       v,
+		bestEffort:      bestEffort,
 	}
 }
 
@@ -68,7 +83,9 @@ func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 			defer wg.Done()
 			err := r.runInstructionSet(hs, hsURL, s)
 			if err != nil {
+				r.log("Instruction set failed: %s", err)
 				resErr = err
+				r.terminate.Store(true)
 			}
 		}(set)
 	}
@@ -85,7 +102,9 @@ func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 			defer wg.Done()
 			err := r.runInstructionSet(hs, hsURL, s)
 			if err != nil {
+				r.log("Instruction set failed: %s", err)
 				resErr = err
+				r.terminate.Store(true)
 			}
 		}(set)
 	}
@@ -98,27 +117,50 @@ func (r *Runner) runInstructionSet(hs b.Homeserver, hsURL string, instrs []instr
 	contextStr := fmt.Sprintf("%s.%s", r.blueprintName, hs.Name)
 	i := 0
 	cli := http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 30 * time.Second,
+	}
+	isFatalErr := func(err error) error {
+		if r.bestEffort {
+			r.log("ERROR [bestEffort=true]: %s", err)
+			return nil
+		}
+		return err
 	}
 	req, instr, i := r.next(instrs, hsURL, i)
 	for req != nil {
+		if r.terminate.Load().(bool) {
+			return fmt.Errorf("terminated")
+		}
 		res, err := cli.Do(req)
 		if err != nil {
-			return fmt.Errorf("%s : failed to perform HTTP request to %s: %w", contextStr, req.URL.String(), err)
+			err = isFatalErr(fmt.Errorf("%s : failed to perform HTTP request to %s with body %+v: %w", contextStr, req.URL.String(), instr.body, err))
+			if err != nil {
+				return err
+			}
 		}
-		r.log("%s [%d/%d] %s => HTTP %s\n", contextStr, i+1, len(instrs), req.URL.String(), res.Status)
+		if i < 100 || i%200 == 0 {
+			r.log("%s [%d/%d] %s => HTTP %s\n", contextStr, i, len(instrs), req.URL.String(), res.Status)
+		}
 		body, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			return fmt.Errorf("%s : failed to read response body: %w", contextStr, err)
+			err = isFatalErr(fmt.Errorf("%s : failed to read response body: %w", contextStr, err))
+			if err != nil {
+				return err
+			}
 		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			r.log("LOOKUP : %+v\n", r.lookup)
 			r.log("INSTRUCTION: %+v\n", instr)
-			return fmt.Errorf("%s : request %s returned HTTP %s : %s", contextStr, req.URL.String(), res.Status, string(body))
+			err = isFatalErr(fmt.Errorf("%s : request %s returned HTTP %s : %s", contextStr, req.URL.String(), res.Status, string(body)))
+			if err != nil {
+				return err
+			}
 		}
 		if instr.storeResponse != nil {
 			if !gjson.ValidBytes(body) {
-				return fmt.Errorf("%s : cannot storeResponse as response is not valid JSON. Body: %s", contextStr, string(body))
+				err = isFatalErr(fmt.Errorf("%s : cannot storeResponse as response is not valid JSON. Body: %s", contextStr, string(body)))
+				if err != nil {
+					return err
+				}
 			}
 			for k, v := range instr.storeResponse {
 				val := gjson.GetBytes(body, strings.TrimPrefix(v, "."))
@@ -226,12 +268,12 @@ func (i *instruction) url(hsURL string, lookup *sync.Map) string {
 
 // calculateUserInstructionSets returns sets of HTTP requests to be executed in order. Sets can be executed in any order.
 func calculateUserInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
-	sets := make([][]instruction, r.concurrency)
+	sets := make([][]instruction, r.userConcurrency)
 
 	createdUsers := make(map[string]bool)
 	// add instructions to create users
 	for _, user := range hs.Users {
-		i := indexFor(user.Localpart, r.concurrency)
+		i := indexFor(user.Localpart, r.userConcurrency)
 		instrs := sets[i]
 
 		if createdUsers[user.Localpart] {
@@ -254,11 +296,11 @@ func calculateUserInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 // and placeholders are returned in these instructions as it's impossible to know at this time what room IDs etc
 // will be allocated, so use an instruction loader to load the right requests.
 func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
-	sets := make([][]instruction, r.concurrency)
+	sets := make([][]instruction, r.roomConcurrency)
 
 	// add instructions to create rooms and send events
 	for roomIndex, room := range hs.Rooms {
-		setIndex := indexFor(fmt.Sprintf("%d", roomIndex), r.concurrency)
+		setIndex := indexFor(fmt.Sprintf("%d", roomIndex), r.roomConcurrency)
 		instrs := sets[setIndex]
 		var queryParams = make(map[string]string)
 		if room.Creator != "" {
@@ -301,17 +343,31 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 				subs["$txnId"] = fmt.Sprintf("%d", eventIndex)
 			}
 
-			// special cases: room joining
+			// special cases: room joining, leaving and inviting
 			if event.Type == "m.room.member" && event.StateKey != nil &&
 				event.Content != nil && event.Content["membership"] != nil {
 				membership := event.Content["membership"].(string)
-				if membership == "join" {
+				switch membership {
+				case "join":
 					path = "/_matrix/client/r0/join/$roomId"
 					method = "POST"
 
 					// Set server_name to the homeserver that created the room, as they're a pretty
 					// good candidate to join the room through
 					queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
+				case "leave":
+					path = "/_matrix/client/r0/rooms/$roomId/leave"
+					method = "POST"
+					if *event.StateKey != event.Sender {
+						// it's a kick
+						path = "/_matrix/client/r0/rooms/$roomId/kick"
+						method = "POST"
+						event.Content["user_id"] = *event.StateKey
+					}
+				case "invite":
+					path = "/_matrix/client/r0/rooms/$roomId/invite"
+					method = "POST"
+					event.Content["user_id"] = *event.StateKey
 				}
 			}
 			instrs = append(instrs, instruction{
