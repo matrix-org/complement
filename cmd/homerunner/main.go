@@ -45,6 +45,7 @@ func cleanup(c *Config) {
 		DebugLoggingEnabled:    true,
 		VersionCheckIterations: c.VersionCheckIterations,
 		KeepBlueprints:         c.KeepBlueprints,
+		BestEffort:             true,
 	}
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {

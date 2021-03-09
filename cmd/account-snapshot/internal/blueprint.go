@@ -189,6 +189,59 @@ func convertRoom(sr *AnonSnapshotRoom) *b.Room {
 		})
 	}
 
+	// roll forward Timeline
+	for _, ev := range sr.Timeline {
+		evType := gjson.GetBytes(ev, "type").Str
+		if ignoredEventType[evType] {
+			continue
+		}
+		var sk *string
+		skg := gjson.GetBytes(ev, "state_key")
+		if skg.Exists() {
+			sk = &skg.Str
+		}
+		if evType == "m.room.member" && sk != nil {
+			membership := gjson.GetBytes(ev, "content.membership").Str
+			if *sk == sr.Creator {
+				// merge multiple creator memberships into one so we never end up leaving the room completely empty
+				// which can happen if everyone leaves the room in State but then joins again in Timeline
+				creatorMembership = membership
+				continue
+			} else if membership == "leave" {
+				// we can't do leave -> leave transitions else we get "User \"@anon-4c9:hs1\" is not a member of room"
+				// so they must either be invite/join/ban
+				canBeLeft := false
+				for _, uid := range memberships["invite"] {
+					if uid == *sk {
+						canBeLeft = true
+						break
+					}
+				}
+				for _, uid := range memberships["join"] {
+					if uid == *sk {
+						canBeLeft = true
+						break
+					}
+				}
+				for _, uid := range memberships["ban"] {
+					if uid == *sk {
+						canBeLeft = true
+						break
+					}
+				}
+				if !canBeLeft {
+					continue
+				}
+			}
+		}
+		r.Events = append(r.Events, b.Event{
+			Sender:   gjson.GetBytes(ev, "sender").Str,
+			StateKey: sk,
+			Type:     evType,
+			Content:  jsonObject([]byte(gjson.GetBytes(ev, "content").Raw)),
+		})
+	}
+
 	// NOW handle the creator's membership
 	// We need to inspect the PL event to accurately handle invite/ban
 	switch creatorMembership {
@@ -204,25 +257,6 @@ func convertRoom(sr *AnonSnapshotRoom) *b.Room {
 			Content: map[string]interface{}{
 				"membership": "leave",
 			},
-		})
-	}
-
-	// roll forward Timeline
-	for _, ev := range sr.Timeline {
-		evType := gjson.GetBytes(ev, "type").Str
-		if ignoredEventType[evType] {
-			continue
-		}
-		var sk *string
-		skg := gjson.GetBytes(ev, "state_key")
-		if skg.Exists() {
-			sk = &skg.Str
-		}
-		r.Events = append(r.Events, b.Event{
-			Sender:   gjson.GetBytes(ev, "sender").Str,
-			StateKey: sk,
-			Type:     evType,
-			Content:  jsonObject([]byte(gjson.GetBytes(ev, "content").Raw)),
 		})
 	}
 
