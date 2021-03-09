@@ -22,6 +22,9 @@ func ConvertToBlueprint(s *Snapshot, serverName string) (*b.Blueprint, error) {
 	bp := &b.Blueprint{
 		// format that Docker images are happy with
 		Name: "snapshot_" + regexpAlphanums.ReplaceAllString(s.UserID, ""),
+		// only keep the access token for the user whose account is being snapshotted else
+		// we could persist 10,000s of tokens as labels and make Docker sad
+		KeepAccessTokensForUsers: []string{s.UserID},
 	}
 	// TODO: the snapshot has information on servers but we only want 1 server for now
 	hs := b.Homeserver{

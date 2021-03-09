@@ -21,6 +21,7 @@ var (
 	flagAccessToken = flag.String("token", "", "Account access token")
 	flagHSURL       = flag.String("url", "https://matrix.org", "HS URL")
 	flagUserID      = flag.String("user", "", "Matrix User ID, needed to configure blueprints correctly for account data")
+	flagAnonOnly    = flag.Bool("anon-only", false, "If set, outputs an anonymous sync output only, not a blueprint")
 	imageURI        = "complement-dendrite:latest"
 )
 
@@ -54,6 +55,15 @@ func main() {
 	anonMappings.SingleServerName = "hs1"
 	snapshot := internal.Redact(syncData, anonMappings)
 	snapshot.UserID = anonMappings.User(*flagUserID)
+	if *flagAnonOnly {
+		b, err := json.MarshalIndent(snapshot, "", "  ")
+		if err != nil {
+			log.Printf("WARNING: failed to marshal anonymous snapshot: %s", err)
+		} else {
+			fmt.Printf(string(b) + "\n")
+		}
+		os.Exit(0)
+	}
 	bp, err := internal.ConvertToBlueprint(snapshot, "hs1")
 	if err != nil {
 		log.Panicf("FATAL: ConvertToBlueprint %s\n", err)
@@ -69,7 +79,7 @@ func main() {
 
 	b, err := json.MarshalIndent(homerunnerReq, "", "  ")
 	if err != nil {
-		log.Printf("WARNING: failed to marshal anonymous snapshot: %s", err)
+		log.Printf("WARNING: failed to marshal blueprint: %s", err)
 	} else {
 		fmt.Printf(string(b) + "\n")
 	}
