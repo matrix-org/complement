@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ type Config struct {
 	Port                   int
 	VersionCheckIterations int
 	KeepBlueprints         []string
+	Snapshot               string
 }
 
 func NewConfig() *Config {
@@ -26,6 +28,7 @@ func NewConfig() *Config {
 		Port:                   54321,
 		VersionCheckIterations: 100,
 		KeepBlueprints:         strings.Split(os.Getenv("HOMERUNNER_KEEP_BLUEPRINTS"), " "),
+		Snapshot:               os.Getenv("HOMERUNNER_SNAPSHOT_BLUEPRINT"),
 	}
 	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_LIFETIME_MINS")); val != 0 {
 		cfg.HomeserverLifetimeMins = val
@@ -61,6 +64,30 @@ func main() {
 		logrus.Fatalf("failed to setup new runtime: %s", err)
 	}
 	cleanup(cfg)
+
+	if cfg.Snapshot != "" {
+		logrus.Infof("Running in single-shot snapshot mode for request file '%s'", cfg.Snapshot)
+		// pretend the file is the request
+		reqFile, err := os.Open(cfg.Snapshot)
+		if err != nil {
+			logrus.Fatalf("failed to read snapshot: %s", err)
+		}
+		var rc ReqCreate
+		if err := json.NewDecoder(reqFile).Decode(&rc); err != nil {
+			logrus.Fatalf("file is not JSON: %s", err)
+		}
+		dep, _, err := rt.CreateDeployment(rc.BaseImageURI, rc.Blueprint)
+		if err != nil {
+			logrus.Fatalf("failed to create deployment: %s", err)
+		}
+		logrus.Infof("Successful deployment. Created %d homeserver images visible in 'docker image ls'.", len(dep.HS))
+		logrus.Infof("Clients: to run this blueprint in homerunner, use the blueprint name '%s'", rc.Blueprint.Name)
+		logrus.Infof("Servers: Run Homerunner with the env var HOMERUNNER_KEEP_BLUEPRINTS=%s set to prevent this blueprint being cleaned up", rc.Blueprint.Name)
+
+		// clean up after ourselves
+		_ = rt.DestroyDeployment(dep.BlueprintName)
+		os.Exit(1)
+	}
 
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Minute,

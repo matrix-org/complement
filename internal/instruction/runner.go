@@ -45,7 +45,7 @@ func NewRunner(blueprintName string, bestEffort, debugLogging bool) *Runner {
 		blueprintName:   blueprintName,
 		debugLogging:    debugLogging,
 		userConcurrency: 12,
-		roomConcurrency: 36,
+		roomConcurrency: 40,
 		terminate:       v,
 		bestEffort:      bestEffort,
 	}
