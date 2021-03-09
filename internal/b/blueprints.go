@@ -41,6 +41,8 @@ type Blueprint struct {
 	Name string
 	// The list of homeservers to create for this deployment.
 	Homeservers []Homeserver
+	// A set of user IDs to retain access_tokens for. If empty, all tokens are kept.
+	KeepAccessTokensForUsers []string
 }
 
 type Homeserver struct {

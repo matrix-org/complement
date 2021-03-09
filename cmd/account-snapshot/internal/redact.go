@@ -248,6 +248,12 @@ var RedactRules = map[string][]redaction{
 			},
 		},
 		{
+			key: "content.uk\\.half-shot\\.discord\\.member",
+			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
+				return nil
+			},
+		},
+		{
 			key: "content.third_party_signed",
 			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
 				return nil

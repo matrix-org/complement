@@ -280,7 +280,23 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		if res.err != nil {
 			continue
 		}
-		labels := labelsForTokens(runner.AccessTokens(res.homeserver.Name))
+		// collect and store access tokens as labels 'access_token_$userid: $token'
+		labels := make(map[string]string)
+		accessTokens := runner.AccessTokens(res.homeserver.Name)
+		if len(bprint.KeepAccessTokensForUsers) > 0 {
+			// only keep access tokens for specified users
+			for _, userID := range bprint.KeepAccessTokensForUsers {
+				tok, ok := accessTokens[userID]
+				if ok {
+					labels["access_token_"+userID] = tok
+				}
+			}
+		} else {
+			// keep all tokens
+			for k, v := range accessTokens {
+				labels["access_token_"+k] = v
+			}
+		}
 
 		// Combine the labels for tokens and application services
 		asLabels := labelsForApplicationServices(res.homeserver)
@@ -637,15 +653,6 @@ func tokensFromLabels(labels map[string]string) map[string]string {
 		}
 	}
 	return userIDToToken
-}
-
-func labelsForTokens(userIDToToken map[string]string) map[string]string {
-	labels := make(map[string]string)
-	// collect and store access tokens as labels 'access_token_$userid: $token'
-	for k, v := range userIDToToken {
-		labels["access_token_"+k] = v
-	}
-	return labels
 }
 
 func asIDToRegistrationFromLabels(labels map[string]string) map[string]string {
