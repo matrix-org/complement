@@ -26,19 +26,31 @@ func LoadSyncData(hsURL, token, tempFile string) (json.RawMessage, error) {
 
 	filterStr := url.QueryEscape(`{"event_format":"federation", "room":{"timeline":{"limit":50}}}`)
 
-	// Perform the sync
-	log.Println("Performing /sync...")
-	filterReq, err := http.NewRequest("GET", hsURL+"/_matrix/client/r0/sync?filter="+filterStr, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sync req: %w", err)
+	attempts := 0
+
+	var body []byte
+	for attempts < 20 {
+		attempts++
+		// Perform the sync
+		log.Println("Performing /sync...")
+		filterReq, err := http.NewRequest("GET", hsURL+"/_matrix/client/r0/sync?filter="+filterStr, nil)
+		if err != nil {
+			log.Printf("failed to create sync request: %s\n", err)
+			continue
+		}
+		body, err = doRequest(httpCli, filterReq, token)
+		if err != nil {
+			log.Printf("failed to perform sync request: %s\n", err)
+			continue
+		}
+		break
 	}
-	body, err := doRequest(httpCli, filterReq, token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform sync request: %w", err)
+	if body == nil {
+		return nil, fmt.Errorf("failed to perform /sync")
 	}
 
 	// dump it straight to disk first
-	err = ioutil.WriteFile(tempFile, body, 0644)
+	err := ioutil.WriteFile(tempFile, body, 0644)
 	if err != nil {
 		log.Printf("WARNING: failed to write sync data to disk: %s", err)
 	}
