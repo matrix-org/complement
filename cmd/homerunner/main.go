@@ -86,7 +86,7 @@ func main() {
 
 		// clean up after ourselves
 		_ = rt.DestroyDeployment(dep.BlueprintName)
-		os.Exit(1)
+		return
 	}
 
 	srv := &http.Server{
