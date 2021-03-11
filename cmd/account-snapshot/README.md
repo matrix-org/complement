@@ -1,6 +1,6 @@
 ### Account Snapshot
 
-This is capable of taking an anonymised snapshot of a Matrix account and then create a blueprint for it. It has several stages:
+This is capable of taking an anonymised snapshot of a Matrix account and then create a Homerunner in-line blueprint for it. It has several stages:
  - Perform a full `/sync` request. This is cached in `sync_snapshot.json` for subsequent runs in case something fails.
  - Redact the `/sync` response. This removes all PII including user IDs, messages, room IDs, event IDs, attachments, avatars, display names, etc.
    An intermediate `Snapshot` struct is the returned.
@@ -15,14 +15,15 @@ This is capable of taking an anonymised snapshot of a Matrix account and then cr
    response, all joined rooms, and the most recent 50 messages.
 
 
-To try it out:
+To try it out: (this will take between 5-60 mins depending on how large your account is)
 ```
 ./account-snapshot -user @alice:matrix.org -token MDA.... > blueprint.json
 ```
-Then run `./homerunner` and do:
+Then run Homerunner in single-shot mode: (this will take hours or days depending on the homeserver and how many events there are)
 ```
-curl -XPOST -d "@blueprint.json" "http://localhost:54321/create"
+HOMERUNNER_SNAPSHOT_BLUEPRINT=blueprint.json ./homerunner
 ```
+This will execute the blueprint and commit the resulting images so you can push them to docker hub/gitlab. IMPORTANT: Make sure to set `HOMERUNNER_KEEP_BLUEPRINTS=your-blueprint-name` when running homerunner subsequently or **it will clean up the image**.
 
 #### Limitations
 
