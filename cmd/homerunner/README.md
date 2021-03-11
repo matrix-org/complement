@@ -44,6 +44,8 @@ curl -XPOST -d '{"blueprint_name":"name-of-blueprint"}'
 }
 ```
 
+To find the blueprint name, run `docker inspect --format={{.ContainerConfig.Labels.complement_blueprint}} your-image:latest`
+
 ### Deploy an in-line blueprint
 
 *Requires: A base image from [dockerfiles](https://github.com/matrix-org/complement/tree/master/dockerfiles)*
