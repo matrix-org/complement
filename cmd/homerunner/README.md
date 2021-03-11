@@ -1,4 +1,4 @@
-### Homerunner
+## Homerunner
 
 An HTTP server which can spin up homeservers and execute blueprints on them. Powered by the same internals as Complement.
 
@@ -19,7 +19,7 @@ go build ./cmd/homerunner
 
 There are three ways to use Homerunner which are shown below.
 
-#### Deploy an image from Docker
+### Deploy an image from Docker
 
 If you have a pre-committed image already (e.g you have an anonymous account snapshot) then run Homerunner like this:
 ```
@@ -44,7 +44,7 @@ curl -XPOST -d '{"blueprint_name":"name-of-blueprint"}'
 }
 ```
 
-#### Deploy an in-line blueprint
+### Deploy an in-line blueprint
 
 *Requires: A base image from [dockerfiles](https://github.com/matrix-org/complement/tree/master/dockerfiles)*
 
@@ -71,7 +71,7 @@ If you have your own custom blueprint you want to run, perform a single POST req
 ```
 The format of `blueprint` is the same as the `Blueprint` struct in https://github.com/matrix-org/complement/blob/master/internal/b/blueprints.go#L39
 
-#### Deploy a blueprint from Complement
+### Deploy a blueprint from Complement
 
 *Requires: A base image from [dockerfiles](https://github.com/matrix-org/complement/tree/master/dockerfiles)*
 
@@ -109,3 +109,30 @@ Destroy the network:
 curl -XPOST -d '{"blueprint_name":"federation_one_to_one_room"}' http://localhost:54321/destroy                                       
 {}
 ```
+
+### Creating pre-committed images
+
+If you have a blueprint (e.g from [account-snapshot](https://github.com/matrix-org/complement/tree/master/cmd/account-snapshot)) which you wish to snapshot into a docker image, then run this command:
+```
+HOMERUNNER_SNAPSHOT_BLUEPRINT=/some/file.json ./homerunner
+```
+The data in `/some/file` must be the same as an in-line blueprint request. The output will be an image in `docker image ls` along the lines of:
+```
+REPOSITORY                                                             TAG                     IMAGE ID       CREATED         SIZE
+localhost/complement                                                   snapshot_anon2hs1.hs1   1b18395c0d1e   37 hours ago    330MB
+```
+If you run `docker inspect repo:tag` on this you will see a section called `Labels`:
+```
+"Labels": {
+  "access_token_@anon-2:hs1": "tcy4A0xsHH0_iKq4O7AlOdg4zdThDyw7R8lUFjoZO4s",
+  "complement_blueprint": "snapshot_anon2hs1",
+  "complement_context": "snapshot_anon2hs1.hs1",
+  "complement_hs_name": "hs1"
+}
+```
+The `complement_blueprint` label is the blueprint name you should use to deploy this image. You can now push this image to docker/gitlab.
+
+
+### Access tokens
+
+Access tokens are returned when deploying the blueprint but sometimes you want to login as a normal user. The format for passwords for all users created by Complement is [here](https://github.com/matrix-org/complement/blob/fc87b081ac9dd3c8e52bcd2ed155bc8d49ce6d56/internal/instruction/runner.go#L415).
