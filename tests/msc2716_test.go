@@ -18,6 +18,7 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
@@ -55,15 +56,15 @@ func TestBackfillingHistory(t *testing.T) {
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			numBackfilledMessages := 3
+			numHistoricalMessages := 3
 			// wait X number of ms to ensure that the timestamp changes enough for each of the messages we try to backfill later
-			time.Sleep(time.Duration(numBackfilledMessages) * time.Millisecond)
+			time.Sleep(time.Duration(numHistoricalMessages) * time.Millisecond)
 
 			// Create some more "live" events after our insertion point
 			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
 			// Then backfill a bunch of events between eventBefore and eventsAfter
-			backfilledEvents := backfillMessagesAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, numBackfilledMessages)
+			historticalEvents := reversed(backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, numHistoricalMessages))
 
 			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
 				"dir":   []string{"b"},
@@ -72,10 +73,18 @@ func TestBackfillingHistory(t *testing.T) {
 
 			var expectedMessageOrder []string
 			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
-			expectedMessageOrder = append(expectedMessageOrder, backfilledEvents...)
+			expectedMessageOrder = append(expectedMessageOrder, historticalEvents...)
 			expectedMessageOrder = append(expectedMessageOrder, eventsAfter...)
 			// Order events from newest to oldest
 			expectedMessageOrder = reversed(expectedMessageOrder)
+
+			contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[1]}, nil, "application/json", url.Values{
+				"limit": []string{"100"},
+			})
+			contextResBody := client.ParseJSON(t, contextRes)
+			logrus.WithFields(logrus.Fields{
+				"contextResBody": string(contextResBody),
+			}).Error("context res")
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -131,8 +140,8 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 5)
 
 			// Insert a backfilled event
-			backfilledEvents := backfillMessagesAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, 1)
-			backfilledEvent := backfilledEvents[0]
+			historticalEvents := backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, 1)
+			backfilledEvent := historticalEvents[0]
 
 			// This is just a dummy event we search for after the backfilledEvent
 			eventsAfterBackfill := createMessagesInRoom(t, alice, roomID, 1)
@@ -194,7 +203,7 @@ func TestBackfillingHistory(t *testing.T) {
 			timeAfterEventBefore := time.Now()
 
 			// Normal user alice should not be able to backfill messages
-			backfillMessagesAtTime(t, alice, roomID, eventBefore, timeAfterEventBefore, 1)
+			backfillHistoricalMessagesInReverseChronologicalAtTime(t, alice, roomID, eventBefore, timeAfterEventBefore, 1)
 
 			// TODO: Check that prev_events not on message
 			// Also check response to https://github.com/matrix-org/synapse/pull/9247#discussion_r581761053
@@ -224,7 +233,7 @@ func getEventIDsFromResponseBody(body []byte) (eventIDsFromResponse []string, er
 
 	res.ForEach(func(key, r gjson.Result) bool {
 		if len(r.Get("content").Get("body").Str) > 0 {
-			eventIDsFromResponse = append(eventIDsFromResponse, r.Get("event_id").Str)
+			eventIDsFromResponse = append(eventIDsFromResponse, r.Get("event_id").Str+" ("+r.Get("content").Get("body").Str+")")
 		}
 		return true
 	})
@@ -278,29 +287,34 @@ func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count in
 	return evs
 }
 
-func backfillMessagesAtTime(t *testing.T, c *client.CSAPI, roomID string, insertAfterEventId string, insertTime time.Time, count int) []string {
+// Backfill in a reverse-chronogical order (most recent history to oldest history)
+// Reverse-chronogical is a constraint of the Synapse implementation.
+func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *client.CSAPI, roomID string, insertAfterEventId string, insertTime time.Time, count int) []string {
 	insertOriginServerTs := uint64(insertTime.UnixNano() / 1000000)
 
 	evs := make([]string, count)
 
-	prevEventId := insertAfterEventId
 	for i := 0; i < len(evs); i++ {
+		// We have to backfill historical messages from most recent to oldest
+		// since backfilled messages decrement their `stream_order` and we want messages
+		// to appear in order from the `/messages` endpoint
+		messageIndex := (count - 1) - i
+
 		newEvent := event{
 			Type: "m.room.message",
 			PrevEvents: []string{
-				prevEventId,
+				// Hang all histortical messages off of the insert point
+				insertAfterEventId,
 			},
-			OriginServerTS: insertOriginServerTs + uint64(i),
+			OriginServerTS: insertOriginServerTs + uint64(messageIndex),
 			Content: map[string]interface{}{
 				"msgtype":      "m.text",
-				"body":         fmt.Sprintf("Backfilled %d", i),
+				"body":         fmt.Sprintf("Historical %d", messageIndex),
 				"m.historical": true,
 			},
 		}
 		newEventId := sendEvent(t, c, roomID, newEvent)
 		evs[i] = newEventId
-
-		prevEventId = newEventId
 	}
 
 	return evs
