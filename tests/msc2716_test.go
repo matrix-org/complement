@@ -201,14 +201,32 @@ func TestBackfillingHistory(t *testing.T) {
 			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
+			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / 1000000)
+
+			e := event{
+				Type: "m.room.message",
+				PrevEvents: []string{
+					eventBefore,
+				},
+				OriginServerTS: insertOriginServerTs,
+				Content: map[string]interface{}{
+					"msgtype":      "m.text",
+					"body":         "Historical message",
+					"m.historical": true,
+				},
+			}
+
+			query := make(url.Values, len(e.PrevEvents))
+			query.Add("prev_event", e.PrevEvents[0])
+			query.Add("ts", strconv.FormatUint(e.OriginServerTS, 10))
+
+			b, err := json.Marshal(e.Content)
+			if err != nil {
+				t.Fatalf("msc2716.sendEvent failed to marshal JSON body: %s", err)
+			}
 
 			// Normal user alice should not be able to backfill messages
-			backfillHistoricalMessagesInReverseChronologicalAtTime(t, alice, roomID, eventBefore, timeAfterEventBefore, 1)
-
-			// TODO: Check that prev_events not on message
-			// Also check response to https://github.com/matrix-org/synapse/pull/9247#discussion_r581761053
-			// because it would be nice to just throw a 403 at the user when they try to do this
-
+			alice.MustDoWithStatusRaw(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + strconv.Itoa(txnID)}, b, "application/json", query, 403)
 		})
 	})
 }
