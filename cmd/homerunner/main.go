@@ -11,6 +11,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
+	"github.com/matrix-org/complement/internal/federation"
 	"github.com/sirupsen/logrus"
 )
 
@@ -64,6 +65,11 @@ func main() {
 		logrus.Fatalf("failed to setup new runtime: %s", err)
 	}
 	cleanup(cfg)
+
+	_, _, err = federation.GetOrCreateCaCert()
+	if err != nil {
+		logrus.Fatalf("failed to make CA certs")
+	}
 
 	if cfg.Snapshot != "" {
 		logrus.Infof("Running in single-shot snapshot mode for request file '%s'", cfg.Snapshot)

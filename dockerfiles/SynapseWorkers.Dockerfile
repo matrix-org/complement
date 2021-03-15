@@ -37,9 +37,9 @@ ENTRYPOINT \
   # Replace the server name in the caddy config
   sed -i "s/{{ server_name }}/${SERVER_NAME}/g" /root/caddy.json && \
   # Start postgres
-  pg_ctlcluster 11 main start > /dev/null 2>&1 && \
+  pg_ctlcluster 11 main start 2>&1 && \
   # Start caddy
-  /root/caddy start --config /root/caddy.json > /dev/null 2>&1 && \
+  /root/caddy start --config /root/caddy.json 2>&1 && \
   # Set the server name of the homeserver
   SYNAPSE_SERVER_NAME=${SERVER_NAME} \
   # No need to report stats here
