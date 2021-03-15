@@ -141,6 +141,20 @@ func (d *Builder) removeImages() error {
 		return err
 	}
 	for _, img := range images {
+		// we only clean up localhost/complement images else if someone docker pulls
+		// an anonymous snapshot we might incorrectly nuke it :( any non-localhost
+		// tag marks this image as safe (as images can have multiple tags)
+		isLocalhost := true
+		for _, rt := range img.RepoTags {
+			if !strings.HasPrefix(rt, "localhost/complement") {
+				isLocalhost = false
+				break
+			}
+		}
+		if !isLocalhost {
+			d.log("Not cleaning up image with tags: %v", img.RepoTags)
+			continue
+		}
 		bprintName := img.Labels["complement_blueprint"]
 		keep := false
 		for _, keepBprint := range d.KeepBlueprints {
