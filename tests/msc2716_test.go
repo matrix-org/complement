@@ -192,6 +192,48 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
+		t.Run("Unrecognised prev_event ID will throw an error", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, struct{}{})
+
+			e := event{
+				Type: "m.room.message",
+				PrevEvents: []string{
+					// Here is the area of interest in the event
+					"$some-non-existant-event-id",
+				},
+				OriginServerTS: uint64(time.Now().UnixNano() / 1000000),
+				Content: map[string]interface{}{
+					"msgtype":      "m.text",
+					"body":         "Historical message",
+					"m.historical": true,
+				},
+			}
+
+			query := make(url.Values, len(e.PrevEvents))
+			query.Add("prev_event", e.PrevEvents[0])
+			query.Add("ts", strconv.FormatUint(e.OriginServerTS, 10))
+
+			b, err := json.Marshal(e.Content)
+			if err != nil {
+				t.Fatalf("msc2716.sendEvent failed to marshal JSON body: %s", err)
+			}
+
+			as.MustDoWithStatusRaw(
+				t,
+				"PUT",
+				[]string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + "404-unrecognized-prev-event-id"},
+				b,
+				"application/json",
+				query,
+				// TODO: Seems like this makes more sense as a 404
+				// But the current Synapse code around unknown prev events will throw ->
+				// `403: No create event in auth events`
+				403,
+			)
+		})
+
 		t.Run("Normal users aren't allowed to backfill messages", func(t *testing.T) {
 			t.Parallel()
 
@@ -226,7 +268,7 @@ func TestBackfillingHistory(t *testing.T) {
 			}
 
 			// Normal user alice should not be able to backfill messages
-			alice.MustDoWithStatusRaw(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + strconv.Itoa(txnID)}, b, "application/json", query, 403)
+			alice.MustDoWithStatusRaw(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + "403-no-normal-user-test"}, b, "application/json", query, 403)
 		})
 	})
 }
