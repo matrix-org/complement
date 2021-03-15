@@ -45,7 +45,7 @@ func TestBackfillingHistory(t *testing.T) {
 	alice := deployment.Client(t, "hs1", userID)
 
 	t.Run("parallel", func(t *testing.T) {
-		t.Run("Backfilled messages come back in correct order", func(t *testing.T) {
+		t.Run("Backfilled historical messages come back in correct order", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, struct{}{})
@@ -64,7 +64,7 @@ func TestBackfillingHistory(t *testing.T) {
 			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
 			// Then backfill a bunch of events between eventBefore and eventsAfter
-			historticalEvents := reversed(backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, numHistoricalMessages))
+			historicalEvents := reversed(backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, numHistoricalMessages))
 
 			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
 				"dir":   []string{"b"},
@@ -73,7 +73,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			var expectedMessageOrder []string
 			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
-			expectedMessageOrder = append(expectedMessageOrder, historticalEvents...)
+			expectedMessageOrder = append(expectedMessageOrder, historicalEvents...)
 			expectedMessageOrder = append(expectedMessageOrder, eventsAfter...)
 			// Order events from newest to oldest
 			expectedMessageOrder = reversed(expectedMessageOrder)
@@ -125,7 +125,7 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
-		t.Run("Backfilled events with m.historical do not come down /sync", func(t *testing.T) {
+		t.Run("Backfilled historical events with m.historical do not come down /sync", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, struct{}{})
@@ -140,8 +140,8 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 5)
 
 			// Insert a backfilled event
-			historticalEvents := backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, 1)
-			backfilledEvent := historticalEvents[0]
+			historicalEvents := backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, 1)
+			backfilledEvent := historicalEvents[0]
 
 			// This is just a dummy event we search for after the backfilledEvent
 			eventsAfterBackfill := createMessagesInRoom(t, alice, roomID, 1)
@@ -159,7 +159,7 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
-		t.Run("Backfilled events without m.historical come down /sync", func(t *testing.T) {
+		t.Run("Backfilled historical events without m.historical come down /sync", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, struct{}{})
@@ -363,7 +363,7 @@ func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *cli
 		newEvent := event{
 			Type: "m.room.message",
 			PrevEvents: []string{
-				// Hang all histortical messages off of the insert point
+				// Hang all historical messages off of the insert point
 				insertAfterEventId,
 			},
 			OriginServerTS: insertOriginServerTs + uint64(messageIndex),
