@@ -132,25 +132,26 @@ func convertRoom(sr *AnonSnapshotRoom) *b.Room {
 			},
 		})
 	}
-	// All left users should join then immediately leave
-	for _, userID := range memberships["leave"] {
-		r.Events = append(r.Events, b.Event{
-			Sender:   userID,
-			StateKey: b.Ptr(userID),
-			Type:     "m.room.member",
-			Content: map[string]interface{}{
-				"membership": "join",
-			},
-		})
-		r.Events = append(r.Events, b.Event{
-			Sender:   userID,
-			StateKey: b.Ptr(userID),
-			Type:     "m.room.member",
-			Content: map[string]interface{}{
-				"membership": "leave",
-			},
-		})
-	}
+	/*
+		// All left users should join then immediately leave
+		for _, userID := range memberships["leave"] {
+			r.Events = append(r.Events, b.Event{
+				Sender:   userID,
+				StateKey: b.Ptr(userID),
+				Type:     "m.room.member",
+				Content: map[string]interface{}{
+					"membership": "join",
+				},
+			})
+			r.Events = append(r.Events, b.Event{
+				Sender:   userID,
+				StateKey: b.Ptr(userID),
+				Type:     "m.room.member",
+				Content: map[string]interface{}{
+					"membership": "leave",
+				},
+			})
+		} */
 	// All invited users should be invited, we'll just invite them from the creator as they will be joined with perms
 	for _, userID := range memberships["invite"] {
 		r.Events = append(r.Events, b.Event{

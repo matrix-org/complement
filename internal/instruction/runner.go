@@ -181,6 +181,9 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 	i++
 
 	var body io.Reader
+	if instr.body == nil && instr.bodyFn != nil {
+		instr.body = instr.bodyFn(r.lookup)
+	}
 	if instr.body != nil {
 		b, err := json.Marshal(instr.body)
 		if err != nil {
@@ -242,6 +245,8 @@ type instruction struct {
 	// The fields (expressed as dot-style notation) which should be stored in a lookup table for later use.
 	// E.g to store the room_id in the response under the key 'foo' to use it later: { "foo" : ".room_id" }
 	storeResponse map[string]string
+	// Optional: A function to create the request body from the lookup map provided. Only used if `body` is <nil>.
+	bodyFn func(lk *sync.Map) interface{}
 }
 
 // url returns the complete path resolved url for this instruction. Query parameters must be
@@ -369,6 +374,24 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 					method = "POST"
 					event.Content["user_id"] = *event.StateKey
 				}
+			} else if event.Type == "m.room.canonical_alias" && event.StateKey != nil &&
+				*event.StateKey == "" {
+				// create the alias first then send the canonical alias
+				// keep a ref to the current room index so it's correct when bodyFn is called
+				ri := roomIndex
+				instrs = append(instrs, instruction{
+					method:        "PUT",
+					path:          "/_matrix/client/r0/directory/room/" + url.PathEscape(event.Content["alias"].(string)),
+					accessToken:   fmt.Sprintf("user_%s", event.Sender),
+					substitutions: subs,
+					queryParams:   queryParams,
+					bodyFn: func(lk *sync.Map) interface{} {
+						val, _ := lk.Load(fmt.Sprintf("room_%d", ri))
+						return map[string]interface{}{
+							"room_id": val,
+						}
+					},
+				})
 			}
 			instrs = append(instrs, instruction{
 				method:        method,
@@ -411,6 +434,7 @@ func instructionRegister(hs b.Homeserver, user b.User) instruction {
 
 func instructionLogin(hs b.Homeserver, user b.User) instruction {
 	body := map[string]interface{}{
+		"type":     "m.login.password",
 		"user":     user.Localpart,
 		"password": "complement_meets_min_pasword_req_" + user.Localpart,
 		"auth": map[string]string{
