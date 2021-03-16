@@ -442,7 +442,9 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 		fmt.Sprintf("sender_localpart: %s\n", as.SenderLocalpart) +
 		fmt.Sprintf("rate_limited: %v\n", as.RateLimited) +
 		"namespaces:\n" +
-		"  users: []\n" +
+		"  users:\n" +
+		"    - exclusive: false\n" +
+		"      regex: .*\n" +
 		"  rooms: []\n" +
 		"  aliases: []\n"
 }

@@ -35,6 +35,7 @@ type event struct {
 func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, "rooms_state", b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
+	//defer time.Sleep(2 * time.Hour)
 
 	// Create the application service bridge user that is able to backfill messages
 	asUserID := "@the-bridge-user:hs1"
@@ -64,7 +65,7 @@ func TestBackfillingHistory(t *testing.T) {
 			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
 			// Then backfill a bunch of events between eventBefore and eventsAfter
-			historicalEvents := reversed(backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, numHistoricalMessages))
+			historicalEvents := reversed(backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, "", roomID, eventBefore, timeAfterEventBefore, numHistoricalMessages))
 
 			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
 				"dir":   []string{"b"},
@@ -125,6 +126,47 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
+		t.Run("Backfilled historical events resolve with proper state", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+			})
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create the "live" event we are going to insert our backfilled events next to
+			eventsBefore := createMessagesInRoom(t, alice, roomID, 10)
+			eventBefore := eventsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			numHistoricalMessages := 6
+			// wait X number of ms to ensure that the timestamp changes enough for each of the messages we try to backfill later
+			time.Sleep(time.Duration(numHistoricalMessages) * time.Millisecond)
+
+			// Create some events after.
+			// Fill up the buffer so we have to scrollback to the inserted history later
+			createMessagesInRoom(t, alice, roomID, 200)
+
+			virtualUserLocalpart := "maria"
+			virtualUserID := fmt.Sprintf("@%s:hs1", virtualUserLocalpart)
+			// Register and join the virtual user
+			ensureRegistered(t, as, virtualUserLocalpart)
+			joinRoom(t, as, virtualUserID, roomID)
+
+			// TODO: Figure out why after joining the virtual user and it gets a 200 OK,
+			// we still see `SynapseError: 403 - User @maria:hs1 not in room !ZIIflEwiKrDFeMEMKV:hs1`
+			// when sending a message. Debugging with an Element interface on top even, shows Maria as joined!
+
+			// Insert the most recent chunk of backfilled history
+			backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, virtualUserID, roomID, eventBefore, timeAfterEventBefore.Add(time.Millisecond*time.Duration(numHistoricalMessages)), 3)
+
+			// Insert another older chunk of backfilled history from the same user.
+			// See if the joins and meta data still are visible on the subsequent chunk
+			backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, virtualUserID, roomID, eventBefore, timeAfterEventBefore, 3)
+
+		})
+
 		t.Run("Backfilled historical events with m.historical do not come down /sync", func(t *testing.T) {
 			t.Parallel()
 
@@ -140,7 +182,7 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 5)
 
 			// Insert a backfilled event
-			historicalEvents := backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, roomID, eventBefore, timeAfterEventBefore, 1)
+			historicalEvents := backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, "", roomID, eventBefore, timeAfterEventBefore, 1)
 			backfilledEvent := historicalEvents[0]
 
 			// This is just a dummy event we search for after the backfilledEvent
@@ -172,7 +214,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// Send an event that has `prev_event` and `ts` set but not `m.historical`.
 			// We should see these type of events in the `/sync` response
-			eventWeShouldSee := sendEvent(t, as, roomID, event{
+			eventWeShouldSee := sendEvent(t, as, "", roomID, event{
 				Type: "m.room.message",
 				PrevEvents: []string{
 					eventBefore,
@@ -306,7 +348,7 @@ var txnID int = 0
 // The transactions need to be prefixed so they don't collide with the txnID in client.go
 var txnPrefix string = "msc2716-txn"
 
-func sendEvent(t *testing.T, c *client.CSAPI, roomID string, e event) string {
+func sendEvent(t *testing.T, c *client.CSAPI, virtualUserID string, roomID string, e event) string {
 	txnID++
 
 	query := make(url.Values, len(e.PrevEvents))
@@ -316,6 +358,10 @@ func sendEvent(t *testing.T, c *client.CSAPI, roomID string, e event) string {
 
 	if e.OriginServerTS != 0 {
 		query.Add("ts", strconv.FormatUint(e.OriginServerTS, 10))
+	}
+
+	if virtualUserID != "" {
+		query.Add("user_id", virtualUserID)
 	}
 
 	b, err := json.Marshal(e.Content)
@@ -328,6 +374,55 @@ func sendEvent(t *testing.T, c *client.CSAPI, roomID string, e event) string {
 	eventID := client.GetJSONFieldStr(t, body, "event_id")
 
 	return eventID
+}
+
+// ensureRegistered makes sure the user is registered for the homeserver regardless
+// if they are already registered or not. If unable to register, fails the test
+func ensureRegistered(t *testing.T, c *client.CSAPI, virtualUserLocalpart string) {
+	// b, err := json.Marshal(map[string]interface{}{
+	// 	"username": virtualUserLocalpart,
+	// })
+	// if err != nil {
+	// 	t.Fatalf("msc2716.ensureRegistered failed to marshal JSON body: %s", err)
+	// }
+
+	res, err := c.DoWithAuthRaw(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(fmt.Sprintf(`{ "username": "%s" }`, virtualUserLocalpart)), "application/json", url.Values{})
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if res.StatusCode == 200 {
+		return
+	}
+
+	body := client.ParseJSON(t, res)
+	errcode := client.GetJSONFieldStr(t, body, "errcode")
+
+	if res.StatusCode == 400 && errcode == "M_USER_IN_USE" {
+		return
+	} else {
+		errorMessage := client.GetJSONFieldStr(t, body, "error")
+		t.Fatalf("msc2716.ensureRegistered failed to register: (%s) %s", errcode, errorMessage)
+	}
+}
+
+// joinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
+func joinRoom(t *testing.T, c *client.CSAPI, virtualUserID string, roomIDOrAlias string) string {
+	query := url.Values{}
+	if virtualUserID != "" {
+		query.Add("user_id", virtualUserID)
+	}
+
+	// join the room
+	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, nil, "application/json", query)
+	// return the room ID if we joined with it
+	if roomIDOrAlias[0] == '!' {
+		return roomIDOrAlias
+	}
+	// otherwise we should be told the room ID if we joined via an alias
+	body := client.ParseJSON(t, res)
+	return client.GetJSONFieldStr(t, body, "room_id")
 }
 
 func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count int) []string {
@@ -349,7 +444,7 @@ func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count in
 
 // Backfill in a reverse-chronogical order (most recent history to oldest history)
 // Reverse-chronogical is a constraint of the Synapse implementation.
-func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *client.CSAPI, roomID string, insertAfterEventId string, insertTime time.Time, count int) []string {
+func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *client.CSAPI, virtualUserID string, roomID string, insertAfterEventId string, insertTime time.Time, count int) []string {
 	insertOriginServerTs := uint64(insertTime.UnixNano() / 1000000)
 
 	evs := make([]string, count)
@@ -373,7 +468,7 @@ func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *cli
 				"m.historical": true,
 			},
 		}
-		newEventId := sendEvent(t, c, roomID, newEvent)
+		newEventId := sendEvent(t, c, virtualUserID, roomID, newEvent)
 		evs[i] = newEventId
 	}
 
