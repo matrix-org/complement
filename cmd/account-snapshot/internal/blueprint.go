@@ -65,6 +65,11 @@ func ConvertToBlueprint(s *Snapshot, serverName string) (*b.Blueprint, error) {
 		}
 		hs.Rooms = append(hs.Rooms, *room)
 	}
+
+	// remove users who have left and done nothing else of consequence
+	removeUnusedUsers(&hs)
+	log.Printf("Blueprint: cleaned user list (%d)\n", len(hs.Users))
+
 	bp.Homeservers = append(bp.Homeservers, hs)
 
 	return bp, nil
@@ -300,6 +305,28 @@ func convertTimelineOnlyRoom(sr *AnonSnapshotRoom) *b.Room {
 		}
 	}
 	return r
+}
+
+func removeUnusedUsers(hs *b.Homeserver) {
+	usersWhoDoSomething := make(map[string]bool)
+	for _, room := range hs.Rooms {
+		for _, ev := range room.Events {
+			if ev.Type == "m.room.member" && ev.StateKey != nil {
+				localpartStateKey, _ := split(*ev.StateKey)
+				usersWhoDoSomething[localpartStateKey] = true
+			}
+			localpart, _ := split(ev.Sender)
+			usersWhoDoSomething[localpart] = true
+		}
+	}
+	var users []b.User
+	for i := 0; i < len(hs.Users); i++ {
+		if !usersWhoDoSomething[hs.Users[i].Localpart] {
+			continue
+		}
+		users = append(users, hs.Users[i])
+	}
+	hs.Users = users
 }
 
 func jsonObject(in json.RawMessage) (out map[string]interface{}) {
