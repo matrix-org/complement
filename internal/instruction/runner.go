@@ -351,47 +351,52 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 			// special cases: room joining, leaving and inviting
 			if event.Type == "m.room.member" && event.StateKey != nil &&
 				event.Content != nil && event.Content["membership"] != nil {
-				membership := event.Content["membership"].(string)
-				switch membership {
-				case "join":
-					path = "/_matrix/client/r0/join/$roomId"
-					method = "POST"
+				membership, ok := event.Content["membership"].(string)
+				if ok {
+					switch membership {
+					case "join":
+						path = "/_matrix/client/r0/join/$roomId"
+						method = "POST"
 
-					// Set server_name to the homeserver that created the room, as they're a pretty
-					// good candidate to join the room through
-					queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
-				case "leave":
-					path = "/_matrix/client/r0/rooms/$roomId/leave"
-					method = "POST"
-					if *event.StateKey != event.Sender {
-						// it's a kick
-						path = "/_matrix/client/r0/rooms/$roomId/kick"
+						// Set server_name to the homeserver that created the room, as they're a pretty
+						// good candidate to join the room through
+						queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
+					case "leave":
+						path = "/_matrix/client/r0/rooms/$roomId/leave"
+						method = "POST"
+						if *event.StateKey != event.Sender {
+							// it's a kick
+							path = "/_matrix/client/r0/rooms/$roomId/kick"
+							method = "POST"
+							event.Content["user_id"] = *event.StateKey
+						}
+					case "invite":
+						path = "/_matrix/client/r0/rooms/$roomId/invite"
 						method = "POST"
 						event.Content["user_id"] = *event.StateKey
 					}
-				case "invite":
-					path = "/_matrix/client/r0/rooms/$roomId/invite"
-					method = "POST"
-					event.Content["user_id"] = *event.StateKey
 				}
 			} else if event.Type == "m.room.canonical_alias" && event.StateKey != nil &&
 				*event.StateKey == "" {
 				// create the alias first then send the canonical alias
 				// keep a ref to the current room index so it's correct when bodyFn is called
-				ri := roomIndex
-				instrs = append(instrs, instruction{
-					method:        "PUT",
-					path:          "/_matrix/client/r0/directory/room/" + url.PathEscape(event.Content["alias"].(string)),
-					accessToken:   fmt.Sprintf("user_%s", event.Sender),
-					substitutions: subs,
-					queryParams:   queryParams,
-					bodyFn: func(lk *sync.Map) interface{} {
-						val, _ := lk.Load(fmt.Sprintf("room_%d", ri))
-						return map[string]interface{}{
-							"room_id": val,
-						}
-					},
-				})
+				alias, ok := event.Content["alias"].(string)
+				if ok {
+					ri := roomIndex
+					instrs = append(instrs, instruction{
+						method:        "PUT",
+						path:          "/_matrix/client/r0/directory/room/" + url.PathEscape(alias),
+						accessToken:   fmt.Sprintf("user_%s", event.Sender),
+						substitutions: subs,
+						queryParams:   queryParams,
+						bodyFn: func(lk *sync.Map) interface{} {
+							val, _ := lk.Load(fmt.Sprintf("room_%d", ri))
+							return map[string]interface{}{
+								"room_id": val,
+							}
+						},
+					})
+				}
 			}
 			instrs = append(instrs, instruction{
 				method:        method,
