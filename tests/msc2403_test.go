@@ -32,6 +32,9 @@ const testKnockReason string = "Let me in... LET ME IN!!!"
 // The unstable identifier to use while this feature is still unstable
 const knockUnstableIdentifier string = "xyz.amorgan.knock"
 
+// The room version to use when creating rooms. Knocking is only available in v7+
+const knockRoomVersion = "7"
+
 // TestKnocking tests sending knock membership events and transitioning from knock to other membership states.
 // Knocking is currently an experimental feature and not in the matrix spec.
 // This function tests knocking on local and remote room.
@@ -56,8 +59,8 @@ func TestKnocking(t *testing.T) {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
-		"private_chat",          // Set to private in order to get an invite-only room
-		knockUnstableIdentifier, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
+		"private_chat",   // Set to private in order to get an invite-only room
+		knockRoomVersion, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
 	})
 
 	// Test knocking between two users on the same homeserver
@@ -69,7 +72,7 @@ func TestKnocking(t *testing.T) {
 		RoomVersion string `json:"room_version"`
 	}{
 		"private_chat",          // Set to private in order to get an invite-only room
-		knockUnstableIdentifier, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
+		knockUnstableIdentifier, // Room version required for knocking
 	})
 
 	// Test knocking between two users, each on a separate homeserver
@@ -362,8 +365,8 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
-		"private_chat",          // Set to private in order to get an invite-only room
-		knockUnstableIdentifier, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
+		"private_chat",   // Set to private in order to get an invite-only room
+		knockRoomVersion, // Room version required for knocking
 	})
 
 	// Change the join_rule to allow knocking
