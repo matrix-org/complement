@@ -71,8 +71,8 @@ func TestKnocking(t *testing.T) {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
-		"private_chat",          // Set to private in order to get an invite-only room
-		knockUnstableIdentifier, // Room version required for knocking
+		"private_chat",   // Set to private in order to get an invite-only room
+		knockRoomVersion, // Room version required for knocking
 	})
 
 	// Test knocking between two users, each on a separate homeserver
