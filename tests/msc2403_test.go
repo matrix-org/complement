@@ -33,7 +33,7 @@ const testKnockReason string = "Let me in... LET ME IN!!!"
 const knockUnstableIdentifier string = "xyz.amorgan.knock"
 
 // The room version to use when creating rooms. Knocking is only available in v7+
-const knockRoomVersion = "7"
+const knockRoomVersion string = "7"
 
 // TestKnocking tests sending knock membership events and transitioning from knock to other membership states.
 // Knocking is currently an experimental feature and not in the matrix spec.
