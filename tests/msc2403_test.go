@@ -80,23 +80,23 @@ func TestKnocking(t *testing.T) {
 }
 
 func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, federation bool) {
-	t.Run("Knocking on a room with a join rule other than '"+knockUnstableIdentifier+"' should fail", func(t *testing.T) {
+	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
 		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{"hs1"}, 403)
 	})
 
-	t.Run("Change the join rule of a room from 'invite' to '"+knockUnstableIdentifier+"'", func(t *testing.T) {
+	t.Run("Change the join rule of a room from 'invite' to 'knock'", func(t *testing.T) {
 		emptyStateKey := ""
 		inRoomUser.SendEventSynced(t, roomID, b.Event{
 			Type:     "m.room.join_rules",
 			Sender:   inRoomUser.UserID,
 			StateKey: &emptyStateKey,
 			Content: map[string]interface{}{
-				"join_rule": knockUnstableIdentifier,
+				"join_rule": "knock",
 			},
 		})
 	})
 
-	t.Run("Attempting to join a room with join rule '"+knockUnstableIdentifier+"' without an invite should fail", func(t *testing.T) {
+	t.Run("Attempting to join a room with join rule 'knock' without an invite should fail", func(t *testing.T) {
 		// Set server_name so we can find rooms via ID over federation
 		query := url.Values{
 			"server_name": []string{"hs1"},
@@ -113,7 +113,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		)
 	})
 
-	t.Run("Knocking on a room with join rule '"+knockUnstableIdentifier+"' should succeed", func(t *testing.T) {
+	t.Run("Knocking on a room with join rule 'knock' should succeed", func(t *testing.T) {
 		knockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []string{"hs1"})
 	})
 
@@ -127,7 +127,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				return false
 			}
 			must.EqualStr(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, knockUnstableIdentifier, "incorrect membership for knocking user")
+			must.EqualStr(t, ev.Get("content").Get("membership").Str, "knock", "incorrect membership for knocking user")
 			return true
 		})
 	})
@@ -288,7 +288,7 @@ func knockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, ser
 	c.SyncUntil(
 		t,
 		"",
-		"rooms."+client.GjsonEscape(knockUnstableIdentifier)+"."+client.GjsonEscape(roomID)+".knock_state.events",
+		"rooms.knock."+client.GjsonEscape(roomID)+".knock_state.events",
 		func(ev gjson.Result) bool {
 			// We don't currently define any required state event types to be sent.
 			// If we've reached this point, then an entry for this room was found
@@ -376,12 +376,12 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 		Sender:   alice.UserID,
 		StateKey: &emptyStateKey,
 		Content: map[string]interface{}{
-			"join_rule": knockUnstableIdentifier,
+			"join_rule": "knock",
 		},
 	})
 
 	// Publish the room to the public room directory and check that the 'join_rule' key is knock
-	publishAndCheckRoomJoinRule(t, alice, roomID, knockUnstableIdentifier)
+	publishAndCheckRoomJoinRule(t, alice, roomID, "knock")
 
 	// Create a public room
 	roomID = alice.CreateRoom(t, struct {
