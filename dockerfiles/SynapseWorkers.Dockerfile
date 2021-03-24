@@ -33,7 +33,7 @@ COPY synapse/caddy.complement.json /root/caddy.json
 # Expose caddy's listener ports
 EXPOSE 8008 8448
 
-ENTRYPOINT \
+CMD \
   # Replace the server name in the caddy config
   sed -i "s/{{ server_name }}/${SERVER_NAME}/g" /root/caddy.json && \
   # Start postgres
@@ -51,3 +51,5 @@ ENTRYPOINT \
   # Run the script that writes the necessary config files and starts supervisord, which in turn
   # starts everything else
   /configure_workers_and_start.py
+
+RUN tree /conf
