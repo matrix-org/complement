@@ -33,7 +33,7 @@ COPY synapse/caddy.complement.json /root/caddy.json
 # Expose caddy's listener ports
 EXPOSE 8008 8448
 
-CMD \
+ENTRYPOINT \
   # Replace the server name in the caddy config
   sed -i "s/{{ server_name }}/${SERVER_NAME}/g" /root/caddy.json && \
   # Start postgres
