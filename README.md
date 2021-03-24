@@ -53,6 +53,7 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(
 - The homeserver needs to `200 OK` requests to `GET /_matrix/client/versions`.
 - The homeserver needs to manage its own storage within the image.
 - The homeserver needs to accept the server name given by the environment variable `SERVER_NAME` at runtime.
+- The homeserver needs to assume dockerfile `CMD` or `ENTRYPOINT` instructions will be run multiple times.
 - The homeserver can use the CA certificate mounted at /ca to create its own TLS cert (see [Complement PKI](README.md#complement-pki)).
 
 #### Why 'Complement'?
