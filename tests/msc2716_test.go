@@ -136,8 +136,8 @@ func TestBackfillingHistory(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our backfilled events next to
-			eventsBefore := createMessagesInRoom(t, alice, roomID, 10)
-			eventBefore := eventsBefore[0]
+			eventsBefore := createMessagesInRoom(t, alice, roomID, 2)
+			eventBefore := eventsBefore[len(eventsBefore)-1]
 			timeAfterEventBefore := time.Now()
 
 			numHistoricalMessages := 6
@@ -146,25 +146,88 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// Create some events after.
 			// Fill up the buffer so we have to scrollback to the inserted history later
-			createMessagesInRoom(t, alice, roomID, 200)
+			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
 			virtualUserLocalpart := "maria"
 			virtualUserID := fmt.Sprintf("@%s:hs1", virtualUserLocalpart)
 			// Register and join the virtual user
 			ensureRegistered(t, as, virtualUserLocalpart)
-			joinRoom(t, as, virtualUserID, roomID)
 
-			// TODO: Figure out why after joining the virtual user and it gets a 200 OK,
-			// we still see `SynapseError: 403 - User @maria:hs1 not in room !ZIIflEwiKrDFeMEMKV:hs1`
-			// when sending a message. Debugging with an Element interface on top even, shows Maria as joined!
+			// TODO: Try adding avatar and displayName and see if historical messages get this info
 
 			// Insert the most recent chunk of backfilled history
-			backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, virtualUserID, roomID, eventBefore, timeAfterEventBefore.Add(time.Millisecond*time.Duration(numHistoricalMessages)), 3)
+			//backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, virtualUserID, roomID, eventBefore, timeAfterEventBefore.Add(time.Millisecond*time.Duration(numHistoricalMessages)), 3)
+			_, historicalEvents := backfillBulkHistoricalMessagesAtTime(
+				t,
+				as,
+				virtualUserID,
+				roomID,
+				eventBefore,
+				timeAfterEventBefore,
+				3,
+			)
 
 			// Insert another older chunk of backfilled history from the same user.
 			// See if the joins and meta data still are visible on the subsequent chunk
-			backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, virtualUserID, roomID, eventBefore, timeAfterEventBefore, 3)
+			//backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, virtualUserID, roomID, eventBefore, timeAfterEventBefore, 3)
 
+			var expectedMessageOrder []string
+			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
+			expectedMessageOrder = append(expectedMessageOrder, historicalEvents...)
+			expectedMessageOrder = append(expectedMessageOrder, eventsAfter...)
+			// Order events from newest to oldest
+			expectedMessageOrder = reversed(expectedMessageOrder)
+
+			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			})
+
+			contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[len(eventsAfter)-1]}, nil, "application/json", url.Values{
+				"limit": []string{"100"},
+			})
+			contextResBody := client.ParseJSON(t, contextRes)
+			logrus.WithFields(logrus.Fields{
+				"contextResBody": string(contextResBody),
+			}).Error("context res")
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					// We're using this weird custom matcher function because we want to iterate the full response
+					// to see all of the events from the response. This way we can use it to easily compare in
+					// the fail error message when the test fails and compare the actual order to the expected order.
+					func(body []byte) error {
+						eventIDsFromResponse, err := getEventIDsFromResponseBody(body)
+						if err != nil {
+							return err
+						}
+
+						// Copy the array by value so we can modify it as we iterate in the foreach loop
+						// We save the full untouched `expectedMessageOrder` for use in the log messages
+						workingExpectedMessageOrder := expectedMessageOrder
+
+						// Match each event from the response in order to the list of expected events
+						matcher := match.JSONArrayEach("chunk", func(r gjson.Result) error {
+							// Find all events in order
+							if len(r.Get("content").Get("body").Str) > 0 {
+								// Pop the next message off the expected list
+								nextEventInOrder := workingExpectedMessageOrder[0]
+								workingExpectedMessageOrder = workingExpectedMessageOrder[1:]
+
+								if r.Get("event_id").Str != nextEventInOrder {
+									return fmt.Errorf("Next event found was %s but expected %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", r.Get("event_id").Str, nextEventInOrder, len(eventIDsFromResponse), eventIDsFromResponse, len(expectedMessageOrder), expectedMessageOrder)
+								}
+							}
+
+							return nil
+						})
+
+						err = matcher(body)
+
+						return err
+					},
+				},
+			})
 		})
 
 		t.Run("Backfilled historical events with m.historical do not come down /sync", func(t *testing.T) {
@@ -473,4 +536,61 @@ func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *cli
 	}
 
 	return evs
+}
+
+func backfillBulkHistoricalMessagesAtTime(
+	t *testing.T,
+	c *client.CSAPI,
+	virtualUserID string,
+	roomID string,
+	insertAfterEventId string,
+	insertTime time.Time,
+	count int,
+) (state_event_ids []string, event_ids []string) {
+	insertOriginServerTs := uint64(insertTime.UnixNano() / 1000000)
+
+	evs := make([]map[string]interface{}, count)
+	for i := 0; i < len(evs); i++ {
+		newEvent := map[string]interface{}{
+			"type":             "m.room.message",
+			"sender":           virtualUserID,
+			"origin_server_ts": insertOriginServerTs + uint64(i),
+			"content": map[string]interface{}{
+				"msgtype":      "m.text",
+				"body":         fmt.Sprintf("Historical %d", i),
+				"m.historical": true,
+			},
+		}
+		evs[i] = newEvent
+	}
+
+	joinEvent := map[string]interface{}{
+		"type":             "m.room.member",
+		"sender":           virtualUserID,
+		"origin_server_ts": insertOriginServerTs,
+		"content": map[string]interface{}{
+			"membership": "join",
+		},
+		"state_key": virtualUserID,
+	}
+
+	query := make(url.Values, 2)
+	query.Add("prev_event", insertAfterEventId)
+	query.Add("user_id", virtualUserID)
+
+	b, err := json.Marshal(map[string]interface{}{
+		"events":                evs,
+		"state_events_at_start": []map[string]interface{}{joinEvent},
+	})
+	if err != nil {
+		t.Fatalf("msc2716.backfillBulkHistoricalMessagesAtTime failed to marshal JSON body: %s", err)
+	}
+
+	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "bulksend"}, b, "application/json", query)
+	body := client.ParseJSON(t, res)
+
+	stateEvents := client.GetJSONFieldArray(t, body, "state_events")
+	events := client.GetJSONFieldArray(t, body, "events")
+
+	return stateEvents, events
 }

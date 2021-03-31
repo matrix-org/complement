@@ -325,6 +325,29 @@ func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	return res.Str
 }
 
+func GetJSONFieldArray(t *testing.T, body []byte, wantKey string) []string {
+	t.Helper()
+
+	res := gjson.GetBytes(body, wantKey)
+
+	if !res.Exists() {
+		t.Fatalf("JSONFieldStr: key '%s' missing from %s", wantKey, string(body))
+	}
+
+	arrLength := len(res.Array())
+	arr := make([]string, arrLength)
+	i := 0
+	res.ForEach(func(key, value gjson.Result) bool {
+		arr[i] = value.Str
+
+		// Keep iterating
+		i++
+		return true
+	})
+
+	return arr
+}
+
 // ParseJSON parses a JSON-encoded HTTP Response body into a byte slice
 func ParseJSON(t *testing.T, res *http.Response) []byte {
 	t.Helper()
