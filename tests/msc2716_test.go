@@ -65,7 +65,7 @@ func TestBackfillingHistory(t *testing.T) {
 			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
 			// Then backfill a bunch of events between eventBefore and eventsAfter
-			historicalEvents := reversed(backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, "", roomID, eventBefore, timeAfterEventBefore, numHistoricalMessages))
+			historicalEvents := backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, "", roomID, eventBefore, timeAfterEventBefore, numHistoricalMessages)
 
 			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
 				"dir":   []string{"b"},
@@ -74,7 +74,9 @@ func TestBackfillingHistory(t *testing.T) {
 
 			var expectedMessageOrder []string
 			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
-			expectedMessageOrder = append(expectedMessageOrder, historicalEvents...)
+			// Historical events were inserted in reverse chronological
+			// But we expect them to come out in /messages in the correct order
+			expectedMessageOrder = append(expectedMessageOrder, reversed(historicalEvents)...)
 			expectedMessageOrder = append(expectedMessageOrder, eventsAfter...)
 			// Order events from newest to oldest
 			expectedMessageOrder = reversed(expectedMessageOrder)
@@ -157,7 +159,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// Insert the most recent chunk of backfilled history
 			//backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, virtualUserID, roomID, eventBefore, timeAfterEventBefore.Add(time.Millisecond*time.Duration(numHistoricalMessages)), 3)
-			_, historicalEvents := backfillBulkHistoricalMessagesAtTime(
+			_, historicalEvents := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 				t,
 				as,
 				virtualUserID,
@@ -173,7 +175,9 @@ func TestBackfillingHistory(t *testing.T) {
 
 			var expectedMessageOrder []string
 			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
-			expectedMessageOrder = append(expectedMessageOrder, historicalEvents...)
+			// Historical events were inserted in reverse chronological
+			// But we expect them to come out in /messages in the correct order
+			expectedMessageOrder = append(expectedMessageOrder, reversed(historicalEvents)...)
 			expectedMessageOrder = append(expectedMessageOrder, eventsAfter...)
 			// Order events from newest to oldest
 			expectedMessageOrder = reversed(expectedMessageOrder)
@@ -538,7 +542,7 @@ func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *cli
 	return evs
 }
 
-func backfillBulkHistoricalMessagesAtTime(
+func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 	t *testing.T,
 	c *client.CSAPI,
 	virtualUserID string,
@@ -551,13 +555,18 @@ func backfillBulkHistoricalMessagesAtTime(
 
 	evs := make([]map[string]interface{}, count)
 	for i := 0; i < len(evs); i++ {
+		// We have to backfill historical messages from most recent to oldest
+		// since backfilled messages decrement their `stream_order` and we want messages
+		// to appear in order from the `/messages` endpoint
+		messageIndex := (count - 1) - i
+
 		newEvent := map[string]interface{}{
 			"type":             "m.room.message",
 			"sender":           virtualUserID,
-			"origin_server_ts": insertOriginServerTs + uint64(i),
+			"origin_server_ts": insertOriginServerTs + uint64(messageIndex),
 			"content": map[string]interface{}{
 				"msgtype":      "m.text",
-				"body":         fmt.Sprintf("Historical %d", i),
+				"body":         fmt.Sprintf("Historical %d", messageIndex),
 				"m.historical": true,
 			},
 		}
@@ -583,7 +592,7 @@ func backfillBulkHistoricalMessagesAtTime(
 		"state_events_at_start": []map[string]interface{}{joinEvent},
 	})
 	if err != nil {
-		t.Fatalf("msc2716.backfillBulkHistoricalMessagesAtTime failed to marshal JSON body: %s", err)
+		t.Fatalf("msc2716.backfillBulkHistoricalMessagesInReverseChronologicalAtTime failed to marshal JSON body: %s", err)
 	}
 
 	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "bulksend"}, b, "application/json", query)
