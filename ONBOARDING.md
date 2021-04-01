@@ -1,10 +1,26 @@
 ## So you want to write Complement tests
 
-If you've not run Complement tests yet, please do so. This document will outline how Complement works and how you can add efficient tests and best practices for Complement itself.
+Complement is a black box integration testing framework for Matrix homeservers.
+
+This document will outline how Complement works and how you can add efficient tests and best practices for Complement itself.  If you haven't run Complement tests yet, please see the [README](README.md) and start there!
+
+### Terminology
+
+* `Blueprint`: a human-readable outline for what should be done prior to a test (such as creating users, rooms, etc).
+* `Deployment`: controls the lifetime of a Docker container (built from a `Blueprint`). It has functions on it for creating deployment-scoped structs such as Client-Server API clients for interacting with specific Homeservers in the deployment.
 
 ### Architecture
 
-Complement runs a Docker container every time you call `deployment := Deploy(...)`, which gets killed on `deployment.Destroy(...)`. These containers are snapshots of the target homeserver at a particular state. The state is determined by the `Blueprint`, which is a human-readable outline for what should be done prior to the test (such as creating users, rooms, etc). Coming from Sytest, a `Blueprint` is similar to a `fixture`. A `deployment` has functions on it for creating deployment-scoped structs such as CS-API clients for interacting with specific Homeservers in the deployment. Assertions are done via the `must` and `match` packages. For testing outbound federation, Complement implements a bare-bones Federation server for homeservers to talk to. Unlike Sytest, you have to explicitly opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically. This is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
+Each Complement test runs one or more Docker containers for the homeserver(s) involved in the test. These containers are snapshots of the target homeserver at a particular state. The state of each container is determined by the `Blueprint` used. Client-Server and Server-Server API calls can then be made with assertions against the results.
+
+In order to actually write a test, Complement needs to:
+
+* Create `Deployments`, this is done by calling `deployment := Deploy(...)` (and can subsequently be killed via `deployment.Destroy(...)`).
+* (Potentially) make API calls against the `Deployments`.
+* Make assertions, which are done via the `must` and `match` packages provided by Complement.
+
+For testing outbound federation, Complement implements a bare-bones Federation server for homeservers to talk to.  Each test must explicitly declare the functionality of the homeserver, this is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
+
 ```go
 // A federation server which handles serving up its own keys when requested,
 // automatically accepts make_join and send_join requests and deals with
@@ -37,9 +53,9 @@ The mapping of `hs1` to `localhost:port` combinations can be done automatically 
 
 ### How do I...
 
-Get a CS API client:
+Get a Client-Server API client:
 ```go
-// the user and hs name are from the blueprint
+// the user and homeserver name are from the blueprint
 // automatically maps localhost:12345 to the right container
 alice := deployment.Client(t, "hs1", "@alice:hs1")
 ```
@@ -107,7 +123,7 @@ the HTTP body.
 
 #### I want to run a bunch of tests in parallel, how do I do this?
 
-If you're familiar with Go testing then you already know how. Add `t.Parallel()` to all tests which you want to run in parallel. For a good example of this, see `registration_test.go` which does:
+This is done using the standard Go testing mechanisms. Add `t.Parallel()` to all tests which you want to run in parallel. For a good example of this, see `registration_test.go` which does:
 ```go
 // This will block until the 2 subtests have completed
 t.Run("parallel", func(t *testing.T) {
@@ -145,7 +161,7 @@ There is no syntactically pleasing way to do this. Create a separate function wh
 
 #### How do I log messages in tests?
 
-Standard Go testing here, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
+This is done using standard Go testing mechanisms, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
 
 #### How do I skip a test?
 
@@ -171,3 +187,9 @@ For VSCode, add to `settings.json`:
 For Goland:
  * Under "Run"->"Edit Configurations..."->"Templates"->"Go Test", add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest`
  * Then you can right-click on any test file or test case and "Run <test name>".
+
+#### What do I need to know if I'm coming from sytest?
+
+sytest has a concept of a `fixture` to configure the homeserver or test in a particular way, these are replaced with a `Blueprint` in complement.
+
+Unlike Sytest, each test must to opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically.
