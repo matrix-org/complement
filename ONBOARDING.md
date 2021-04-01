@@ -17,7 +17,7 @@ In order to actually write a test, Complement needs to:
 
 * Create `Deployments`, this is done by calling `deployment := Deploy(...)` (and can subsequently be killed via `deployment.Destroy(...)`).
 * (Potentially) make API calls against the `Deployments`.
-* Make assertions, which are done via the `must` and `match` packages provided by Complement.
+* Make assertions, this can be done via the standard Go testing mechanisms (e.g. `t.Fatalf`), but Complement also provides some helpers in the `must` and `match` packages.
 
 For testing outbound federation, Complement implements a bare-bones Federation server for homeservers to talk to.  Each test must explicitly declare the functionality of the homeserver. This is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
 
