@@ -1,15 +1,15 @@
-## So you want to write Complement tests
+# So you want to write Complement tests
 
 Complement is a black box integration testing framework for Matrix homeservers.
 
 This document will outline how Complement works and how you can add efficient tests and best practices for Complement itself.  If you haven't run Complement tests yet, please see the [README](README.md) and start there!
 
-### Terminology
+## Terminology
 
 * `Blueprint`: a human-readable outline for what should be done prior to a test (such as creating users, rooms, etc).
 * `Deployment`: controls the lifetime of a Docker container (built from a `Blueprint`). It has functions on it for creating deployment-scoped structs such as Client-Server API clients for interacting with specific Homeservers in the deployment.
 
-### Architecture
+## Architecture
 
 Each Complement test runs one or more Docker containers for the homeserver(s) involved in the test. These containers are snapshots of the target homeserver at a particular state. The state of each container is determined by the `Blueprint` used. Client-Server and Server-Server API calls can then be made with assertions against the results.
 
@@ -51,7 +51,7 @@ The high numbered ports are randomly chosen, and are for illustrative purposes o
 ```
 The mapping of `hs1` to `localhost:port` combinations can be done automatically using a `docker.RoundTripper`.
 
-### How do I...
+## How do I...
 
 Get a Client-Server API client:
 ```go
@@ -81,9 +81,9 @@ Get a Federation client:
 fedClient := srv.FederationClient(deployment, "hs1")
 ```
 
-### FAQ
+## FAQ
 
-#### How should I name the test files / test functions?
+### How should I name the test files / test functions?
 
 Test files have to have `_test.go` else Go won't run the tests in that file. Other than that, there are no restrictions or naming convention.
 If you are converting a sytest be sure to add a comment _anywhere_ in the source code which has the form:
@@ -103,11 +103,11 @@ Adding `// sytest: ...` means `sytest_coverage.go` will know the test is convert
 when run! Use `go run sytest_coverage.go -v` to see the exact string to use, as they may be different to the one produced
 by an actual sytest run due to parameterised tests.
 
-#### Should I always make a new blueprint for a test?
+### Should I always make a new blueprint for a test?
 
 Probably not. Blueprints are costly, and they should only be made if there is a strong case for plenty of reuse among tests. In the same way that we don't always add fixtures to sytest, we should be sparing with adding blueprints.
 
-#### How should I assert JSON objects?
+### How should I assert JSON objects?
 
 Use one of the matchers in the `match` package (which uses `gjson`) rather than `json.Unmarshal(...)` into a struct. There's a few reasons for this:
  - Removes the temptation to use `gomatrixserverlib` structs.
@@ -116,12 +116,12 @@ Use one of the matchers in the `match` package (which uses `gjson`) rather than 
 
 If you want to extract data from objects, just use `gjson` directly.
 
-#### How should I assert HTTP requests/responses?
+### How should I assert HTTP requests/responses?
 
 Use the corresponding matcher in the `match` package. This allows you to be as specific or as lax as you like on your checks, and allows you to add JSON matchers on
 the HTTP body.
 
-#### I want to run a bunch of tests in parallel, how do I do this?
+### I want to run a bunch of tests in parallel, how do I do this?
 
 This is done using the standard Go testing mechanisms. Add `t.Parallel()` to all tests which you want to run in parallel. For a good example of this, see `registration_test.go` which does:
 ```go
@@ -140,7 +140,7 @@ t.Run("parallel", func(t *testing.T) {
 })
 ```
 
-#### How should I do comments in the test?
+### How should I do comments in the test?
 
 Add long prose to the start of the function to outline what it is you're testing (and why if it is unclear). For example:
 ```go
@@ -151,31 +151,31 @@ func TestInboundFederationKeys(t *testing.T) {
 }
 ```
 
-#### I think Complement is doing something weird, can I get more logs?
+### I think Complement is doing something weird, can I get more logs?
 
 You can pass `COMPLEMENT_DEBUG=1` to add lots of debug logging. You can also do this via `os.Setenv("COMPLEMENT_DEBUG", "1")` before you make a deployment. This will add trace logging to the clients which logs full HTTP request/responses, amongst other debug info.
 
-#### How do I set up a bunch of stuff before the tests, e.g before each?
+### How do I set up a bunch of stuff before the tests, e.g before each?
 
 There is no syntactically pleasing way to do this. Create a separate function which returns a function. See https://stackoverflow.com/questions/42310088/setup-and-teardown-for-each-test-using-std-testing-package?rq=1
 
-#### How do I log messages in tests?
+### How do I log messages in tests?
 
 This is done using standard Go testing mechanisms, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
 
-#### How do I skip a test?
+### How do I skip a test?
 
 Use one of `t.Skipf(...)` or `t.SkipNow()`.
 
-#### Why do we use `t.Errorf` sometimes and `t.Fatalf` other times?
+### Why do we use `t.Errorf` sometimes and `t.Fatalf` other times?
 
 Error will fail the test but continue execution, where Fatal will fail the test and quit. Use Fatal when continuing to run the test will result in programming errors (e.g nil exceptions).
 
-#### Why do I get the error "Error response from daemon: Conflict. The container name "/complement_rooms_state_alice.hs1_1" is already in use by container "c2d1d90c6cff7b7de2678b56c702bd1ff76ca72b930e8f2ca32eef3f2514ff3b". You have to remove (or rename) that container to be able to reuse that name."?
+### Why do I get the error "Error response from daemon: Conflict. The container name "/complement_rooms_state_alice.hs1_1" is already in use by container "c2d1d90c6cff7b7de2678b56c702bd1ff76ca72b930e8f2ca32eef3f2514ff3b". You have to remove (or rename) that container to be able to reuse that name."?
 
 The Docker daemon has a lag time between removing containers and them actually being removed. This means you cannot remove a container called 'foo' and immediately recreate it as 'foo'. To get around this, you need to use a different name. This probably means the namespace you have given the deployment is used by another test. Try changing it to something else e.g `Deploy(t, "rooms_state_2", b.BlueprintAlice.Name)`
 
-#### How do I run tests inside my IDE?
+### How do I run tests inside my IDE?
 
 For VSCode, add to `settings.json`:
 ```
@@ -188,7 +188,7 @@ For Goland:
  * Under "Run"->"Edit Configurations..."->"Templates"->"Go Test", add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest`
  * Then you can right-click on any test file or test case and "Run <test name>".
 
-#### What do I need to know if I'm coming from sytest?
+### What do I need to know if I'm coming from sytest?
 
 sytest has a concept of a `fixture` to configure the homeserver or test in a particular way, these are replaced with a `Blueprint` in complement.
 
