@@ -1,10 +1,10 @@
 [![Complement Dev](https://img.shields.io/matrix/complement:matrix.org.svg?label=%23complement%3Amatrix.org&logo=matrix&server_fqdn=matrix.org)](https://matrix.to/#/#complement:matrix.org)
 
-### Complement
+# Complement
 
 Complement is a black box integration testing framework for Matrix homeservers.
 
-#### Running
+## Running
 
 You need to have Go and Docker installed, as well as `libolm3` and `libolm-dev`. Then:
 
@@ -29,7 +29,7 @@ options will work, so to just run 1 named test and include a timeout for the tes
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests
 ```
 
-##### Running against Dendrite
+### Running against Dendrite
 
 For instance, for Dendrite:
 ```
@@ -39,7 +39,7 @@ $ (cd dockerfiles && docker build -t complement-dendrite -f Dendrite.Dockerfile 
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests
 ```
 
-##### Running against Synapse
+### Running against Synapse
 
 If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
 
@@ -49,7 +49,7 @@ If you want to develop Complement tests while working on a local dev instance of
 COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh "TestOutboundFederation(Profile|Send)"
 ```
 
-##### Image requirements
+### Image requirements
 
 If you're looking to run against a custom Dockerfile, it must meet the following requirements:
 
@@ -61,15 +61,15 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 - The homeserver needs to assume dockerfile `CMD` or `ENTRYPOINT` instructions will be run multiple times.
 - The homeserver can use the CA certificate mounted at /ca to create its own TLS cert (see [Complement PKI](README.md#complement-pki)).
 
-#### Writing tests
+## Writing tests
 
 To get started developing Complement tests, see [the onboarding documentation](ONBOARDING.md).
 
-#### Why 'Complement'?
+## Why 'Complement'?
 
 Because **M**<sup>*C*</sup> = **1** - **M**
 
-#### Complement PKI
+## Complement PKI
 
 As the Matrix federation protocol expects federation endpoints to be served with valid TLS certs,
 Complement will create a self-signed CA cert to use for creating valid TLS certs in homeserver containers.
@@ -94,7 +94,7 @@ cp /root/ca.crt /usr/local/share/ca-certificates/complement.crt
 update-ca-certificates
 ```
 
-#### Sytest parity
+## Sytest parity
 
 ```
 $ go run sytest_coverage.go -v
