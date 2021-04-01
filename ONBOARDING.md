@@ -7,7 +7,7 @@ This document will outline how Complement works and how you can add efficient te
 ## Terminology
 
 * `Blueprint`: a human-readable outline for what should be done prior to a test (such as creating users, rooms, etc).
-* `Deployment`: controls the lifetime of a Docker container (built from a `Blueprint`). It has functions on it for creating deployment-scoped structs such as Client-Server API clients for interacting with specific Homeservers in the deployment.
+* `Deployment`: controls the lifetime of a Docker container (built from a `Blueprint`). It has functions on it for creating deployment-scoped structs such as Client-Server API clients for interacting with specific homeservers in the deployment.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ In order to actually write a test, Complement needs to:
 * (Potentially) make API calls against the `Deployments`.
 * Make assertions, which are done via the `must` and `match` packages provided by Complement.
 
-For testing outbound federation, Complement implements a bare-bones Federation server for homeservers to talk to.  Each test must explicitly declare the functionality of the homeserver, this is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
+For testing outbound federation, Complement implements a bare-bones Federation server for homeservers to talk to.  Each test must explicitly declare the functionality of the homeserver. This is done using [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) and looks something like:
 
 ```go
 // A federation server which handles serving up its own keys when requested,
@@ -190,6 +190,6 @@ For Goland:
 
 ### What do I need to know if I'm coming from sytest?
 
-sytest has a concept of a `fixture` to configure the homeserver or test in a particular way, these are replaced with a `Blueprint` in complement.
+Sytest has a concept of a `fixture` to configure the homeserver or test in a particular way, these are replaced with a `Blueprint` in Complement.
 
-Unlike Sytest, each test must to opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically.
+Unlike Sytest, each test must opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically.
