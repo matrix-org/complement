@@ -4,20 +4,6 @@
 
 Complement is a black box integration testing framework for Matrix homeservers.
 
-
-#### Getting started
-
-To get started developing, see https://github.com/matrix-org/complement/blob/master/ONBOARDING.md
-
-If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
-
-If you want to develop Complement tests while working on a local dev instance of Synapse, use the [`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh) script and set the `COMPLEMENT_DIR` environment variable to the filepath of your local Complement checkout. A regex that matches against test names can also be supplied as an argument to the script, i.e:
-
-```sh
-COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh "TestOutboundFederation(Profile|Send)"
-```
-
-
 #### Running
 
 You need to have Go and Docker installed, as well as `libolm3` and `libolm-dev`. Then:
@@ -37,6 +23,14 @@ brew install libolm
 
 You can either use your own image, or one of the ones supplied in the [dockerfiles](./dockerfiles) directory.
 
+A full list of config options can be found [in the config file](./internal/config/config.go). All normal Go test config
+options will work, so to just run 1 named test and include a timeout for the test run:
+```
+$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests
+```
+
+##### Running against Dendrite
+
 For instance, for Dendrite:
 ```
 # build a docker image for Dendrite...
@@ -45,13 +39,20 @@ $ (cd dockerfiles && docker build -t complement-dendrite -f Dendrite.Dockerfile 
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests
 ```
 
-A full list of config options can be found [in the config file](./internal/config/config.go). All normal Go test config
-options will work, so to just run 1 named test and include a timeout for the test run:
-```
-$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests
+##### Running against Synapse
+
+If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
+
+If you want to develop Complement tests while working on a local dev instance of Synapse, use the [`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh) script and set the `COMPLEMENT_DIR` environment variable to the filepath of your local Complement checkout. A regex that matches against test names can also be supplied as an argument to the script, i.e:
+
+```sh
+COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh "TestOutboundFederation(Profile|Send)"
 ```
 
 ##### Image requirements
+
+If you're looking to run against a custom Dockerfile, it must meet the following requirements:
+
 - The Dockerfile must `EXPOSE 8008` and `EXPOSE 8448` for client and federation traffic respectively.
 - The homeserver should run and listen on these ports.
 - The homeserver needs to `200 OK` requests to `GET /_matrix/client/versions`.
@@ -59,6 +60,10 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(
 - The homeserver needs to accept the server name given by the environment variable `SERVER_NAME` at runtime.
 - The homeserver needs to assume dockerfile `CMD` or `ENTRYPOINT` instructions will be run multiple times.
 - The homeserver can use the CA certificate mounted at /ca to create its own TLS cert (see [Complement PKI](README.md#complement-pki)).
+
+#### Writing tests
+
+To get started developing Complement tests, see [the onboarding documentation](ONBOARDING.md).
 
 #### Why 'Complement'?
 
