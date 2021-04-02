@@ -96,7 +96,7 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 	t.Helper()
 	// Invite the user to the room
 	body := map[string]interface{}{
-    "user_id": userID,
+		"user_id": userID,
 	}
 	c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
 }
