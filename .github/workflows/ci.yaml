@@ -10,19 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v2
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
       - run: sudo apt-get -qq install libolm-dev
-      - run: |
-          export PATH="$(go env GOPATH)/bin:$PATH"
-          ./build/scripts/build-and-lint.sh
+      - uses: golangci/golangci-lint-action@v2
+        with:
+          version: v1.39
+          args: ./internal/... ./tests/... 
 
   complement:
     needs: lint
