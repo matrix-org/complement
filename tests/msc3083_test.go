@@ -89,4 +89,44 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 	// Invite the user and joining shuold work.
 	alice.InviteRoom(t, room, "@bob:hs1")
 	bob.JoinRoom(t, room, []string{"hs1"})
+
+	// Leave the room again, and join the space.
+	bob.LeaveRoom(t, room)
+	bob.JoinRoom(t, space, []string{"hs1"})
+
+	// Update the room to have bad values in the "allow" field, which should stop
+	// joining from working properly.
+	emptyStateKey := ""
+	alice.SendEventSynced(
+		t,
+		room,
+		b.Event{
+			Type:     "m.room.join_rules",
+			Sender:   alice.UserID,
+			StateKey: &emptyStateKey,
+			Content: map[string]interface{}{
+				"join_rule": "restricted",
+				"allow":     []string{"invalid"},
+			},
+		},
+	)
+	// Fails since invalid values get filtered out of allow.
+	FailJoinRoom(bob, t, room, "hs1")
+
+	alice.SendEventSynced(
+		t,
+		room,
+		b.Event{
+			Type:     "m.room.join_rules",
+			Sender:   alice.UserID,
+			StateKey: &emptyStateKey,
+			Content: map[string]interface{}{
+				"join_rule": "restricted",
+				"allow":     "invalid",
+			},
+		},
+	)
+	// Succeeds since a fully invalid allow key is ignored (and the room is
+	// treated as public).
+	bob.JoinRoom(t, room, []string{"hs1"})
 }
