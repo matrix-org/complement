@@ -10,12 +10,28 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 )
 
 var (
 	spaceChildEventType  = "org.matrix.msc1772.space.child"
 	spaceParentEventType = "org.matrix.msc1772.space.parent"
 )
+
+func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverName string) {
+	// This is copied from Client.JoinRoom to test a join failure.
+	query := make(url.Values, 1)
+	query.Set("server_name", serverName)
+	c.MustDoWithStatusRaw(
+		t,
+		"POST",
+		[]string{"_matrix", "client", "r0", "join", roomIDOrAlias},
+		nil,
+		"application/json",
+		query,
+		403,
+	)
+}
 
 // Test joining a room with join rules restricted to membership in a space.
 func TestRestrictedRoomsLocalJoin(t *testing.T) {
@@ -59,20 +75,18 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 
 	// Create a second user and attempt to join the room, it should fail.
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	// This is copied from Client.JoinRoom to test a join failure.
-	query := make(url.Values, 1)
-	query.Set("server_name", "hs1")
-	bob.MustDoWithStatusRaw(
-		t,
-		"POST",
-		[]string{"_matrix", "client", "r0", "join", room},
-		nil,
-		"application/json",
-		query,
-		403,
-	)
+	FailJoinRoom(bob, t, room, "hs1")
 
 	// Join the space, attempt to join the room again, which now should succeed.
 	bob.JoinRoom(t, space, []string{"hs1"})
+	bob.JoinRoom(t, room, []string{"hs1"})
+
+	// Leaving the room works and the user is unable to re-join.
+	bob.LeaveRoom(t, room)
+	bob.LeaveRoom(t, space)
+	FailJoinRoom(bob, t, room, "hs1")
+
+	// Invite the user and joining shuold work.
+	alice.InviteRoom(t, room, "@bob:hs1")
 	bob.JoinRoom(t, room, []string{"hs1"})
 }

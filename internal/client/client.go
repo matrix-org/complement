@@ -84,6 +84,23 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
+// LeaveRoom joins the room ID, else fails the test.
+func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
+	t.Helper()
+	// leave the room
+	c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"}, nil, "application/json", nil)
+}
+
+// InviteRoom joins the room ID, else fails the test.
+func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
+	t.Helper()
+	// Invite the user to the room
+	body := map[string]interface{}{
+    "user_id": userID,
+	}
+	c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
+}
+
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
