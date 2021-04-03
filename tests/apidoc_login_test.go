@@ -46,7 +46,7 @@ func TestLogin(t *testing.T) {
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
-					match.JSONKeyEqual("server_name", "hs1"),
+					match.JSONKeyEqual("home_server", "hs1"),
 				},
 			})
 		})
