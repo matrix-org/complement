@@ -2,12 +2,13 @@ package tests
 
 import (
 	"encoding/json"
+	"testing"
+
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/gjson"
-	"io/ioutil"
-	"testing"
 )
 
 func TestLogin(t *testing.T) {
@@ -25,8 +26,14 @@ func TestLogin(t *testing.T) {
 				"username": "post-login-user",
 				"password": "superuser"
 			}`))
-			body, _ := ioutil.ReadAll(res.Body)
-			userId := gjson.Get(string(body), "user_id")
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual("access_token", gjson.String),
+					match.JSONKeyTypeEqual("user_id", gjson.String),
+				},
+			})
+			//body, _ := ioutil.ReadAll(res.Body)
+			//userId := gjson.Get(string(body), "user_id")
 			res = unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`
 			{
 				"type": "m.login.password"
