@@ -1,9 +1,10 @@
-
 package tests
 
 import (
-	"encoding/json"
+	"fmt"
 	"testing"
+
+	"encoding/json"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/match"
@@ -17,7 +18,7 @@ func TestRequestEncodingFails(t *testing.T) {
 	// sytest: POST rejects invalid utf-8 in JSON
 	t.Run("POST rejects invalid utf-8 in JSON", func(t *testing.T) {
 		res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
-			"test": "a` + string(0x81) + `"
+			"test": "a`+fmt.Sprint(0x81)+`"
 		}`))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 400,
