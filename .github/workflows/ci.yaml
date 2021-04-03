@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [ 'master' ]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: sudo apt-get -qq install libolm-dev
+      - uses: golangci/golangci-lint-action@v2
+        with:
+          version: v1.39
+          args: ./internal/... ./tests/... 
+
+  complement:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - homeserver: Synapse
+            tags: synapse_blacklist
+
+          - homeserver: Dendrite
+            tags: msc2836
+
+    container:
+      image: matrixdotorg/complement  # dockerfiles/ComplementCIBuildkite.Dockerfile
+      env:
+        CI: true
+        DOCKER_BUILDKIT: 1
+      ports:
+        - 8448:8448
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - uses: actions/checkout@v2
+      - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
+      - run: go test -v -tags "${{ matrix.tags }}" ./tests
+        env:
+          COMPLEMENT_BASE_IMAGE: homeserver
