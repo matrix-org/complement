@@ -38,7 +38,7 @@ func TestLogin(t *testing.T) {
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
-					"user": "post-login-user",
+					"user": "post-login-user"
 				},
 				"password": "superuser"
 			}`))
