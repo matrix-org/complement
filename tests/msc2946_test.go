@@ -171,7 +171,7 @@ func TestClientSpacesSummary(t *testing.T) {
 			ss2:  2, // ss1,r4
 			r4:   1, // ss2
 		}
-		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", root, "spaces"}, map[string]interface{}{})
+		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -218,7 +218,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		// SS2 -> SS1
 		// SS1 -> root
 		// root -> R1,R2 (but only 1 is allowed)
-		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", r4, "spaces"}, map[string]interface{}{
+		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", r4, "spaces"}, map[string]interface{}{
 			"max_rooms_per_space": 1,
 		})
 		wantItems := []interface{}{
@@ -240,7 +240,7 @@ func TestClientSpacesSummary(t *testing.T) {
 	// - Setting limit works correctly
 	t.Run("limit", func(t *testing.T) {
 		// should omit R4 due to limit
-		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", root, "spaces"}, map[string]interface{}{
+		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{
 			"limit": 6,
 		})
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -267,7 +267,7 @@ func TestClientSpacesSummary(t *testing.T) {
 			StateKey: &ss1,
 			Content:  map[string]interface{}{},
 		})
-		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", root, "spaces"}, map[string]interface{}{})
+		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -383,7 +383,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 	}
 	t.Logf("rooms: %v", allEvents)
 
-	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "rooms", root, "spaces"}, map[string]interface{}{})
+	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
