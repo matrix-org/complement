@@ -91,7 +91,7 @@ func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 	c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"}, nil, "application/json", nil)
 }
 
-// InviteRoom joins the room ID, else fails the test.
+// InviteRoom invites userID to the room ID, else fails the test.
 func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 	t.Helper()
 	// Invite the user to the room

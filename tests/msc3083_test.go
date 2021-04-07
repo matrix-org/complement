@@ -86,7 +86,7 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 	bob.LeaveRoom(t, space)
 	FailJoinRoom(bob, t, room, "hs1")
 
-	// Invite the user and joining shuold work.
+	// Invite the user and joining should work.
 	alice.InviteRoom(t, room, "@bob:hs1")
 	bob.JoinRoom(t, room, []string{"hs1"})
 
