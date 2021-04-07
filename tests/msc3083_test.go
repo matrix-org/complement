@@ -126,7 +126,6 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 			},
 		},
 	)
-	// Succeeds since a fully invalid allow key is ignored (and the room is
-	// treated as public).
-	bob.JoinRoom(t, room, []string{"hs1"})
+	// Fails since a fully invalid allow key rquires an invite.
+	FailJoinRoom(bob, t, room, "hs1")
 }
