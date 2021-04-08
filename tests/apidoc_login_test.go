@@ -8,6 +8,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -41,24 +42,12 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login can log in as a user
 		t.Run("POST /login can login as user", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
-				"auth": {
-					"type": "m.login.dummy"
-				},
-				"username": "post-login-user",
-				"password": "superuser"
-			}`))
-			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONKeyTypeEqual("access_token", gjson.String),
-					match.JSONKeyTypeEqual("user_id", gjson.String),
-				},
-			})
-			res = unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
+			createDummyUser(t, unauthedClient, "login_test_user")
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
-					"user": "post-login-user"
+					"user": "login_test_user"
 				},
 				"password": "superuser"
 			}`))
@@ -70,5 +59,50 @@ func TestLogin(t *testing.T) {
 				},
 			})
 		})
+		// sytest: POST /login returns the same device_id as that in the request
+		t.Run("POST /login returns the same device_id as that in the request", func(t *testing.T) {
+			t.Parallel()
+			deviceId := "test_device_id"
+			createDummyUser(t, unauthedClient, "device_id_test_user")
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
+				"type": "m.login.password",
+				"identifier": {
+					"type": "m.id.user",
+					"user": "device_id_test_user"
+				},
+				"password": "superuser",
+				"device_id": "`+deviceId+`"
+			}`))
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual("access_token", gjson.String),
+					match.JSONKeyEqual("device_id", deviceId),
+				},
+			})
+		})
+	})
+}
+
+func createDummyUser(t *testing.T, unauthedClient *client.CSAPI, userID string) {
+	reqBody, err := json.Marshal(map[string]interface{}{
+		"auth": map[string]string{
+			"type": "m.login.dummy",
+		},
+		"username": userID,
+		"password": "superuser",
+	})
+	if err != nil {
+		t.Fatalf("unable to marshal json: %v", err)
+	}
+	res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(reqBody), nil)
+	if err != nil {
+		t.Fatalf("unable to make register user: %v", err)
+	}
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONKeyTypeEqual("access_token", gjson.String),
+			match.JSONKeyTypeEqual("user_id", gjson.String),
+		},
 	})
 }
