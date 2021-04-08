@@ -78,17 +78,24 @@ func TestClientSpacesSummary(t *testing.T) {
 	roomNames[ss1] = "Sub-Space 1"
 	r2 := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
+		"name": "R2",
 	})
+	roomNames[r2] = "R2"
 	ss2 := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
+		"name": "SS2",
 	})
+	roomNames[ss2] = "SS2"
 	r3 := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
+		"name": "R3",
 	})
+	roomNames[r3] = "R3"
 	// alice is not joined to R4
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	r4 := bob.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
+		"name": "R4",
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.history_visibility",
@@ -99,6 +106,7 @@ func TestClientSpacesSummary(t *testing.T) {
 			},
 		},
 	})
+	roomNames[r4] = "R4"
 
 	// create the links
 	rootToR1 := eventKey(root, r1, spaceChildEventType)
