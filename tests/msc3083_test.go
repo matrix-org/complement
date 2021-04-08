@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	msc1772SpaceChildEventType  = "org.matrix.msc1772.space.child"
+	msc1772SpaceChildEventType = "org.matrix.msc1772.space.child"
 )
 
 func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverName string, expectedHttpCode int) {
