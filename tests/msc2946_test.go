@@ -29,15 +29,14 @@ func eventKey(srcRoomID, dstRoomID, evType string) string {
 // _____|________
 // |    |       |
 // R1  SS1      R2
-//      |________
-//      |        |
-//     SS2      R3
 //      |
-//      R4
+//     SS2
+//      |________
+//      |       |
+//      R3      R4
 //
 // Where:
 // - the user is joined to all rooms except R4.
-// - R3 -> SS1 is a parent link without a child.
 // - R2 <---> Root is a two-way link.
 // - The remaining links are just children links.
 // - SS1 is marked as a "space", but SS2 is not.
@@ -78,24 +77,24 @@ func TestClientSpacesSummary(t *testing.T) {
 	roomNames[ss1] = "Sub-Space 1"
 	r2 := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
-		"name": "R2",
+		"name":   "R2",
 	})
 	roomNames[r2] = "R2"
 	ss2 := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
-		"name": "SS2",
+		"name":   "SS2",
 	})
 	roomNames[ss2] = "SS2"
 	r3 := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
-		"name": "R3",
+		"name":   "R3",
 	})
 	roomNames[r3] = "R3"
 	// alice is not joined to R4
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	r4 := bob.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
-		"name": "R4",
+		"name":   "R4",
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.history_visibility",
@@ -133,7 +132,6 @@ func TestClientSpacesSummary(t *testing.T) {
 			"via": []string{"hs1"},
 		},
 	})
-	r2ToRoot := eventKey(r2, root, spaceParentEventType)
 	alice.SendEventSynced(t, r2, b.Event{ // parent link
 		Type:     spaceParentEventType,
 		StateKey: &root,
@@ -149,10 +147,10 @@ func TestClientSpacesSummary(t *testing.T) {
 			"via": []string{"hs1"},
 		},
 	})
-	r3ToSS1 := eventKey(r3, ss1, spaceParentEventType)
-	alice.SendEventSynced(t, r3, b.Event{ // parent link only
-		Type:     spaceParentEventType,
-		StateKey: &ss1,
+	ss2ToR3 := eventKey(ss2, r3, spaceChildEventType)
+	alice.SendEventSynced(t, ss2, b.Event{
+		Type:     spaceChildEventType,
+		StateKey: &r3,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
 		},
@@ -167,18 +165,9 @@ func TestClientSpacesSummary(t *testing.T) {
 	})
 
 	// - Querying the root returns the entire graph
-	// - Rooms are returned correctly along with the custom fields `num_refs` and `room_type`.
+	// - Rooms are returned correctly along with the custom fields `room_type`.
 	// - Events are returned correctly.
 	t.Run("query whole graph", func(t *testing.T) {
-		roomRefs := map[string]int{
-			root: 4, // r1,r2,ss1,parent r2
-			r1:   1, // root
-			r2:   2, // root,parent
-			ss1:  3, // root,ss2,r3
-			r3:   1, // ss1
-			ss2:  2, // ss1,r4
-			r4:   1, // ss2
-		}
 		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -194,12 +183,6 @@ func TestClientSpacesSummary(t *testing.T) {
 							return fmt.Errorf("room %s got name %s want %s", roomID, data.Get("name").Str, name)
 						}
 					}
-					if refs, ok := roomRefs[roomID]; ok {
-						gotRefs := data.Get("num_refs").Int()
-						if int64(refs) != gotRefs {
-							return fmt.Errorf("room %s got %d refs want %d", roomID, gotRefs, refs)
-						}
-					}
 					if roomID == ss1 {
 						wantType := "org.matrix.msc1772.space"
 						if data.Get("room_type").Str != wantType {
@@ -208,10 +191,10 @@ func TestClientSpacesSummary(t *testing.T) {
 					}
 					return nil
 				}),
+				// Check that the links from Root down to other rooms and spaces exist.
 				match.JSONCheckOff("events", []interface{}{
-					rootToR1, rootToR2, rootToSS1, r2ToRoot,
-					ss1ToSS2, r3ToSS1,
-					ss2ToR4,
+					rootToR1, rootToR2, rootToSS1,
+					ss1ToSS2, ss2ToR3, ss2ToR4,
 				}, func(r gjson.Result) interface{} {
 					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
 				}, nil),
@@ -221,17 +204,15 @@ func TestClientSpacesSummary(t *testing.T) {
 
 	// - Setting max_rooms_per_space works correctly
 	t.Run("max_rooms_per_space", func(t *testing.T) {
-		// should omit either R1 or R2 if we start from R4 because we only return 1 link per room which will be:
-		// R4 -> SS2
-		// SS2 -> SS1
-		// SS1 -> root
-		// root -> R1,R2 (but only 1 is allowed)
-		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", r4, "spaces"}, map[string]interface{}{
+		// should omit either R3 or R4 if we start from SS1 because we only return 1 link per room which will be:
+		// SS1 -> SS2
+		// SS2 -> R3,R4 (but only 1 is allowed)
+		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", ss1, "spaces"}, map[string]interface{}{
 			"max_rooms_per_space": 1,
 		})
 		wantItems := []interface{}{
-			ss2ToR4, ss1ToSS2, rootToSS1,
-			rootToR1, rootToR2, // one of these
+			ss1ToSS2,
+			ss2ToR3, ss2ToR4, // one of these
 		}
 		body := must.ParseJSON(t, res.Body)
 		gjson.GetBytes(body, "events").ForEach(func(_, val gjson.Result) bool {
@@ -239,33 +220,10 @@ func TestClientSpacesSummary(t *testing.T) {
 			return true
 		})
 		if len(wantItems) != 1 {
-			if wantItems[0] != rootToR1 && wantItems[0] != rootToR2 {
+			if wantItems[0] != ss2ToR3 && wantItems[0] != ss2ToR4 {
 				t.Errorf("expected fewer events to be returned: %s", string(body))
 			}
 		}
-	})
-
-	// - Setting limit works correctly
-	t.Run("limit", func(t *testing.T) {
-		// should omit R4 due to limit
-		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{
-			"limit": 6,
-		})
-		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONCheckOff("rooms", []interface{}{
-					root, r1, r2, r3, ss1, ss2,
-				}, func(r gjson.Result) interface{} {
-					return r.Get("room_id").Str
-				}, nil),
-				match.JSONCheckOff("events", []interface{}{
-					rootToR1, rootToR2, rootToSS1, r2ToRoot,
-					ss1ToSS2, r3ToSS1,
-				}, func(r gjson.Result) interface{} {
-					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
-				}, nil),
-			},
-		})
 	})
 
 	t.Run("redact link", func(t *testing.T) {
@@ -284,7 +242,7 @@ func TestClientSpacesSummary(t *testing.T) {
 					return r.Get("room_id").Str
 				}, nil),
 				match.JSONCheckOff("events", []interface{}{
-					rootToR1, rootToR2, r2ToRoot,
+					rootToR1, rootToR2,
 				}, func(r gjson.Result) interface{} {
 					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
 				}, nil),
