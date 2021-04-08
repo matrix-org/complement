@@ -14,8 +14,7 @@ import (
 )
 
 var (
-	spaceChildEventType  = "org.matrix.msc1772.space.child"
-	spaceParentEventType = "org.matrix.msc1772.space.parent"
+	msc1772SpaceChildEventType = "org.matrix.msc1772.space.child"
 )
 
 func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverName string) {
@@ -66,7 +65,7 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 		},
 	})
 	alice.SendEventSynced(t, space, b.Event{
-		Type:     spaceChildEventType,
+		Type:     msc1772SpaceChildEventType,
 		StateKey: &room,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
