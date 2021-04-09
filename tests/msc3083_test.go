@@ -125,7 +125,7 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 			},
 		},
 	)
-	// Fails since a fully invalid allow key rquires an invite.
+	// Fails since a fully invalid allow key requires an invite.
 	FailJoinRoom(bob, t, room, "hs1", 403)
 }
 
@@ -183,7 +183,7 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	bob.LeaveRoom(t, space)
 	FailJoinRoom(bob, t, room, "hs1", 400)
 
-	// Invite the user and joining shuold work.
+	// Invite the user and joining should work.
 	alice.InviteRoom(t, room, "@bob:hs2")
 	bob.JoinRoom(t, room, []string{"hs1"})
 
@@ -223,6 +223,6 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 			},
 		},
 	)
-	// Fails since a fully invalid allow key rquires an invite.
+	// Fails since a fully invalid allow key requires an invite.
 	FailJoinRoom(bob, t, room, "hs1", 400)
 }
