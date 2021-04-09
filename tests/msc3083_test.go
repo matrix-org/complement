@@ -11,6 +11,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/docker"
 )
 
 var (
@@ -32,12 +33,10 @@ func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverNam
 	)
 }
 
-// Test joining a room with join rules restricted to membership in a space.
-func TestRestrictedRoomsLocalJoin(t *testing.T) {
-	deployment := Deploy(t, "msc3083_local", b.BlueprintOneToOneRoom)
-	defer deployment.Destroy(t)
-
-	// Create the space and put a room in it.
+// Create a space and put a room in it which is set to:
+// * The experimental room version.
+// * restricted join rules with allow set to the space.
+func SetupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.CSAPI, string, string) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	space := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -71,6 +70,17 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 			"via": []string{"hs1"},
 		},
 	})
+
+	return alice, space, room
+}
+
+// Test joining a room with join rules restricted to membership in a space.
+func TestRestrictedRoomsLocalJoin(t *testing.T) {
+	deployment := Deploy(t, "msc3083_local", b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	// Setup the user, space, and restricted room.
+	alice, space, room := SetupRestrictedRoom(t, deployment)
 
 	// Create a second user and attempt to join the room, it should fail.
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
@@ -134,40 +144,8 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	deployment := Deploy(t, "msc3083_remote", b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	// Create the space and put a room in it.
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	space := alice.CreateRoom(t, map[string]interface{}{
-		"preset": "public_chat",
-		"name":   "Space",
-	})
-	// The room is an unstable room version which supports the restricted join_rule.
-	room := alice.CreateRoom(t, map[string]interface{}{
-		"preset":       "public_chat",
-		"name":         "Room",
-		"room_version": "org.matrix.msc3083",
-		"initial_state": []map[string]interface{}{
-			{
-				"type":      "m.room.join_rules",
-				"state_key": "",
-				"content": map[string]interface{}{
-					"join_rule": "restricted",
-					"allow": []map[string]interface{}{
-						{
-							"space": &space,
-							"via":   []string{"hs1"},
-						},
-					},
-				},
-			},
-		},
-	})
-	alice.SendEventSynced(t, space, b.Event{
-		Type:     msc1772SpaceChildEventType,
-		StateKey: &room,
-		Content: map[string]interface{}{
-			"via": []string{"hs1"},
-		},
-	})
+	// Setup the user, space, and restricted room.
+	alice, space, room := SetupRestrictedRoom(t, deployment)
 
 	// Create a second user and attempt to join the room, it should fail.
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
