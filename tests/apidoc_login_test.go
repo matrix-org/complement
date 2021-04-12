@@ -62,7 +62,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login returns the same device_id as that in the request
 		t.Run("POST /login returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
-			deviceId := "test_device_id"
+			deviceID := "test_device_id"
 			createDummyUser(t, unauthedClient, "device_id_test_user")
 			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
 				"type": "m.login.password",
@@ -71,13 +71,13 @@ func TestLogin(t *testing.T) {
 					"user": "device_id_test_user"
 				},
 				"password": "superuser",
-				"device_id": "`+deviceId+`"
+				"device_id": "`+deviceID+`"
 			}`))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
-					match.JSONKeyEqual("device_id", deviceId),
+					match.JSONKeyEqual("device_id", deviceID),
 				},
 			})
 		})
