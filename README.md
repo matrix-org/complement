@@ -99,7 +99,6 @@ update-ca-certificates
 
 ```
 $ go run sytest_coverage.go -v
-
 10apidoc/01register 3/9 tests
     × GET /register yields a set of flows
     ✓ POST /register can create a user
@@ -111,8 +110,17 @@ $ go run sytest_coverage.go -v
     × POST $ep_name with shared secret downcases capitals
     × POST $ep_name with shared secret disallows symbols
 
-10apidoc/01request-encoding 0/1 tests
-10apidoc/02login 0/6 tests
+10apidoc/01request-encoding 1/1 tests
+    ✓ POST rejects invalid utf-8 in JSON
+
+10apidoc/02login 3/6 tests
+    ✓ GET /login yields a set of flows
+    ✓ POST /login can log in as a user
+    ✓ POST /login returns the same device_id as that in the request
+    × POST /login can log in as a user with just the local part of the id
+    × POST /login as non-existing user is rejected
+    × POST /login wrong password is rejected
+
 10apidoc/03events-initial 0/2 tests
 10apidoc/04version 0/1 tests
 10apidoc/10profile-displayname 0/2 tests
@@ -302,6 +310,5 @@ $ go run sytest_coverage.go -v
 90jira/SYN-516 0/1 tests
 90jira/SYN-627 0/1 tests
 
-TOTAL: 11/690 tests converted
-
+TOTAL: 15/690 tests converted
 ```
