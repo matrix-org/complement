@@ -47,7 +47,7 @@ func TestLogin(t *testing.T) {
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
-					"user": "login_test_user"
+					"user": "@login_test_user:hs1"
 				},
 				"password": "superuser"
 			}`))
@@ -68,7 +68,7 @@ func TestLogin(t *testing.T) {
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
-					"user": "device_id_test_user"
+					"user": "@device_id_test_user:hs1"
 				},
 				"password": "superuser",
 				"device_id": "`+deviceID+`"
@@ -78,6 +78,71 @@ func TestLogin(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
 					match.JSONKeyEqual("device_id", deviceID),
+				},
+			})
+		})
+		// sytest: POST /login can log in as a user with just the local part of the id
+		t.Run("POST /login can log in as a user with just the local part of the id", func(t *testing.T) {
+			t.Parallel()
+
+			createDummyUser(t, unauthedClient, "local-login-user")
+
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
+				"type": "m.login.password",
+				"identifier": {
+					"type": "m.id.user",
+					"user": "local-login-user"
+				},
+				"password": "superuser"
+			}`))
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual("access_token", gjson.String),
+					match.JSONKeyEqual("home_server", "hs1"),
+				},
+			})
+		})
+		// sytest: POST /login as non-existing user is rejected
+		t.Run("POST /login as non-existing user is rejected", func(t *testing.T) {
+			t.Parallel()
+			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
+				"type": "m.login.password",
+				"identifier": {
+					"type": "m.id.user",
+					"user": "i-dont-exist"
+				},
+				"password": "superuser"
+			}`), nil)
+			if err != nil {
+				t.Fatalf("unable to make request to /login: %v", err)
+			}
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 403,
+			})
+		})
+		// sytest: POST /login wrong password is rejected
+		t.Run("POST /login wrong password is rejected", func(t *testing.T) {
+			t.Parallel()
+			createDummyUser(t, unauthedClient, "login_wrong_password")
+			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
+				"type": "m.login.password",
+				"identifier": {
+					"type": "m.id.user",
+					"user": "login_wrong_password"
+				},
+				"password": "wrong_password"
+			}`), nil)
+
+			if err != nil {
+				t.Fatalf("unable to make request to /login: %v", err)
+			}
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 403,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
 				},
 			})
 		})
