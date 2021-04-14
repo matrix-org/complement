@@ -70,6 +70,7 @@ type Builder struct {
 	FederationPort int
 	Docker         *client.Client
 	debugLogging   bool
+	bestEffort     bool
 	config         *config.Complement
 }
 
@@ -86,6 +87,7 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 		CSAPIPort:      8008,
 		FederationPort: 8448,
 		debugLogging:   cfg.DebugLoggingEnabled,
+		bestEffort:     cfg.BestEffort,
 		config:         cfg,
 	}, nil
 }
@@ -139,6 +141,20 @@ func (d *Builder) removeImages() error {
 		return err
 	}
 	for _, img := range images {
+		// we only clean up localhost/complement images else if someone docker pulls
+		// an anonymous snapshot we might incorrectly nuke it :( any non-localhost
+		// tag marks this image as safe (as images can have multiple tags)
+		isLocalhost := true
+		for _, rt := range img.RepoTags {
+			if !strings.HasPrefix(rt, "localhost/complement") {
+				isLocalhost = false
+				break
+			}
+		}
+		if !isLocalhost {
+			d.log("Not cleaning up image with tags: %v", img.RepoTags)
+			continue
+		}
 		bprintName := img.Labels["complement_blueprint"]
 		keep := false
 		for _, keepBprint := range d.KeepBlueprints {
@@ -252,7 +268,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		return []error{err}
 	}
 
-	runner := instruction.NewRunner(bprint.Name, d.debugLogging)
+	runner := instruction.NewRunner(bprint.Name, d.bestEffort, d.debugLogging)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
 		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
@@ -278,7 +294,23 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		if res.err != nil {
 			continue
 		}
-		labels := labelsForTokens(runner.AccessTokens(res.homeserver.Name))
+		// collect and store access tokens as labels 'access_token_$userid: $token'
+		labels := make(map[string]string)
+		accessTokens := runner.AccessTokens(res.homeserver.Name)
+		if len(bprint.KeepAccessTokensForUsers) > 0 {
+			// only keep access tokens for specified users
+			for _, userID := range bprint.KeepAccessTokensForUsers {
+				tok, ok := accessTokens[userID]
+				if ok {
+					labels["access_token_"+userID] = tok
+				}
+			}
+		} else {
+			// keep all tokens
+			for k, v := range accessTokens {
+				labels["access_token_"+k] = v
+			}
+		}
 
 		// Combine the labels for tokens and application services
 		asLabels := labelsForApplicationServices(res.homeserver)
@@ -637,15 +669,6 @@ func tokensFromLabels(labels map[string]string) map[string]string {
 		}
 	}
 	return userIDToToken
-}
-
-func labelsForTokens(userIDToToken map[string]string) map[string]string {
-	labels := make(map[string]string)
-	// collect and store access tokens as labels 'access_token_$userid: $token'
-	for k, v := range userIDToToken {
-		labels["access_token_"+k] = v
-	}
-	return labels
 }
 
 func asIDToRegistrationFromLabels(labels map[string]string) map[string]string {

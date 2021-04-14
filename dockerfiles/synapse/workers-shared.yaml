@@ -2,6 +2,7 @@
 report_stats: False
 trusted_key_servers: []
 enable_registration: true
+bcrypt_rounds: 4
 
 ## Federation ##
 

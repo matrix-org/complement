@@ -4,30 +4,50 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tidwall/gjson"
+	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/matrix-org/complement/internal/b"
 )
 
 type Runner struct {
 	blueprintName string
-	lookup        map[string]string
+	lookup        *sync.Map // string -> string
 	debugLogging  bool
+	// number of in-flight HTTP requests at any one time
+	// this is cpu bounded due to bcrypting passwords
+	userConcurrency int
+	// number of in-flight HTTP requests at any one time
+	// this is not cpu bounded so can be higher than userConcurrency
+	roomConcurrency int
+	// if true, does not treat non 2xx as fatal
+	bestEffort bool
+	// set to true if the runner should stop
+	terminate atomic.Value
 }
 
-func NewRunner(blueprintName string, debugLogging bool) *Runner {
+func NewRunner(blueprintName string, bestEffort, debugLogging bool) *Runner {
+	var v atomic.Value
+	v.Store(false)
 	return &Runner{
-		lookup:        make(map[string]string),
-		blueprintName: blueprintName,
-		debugLogging:  debugLogging,
+		lookup:          &sync.Map{},
+		blueprintName:   blueprintName,
+		debugLogging:    debugLogging,
+		userConcurrency: 12,
+		roomConcurrency: 40,
+		terminate:       v,
+		bestEffort:      bestEffort,
 	}
 }
 
@@ -42,45 +62,109 @@ func (r *Runner) log(str string, args ...interface{}) {
 // Returns a map of user_id => access_token
 func (r *Runner) AccessTokens(hsDomain string) map[string]string {
 	res := make(map[string]string)
-	for key, val := range r.lookup {
+	r.lookup.Range(func(k, v interface{}) bool {
+		key := k.(string)
+		val := v.(string)
 		if strings.HasPrefix(key, "user_@") && strings.HasSuffix(key, ":"+hsDomain) {
 			res[strings.TrimPrefix(key, "user_")] = val
 		}
-	}
+		return true
+	})
 	return res
 }
 
 // Run all instructions until completion. Return an error if there was a problem executing any instruction.
-func (r *Runner) Run(hs b.Homeserver, hsURL string) error {
+func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
+	userInstrSets := calculateUserInstructionSets(r, hs)
+	var wg sync.WaitGroup
+	wg.Add(len(userInstrSets))
+	for _, set := range userInstrSets {
+		go func(s []instruction) {
+			defer wg.Done()
+			err := r.runInstructionSet(hs, hsURL, s)
+			if err != nil {
+				r.log("Instruction set failed: %s", err)
+				resErr = err
+				r.terminate.Store(true)
+			}
+		}(set)
+	}
+	// wait for all users to be made before creating rooms
+	wg.Wait()
+	if resErr != nil {
+		r.log("Terminating: user creation failed: %s", resErr)
+		return resErr
+	}
+	roomInstrSets := calculateRoomInstructionSets(r, hs)
+	wg.Add(len(roomInstrSets))
+	for _, set := range roomInstrSets {
+		go func(s []instruction) {
+			defer wg.Done()
+			err := r.runInstructionSet(hs, hsURL, s)
+			if err != nil {
+				r.log("Instruction set failed: %s", err)
+				resErr = err
+				r.terminate.Store(true)
+			}
+		}(set)
+	}
+	// wait for all rooms to be made before returning from this function
+	wg.Wait()
+	return resErr
+}
+
+func (r *Runner) runInstructionSet(hs b.Homeserver, hsURL string, instrs []instruction) error {
 	contextStr := fmt.Sprintf("%s.%s", r.blueprintName, hs.Name)
-	instrs := calculateInstructions(r, hs)
 	i := 0
 	cli := http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 30 * time.Second,
+	}
+	isFatalErr := func(err error) error {
+		if r.bestEffort {
+			r.log("ERROR [bestEffort=true]: %s", err)
+			return nil
+		}
+		return err
 	}
 	req, instr, i := r.next(instrs, hsURL, i)
 	for req != nil {
+		if r.terminate.Load().(bool) {
+			return fmt.Errorf("terminated")
+		}
 		res, err := cli.Do(req)
 		if err != nil {
-			return fmt.Errorf("%s : failed to perform HTTP request to %s: %w", contextStr, req.URL.String(), err)
+			err = isFatalErr(fmt.Errorf("%s : failed to perform HTTP request to %s with body %+v: %w", contextStr, req.URL.String(), instr.body, err))
+			if err != nil {
+				return err
+			}
 		}
-		r.log("%s [%s] %s => HTTP %s\n", contextStr, instr.accessToken, req.URL.String(), res.Status)
+		if i < 100 || i%200 == 0 {
+			r.log("%s [%d/%d] %s => HTTP %s\n", contextStr, i, len(instrs), req.URL.String(), res.Status)
+		}
 		body, err := ioutil.ReadAll(res.Body)
 		if err != nil {
-			return fmt.Errorf("%s : failed to read response body: %w", contextStr, err)
+			err = isFatalErr(fmt.Errorf("%s : failed to read response body: %w", contextStr, err))
+			if err != nil {
+				return err
+			}
 		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			r.log("LOOKUP : %+v\n", r.lookup)
 			r.log("INSTRUCTION: %+v\n", instr)
-			return fmt.Errorf("%s : request %s returned HTTP %s : %s", contextStr, req.URL.String(), res.Status, string(body))
+			err = isFatalErr(fmt.Errorf("%s : request %s returned HTTP %s : %s", contextStr, req.URL.String(), res.Status, string(body)))
+			if err != nil {
+				return err
+			}
 		}
 		if instr.storeResponse != nil {
 			if !gjson.ValidBytes(body) {
-				return fmt.Errorf("%s : cannot storeResponse as response is not valid JSON. Body: %s", contextStr, string(body))
+				err = isFatalErr(fmt.Errorf("%s : cannot storeResponse as response is not valid JSON. Body: %s", contextStr, string(body)))
+				if err != nil {
+					return err
+				}
 			}
 			for k, v := range instr.storeResponse {
 				val := gjson.GetBytes(body, strings.TrimPrefix(v, "."))
-				r.lookup[k] = val.Str
+				r.lookup.Store(k, val.Str)
 			}
 		}
 		req, instr, i = r.next(instrs, hsURL, i)
@@ -97,6 +181,9 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 	i++
 
 	var body io.Reader
+	if instr.body == nil && instr.bodyFn != nil {
+		instr.body = instr.bodyFn(r.lookup)
+	}
 	if instr.body != nil {
 		b, err := json.Marshal(instr.body)
 		if err != nil {
@@ -113,7 +200,10 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 
 	q := req.URL.Query()
 	if instr.accessToken != "" {
-		q.Set("access_token", r.lookup[instr.accessToken])
+		at, ok := r.lookup.Load(instr.accessToken)
+		if ok {
+			q.Set("access_token", at.(string))
+		}
 	}
 	for paramName, paramValue := range instr.queryParams {
 		// if the variable starts with a '.' then use the lookup table, else use the string literally
@@ -121,7 +211,10 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 		// { $roomId: ".room_0", $eventType: "m.room.message" }
 		var valToEncode string
 		if paramValue[0] == '.' {
-			valToEncode = r.lookup[strings.TrimPrefix(paramValue, ".")]
+			vint, ok := r.lookup.Load(strings.TrimPrefix(paramValue, "."))
+			if ok {
+				valToEncode = vint.(string)
+			}
 		} else {
 			valToEncode = paramValue
 		}
@@ -152,19 +245,24 @@ type instruction struct {
 	// The fields (expressed as dot-style notation) which should be stored in a lookup table for later use.
 	// E.g to store the room_id in the response under the key 'foo' to use it later: { "foo" : ".room_id" }
 	storeResponse map[string]string
+	// Optional: A function to create the request body from the lookup map provided. Only used if `body` is <nil>.
+	bodyFn func(lk *sync.Map) interface{}
 }
 
 // url returns the complete path resolved url for this instruction. Query parameters must be
 // added separately.
-func (i *instruction) url(hsURL string, lookup map[string]string) string {
+func (i *instruction) url(hsURL string, lookup *sync.Map) string {
 	pathTemplate := i.path
 	for k, v := range i.substitutions {
 		// if the variable starts with a '.' then use the lookup table, else use the string literally
 		// this handles scenarios like:
 		// { $roomId: ".room_0", $eventType: "m.room.message" }
 		var valToEncode string
-		if v[0] == '.' {
-			valToEncode = lookup[strings.TrimPrefix(v, ".")]
+		if v != "" && v[0] == '.' {
+			vint, ok := lookup.Load(strings.TrimPrefix(v, "."))
+			if ok {
+				valToEncode = vint.(string)
+			}
 		} else {
 			valToEncode = v
 		}
@@ -173,31 +271,42 @@ func (i *instruction) url(hsURL string, lookup map[string]string) string {
 	return hsURL + pathTemplate
 }
 
-// calculateInstructions returns the entire set of HTTP requests to be executed in order. Various substitutions
-// and placeholders are returned in these instructions as it's impossible to know at this time what room IDs etc
-// will be allocated, so use an instruction loader to load the right requests.
-func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
-	var instrs []instruction
+// calculateUserInstructionSets returns sets of HTTP requests to be executed in order. Sets can be executed in any order.
+func calculateUserInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
+	sets := make([][]instruction, r.userConcurrency)
+
+	createdUsers := make(map[string]bool)
 	// add instructions to create users
 	for _, user := range hs.Users {
-		instrs = append(instrs, instruction{
-			method:      "POST",
-			path:        "/_matrix/client/r0/register",
-			accessToken: "",
-			body: map[string]interface{}{
-				"username": user.Localpart,
-				"password": "complement_meets_min_pasword_req_" + user.Localpart,
-				"auth": map[string]string{
-					"type": "m.login.dummy",
-				},
-			},
-			storeResponse: map[string]string{
-				"user_@" + user.Localpart + ":" + hs.Name: ".access_token",
-			},
-		})
+		i := indexFor(user.Localpart, r.userConcurrency)
+		instrs := sets[i]
+
+		if createdUsers[user.Localpart] {
+			// login instead as the device ID may be different
+			instrs = append(instrs, instructionLogin(hs, user))
+		} else {
+			instrs = append(instrs, instructionRegister(hs, user))
+		}
+		createdUsers[user.Localpart] = true
+
+		if user.OneTimeKeys > 0 {
+			instrs = append(instrs, instructionOneTimeKeyUpload(hs, user))
+		}
+		sets[i] = instrs
 	}
+	return sets
+}
+
+// calculateRoomInstructionSets returns sets of HTTP requests to be executed in order. Sets can be executed in any order. Various substitutions
+// and placeholders are returned in these instructions as it's impossible to know at this time what room IDs etc
+// will be allocated, so use an instruction loader to load the right requests.
+func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
+	sets := make([][]instruction, r.roomConcurrency)
+
 	// add instructions to create rooms and send events
 	for roomIndex, room := range hs.Rooms {
+		setIndex := indexFor(fmt.Sprintf("%d", roomIndex), r.roomConcurrency)
+		instrs := sets[setIndex]
 		var queryParams = make(map[string]string)
 		if room.Creator != "" {
 			storeRes := map[string]string{
@@ -208,7 +317,7 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 
 				// Store the homeserver's server_name, so that remote homeservers that attempt
 				// to join this room know which server to contact
-				r.lookup[fmt.Sprintf("room_ref_%s_server_name", room.Ref)] = hs.Name
+				r.lookup.Store(fmt.Sprintf("room_ref_%s_server_name", room.Ref), hs.Name)
 			}
 			instrs = append(instrs, instruction{
 				method:        "POST",
@@ -239,17 +348,54 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 				subs["$txnId"] = fmt.Sprintf("%d", eventIndex)
 			}
 
-			// special cases: room joining
+			// special cases: room joining, leaving and inviting
 			if event.Type == "m.room.member" && event.StateKey != nil &&
 				event.Content != nil && event.Content["membership"] != nil {
-				membership := event.Content["membership"].(string)
-				if membership == "join" {
-					path = "/_matrix/client/r0/join/$roomId"
-					method = "POST"
+				membership, ok := event.Content["membership"].(string)
+				if ok {
+					switch membership {
+					case "join":
+						path = "/_matrix/client/r0/join/$roomId"
+						method = "POST"
 
-					// Set server_name to the homeserver that created the room, as they're a pretty
-					// good candidate to join the room through
-					queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
+						// Set server_name to the homeserver that created the room, as they're a pretty
+						// good candidate to join the room through
+						queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
+					case "leave":
+						path = "/_matrix/client/r0/rooms/$roomId/leave"
+						method = "POST"
+						if *event.StateKey != event.Sender {
+							// it's a kick
+							path = "/_matrix/client/r0/rooms/$roomId/kick"
+							method = "POST"
+							event.Content["user_id"] = *event.StateKey
+						}
+					case "invite":
+						path = "/_matrix/client/r0/rooms/$roomId/invite"
+						method = "POST"
+						event.Content["user_id"] = *event.StateKey
+					}
+				}
+			} else if event.Type == "m.room.canonical_alias" && event.StateKey != nil &&
+				*event.StateKey == "" {
+				// create the alias first then send the canonical alias
+				// keep a ref to the current room index so it's correct when bodyFn is called
+				alias, ok := event.Content["alias"].(string)
+				if ok {
+					ri := roomIndex
+					instrs = append(instrs, instruction{
+						method:        "PUT",
+						path:          "/_matrix/client/r0/directory/room/" + url.PathEscape(alias),
+						accessToken:   fmt.Sprintf("user_%s", event.Sender),
+						substitutions: subs,
+						queryParams:   queryParams,
+						bodyFn: func(lk *sync.Map) interface{} {
+							val, _ := lk.Load(fmt.Sprintf("room_%d", ri))
+							return map[string]interface{}{
+								"room_id": val,
+							}
+						},
+					})
 				}
 			}
 			instrs = append(instrs, instruction{
@@ -261,7 +407,123 @@ func calculateInstructions(r *Runner, hs b.Homeserver) []instruction {
 				queryParams:   queryParams,
 			})
 		}
+		sets[setIndex] = instrs
 	}
 
-	return instrs
+	return sets
+}
+
+func instructionRegister(hs b.Homeserver, user b.User) instruction {
+	body := map[string]interface{}{
+		"username": user.Localpart,
+		"password": "complement_meets_min_pasword_req_" + user.Localpart,
+		"auth": map[string]string{
+			"type": "m.login.dummy",
+		},
+	}
+
+	if user.DeviceID != nil {
+		body["device_id"] = user.DeviceID
+	}
+
+	return instruction{
+		method:      "POST",
+		path:        "/_matrix/client/r0/register",
+		accessToken: "",
+		body:        body,
+		storeResponse: map[string]string{
+			"user_@" + user.Localpart + ":" + hs.Name: ".access_token",
+		},
+	}
+}
+
+func instructionLogin(hs b.Homeserver, user b.User) instruction {
+	body := map[string]interface{}{
+		"type":     "m.login.password",
+		"user":     user.Localpart,
+		"password": "complement_meets_min_pasword_req_" + user.Localpart,
+		"auth": map[string]string{
+			"type": "m.login.dummy",
+		},
+	}
+
+	if user.DeviceID != nil {
+		body["device_id"] = user.DeviceID
+	}
+
+	return instruction{
+		method:      "POST",
+		path:        "/_matrix/client/r0/login",
+		accessToken: "",
+		body:        body,
+		storeResponse: map[string]string{
+			"user_@" + user.Localpart + ":" + hs.Name: ".access_token",
+		},
+	}
+}
+
+func instructionOneTimeKeyUpload(hs b.Homeserver, user b.User) instruction {
+	account := olm.NewAccount()
+	ed25519Key, curveKey := account.IdentityKeys()
+
+	userID := fmt.Sprintf("@%s:%s", user.Localpart, hs.Name)
+	deviceID := *user.DeviceID
+
+	ed25519KeyID := fmt.Sprintf("ed25519:%s", deviceID)
+	curveKeyID := fmt.Sprintf("curve25519:%s", deviceID)
+
+	deviceKeys := map[string]interface{}{
+		"user_id":    userID,
+		"device_id":  deviceID,
+		"algorithms": []string{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
+		"keys": map[string]string{
+			ed25519KeyID: ed25519Key.String(),
+			curveKeyID:   curveKey.String(),
+		},
+	}
+
+	signature, _ := account.SignJSON(deviceKeys)
+
+	deviceKeys["signatures"] = map[string]map[string]string{
+		userID: {
+			ed25519KeyID: signature,
+		},
+	}
+
+	account.GenOneTimeKeys(user.OneTimeKeys)
+
+	oneTimeKeys := map[string]interface{}{}
+
+	for kid, key := range account.OneTimeKeys() {
+		keyID := fmt.Sprintf("signed_curve25519:%s", kid)
+		keyMap := map[string]interface{}{
+			"key": key.String(),
+		}
+
+		signature, _ = account.SignJSON(keyMap)
+
+		keyMap["signatures"] = map[string]interface{}{
+			userID: map[string]string{
+				ed25519KeyID: signature,
+			},
+		}
+
+		oneTimeKeys[keyID] = keyMap
+	}
+	return instruction{
+		method:      "POST",
+		path:        "/_matrix/client/r0/keys/upload",
+		accessToken: fmt.Sprintf("user_@%s:%s", user.Localpart, hs.Name),
+		body: map[string]interface{}{
+			"device_keys":   deviceKeys,
+			"one_time_keys": oneTimeKeys,
+		},
+	}
+}
+
+// indexFor hashes the input and returns a number % numEntries
+func indexFor(input string, numEntries int) int {
+	hh := fnv.New32a()
+	_, _ = hh.Write([]byte(input))
+	return int(int64(hh.Sum32()) % int64(numEntries))
 }
