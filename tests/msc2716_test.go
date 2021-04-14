@@ -31,6 +31,10 @@ type event struct {
 	Content        map[string]interface{}
 }
 
+// This is configurable because it can be nice to change it to `time.Second` while
+// checking out the test result in a Synapse instance
+const TimeBetweenMessages = time.Millisecond
+
 // Test that the message events we insert between A and B come back in the correct order from /messages
 func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, "rooms_state", b.BlueprintHSWithApplicationService)
@@ -59,7 +63,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			numHistoricalMessages := 3
 			// wait X number of ms to ensure that the timestamp changes enough for each of the messages we try to backfill later
-			time.Sleep(time.Duration(numHistoricalMessages) * time.Millisecond)
+			time.Sleep(time.Duration(numHistoricalMessages) * TimeBetweenMessages)
 
 			// Create some more "live" events after our insertion point
 			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
@@ -144,7 +148,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			numHistoricalMessages := 6
 			// wait X number of ms to ensure that the timestamp changes enough for each of the messages we try to backfill later
-			time.Sleep(time.Duration(numHistoricalMessages) * time.Millisecond)
+			time.Sleep(time.Duration(numHistoricalMessages) * TimeBetweenMessages)
 
 			// Create some events after.
 			// Fill up the buffer so we have to scrollback to the inserted history later
@@ -158,8 +162,19 @@ func TestBackfillingHistory(t *testing.T) {
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
 
 			// Insert the most recent chunk of backfilled history
-			//backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, virtualUserID, roomID, eventBefore, timeAfterEventBefore.Add(time.Millisecond*time.Duration(numHistoricalMessages)), 3)
 			_, historicalEvents := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+				t,
+				as,
+				virtualUserID,
+				roomID,
+				eventBefore,
+				timeAfterEventBefore.Add(TimeBetweenMessages*3),
+				3,
+			)
+
+			// Insert another older chunk of backfilled history from the same user.
+			// Make sure the meta data and joins still work on the subsequent chunk
+			_, historicalEvents2 := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 				t,
 				as,
 				virtualUserID,
@@ -169,14 +184,11 @@ func TestBackfillingHistory(t *testing.T) {
 				3,
 			)
 
-			// Insert another older chunk of backfilled history from the same user.
-			// See if the joins and meta data still are visible on the subsequent chunk
-			//backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, virtualUserID, roomID, eventBefore, timeAfterEventBefore, 3)
-
 			var expectedMessageOrder []string
 			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
 			// Historical events were inserted in reverse chronological
 			// But we expect them to come out in /messages in the correct order
+			expectedMessageOrder = append(expectedMessageOrder, reversed(historicalEvents2)...)
 			expectedMessageOrder = append(expectedMessageOrder, reversed(historicalEvents)...)
 			expectedMessageOrder = append(expectedMessageOrder, eventsAfter...)
 			// Order events from newest to oldest
@@ -277,7 +289,7 @@ func TestBackfillingHistory(t *testing.T) {
 			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
-			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / 1000000)
+			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / int64(time.Millisecond))
 
 			// Send an event that has `prev_event` and `ts` set but not `m.historical`.
 			// We should see these type of events in the `/sync` response
@@ -312,7 +324,7 @@ func TestBackfillingHistory(t *testing.T) {
 					// Here is the area of interest in the event
 					"$some-non-existant-event-id",
 				},
-				OriginServerTS: uint64(time.Now().UnixNano() / 1000000),
+				OriginServerTS: uint64(time.Now().UnixNano() / int64(time.Millisecond)),
 				Content: map[string]interface{}{
 					"msgtype":      "m.text",
 					"body":         "Historical message",
@@ -352,7 +364,7 @@ func TestBackfillingHistory(t *testing.T) {
 			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
-			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / 1000000)
+			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / int64(time.Millisecond))
 
 			e := event{
 				Type: "m.room.message",
@@ -512,7 +524,7 @@ func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count in
 // Backfill in a reverse-chronogical order (most recent history to oldest history)
 // Reverse-chronogical is a constraint of the Synapse implementation.
 func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *client.CSAPI, virtualUserID string, roomID string, insertAfterEventId string, insertTime time.Time, count int) []string {
-	insertOriginServerTs := uint64(insertTime.UnixNano() / 1000000)
+	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
 
 	evs := make([]string, count)
 
@@ -542,6 +554,8 @@ func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *cli
 	return evs
 }
 
+var chunkCount int64 = 0
+
 func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 	t *testing.T,
 	c *client.CSAPI,
@@ -551,7 +565,10 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 	insertTime time.Time,
 	count int,
 ) (state_event_ids []string, event_ids []string) {
-	insertOriginServerTs := uint64(insertTime.UnixNano() / 1000000)
+	// Timestamp in milliseconds
+	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
+
+	timeBetweenMessagesMS := uint64(TimeBetweenMessages / time.Millisecond)
 
 	evs := make([]map[string]interface{}, count)
 	for i := 0; i < len(evs); i++ {
@@ -563,10 +580,10 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 		newEvent := map[string]interface{}{
 			"type":             "m.room.message",
 			"sender":           virtualUserID,
-			"origin_server_ts": insertOriginServerTs + uint64(messageIndex),
+			"origin_server_ts": insertOriginServerTs + (timeBetweenMessagesMS * uint64(messageIndex)),
 			"content": map[string]interface{}{
 				"msgtype":      "m.text",
-				"body":         fmt.Sprintf("Historical %d", messageIndex),
+				"body":         fmt.Sprintf("Historical %d (chunk=%d)", messageIndex, chunkCount),
 				"m.historical": true,
 			},
 		}
@@ -600,6 +617,8 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 
 	stateEvents := client.GetJSONFieldArray(t, body, "state_events")
 	events := client.GetJSONFieldArray(t, body, "events")
+
+	chunkCount++
 
 	return stateEvents, events
 }
