@@ -7,8 +7,10 @@
 package tests
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"strconv"
 	"testing"
@@ -75,6 +77,10 @@ func TestBackfillingHistory(t *testing.T) {
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			})
+			messsageResBody := client.ParseJSON(t, messagesRes)
+			eventIDsFromResponse := getEventIDsFromResponseBody(t, messsageResBody)
+			// Since the original body can only be read once, create a new one from the body bytes we just read
+			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
 			var expectedMessageOrder []string
 			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
@@ -93,41 +99,26 @@ func TestBackfillingHistory(t *testing.T) {
 				"contextResBody": string(contextResBody),
 			}).Error("context res")
 
+			// Copy the array by value so we can modify it as we iterate in the foreach loop
+			// We save the full untouched `expectedMessageOrder` for use in the log messages
+			workingExpectedMessageOrder := expectedMessageOrder
+
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
-					// We're using this weird custom matcher function because we want to iterate the full response
-					// to see all of the events from the response. This way we can use it to easily compare in
-					// the fail error message when the test fails and compare the actual order to the expected order.
-					func(body []byte) error {
-						eventIDsFromResponse, err := getEventIDsFromResponseBody(body)
-						if err != nil {
-							return err
+					match.JSONArrayEach("chunk", func(r gjson.Result) error {
+						// Find all events in order
+						if len(r.Get("content").Get("body").Str) > 0 {
+							// Pop the next message off the expected list
+							nextEventInOrder := workingExpectedMessageOrder[0]
+							workingExpectedMessageOrder = workingExpectedMessageOrder[1:]
+
+							if r.Get("event_id").Str != nextEventInOrder {
+								return fmt.Errorf("Next event found was %s but expected %s\nActualEvents: %v\nExpectedEvents: %v", r.Get("event_id").Str, nextEventInOrder, eventIDsFromResponse, expectedMessageOrder)
+							}
 						}
 
-						// Copy the array by value so we can modify it as we iterate in the foreach loop
-						// We save the full untouched `expectedMessageOrder` for use in the log messages
-						workingExpectedMessageOrder := expectedMessageOrder
-
-						// Match each event from the response in order to the list of expected events
-						matcher := match.JSONArrayEach("chunk", func(r gjson.Result) error {
-							// Find all events in order
-							if len(r.Get("content").Get("body").Str) > 0 {
-								// Pop the next message off the expected list
-								nextEventInOrder := workingExpectedMessageOrder[0]
-								workingExpectedMessageOrder = workingExpectedMessageOrder[1:]
-
-								if r.Get("event_id").Str != nextEventInOrder {
-									return fmt.Errorf("Next event found was %s but expected %s\nActualEvents: %v\nExpectedEvents: %v", r.Get("event_id").Str, nextEventInOrder, eventIDsFromResponse, expectedMessageOrder)
-								}
-							}
-
-							return nil
-						})
-
-						err = matcher(body)
-
-						return err
-					},
+						return nil
+					}),
 				},
 			})
 		})
@@ -198,6 +189,10 @@ func TestBackfillingHistory(t *testing.T) {
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			})
+			messsageResBody := client.ParseJSON(t, messagesRes)
+			eventIDsFromResponse := getEventIDsFromResponseBody(t, messsageResBody)
+			// Since the original body can only be read once, create a new one from the body bytes we just read
+			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
 			contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[len(eventsAfter)-1]}, nil, "application/json", url.Values{
 				"limit": []string{"100"},
@@ -207,41 +202,26 @@ func TestBackfillingHistory(t *testing.T) {
 				"contextResBody": string(contextResBody),
 			}).Error("context res")
 
+			// Copy the array by value so we can modify it as we iterate in the foreach loop
+			// We save the full untouched `expectedMessageOrder` for use in the log messages
+			workingExpectedMessageOrder := expectedMessageOrder
+
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
-					// We're using this weird custom matcher function because we want to iterate the full response
-					// to see all of the events from the response. This way we can use it to easily compare in
-					// the fail error message when the test fails and compare the actual order to the expected order.
-					func(body []byte) error {
-						eventIDsFromResponse, err := getEventIDsFromResponseBody(body)
-						if err != nil {
-							return err
+					match.JSONArrayEach("chunk", func(r gjson.Result) error {
+						// Find all events in order
+						if len(r.Get("content").Get("body").Str) > 0 {
+							// Pop the next message off the expected list
+							nextEventInOrder := workingExpectedMessageOrder[0]
+							workingExpectedMessageOrder = workingExpectedMessageOrder[1:]
+
+							if r.Get("event_id").Str != nextEventInOrder {
+								return fmt.Errorf("Next event found was %s but expected %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", r.Get("event_id").Str, nextEventInOrder, len(eventIDsFromResponse), eventIDsFromResponse, len(expectedMessageOrder), expectedMessageOrder)
+							}
 						}
 
-						// Copy the array by value so we can modify it as we iterate in the foreach loop
-						// We save the full untouched `expectedMessageOrder` for use in the log messages
-						workingExpectedMessageOrder := expectedMessageOrder
-
-						// Match each event from the response in order to the list of expected events
-						matcher := match.JSONArrayEach("chunk", func(r gjson.Result) error {
-							// Find all events in order
-							if len(r.Get("content").Get("body").Str) > 0 {
-								// Pop the next message off the expected list
-								nextEventInOrder := workingExpectedMessageOrder[0]
-								workingExpectedMessageOrder = workingExpectedMessageOrder[1:]
-
-								if r.Get("event_id").Str != nextEventInOrder {
-									return fmt.Errorf("Next event found was %s but expected %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", r.Get("event_id").Str, nextEventInOrder, len(eventIDsFromResponse), eventIDsFromResponse, len(expectedMessageOrder), expectedMessageOrder)
-								}
-							}
-
-							return nil
-						})
-
-						err = matcher(body)
-
-						return err
-					},
+						return nil
+					}),
 				},
 			})
 		})
@@ -402,14 +382,14 @@ func reversed(in []string) []string {
 	return out
 }
 
-func getEventIDsFromResponseBody(body []byte) (eventIDsFromResponse []string, err error) {
+func getEventIDsFromResponseBody(t *testing.T, body []byte) (eventIDsFromResponse []string) {
 	wantKey := "chunk"
 	res := gjson.GetBytes(body, wantKey)
 	if !res.Exists() {
-		return eventIDsFromResponse, fmt.Errorf("missing key '%s'", wantKey)
+		t.Fatalf("missing key '%s'", wantKey)
 	}
 	if !res.IsArray() {
-		return eventIDsFromResponse, fmt.Errorf("key '%s' is not an array (was %s)", wantKey, res.Type)
+		t.Fatalf("key '%s' is not an array (was %s)", wantKey, res.Type)
 	}
 
 	res.ForEach(func(key, r gjson.Result) bool {
@@ -419,7 +399,7 @@ func getEventIDsFromResponseBody(body []byte) (eventIDsFromResponse []string, er
 		return true
 	})
 
-	return eventIDsFromResponse, nil
+	return eventIDsFromResponse
 }
 
 var txnID int = 0
