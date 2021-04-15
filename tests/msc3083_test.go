@@ -18,7 +18,7 @@ var (
 	msc1772SpaceChildEventType = "org.matrix.msc1772.space.child"
 )
 
-func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverName string, expectedHttpCode int) {
+func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverName string) {
 	// This is copied from Client.JoinRoom to test a join failure.
 	query := make(url.Values, 1)
 	query.Set("server_name", serverName)
@@ -29,7 +29,7 @@ func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverNam
 		nil,
 		"application/json",
 		query,
-		expectedHttpCode,
+		403,
 	)
 }
 
@@ -75,7 +75,7 @@ func SetupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 }
 
 func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, space string, room string) {
-	FailJoinRoom(bob, t, room, "hs1", 403)
+	FailJoinRoom(bob, t, room, "hs1")
 
 	// Join the space, attempt to join the room again, which now should succeed.
 	bob.JoinRoom(t, space, []string{"hs1"})
@@ -84,7 +84,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 	// Leaving the room works and the user is unable to re-join.
 	bob.LeaveRoom(t, room)
 	bob.LeaveRoom(t, space)
-	FailJoinRoom(bob, t, room, "hs1", 403)
+	FailJoinRoom(bob, t, room, "hs1")
 
 	// Invite the user and joining should work.
 	alice.InviteRoom(t, room, bob.UserID)
@@ -111,7 +111,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 		},
 	)
 	// Fails since invalid values get filtered out of allow.
-	FailJoinRoom(bob, t, room, "hs1", 403)
+	FailJoinRoom(bob, t, room, "hs1")
 
 	alice.SendEventSynced(
 		t,
@@ -127,7 +127,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 		},
 	)
 	// Fails since a fully invalid allow key requires an invite.
-	FailJoinRoom(bob, t, room, "hs1", 403)
+	FailJoinRoom(bob, t, room, "hs1")
 }
 
 // Test joining a room with join rules restricted to membership in a space.
