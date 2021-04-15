@@ -149,8 +149,7 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 
 	// Create a second user and attempt to join the room, it should fail.
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
-	// Note that this is a 400 error because it comes back over federation.
-	FailJoinRoom(bob, t, room, "hs1", 400)
+	FailJoinRoom(bob, t, room, "hs1", 403)
 
 	// Join the space, attempt to join the room again, which now should succeed.
 	bob.JoinRoom(t, space, []string{"hs1"})
@@ -159,7 +158,7 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	// Leaving the room works and the user is unable to re-join.
 	bob.LeaveRoom(t, room)
 	bob.LeaveRoom(t, space)
-	FailJoinRoom(bob, t, room, "hs1", 400)
+	FailJoinRoom(bob, t, room, "hs1", 403)
 
 	// Invite the user and joining should work.
 	alice.InviteRoom(t, room, "@bob:hs2")
@@ -186,7 +185,7 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 		},
 	)
 	// Fails since invalid values get filtered out of allow.
-	FailJoinRoom(bob, t, room, "hs1", 400)
+	FailJoinRoom(bob, t, room, "hs1", 403)
 
 	alice.SendEventSynced(
 		t,
@@ -202,5 +201,5 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 		},
 	)
 	// Fails since a fully invalid allow key requires an invite.
-	FailJoinRoom(bob, t, room, "hs1", 400)
+	FailJoinRoom(bob, t, room, "hs1", 403)
 }
