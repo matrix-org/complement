@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"strconv"
 	"testing"
@@ -51,79 +52,11 @@ func TestBackfillingHistory(t *testing.T) {
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
 
+	virtualUserLocalpart := "maria"
+	virtualUserID := fmt.Sprintf("@%s:hs1", virtualUserLocalpart)
+
 	t.Run("parallel", func(t *testing.T) {
-		t.Run("Backfilled historical messages come back in correct order", func(t *testing.T) {
-			t.Parallel()
-
-			roomID := as.CreateRoom(t, struct{}{})
-			alice.JoinRoom(t, roomID, nil)
-
-			// Create the "live" event we are going to insert our backfilled events next to
-			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventBefore := eventsBefore[0]
-			timeAfterEventBefore := time.Now()
-
-			numHistoricalMessages := 3
-			// wait X number of ms to ensure that the timestamp changes enough for each of the messages we try to backfill later
-			time.Sleep(time.Duration(numHistoricalMessages) * TimeBetweenMessages)
-
-			// Create some more "live" events after our insertion point
-			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
-
-			// Then backfill a bunch of events between eventBefore and eventsAfter
-			historicalEvents := backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, "", roomID, eventBefore, timeAfterEventBefore, numHistoricalMessages)
-
-			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			})
-			messsageResBody := client.ParseJSON(t, messagesRes)
-			eventIDsFromResponse := getEventIDsFromResponseBody(t, messsageResBody)
-			// Since the original body can only be read once, create a new one from the body bytes we just read
-			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
-
-			var expectedMessageOrder []string
-			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
-			// Historical events were inserted in reverse chronological
-			// But we expect them to come out in /messages in the correct order
-			expectedMessageOrder = append(expectedMessageOrder, reversed(historicalEvents)...)
-			expectedMessageOrder = append(expectedMessageOrder, eventsAfter...)
-			// Order events from newest to oldest
-			expectedMessageOrder = reversed(expectedMessageOrder)
-
-			contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[1]}, nil, "application/json", url.Values{
-				"limit": []string{"100"},
-			})
-			contextResBody := client.ParseJSON(t, contextRes)
-			logrus.WithFields(logrus.Fields{
-				"contextResBody": string(contextResBody),
-			}).Error("context res")
-
-			// Copy the array by value so we can modify it as we iterate in the foreach loop
-			// We save the full untouched `expectedMessageOrder` for use in the log messages
-			workingExpectedMessageOrder := expectedMessageOrder
-
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONArrayEach("chunk", func(r gjson.Result) error {
-						// Find all events in order
-						if len(r.Get("content").Get("body").Str) > 0 {
-							// Pop the next message off the expected list
-							nextEventInOrder := workingExpectedMessageOrder[0]
-							workingExpectedMessageOrder = workingExpectedMessageOrder[1:]
-
-							if r.Get("event_id").Str != nextEventInOrder {
-								return fmt.Errorf("Next event found was %s but expected %s\nActualEvents: %v\nExpectedEvents: %v", r.Get("event_id").Str, nextEventInOrder, eventIDsFromResponse, expectedMessageOrder)
-							}
-						}
-
-						return nil
-					}),
-				},
-			})
-		})
-
-		t.Run("Backfilled historical events resolve with proper state", func(t *testing.T) {
+		t.Run("Backfilled historical events resolve with proper state in correct order", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
@@ -145,15 +78,13 @@ func TestBackfillingHistory(t *testing.T) {
 			// Fill up the buffer so we have to scrollback to the inserted history later
 			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
-			virtualUserLocalpart := "maria"
-			virtualUserID := fmt.Sprintf("@%s:hs1", virtualUserLocalpart)
 			// Register and join the virtual user
 			ensureRegistered(t, as, virtualUserLocalpart)
 
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
 
 			// Insert the most recent chunk of backfilled history
-			_, historicalEvents := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 				t,
 				as,
 				virtualUserID,
@@ -161,11 +92,14 @@ func TestBackfillingHistory(t *testing.T) {
 				eventBefore,
 				timeAfterEventBefore.Add(TimeBetweenMessages*3),
 				3,
+				// Status
+				200,
 			)
+			_, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
 
 			// Insert another older chunk of backfilled history from the same user.
 			// Make sure the meta data and joins still work on the subsequent chunk
-			_, historicalEvents2 := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillRes2 := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 				t,
 				as,
 				virtualUserID,
@@ -173,7 +107,10 @@ func TestBackfillingHistory(t *testing.T) {
 				eventBefore,
 				timeAfterEventBefore,
 				3,
+				// Status
+				200,
 			)
+			_, historicalEvents2 := getEventsFromBulkSendResponse(t, backfillRes2)
 
 			var expectedMessageOrder []string
 			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
@@ -241,7 +178,18 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 5)
 
 			// Insert a backfilled event
-			historicalEvents := backfillHistoricalMessagesInReverseChronologicalAtTime(t, as, "", roomID, eventBefore, timeAfterEventBefore, 1)
+			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+				t,
+				as,
+				virtualUserID,
+				roomID,
+				eventBefore,
+				timeAfterEventBefore,
+				1,
+				// Status
+				200,
+			)
+			_, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
 			backfilledEvent := historicalEvents[0]
 
 			// This is just a dummy event we search for after the backfilledEvent
@@ -298,36 +246,15 @@ func TestBackfillingHistory(t *testing.T) {
 
 			roomID := as.CreateRoom(t, struct{}{})
 
-			e := event{
-				Type: "m.room.message",
-				PrevEvents: []string{
-					// Here is the area of interest in the event
-					"$some-non-existant-event-id",
-				},
-				OriginServerTS: uint64(time.Now().UnixNano() / int64(time.Millisecond)),
-				Content: map[string]interface{}{
-					"msgtype":      "m.text",
-					"body":         "Historical message",
-					"m.historical": true,
-				},
-			}
-
-			query := make(url.Values, len(e.PrevEvents))
-			query.Add("prev_event", e.PrevEvents[0])
-			query.Add("ts", strconv.FormatUint(e.OriginServerTS, 10))
-
-			b, err := json.Marshal(e.Content)
-			if err != nil {
-				t.Fatalf("msc2716.sendEvent failed to marshal JSON body: %s", err)
-			}
-
-			as.MustDoWithStatusRaw(
+			backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 				t,
-				"PUT",
-				[]string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + "404-unrecognized-prev-event-id"},
-				b,
-				"application/json",
-				query,
+				as,
+				virtualUserID,
+				roomID,
+				"$some-non-existant-event-id",
+				time.Now(),
+				1,
+				// Status
 				// TODO: Seems like this makes more sense as a 404
 				// But the current Synapse code around unknown prev events will throw ->
 				// `403: No create event in auth events`
@@ -344,32 +271,19 @@ func TestBackfillingHistory(t *testing.T) {
 			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
-			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / int64(time.Millisecond))
 
-			e := event{
-				Type: "m.room.message",
-				PrevEvents: []string{
-					eventBefore,
-				},
-				OriginServerTS: insertOriginServerTs,
-				Content: map[string]interface{}{
-					"msgtype":      "m.text",
-					"body":         "Historical message",
-					"m.historical": true,
-				},
-			}
-
-			query := make(url.Values, len(e.PrevEvents))
-			query.Add("prev_event", e.PrevEvents[0])
-			query.Add("ts", strconv.FormatUint(e.OriginServerTS, 10))
-
-			b, err := json.Marshal(e.Content)
-			if err != nil {
-				t.Fatalf("msc2716.sendEvent failed to marshal JSON body: %s", err)
-			}
-
-			// Normal user alice should not be able to backfill messages
-			alice.MustDoWithStatusRaw(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + "403-no-normal-user-test"}, b, "application/json", query, 403)
+			backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+				t,
+				alice,
+				virtualUserID,
+				roomID,
+				eventBefore,
+				timeAfterEventBefore,
+				1,
+				// Status
+				// Normal user alice should not be able to backfill messages
+				403,
+			)
 		})
 	})
 }
@@ -501,39 +415,6 @@ func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count in
 	return evs
 }
 
-// Backfill in a reverse-chronogical order (most recent history to oldest history)
-// Reverse-chronogical is a constraint of the Synapse implementation.
-func backfillHistoricalMessagesInReverseChronologicalAtTime(t *testing.T, c *client.CSAPI, virtualUserID string, roomID string, insertAfterEventId string, insertTime time.Time, count int) []string {
-	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
-
-	evs := make([]string, count)
-
-	for i := 0; i < len(evs); i++ {
-		// We have to backfill historical messages from most recent to oldest
-		// since backfilled messages decrement their `stream_order` and we want messages
-		// to appear in order from the `/messages` endpoint
-		messageIndex := (count - 1) - i
-
-		newEvent := event{
-			Type: "m.room.message",
-			PrevEvents: []string{
-				// Hang all historical messages off of the insert point
-				insertAfterEventId,
-			},
-			OriginServerTS: insertOriginServerTs + uint64(messageIndex),
-			Content: map[string]interface{}{
-				"msgtype":      "m.text",
-				"body":         fmt.Sprintf("Historical %d", messageIndex),
-				"m.historical": true,
-			},
-		}
-		newEventId := sendEvent(t, c, virtualUserID, roomID, newEvent)
-		evs[i] = newEventId
-	}
-
-	return evs
-}
-
 var chunkCount int64 = 0
 
 func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
@@ -544,7 +425,8 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 	insertAfterEventId string,
 	insertTime time.Time,
 	count int,
-) (state_event_ids []string, event_ids []string) {
+	status int,
+) (res *http.Response) {
 	// Timestamp in milliseconds
 	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
 
@@ -592,13 +474,26 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 		t.Fatalf("msc2716.backfillBulkHistoricalMessagesInReverseChronologicalAtTime failed to marshal JSON body: %s", err)
 	}
 
-	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "bulksend"}, b, "application/json", query)
+	res = c.MustDoWithStatusRaw(
+		t,
+		"POST",
+		[]string{"_matrix", "client", "r0", "rooms", roomID, "bulksend"},
+		b,
+		"application/json",
+		query,
+		status,
+	)
+
+	chunkCount++
+
+	return res
+}
+
+func getEventsFromBulkSendResponse(t *testing.T, res *http.Response) (state_event_ids []string, event_ids []string) {
 	body := client.ParseJSON(t, res)
 
 	stateEvents := client.GetJSONFieldArray(t, body, "state_events")
 	events := client.GetJSONFieldArray(t, body, "events")
-
-	chunkCount++
 
 	return stateEvents, events
 }
