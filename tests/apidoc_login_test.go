@@ -42,7 +42,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login can log in as a user
 		t.Run("POST /login can login as user", func(t *testing.T) {
 			t.Parallel()
-			createDummyUser(t, unauthedClient, "login_test_user")
+			CreateDummyUser(t, unauthedClient, "login_test_user")
 			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
@@ -63,7 +63,7 @@ func TestLogin(t *testing.T) {
 		t.Run("POST /login returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
 			deviceID := "test_device_id"
-			createDummyUser(t, unauthedClient, "device_id_test_user")
+			CreateDummyUser(t, unauthedClient, "device_id_test_user")
 			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
@@ -85,7 +85,7 @@ func TestLogin(t *testing.T) {
 		t.Run("POST /login can log in as a user with just the local part of the id", func(t *testing.T) {
 			t.Parallel()
 
-			createDummyUser(t, unauthedClient, "local-login-user")
+			CreateDummyUser(t, unauthedClient, "local-login-user")
 
 			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
 				"type": "m.login.password",
@@ -125,7 +125,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login wrong password is rejected
 		t.Run("POST /login wrong password is rejected", func(t *testing.T) {
 			t.Parallel()
-			createDummyUser(t, unauthedClient, "login_wrong_password")
+			CreateDummyUser(t, unauthedClient, "login_wrong_password")
 			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
@@ -149,7 +149,7 @@ func TestLogin(t *testing.T) {
 	})
 }
 
-func createDummyUser(t *testing.T, unauthedClient *client.CSAPI, userID string) {
+func CreateDummyUser(t *testing.T, unauthedClient *client.CSAPI, userID string) {
 	reqBody, err := json.Marshal(map[string]interface{}{
 		"auth": map[string]string{
 			"type": "m.login.dummy",
