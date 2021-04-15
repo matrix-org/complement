@@ -74,16 +74,7 @@ func SetupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 	return alice, space, room
 }
 
-// Test joining a room with join rules restricted to membership in a space.
-func TestRestrictedRoomsLocalJoin(t *testing.T) {
-	deployment := Deploy(t, "msc3083_local", b.BlueprintOneToOneRoom)
-	defer deployment.Destroy(t)
-
-	// Setup the user, space, and restricted room.
-	alice, space, room := SetupRestrictedRoom(t, deployment)
-
-	// Create a second user and attempt to join the room, it should fail.
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, space string, room string) {
 	FailJoinRoom(bob, t, room, "hs1", 403)
 
 	// Join the space, attempt to join the room again, which now should succeed.
@@ -96,7 +87,7 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 	FailJoinRoom(bob, t, room, "hs1", 403)
 
 	// Invite the user and joining should work.
-	alice.InviteRoom(t, room, "@bob:hs1")
+	alice.InviteRoom(t, room, bob.UserID)
 	bob.JoinRoom(t, room, []string{"hs1"})
 
 	// Leave the room again, and join the space.
@@ -140,6 +131,21 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 }
 
 // Test joining a room with join rules restricted to membership in a space.
+func TestRestrictedRoomsLocalJoin(t *testing.T) {
+	deployment := Deploy(t, "msc3083_local", b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	// Setup the user, space, and restricted room.
+	alice, space, room := SetupRestrictedRoom(t, deployment)
+
+	// Create a second user on the same homeserver.
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+
+	// Execute the checks.
+	CheckRestrictedRoom(t, alice, bob, space, room)
+}
+
+// Test joining a room with join rules restricted to membership in a space.
 func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	deployment := Deploy(t, "msc3083_remote", b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
@@ -147,59 +153,9 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	// Setup the user, space, and restricted room.
 	alice, space, room := SetupRestrictedRoom(t, deployment)
 
-	// Create a second user and attempt to join the room, it should fail.
+	// Create a second user on a different homeserver.
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
-	FailJoinRoom(bob, t, room, "hs1", 403)
 
-	// Join the space, attempt to join the room again, which now should succeed.
-	bob.JoinRoom(t, space, []string{"hs1"})
-	bob.JoinRoom(t, room, []string{"hs1"})
-
-	// Leaving the room works and the user is unable to re-join.
-	bob.LeaveRoom(t, room)
-	bob.LeaveRoom(t, space)
-	FailJoinRoom(bob, t, room, "hs1", 403)
-
-	// Invite the user and joining should work.
-	alice.InviteRoom(t, room, "@bob:hs2")
-	bob.JoinRoom(t, room, []string{"hs1"})
-
-	// Leave the room again, and join the space.
-	bob.LeaveRoom(t, room)
-	bob.JoinRoom(t, space, []string{"hs1"})
-
-	// Update the room to have bad values in the "allow" field, which should stop
-	// joining from working properly.
-	emptyStateKey := ""
-	alice.SendEventSynced(
-		t,
-		room,
-		b.Event{
-			Type:     "m.room.join_rules",
-			Sender:   alice.UserID,
-			StateKey: &emptyStateKey,
-			Content: map[string]interface{}{
-				"join_rule": "restricted",
-				"allow":     []string{"invalid"},
-			},
-		},
-	)
-	// Fails since invalid values get filtered out of allow.
-	FailJoinRoom(bob, t, room, "hs1", 403)
-
-	alice.SendEventSynced(
-		t,
-		room,
-		b.Event{
-			Type:     "m.room.join_rules",
-			Sender:   alice.UserID,
-			StateKey: &emptyStateKey,
-			Content: map[string]interface{}{
-				"join_rule": "restricted",
-				"allow":     "invalid",
-			},
-		},
-	)
-	// Fails since a fully invalid allow key requires an invite.
-	FailJoinRoom(bob, t, room, "hs1", 403)
+	// Execute the checks.
+	CheckRestrictedRoom(t, alice, bob, space, room)
 }
