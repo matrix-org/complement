@@ -11,13 +11,11 @@ import (
 func TestPresence(t *testing.T) {
 	deployment := Deploy(t, "presence", b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	//unauthedClient to create an user which in turn creates an authedClient
-	unauthedClient := deployment.Client(t, "hs1", "")
-	CreateDummyUser(t, unauthedClient, "user_presence")
-	authedClient := deployment.Client(t, "hs1", "@user_presence:hs1")
+
+	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
 	// sytest: GET /presence/:user_id/status fetches initial status
 	t.Run("GET /presence/:user_id/status fetches initial status", func(t *testing.T) {
-		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "presence", "user_presence", "status"}, nil)
+		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "presence", "@alice:hs1", "status"}, nil)
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
