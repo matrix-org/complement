@@ -9,7 +9,7 @@ import (
 )
 
 func TestPresence(t *testing.T) {
-	deployment := Deploy(t, "login", b.BlueprintAlice)
+	deployment := Deploy(t, "presence", b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	//unauthedClient to create an user which in turn creates an authedClient
 	unauthedClient := deployment.Client(t, "hs1", "")
