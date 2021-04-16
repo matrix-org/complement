@@ -14,7 +14,6 @@ func TestPresence(t *testing.T) {
 	unauthedClient := deployment.Client(t, "hs1", "")
 	// sytest: GET /presence/:user_id/status fetches initial status
 	t.Run("GET /presence/:user_id/status fetches initial status", func(t *testing.T) {
-		t.Parallel()
 		CreateDummyUser(t, unauthedClient, "user_presence")
 
 		res := unauthedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "presence", "user_presence", "status"}, nil)
