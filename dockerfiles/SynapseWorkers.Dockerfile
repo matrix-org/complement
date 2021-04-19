@@ -1,6 +1,6 @@
 # This dockerfile builds on top of Dockerfile-worker and includes a built-in postgres instance
 # as well as sets up the homeserver so that it is ready for testing via Complement
-FROM matrixdotorg/synapse:workers
+FROM matrixdotorg/synapse-workers
 
 # Download a caddy server to stand in front of nginx and terminate TLS using Complement's
 # custom CA.
