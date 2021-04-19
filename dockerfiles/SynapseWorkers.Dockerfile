@@ -46,8 +46,21 @@ ENTRYPOINT \
   SYNAPSE_REPORT_STATS=no \
   # Set postgres authentication details which will be placed in the homeserver config file
   POSTGRES_PASSWORD=somesecret POSTGRES_USER=postgres POSTGRES_HOST=localhost \
-  # Use all available worker types
-  SYNAPSE_WORKERS=* \
+  # Specify the workers to test with
+  SYNAPSE_WORKERS=\
+    event_persister, \
+    event_persister, \
+    background_worker, \
+    frontend_proxy, \
+    event_creator, \
+    user_dir, \
+    client_reader, \
+    media_repo, \
+    federation_reader, \
+    federation_sender, \
+    synchrotron, \
+    appservice, \
+    pusher \
   # Run the script that writes the necessary config files and starts supervisord, which in turn
   # starts everything else
   /configure_workers_and_start.py
