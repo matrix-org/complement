@@ -26,7 +26,7 @@ jobs:
             tags: synapse_blacklist
 
           - homeserver: Dendrite
-            tags: msc2836, dendrite_blacklist
+            tags: msc2836 dendrite_blacklist
 
     container:
       image: matrixdotorg/complement  # dockerfiles/ComplementCIBuildkite.Dockerfile
