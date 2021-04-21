@@ -1,3 +1,7 @@
+// +build !dendrite_blacklist
+
+// Rationale for being included in Dendrite's blacklist: https://github.com/matrix-org/complement/pull/104#discussion_r617646624
+
 package tests
 
 import (
