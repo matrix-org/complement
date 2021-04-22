@@ -52,6 +52,10 @@ func TestBackfillingHistory(t *testing.T) {
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
 
+	// Create the federated user which will fetch the messages from a remote homeserver
+	remoteUserID := "@charlie:hs2"
+	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+
 	virtualUserLocalpart := "maria"
 	virtualUserID := fmt.Sprintf("@%s:hs1", virtualUserLocalpart)
 
@@ -131,6 +135,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
+			// TODO: Remove, the context request is just for TARDIS visualizations
 			contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[len(eventsAfter)-1]}, nil, "application/json", url.Values{
 				"limit": []string{"100"},
 			})
@@ -139,7 +144,7 @@ func TestBackfillingHistory(t *testing.T) {
 				"contextResBody": string(contextResBody),
 			}).Error("context res")
 
-			// Copy the array by value so we can modify it as we iterate in the foreach loop
+			// Copy the array by value so we can modify it as we iterate in the foreach loop.
 			// We save the full untouched `expectedMessageOrder` for use in the log messages
 			workingExpectedMessageOrder := expectedMessageOrder
 
@@ -285,6 +290,58 @@ func TestBackfillingHistory(t *testing.T) {
 				403,
 			)
 		})
+
+		t.Run("Historical messages are visible on federated server", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, struct{}{})
+			alice.JoinRoom(t, roomID, nil)
+
+			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventBefore := eventsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// Register and join the virtual user
+			ensureRegistered(t, as, virtualUserLocalpart)
+
+			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+				t,
+				as,
+				virtualUserID,
+				roomID,
+				eventBefore,
+				timeAfterEventBefore,
+				1,
+				// Status
+				200,
+			)
+			_, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
+
+			// Join the room from a remote homeserver
+			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+			messagesRes := remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			})
+			messsageResBody := client.ParseJSON(t, messagesRes)
+			eventIDsFromResponse := getEventIDsFromResponseBody(t, messsageResBody)
+			// Since the original body can only be read once, create a new one from the body bytes we just read
+			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
+
+			logrus.WithFields(logrus.Fields{
+				"eventIDsFromResponse": eventIDsFromResponse,
+				"historicalEvents":     historicalEvents,
+			}).Error("can we see historical?")
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEvents[0]}, func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
+		})
 	})
 }
 
@@ -378,24 +435,6 @@ func ensureRegistered(t *testing.T, c *client.CSAPI, virtualUserLocalpart string
 		errorMessage := client.GetJSONFieldStr(t, body, "error")
 		t.Fatalf("msc2716.ensureRegistered failed to register: (%s) %s", errcode, errorMessage)
 	}
-}
-
-// joinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
-func joinRoom(t *testing.T, c *client.CSAPI, virtualUserID string, roomIDOrAlias string) string {
-	query := url.Values{}
-	if virtualUserID != "" {
-		query.Add("user_id", virtualUserID)
-	}
-
-	// join the room
-	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, nil, "application/json", query)
-	// return the room ID if we joined with it
-	if roomIDOrAlias[0] == '!' {
-		return roomIDOrAlias
-	}
-	// otherwise we should be told the room ID if we joined via an alias
-	body := client.ParseJSON(t, res)
-	return client.GetJSONFieldStr(t, body, "room_id")
 }
 
 func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count int) []string {
