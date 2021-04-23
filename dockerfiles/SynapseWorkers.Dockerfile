@@ -47,7 +47,7 @@ ENTRYPOINT \
   # Set postgres authentication details which will be placed in the homeserver config file
   POSTGRES_PASSWORD=somesecret POSTGRES_USER=postgres POSTGRES_HOST=localhost \
   # Specify the workers to test with
-  SYNAPSE_WORKERS=\
+  SYNAPSE_WORKER_TYPES=\
     event_persister, \
     event_persister, \
     background_worker, \
