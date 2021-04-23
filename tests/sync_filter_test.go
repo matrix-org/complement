@@ -24,8 +24,8 @@ func TestSyncFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal JSON request body: %s", err)
 	}
-	t.Run("GET /presence/:user_id/status fetches initial status", func(t *testing.T) {
-		res := authedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "user", "@alice:hs1", "filter"}, reqBody)
+	t.Run("Can create filter", func(t *testing.T) {
+		res := authedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "user", "@alice:hs1", "filter"}, json.RawMessage(reqBody))
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
