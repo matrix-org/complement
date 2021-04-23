@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -13,14 +14,18 @@ func TestSyncFilter(t *testing.T) {
 	defer deployment.Destroy(t)
 	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
 	// sytest: Can create filter
+	reqBody, err := json.Marshal(map[string]interface{}{
+		"room": map[string]interface{}{
+			"timeline": map[string]string{
+				"limit": "10",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal JSON request body: %s", err)
+	}
 	t.Run("GET /presence/:user_id/status fetches initial status", func(t *testing.T) {
-		res := authedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "user", "@alice:hs1", "filter"}, `{
-				"room": {
-					"timeline": {
-						"limit": "10"
-					}
-				}
-			}`)
+		res := authedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "user", "@alice:hs1", "filter"}, reqBody)
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
