@@ -55,7 +55,8 @@ ENTRYPOINT \
     event_creator, \
     user_dir, \
     client_reader, \
-    media_repo, \
+    media_repository, \
+    federation_inbound, \
     federation_reader, \
     federation_sender, \
     synchrotron, \
