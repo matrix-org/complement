@@ -1,20 +1,11 @@
+[![Tests](https://github.com/matrix-org/complement/actions/workflows/ci.yaml/badge.svg)](https://github.com/matrix-org/complement/actions/workflows/ci.yaml)
 [![Complement Dev](https://img.shields.io/matrix/complement:matrix.org.svg?label=%23complement%3Amatrix.org&logo=matrix&server_fqdn=matrix.org)](https://matrix.to/#/#complement:matrix.org)
 
-### Complement
+# Complement
 
 Complement is a black box integration testing framework for Matrix homeservers.
 
-
-#### Getting started
-
-To get started developing, see https://github.com/matrix-org/complement/blob/master/ONBOARDING.md
-
-If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
-
-If you want to develop Complement tests while working on a local dev instance of Synapse, edit [`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh) to point to your local Complement checkout (`cd ../complement`) instead of downloading from GitHub.
-
-
-#### Running
+## Running
 
 You need to have Go and Docker installed, as well as `libolm3` and `libolm-dev`. Then:
 
@@ -33,6 +24,14 @@ brew install libolm
 
 You can either use your own image, or one of the ones supplied in the [dockerfiles](./dockerfiles) directory.
 
+A full list of config options can be found [in the config file](./internal/config/config.go). All normal Go test config
+options will work, so to just run 1 named test and include a timeout for the test run:
+```
+$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests
+```
+
+### Running against Dendrite
+
 For instance, for Dendrite:
 ```
 # build a docker image for Dendrite...
@@ -41,25 +40,37 @@ $ (cd dockerfiles && docker build -t complement-dendrite -f Dendrite.Dockerfile 
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests
 ```
 
-A full list of config options can be found [in the config file](./internal/config/config.go). All normal Go test config
-options will work, so to just run 1 named test and include a timeout for the test run:
-```
-$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests
+### Running against Synapse
+
+If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
+
+If you want to develop Complement tests while working on a local dev instance of Synapse, use the [`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh) script and set the `COMPLEMENT_DIR` environment variable to the filepath of your local Complement checkout. A regex that matches against test names can also be supplied as an argument to the script, i.e:
+
+```sh
+COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh "TestOutboundFederation(Profile|Send)"
 ```
 
-##### Image requirements
+### Image requirements
+
+If you're looking to run against a custom Dockerfile, it must meet the following requirements:
+
 - The Dockerfile must `EXPOSE 8008` and `EXPOSE 8448` for client and federation traffic respectively.
 - The homeserver should run and listen on these ports.
 - The homeserver needs to `200 OK` requests to `GET /_matrix/client/versions`.
 - The homeserver needs to manage its own storage within the image.
 - The homeserver needs to accept the server name given by the environment variable `SERVER_NAME` at runtime.
+- The homeserver needs to assume dockerfile `CMD` or `ENTRYPOINT` instructions will be run multiple times.
 - The homeserver can use the CA certificate mounted at /ca to create its own TLS cert (see [Complement PKI](README.md#complement-pki)).
 
-#### Why 'Complement'?
+## Writing tests
+
+To get started developing Complement tests, see [the onboarding documentation](ONBOARDING.md).
+
+## Why 'Complement'?
 
 Because **M**<sup>*C*</sup> = **1** - **M**
 
-#### Complement PKI
+## Complement PKI
 
 As the Matrix federation protocol expects federation endpoints to be served with valid TLS certs,
 Complement will create a self-signed CA cert to use for creating valid TLS certs in homeserver containers.
@@ -84,11 +95,10 @@ cp /root/ca.crt /usr/local/share/ca-certificates/complement.crt
 update-ca-certificates
 ```
 
-#### Sytest parity
+## Sytest parity
 
 ```
 $ go run sytest_coverage.go -v
-
 10apidoc/01register 3/9 tests
     × GET /register yields a set of flows
     ✓ POST /register can create a user
@@ -100,8 +110,17 @@ $ go run sytest_coverage.go -v
     × POST $ep_name with shared secret downcases capitals
     × POST $ep_name with shared secret disallows symbols
 
-10apidoc/01request-encoding 0/1 tests
-10apidoc/02login 0/6 tests
+10apidoc/01request-encoding 1/1 tests
+    ✓ POST rejects invalid utf-8 in JSON
+
+10apidoc/02login 3/6 tests
+    ✓ GET /login yields a set of flows
+    ✓ POST /login can log in as a user
+    ✓ POST /login returns the same device_id as that in the request
+    × POST /login can log in as a user with just the local part of the id
+    × POST /login as non-existing user is rejected
+    × POST /login wrong password is rejected
+
 10apidoc/03events-initial 0/2 tests
 10apidoc/04version 0/1 tests
 10apidoc/10profile-displayname 0/2 tests
@@ -291,6 +310,5 @@ $ go run sytest_coverage.go -v
 90jira/SYN-516 0/1 tests
 90jira/SYN-627 0/1 tests
 
-TOTAL: 11/690 tests converted
-
+TOTAL: 15/690 tests converted
 ```

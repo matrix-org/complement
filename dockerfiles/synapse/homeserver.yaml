@@ -105,3 +105,5 @@ AS_REGISTRATION_FILES
 experimental_features:
   # Enable knocking support
   msc2403_enabled: true
+  # Enable spaces support
+  spaces_enabled: true
