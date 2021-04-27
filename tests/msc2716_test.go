@@ -317,8 +317,19 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 			_, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
 
+			eventsAfter := createMessagesInRoom(t, alice, roomID, 3)
+
 			// Join the room from a remote homeserver
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+			localMessagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			})
+			localMesssageResBody := client.ParseJSON(t, localMessagesRes)
+			localEventIDsFromResponse := getEventIDsFromResponseBody(t, localMesssageResBody)
+			// Since the original body can only be read once, create a new one from the body bytes we just read
+			localMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(localMesssageResBody))
 
 			messagesRes := remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
 				"dir":   []string{"b"},
@@ -330,9 +341,19 @@ func TestBackfillingHistory(t *testing.T) {
 			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
 			logrus.WithFields(logrus.Fields{
-				"eventIDsFromResponse": eventIDsFromResponse,
-				"historicalEvents":     historicalEvents,
+				"localEventIDsFromResponse": localEventIDsFromResponse,
+				"eventIDsFromResponse":      eventIDsFromResponse,
+				"historicalEvents":          historicalEvents,
 			}).Error("can we see historical?")
+
+			// TODO: Remove, the context request is just for TARDIS visualizations
+			contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[len(eventsAfter)-1]}, nil, "application/json", url.Values{
+				"limit": []string{"100"},
+			})
+			contextResBody := client.ParseJSON(t, contextRes)
+			logrus.WithFields(logrus.Fields{
+				"contextResBody": string(contextResBody),
+			}).Error("context res")
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
