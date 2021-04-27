@@ -47,7 +47,7 @@ ENTRYPOINT \
   # Set postgres authentication details which will be placed in the homeserver config file
   POSTGRES_PASSWORD=somesecret POSTGRES_USER=postgres POSTGRES_HOST=localhost \
   # Specify the workers to test with
-  SYNAPSE_WORKER_TYPES=\
+  SYNAPSE_WORKER_TYPES="\
     event_persister, \
     event_persister, \
     background_worker, \
@@ -61,7 +61,7 @@ ENTRYPOINT \
     federation_sender, \
     synchrotron, \
     appservice, \
-    pusher \
+    pusher" \
   # Run the script that writes the necessary config files and starts supervisord, which in turn
   # starts everything else
   /configure_workers_and_start.py
