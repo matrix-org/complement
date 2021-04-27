@@ -54,7 +54,6 @@ ENTRYPOINT \
     frontend_proxy, \
     event_creator, \
     user_dir, \
-    client_reader, \
     media_repository, \
     federation_inbound, \
     federation_reader, \
