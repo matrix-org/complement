@@ -1,4 +1,4 @@
-// +build msc3083
+// +build msc2946,msc3083
 
 // Tests MSC3083, an experimental feature for joining restricted rooms based on
 // membership in a space.
@@ -12,6 +12,9 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/docker"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
+	"github.com/tidwall/gjson"
 )
 
 var (
@@ -158,4 +161,93 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 
 	// Execute the checks.
 	CheckRestrictedRoom(t, alice, bob, space, room)
+}
+
+// Tests that MSC2946 works for a restricted room.
+//
+// Create a space with a room in it that has join rules restricted to membership
+// in that space.
+//
+// The user should be unable to see the room in the spaces summary unless they
+// are a member of the space.
+func TestRestrictedRoomsSpacesSummary(t *testing.T) {
+	deployment := Deploy(t, "msc2946", b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	// Create the rooms
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	space := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		"name":   "Space",
+		// World readable to allow peeking without joining.
+		"initial_state": []map[string]interface{}{
+			{
+				"type":      "m.room.history_visibility",
+				"state_key": "",
+				"content": map[string]interface{}{
+					"history_visibility": "world_readable",
+				},
+			},
+		},
+	})
+	// The room is an unstable room version which supports the restricted join_rule.
+	room := alice.CreateRoom(t, map[string]interface{}{
+		"preset":       "public_chat",
+		"name":         "Room",
+		"room_version": "org.matrix.msc3083",
+		"initial_state": []map[string]interface{}{
+			{
+				"type":      "m.room.join_rules",
+				"state_key": "",
+				"content": map[string]interface{}{
+					"join_rule": "restricted",
+					"allow": []map[string]interface{}{
+						{
+							"space": &space,
+							"via":   []string{"hs1"},
+						},
+					},
+				},
+			},
+		},
+	})
+	alice.SendEventSynced(t, space, b.Event{
+		Type:     "org.matrix.msc1772.space.child",
+		StateKey: &room,
+		Content: map[string]interface{}{
+			"via": []string{"hs1"},
+		},
+	})
+
+	t.Logf("Space: %s", space)
+	t.Logf("Room: %s", room)
+
+	// Create a second user on the same homeserver.
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+
+	// Querying the space returns only the space, as the room is restricted.
+	res := bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				space,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+		},
+	})
+
+	// Join the space, and now the restricted room should appear.
+	bob.JoinRoom(t, space, []string{"hs1"})
+
+	res = bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				space, room,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+		},
+	})
 }
