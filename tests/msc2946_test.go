@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	spaceChildEventType  = "org.matrix.msc1772.space.child"
-	spaceParentEventType = "org.matrix.msc1772.space.parent"
+	spaceChildEventType  = "m.space.child"
+	spaceParentEventType = "m.space.parent"
 )
 
 // the API doesn't return event IDs so we need to key off the
@@ -71,7 +71,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		"name":   "Sub-Space 1",
 		"topic":  "Some topic for sub-space 1",
 		"creation_content": map[string]interface{}{
-			"org.matrix.msc1772.type": "org.matrix.msc1772.space",
+			"type": "m.space",
 		},
 	})
 	roomNames[ss1] = "Sub-Space 1"
@@ -184,7 +184,7 @@ func TestClientSpacesSummary(t *testing.T) {
 						}
 					}
 					if roomID == ss1 {
-						wantType := "org.matrix.msc1772.space"
+						wantType := "m.space"
 						if data.Get("room_type").Str != wantType {
 							return fmt.Errorf("room %s got type %s want %s", roomID, data.Get("room_type").Str, wantType)
 						}
