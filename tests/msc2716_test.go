@@ -301,6 +301,8 @@ func TestBackfillingHistory(t *testing.T) {
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
 
+			eventsAfter := createMessagesInRoom(t, alice, roomID, 3)
+
 			// Register and join the virtual user
 			ensureRegistered(t, as, virtualUserLocalpart)
 
@@ -311,13 +313,11 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventBefore,
 				timeAfterEventBefore,
-				1,
+				2,
 				// Status
 				200,
 			)
-			_, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
-
-			eventsAfter := createMessagesInRoom(t, alice, roomID, 3)
+			historicalStateEvents, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
 
 			// Join the room from a remote homeserver
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -344,6 +344,7 @@ func TestBackfillingHistory(t *testing.T) {
 				"localEventIDsFromResponse": localEventIDsFromResponse,
 				"eventIDsFromResponse":      eventIDsFromResponse,
 				"historicalEvents":          historicalEvents,
+				"historicalStateEvents":     historicalStateEvents,
 			}).Error("can we see historical?")
 
 			// TODO: Remove, the context request is just for TARDIS visualizations
