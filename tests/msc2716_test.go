@@ -291,7 +291,7 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 		})
 
-		t.Run("Historical messages are visible on federated server", func(t *testing.T) {
+		t.Run("Historical messages are visible when joining on federated server", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, struct{}{})
@@ -301,7 +301,8 @@ func TestBackfillingHistory(t *testing.T) {
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			eventsAfter := createMessagesInRoom(t, alice, roomID, 3)
+			// eventsAfter
+			createMessagesInRoom(t, alice, roomID, 3)
 
 			// Register and join the virtual user
 			ensureRegistered(t, as, virtualUserLocalpart)
@@ -317,48 +318,126 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			historicalStateEvents, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
+			_, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
 
-			// Join the room from a remote homeserver
+			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
-
-			localMessagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			})
-			localMesssageResBody := client.ParseJSON(t, localMessagesRes)
-			localEventIDsFromResponse := getEventIDsFromResponseBody(t, localMesssageResBody)
-			// Since the original body can only be read once, create a new one from the body bytes we just read
-			localMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(localMesssageResBody))
 
 			messagesRes := remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			})
-			messsageResBody := client.ParseJSON(t, messagesRes)
-			eventIDsFromResponse := getEventIDsFromResponseBody(t, messsageResBody)
-			// Since the original body can only be read once, create a new one from the body bytes we just read
-			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
-
-			logrus.WithFields(logrus.Fields{
-				"localEventIDsFromResponse": localEventIDsFromResponse,
-				"eventIDsFromResponse":      eventIDsFromResponse,
-				"historicalEvents":          historicalEvents,
-				"historicalStateEvents":     historicalStateEvents,
-			}).Error("can we see historical?")
-
-			// TODO: Remove, the context request is just for TARDIS visualizations
-			contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[len(eventsAfter)-1]}, nil, "application/json", url.Values{
-				"limit": []string{"100"},
-			})
-			contextResBody := client.ParseJSON(t, contextRes)
-			logrus.WithFields(logrus.Fields{
-				"contextResBody": string(contextResBody),
-			}).Error("context res")
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEvents[0]}, func(r gjson.Result) interface{} {
+					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEvents[0], historicalEvents[1]}, func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
+		})
+
+		t.Run("Historical messages are visible when already joined on federated server", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, struct{}{})
+			alice.JoinRoom(t, roomID, nil)
+
+			// Join the room from a remote homeserver before any backfilled messages are sent
+			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventBefore := eventsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// eventsAfter
+			createMessagesInRoom(t, alice, roomID, 10)
+
+			// Mimic scrollback just through the latest messages
+			remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+				"dir": []string{"b"},
+				// Limited so we can only see a few of the latest messages
+				"limit": []string{"5"},
+			})
+
+			// Register and join the virtual user
+			ensureRegistered(t, as, virtualUserLocalpart)
+
+			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+				t,
+				as,
+				virtualUserID,
+				roomID,
+				eventBefore,
+				timeAfterEventBefore,
+				2,
+				// Status
+				200,
+			)
+			_, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
+
+			messagesRes := remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			})
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEvents[0], historicalEvents[1]}, func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
+		})
+
+		t.Run("When messages have already been scrolled back through, new historical messages are visible in next scroll back on federated server", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, struct{}{})
+			alice.JoinRoom(t, roomID, nil)
+
+			// Join the room from a remote homeserver before any backfilled messages are sent
+			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventBefore := eventsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// eventsAfter
+			createMessagesInRoom(t, alice, roomID, 3)
+
+			// Register and join the virtual user
+			ensureRegistered(t, as, virtualUserLocalpart)
+
+			// Mimic scrollback to all of the messages
+			// scrollbackMessagesRes
+			remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			})
+
+			// Historical messages are inserted where we have already scrolled back to
+			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+				t,
+				as,
+				virtualUserID,
+				roomID,
+				eventBefore,
+				timeAfterEventBefore,
+				2,
+				// Status
+				200,
+			)
+			_, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
+
+			messagesRes := remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			})
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEvents[0], historicalEvents[1]}, func(r gjson.Result) interface{} {
 						return r.Get("event_id").Str
 					}, nil),
 				},
