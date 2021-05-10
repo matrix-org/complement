@@ -169,7 +169,7 @@ func TestClientSpacesSummary(t *testing.T) {
 	// - Rooms are returned correctly along with the custom fields `room_type`.
 	// - Events are returned correctly.
 	t.Run("query whole graph", func(t *testing.T) {
-		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -241,7 +241,7 @@ func TestClientSpacesSummary(t *testing.T) {
 			StateKey: &ss1,
 			Content:  map[string]interface{}{},
 		})
-		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -357,7 +357,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 	}
 	t.Logf("rooms: %v", allEvents)
 
-	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
+	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
