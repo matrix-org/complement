@@ -249,11 +249,15 @@ func (c *CSAPI) DoWithAuthRaw(t *testing.T, method string, paths []string, body 
 
 // Do a JSON request.
 func (c *CSAPI) Do(t *testing.T, method string, paths []string, jsonBody interface{}, query url.Values) (*http.Response, error) {
-	b, err := json.Marshal(jsonBody)
-	if err != nil {
-		t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
+	body := make([]byte, 0)
+	if jsonBody != nil {
+		b, err := json.Marshal(jsonBody)
+		if err != nil {
+			t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
+		}
+		body = b
 	}
-	return c.DoRaw(t, method, paths, b, "application/json", query)
+	return c.DoRaw(t, method, paths, body, "application/json", query)
 }
 
 func (c *CSAPI) DoRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) (*http.Response, error) {
