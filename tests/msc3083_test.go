@@ -163,6 +163,19 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	CheckRestrictedRoom(t, alice, bob, space, room)
 }
 
+// Request the room summary and ensure the expected rooms are in the response.
+func RequestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, expected_rooms []interface{}) {
+	// The room appears for no one at first since hs2 doesn't know about who is in ss1.
+	res := user.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", expected_rooms, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+		},
+	})
+}
+
 // Tests that MSC2946 works for a restricted room.
 //
 // Create a space with a room in it that has join rules restricted to membership
@@ -226,30 +239,11 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	// Querying the space returns only the space, as the room is restricted.
-	res := bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				space,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-		},
-	})
+	RequestAndAssertSummary(t, bob, space, []interface{}{space})
 
 	// Join the space, and now the restricted room should appear.
 	bob.JoinRoom(t, space, []string{"hs1"})
-
-	res = bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				space, room,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-		},
-	})
+	RequestAndAssertSummary(t, bob, space, []interface{}{space, room})
 }
 
 // Tests that MSC2946 works over federation for a restricted room.
@@ -314,52 +308,13 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	})
 
 	// The room appears for no one at first since hs2 doesn't know about who is in ss1.
-	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				space,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-		},
-	})
-
-	res = bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				space,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-		},
-	})
+	RequestAndAssertSummary(t, alice, space, []interface{}{space})
+	RequestAndAssertSummary(t, bob, space, []interface{}{space})
 
 	// Charlie joins ss1 and now hs2 knows that alice is in it.
 	charlie.JoinRoom(t, space, []string{"hs1"})
 
 	// The restricted room should appear for alice (who is in the space).
-	res = alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				space, room,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-		},
-	})
-
-	// Bob still doesn't know about the room.
-	res = bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				space,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-		},
-	})
+	RequestAndAssertSummary(t, alice, space, []interface{}{space, room})
+	RequestAndAssertSummary(t, bob, space, []interface{}{space})
 }
