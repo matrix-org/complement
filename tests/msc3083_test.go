@@ -251,3 +251,115 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 		},
 	})
 }
+
+// Tests that MSC2946 works over federation for a restricted room.
+//
+// Create a space with a room in it that has join rules restricted to membership
+// in that space. The space and room are on different homeservers.
+//
+// The user should be unable to see the room in the spaces summary unless they
+// are a member of the space.
+func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
+	deployment := Deploy(t, "msc2946", b.BlueprintFederationTwoLocalOneRemote)
+	defer deployment.Destroy(t)
+
+	// Create the rooms
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	space := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		"initial_state": []map[string]interface{}{
+			{
+				"type":      "m.room.history_visibility",
+				"state_key": "",
+				"content": map[string]string{
+					"history_visibility": "world_readable",
+				},
+			},
+		},
+	})
+
+	// The room is an unstable room version which supports the restricted join_rule
+	// and is created on hs2.
+	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
+	room := charlie.CreateRoom(t, map[string]interface{}{
+		"preset":       "public_chat",
+		"name":         "Room",
+		"room_version": "org.matrix.msc3083",
+		"initial_state": []map[string]interface{}{
+			{
+				"type":      "m.room.join_rules",
+				"state_key": "",
+				"content": map[string]interface{}{
+					"join_rule": "restricted",
+					"allow": []map[string]interface{}{
+						{
+							"space": &space,
+							"via":   []string{"hs1"},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	// create the link (this doesn't really make sense since how would alice know
+	// about the room? but it works for testing)
+	alice.SendEventSynced(t, space, b.Event{
+		Type:     spaceChildEventType,
+		StateKey: &room,
+		Content: map[string]interface{}{
+			"via": []string{"hs2"},
+		},
+	})
+
+	// The room appears for no one at first since hs2 doesn't know about who is in ss1.
+	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				space,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+		},
+	})
+
+	res = bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				space,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+		},
+	})
+
+	// Charlie joins ss1 and now hs2 knows that alice is in it.
+	charlie.JoinRoom(t, space, []string{"hs1"})
+
+	// The restricted room should appear for alice (who is in the space).
+	res = alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				space, room,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+		},
+	})
+
+	// Bob still doesn't know about the room.
+	res = bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				space,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+		},
+	})
+}
