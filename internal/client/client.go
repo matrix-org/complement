@@ -41,7 +41,10 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 	if fileName != "" {
 		query.Set("filename", fileName)
 	}
-	res := c.MustDoRaw(t, "POST", []string{"_matrix", "media", "r0", "upload"}, fileBody, contentType, query)
+	res := c.MustDoFunc(
+		t, "POST", []string{"_matrix", "media", "r0", "upload"},
+		WithRawBody(fileBody), WithContentType(contentType), WithQueries(query),
+	)
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "content_uri")
 }
@@ -78,7 +81,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 		query.Add("server_name", serverName)
 	}
 	// join the room
-	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, nil, "application/json", query)
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, WithQueries(query))
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
@@ -92,7 +95,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 	t.Helper()
 	// leave the room
-	c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"}, nil, "application/json", nil)
+	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
@@ -182,47 +185,11 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 // MustDo is the same as Do but fails the test if the response is not 2xx
 func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
 	t.Helper()
-	res, err := c.DoWithAuth(t, method, paths, jsonBody)
-	if err != nil {
-		t.Fatalf("CSAPI.MustDo %s %s error: %s", method, strings.Join(paths, "/"), err)
-	}
+	res := c.DoFunc(t, method, paths, WithJSONBody(t, jsonBody))
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
 	}
 	return res
-}
-
-func (c *CSAPI) MustDoRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) *http.Response {
-	t.Helper()
-	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
-	if err != nil {
-		t.Fatalf("CSAPI.MustDoRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
-	}
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		t.Fatalf("CSAPI.MustDoRaw %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
-	}
-	return res
-}
-
-// DoWithAuth a JSON request. The access token for this user will automatically be added.
-func (c *CSAPI) DoWithAuth(t *testing.T, method string, paths []string, jsonBody interface{}) (*http.Response, error) {
-	t.Helper()
-	var query url.Values
-	if c.AccessToken != "" {
-		query = url.Values{
-			"access_token": []string{c.AccessToken},
-		}
-	}
-	return c.Do(t, method, paths, jsonBody, query)
-}
-
-func (c *CSAPI) DoWithAuthRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) (*http.Response, error) {
-	t.Helper()
-	if query == nil {
-		query = url.Values{}
-	}
-	query.Set("access_token", c.AccessToken)
-	return c.DoRaw(t, method, paths, body, contentType, query)
 }
 
 // WithRawBody sets the HTTP request body to `body`
@@ -266,6 +233,16 @@ func WithQueries(q url.Values) RequestOpt {
 	}
 }
 
+// MustDoFunc is the same as DoFunc but fails the test if it is not 2xx.
+func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
+	t.Helper()
+	res := c.DoFunc(t, method, paths, opts...)
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		t.Fatalf("CSAPI.MustDoFunc response return non-2xx code: %s", res.Status)
+	}
+	return res
+}
+
 // DoFunc is like Do but with functional request options
 func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
@@ -295,9 +272,11 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 		t.Logf("Making %s request to %s", method, reqURL)
 		contentType := req.Header.Get("Content-Type")
 		if contentType == "application/json" || strings.HasPrefix(contentType, "text/") {
-			body, _ := ioutil.ReadAll(req.Body)
-			t.Logf("Request body: %s", string(body))
-			req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+			if req.Body != nil {
+				body, _ := ioutil.ReadAll(req.Body)
+				t.Logf("Request body: %s", string(body))
+				req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+			}
 		} else {
 			t.Logf("Request body: <binary:%s>", contentType)
 		}
