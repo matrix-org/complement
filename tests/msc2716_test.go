@@ -38,6 +38,14 @@ type event struct {
 // checking out the test result in a Synapse instance
 const TimeBetweenMessages = time.Millisecond
 
+var (
+	MSC2716_INSERTION = "org.matrix.msc2716.insertion"
+	MSC2716_MARKER    = "org.matrix.msc2716.marker"
+
+	MSC2716_NEXT_CHUNK_ID = "org.matrix.msc2716.next_chunk_id"
+	MSC2716_CHUNK_ID      = "org.matrix.msc2716.chunk_id"
+)
+
 // Test that the message events we insert between A and B come back in the correct order from /messages
 func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, "rooms_state", b.BlueprintHSWithApplicationService)
@@ -95,11 +103,13 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventBefore,
 				timeAfterEventBefore.Add(TimeBetweenMessages*3),
+				"",
 				3,
 				// Status
 				200,
 			)
 			_, historicalEvents := getEventsFromBulkSendResponse(t, backfillRes)
+			nextChunkID := getNextChunkIdFromBulkSendResponse(t, backfillRes)
 
 			// Insert another older chunk of backfilled history from the same user.
 			// Make sure the meta data and joins still work on the subsequent chunk
@@ -110,6 +120,7 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventBefore,
 				timeAfterEventBefore,
+				nextChunkID,
 				3,
 				// Status
 				200,
@@ -190,6 +201,7 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventBefore,
 				timeAfterEventBefore,
+				"",
 				1,
 				// Status
 				200,
@@ -258,6 +270,7 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				"$some-non-existant-event-id",
 				time.Now(),
+				"",
 				1,
 				// Status
 				// TODO: Seems like this makes more sense as a 404
@@ -284,6 +297,7 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventBefore,
 				timeAfterEventBefore,
+				"",
 				1,
 				// Status
 				// Normal user alice should not be able to backfill messages
@@ -314,6 +328,7 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventBefore,
 				timeAfterEventBefore,
+				"",
 				2,
 				// Status
 				200,
@@ -370,6 +385,7 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventBefore,
 				timeAfterEventBefore,
+				"",
 				2,
 				// Status
 				200,
@@ -424,6 +440,7 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventBefore,
 				timeAfterEventBefore,
+				"",
 				2,
 				// Status
 				200,
@@ -564,6 +581,7 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 	roomID string,
 	insertAfterEventId string,
 	insertTime time.Time,
+	chunkID string,
 	count int,
 	status int,
 ) (res *http.Response) {
@@ -589,6 +607,12 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 				"m.historical": true,
 			},
 		}
+
+		// If provided, connect the chunk to the last insertion point
+		if chunkID != "" && i == 0 {
+			newEvent["content"].(map[string]interface{})[MSC2716_CHUNK_ID] = chunkID
+		}
+
 		evs[i] = newEvent
 	}
 
@@ -629,11 +653,23 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 	return res
 }
 
-func getEventsFromBulkSendResponse(t *testing.T, res *http.Response) (state_event_ids []string, event_ids []string) {
+func getEventsFromBulkSendResponse(t *testing.T, res *http.Response) (stateEventsIDs []string, eventIDs []string) {
 	body := client.ParseJSON(t, res)
+	// Since the original body can only be read once, create a new one from the body bytes we just read
+	res.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 
-	stateEvents := client.GetJSONFieldArray(t, body, "state_events")
-	events := client.GetJSONFieldArray(t, body, "events")
+	stateEventsIDs = client.GetJSONFieldArray(t, body, "state_events")
+	eventIDs = client.GetJSONFieldArray(t, body, "events")
 
-	return stateEvents, events
+	return stateEventsIDs, eventIDs
+}
+
+func getNextChunkIdFromBulkSendResponse(t *testing.T, res *http.Response) (nextChunkID string) {
+	body := client.ParseJSON(t, res)
+	// Since the original body can only be read once, create a new one from the body bytes we just read
+	res.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+
+	nextChunkID = client.GetJSONFieldStr(t, body, "next_chunk_id")
+
+	return nextChunkID
 }
