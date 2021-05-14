@@ -128,7 +128,6 @@ func (d *Builder) removeNetworks() error {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -211,6 +210,9 @@ func (d *Builder) ConstructBlueprintsIfNotExist(bs []b.Blueprint) error {
 			blueprintsToBuild = append(blueprintsToBuild, bprint)
 		}
 	}
+	if len(blueprintsToBuild) == 0 {
+		return nil
+	}
 	return d.ConstructBlueprints(blueprintsToBuild)
 }
 
@@ -263,7 +265,7 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 
 // construct all Homeservers sequentially then commits them
 func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
-	networkID, err := CreateNetwork(d.Docker, bprint.Name)
+	networkID, err := CreateNetworkIfNotExists(d.Docker, bprint.Name)
 	if err != nil {
 		return []error{err}
 	}
@@ -614,9 +616,20 @@ func deployImage(
 	return d, nil
 }
 
-// CreateNetwork creates a docker network and returns its id.
+// CreateNetworkIfNotExists creates a docker network and returns its id.
 // ID is guaranteed not to be empty when err == nil
-func CreateNetwork(docker *client.Client, blueprintName string) (networkID string, err error) {
+func CreateNetworkIfNotExists(docker *client.Client, blueprintName string) (networkID string, err error) {
+	// check if a network already exists for this blueprint
+	nws, err := docker.NetworkList(context.Background(), types.NetworkListOptions{
+		Filters: label("complement_blueprint=" + blueprintName),
+	})
+	if err != nil {
+		return "", fmt.Errorf("%s: failed to list networks. %w", blueprintName, err)
+	}
+	// return the existing network
+	if len(nws) > 0 {
+		return nws[0].ID, nil
+	}
 	// make a user-defined network so we get DNS based on the container name
 	nw, err := docker.NetworkCreate(context.Background(), "complement_"+blueprintName, types.NetworkCreate{
 		Labels: map[string]string{

@@ -4,6 +4,7 @@ package tests
 
 import (
 	"fmt"
+	"net/url"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -49,7 +50,7 @@ func eventKey(srcRoomID, dstRoomID, evType string) string {
 // - Events are returned correctly.
 // - Redacting links works correctly.
 func TestClientSpacesSummary(t *testing.T) {
-	deployment := Deploy(t, "msc2946", b.BlueprintOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	roomNames := make(map[string]string)
@@ -168,7 +169,7 @@ func TestClientSpacesSummary(t *testing.T) {
 	// - Rooms are returned correctly along with the custom fields `room_type`.
 	// - Events are returned correctly.
 	t.Run("query whole graph", func(t *testing.T) {
-		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -207,9 +208,16 @@ func TestClientSpacesSummary(t *testing.T) {
 		// should omit either R3 or R4 if we start from SS1 because we only return 1 link per room which will be:
 		// SS1 -> SS2
 		// SS2 -> R3,R4 (but only 1 is allowed)
-		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", ss1, "spaces"}, map[string]interface{}{
-			"max_rooms_per_space": 1,
-		})
+		query := make(url.Values, 1)
+		query.Set("max_rooms_per_space", "1")
+		res := alice.MustDoRaw(
+			t,
+			"GET",
+			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", ss1, "spaces"},
+			nil,
+			"application/json",
+			query,
+		)
 		wantItems := []interface{}{
 			ss1ToSS2,
 			ss2ToR3, ss2ToR4, // one of these
@@ -233,7 +241,7 @@ func TestClientSpacesSummary(t *testing.T) {
 			StateKey: &ss1,
 			Content:  map[string]interface{}{},
 		})
-		res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -267,7 +275,7 @@ func TestClientSpacesSummary(t *testing.T) {
 // Tests that:
 // - Querying from root returns the entire graph
 func TestFederatedClientSpaces(t *testing.T) {
-	deployment := Deploy(t, "msc2946", b.BlueprintFederationOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	worldReadable := map[string]interface{}{
@@ -349,7 +357,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 	}
 	t.Logf("rooms: %v", allEvents)
 
-	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, map[string]interface{}{})
+	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{

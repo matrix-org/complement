@@ -11,6 +11,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/docker"
 )
 
 var (
@@ -32,12 +33,10 @@ func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverNam
 	)
 }
 
-// Test joining a room with join rules restricted to membership in a space.
-func TestRestrictedRoomsLocalJoin(t *testing.T) {
-	deployment := Deploy(t, "msc3083", b.BlueprintOneToOneRoom)
-	defer deployment.Destroy(t)
-
-	// Create the space and put a room in it.
+// Create a space and put a room in it which is set to:
+// * The experimental room version.
+// * restricted join rules with allow set to the space.
+func SetupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.CSAPI, string, string) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	space := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -72,8 +71,10 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 		},
 	})
 
-	// Create a second user and attempt to join the room, it should fail.
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	return alice, space, room
+}
+
+func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, space string, room string) {
 	FailJoinRoom(bob, t, room, "hs1")
 
 	// Join the space, attempt to join the room again, which now should succeed.
@@ -86,7 +87,7 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 	FailJoinRoom(bob, t, room, "hs1")
 
 	// Invite the user and joining should work.
-	alice.InviteRoom(t, room, "@bob:hs1")
+	alice.InviteRoom(t, room, bob.UserID)
 	bob.JoinRoom(t, room, []string{"hs1"})
 
 	// Leave the room again, and join the space.
@@ -125,6 +126,36 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 			},
 		},
 	)
-	// Fails since a fully invalid allow key rquires an invite.
+	// Fails since a fully invalid allow key requires an invite.
 	FailJoinRoom(bob, t, room, "hs1")
+}
+
+// Test joining a room with join rules restricted to membership in a space.
+func TestRestrictedRoomsLocalJoin(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	// Setup the user, space, and restricted room.
+	alice, space, room := SetupRestrictedRoom(t, deployment)
+
+	// Create a second user on the same homeserver.
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+
+	// Execute the checks.
+	CheckRestrictedRoom(t, alice, bob, space, room)
+}
+
+// Test joining a room with join rules restricted to membership in a space.
+func TestRestrictedRoomsRemoteJoin(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	// Setup the user, space, and restricted room.
+	alice, space, room := SetupRestrictedRoom(t, deployment)
+
+	// Create a second user on a different homeserver.
+	bob := deployment.Client(t, "hs2", "@bob:hs2")
+
+	// Execute the checks.
+	CheckRestrictedRoom(t, alice, bob, space, room)
 }

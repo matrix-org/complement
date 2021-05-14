@@ -18,7 +18,7 @@ import (
 // like an array in Python and hence go un-noticed. In Go however it will result in a 400. The correct behaviour is
 // to return a 400. Element iOS uses this erroneous format.
 func TestKeysQueryWithDeviceIDAsObjectFails(t *testing.T) {
-	deployment := Deploy(t, "user_query_keys", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	userID := "@alice:hs1"
