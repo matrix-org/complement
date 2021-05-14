@@ -153,13 +153,7 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 		if since != "" {
 			query["since"] = []string{since}
 		}
-		res, err := c.Do(t, "GET", []string{"_matrix", "client", "r0", "sync"}, nil, query)
-		if err != nil {
-			t.Fatalf("CSAPI.syncUntil since=%s error: %s", since, err)
-		}
-		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			t.Fatalf("CSAPI.syncUntil since=%s returned HTTP %d", since, res.StatusCode)
-		}
+		res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, WithQueries(query))
 		body := ParseJSON(t, res)
 		since = GetJSONFieldStr(t, body, "next_batch")
 		keyRes := gjson.GetBytes(body, key)
@@ -296,19 +290,6 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 		t.Logf("%s", string(dump))
 	}
 	return res
-}
-
-// Do a JSON request.
-func (c *CSAPI) Do(t *testing.T, method string, paths []string, jsonBody interface{}, query url.Values) (*http.Response, error) {
-	body := make([]byte, 0)
-	if jsonBody != nil {
-		b, err := json.Marshal(jsonBody)
-		if err != nil {
-			t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
-		}
-		body = b
-	}
-	return c.DoRaw(t, method, paths, body, "application/json", query)
 }
 
 func (c *CSAPI) DoRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) (*http.Response, error) {
