@@ -617,12 +617,14 @@ func deployImage(
 // CreateNetworkIfNotExists creates a docker network and returns its id.
 // ID is guaranteed not to be empty when err == nil
 func CreateNetworkIfNotExists(docker *client.Client, blueprintName string) (networkID string, err error) {
+	// check if a network already exists for this blueprint
 	nws, err := docker.NetworkList(context.Background(), types.NetworkListOptions{
 		Filters: label("complement_blueprint=" + blueprintName),
 	})
 	if err != nil {
 		return "", fmt.Errorf("%s: failed to list networks. %w", blueprintName, err)
 	}
+	// return the existing network
 	if len(nws) > 0 {
 		return nws[0].ID, nil
 	}
