@@ -50,7 +50,7 @@ func eventKey(srcRoomID, dstRoomID, evType string) string {
 // - Events are returned correctly.
 // - Redacting links works correctly.
 func TestClientSpacesSummary(t *testing.T) {
-	deployment := Deploy(t, "msc2946", b.BlueprintOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	roomNames := make(map[string]string)
@@ -275,7 +275,7 @@ func TestClientSpacesSummary(t *testing.T) {
 // Tests that:
 // - Querying from root returns the entire graph
 func TestFederatedClientSpaces(t *testing.T) {
-	deployment := Deploy(t, "msc2946", b.BlueprintFederationOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	worldReadable := map[string]interface{}{

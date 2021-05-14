@@ -13,7 +13,7 @@ import (
 
 // Can handle uploads and remote/local downloads without a file name
 func TestMediaWithoutFileName(t *testing.T) {
-	deployment := Deploy(t, "media_repo", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	remoteMediaId := "PlainTextFile"
