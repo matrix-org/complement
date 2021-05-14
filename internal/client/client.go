@@ -190,6 +190,10 @@ func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody int
 func WithRawBody(body []byte) RequestOpt {
 	return func(req *http.Request) {
 		req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		// we need to manually set this because we don't set the body
+		// in http.NewRequest due to using functional options, and only in NewRequest
+		// does the stdlib set this for us.
+		req.ContentLength = int64(len(body))
 	}
 }
 
