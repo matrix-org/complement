@@ -74,7 +74,7 @@ func Deploy(t *testing.T, namespace string, blueprint b.Blueprint) *docker.Deplo
 	if err != nil {
 		t.Fatalf("Deploy: Deploy returned error %s", err)
 	}
-	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Now().Sub(timeStartDeploy))
+	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy))
 	return dep
 }
 
