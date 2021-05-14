@@ -184,7 +184,7 @@ func RequestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, exp
 // The user should be unable to see the room in the spaces summary unless they
 // are a member of the space.
 func TestRestrictedRoomsSpacesSummary(t *testing.T) {
-	deployment := Deploy(t, "msc2946", b.BlueprintOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	// Create the rooms
@@ -254,7 +254,7 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 // The user should be unable to see the room in the spaces summary unless they
 // are a member of the space.
 func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
-	deployment := Deploy(t, "msc2946", b.BlueprintFederationTwoLocalOneRemote)
+	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 
 	// Create the rooms
