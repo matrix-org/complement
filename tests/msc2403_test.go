@@ -324,7 +324,6 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 		t,
 		"POST",
 		[]string{"_matrix", "client", "unstable", knockUnstableIdentifier, roomID},
-		b,
 		client.WithQueries(query),
 		client.WithRawBody(b),
 	)
@@ -336,12 +335,9 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 // doInitialSync will carry out an initial sync and return the next_batch token
 func doInitialSync(t *testing.T, c *client.CSAPI) string {
 	query := url.Values{
-		"access_token": []string{c.AccessToken},
-		"timeout":      []string{"1000"},
+		"timeout": []string{"1000"},
 	}
-	res, err := c.Do(t, "GET", []string{"_matrix", "client", "r0", "sync"}, nil, query)
-	must.NotError(t, "doInitialSync failed to marshal JSON body", err)
-
+	res := c.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(query))
 	body := client.ParseJSON(t, res)
 	since := client.GetJSONFieldStr(t, body, "next_batch")
 	return since

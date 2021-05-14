@@ -147,8 +147,7 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 			t.Fatalf("syncUntil timed out. Called check function %d times", checkCounter)
 		}
 		query := url.Values{
-			"access_token": []string{c.AccessToken},
-			"timeout":      []string{"1000"},
+			"timeout": []string{"1000"},
 		}
 		if since != "" {
 			query["since"] = []string{since}
@@ -176,7 +175,7 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 	}
 }
 
-// MustDo is the same as Do but fails the test if the response is not 2xx
+// MustDo will do the HTTP request and fail the test if the response is not 2xx
 func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
 	t.Helper()
 	res := c.DoFunc(t, method, paths, WithJSONBody(t, jsonBody))
@@ -216,15 +215,8 @@ func WithJSONBody(t *testing.T, obj interface{}) RequestOpt {
 	}
 }
 
-// WithoutAuthorizationHeader removes the Authorization header from the request.
-// By default, requests will attempt to set an auth header if there is an access_token available.
-func WithoutAuthorizationHeader() RequestOpt {
-	return func(req *http.Request) {
-		req.Header.Del("Authorization")
-	}
-}
-
-// WithQueries sets the query parameters on the request. Does not modify access tokens.
+// WithQueries sets the query parameters on the request. Does not modify access token as it
+// is set as an Authorization header.
 func WithQueries(q url.Values) RequestOpt {
 	return func(req *http.Request) {
 		req.URL.RawQuery = q.Encode()
@@ -241,7 +233,18 @@ func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...
 	return res
 }
 
-// DoFunc is like Do but with functional request options
+// DoFunc performs an arbitrary HTTP request to the server. This function supports RequestOpts to set
+// extra information on the request such as an HTTP request body, query parameters and content-type.
+// See all functions in this package starting with `With...`.
+//
+// Fails the test if an HTTP request could not be made or if there was a network error talking to the
+// server. To do assertions on the HTTP response, see the `must` package. For example:
+//    must.MatchResponse(t, res, match.HTTPResponse{
+//    	StatusCode: 400,
+//    	JSON: []match.JSON{
+//    		match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
+//    	},
+//    })
 func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
 	for i := range paths {
@@ -294,43 +297,6 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 		t.Logf("%s", string(dump))
 	}
 	return res
-}
-
-func (c *CSAPI) DoRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) (*http.Response, error) {
-	t.Helper()
-	qs := ""
-	if len(query) > 0 {
-		qs = "?" + query.Encode()
-	}
-	for i := range paths {
-		paths[i] = url.PathEscape(paths[i])
-	}
-
-	reqURL := c.BaseURL + "/" + strings.Join(paths, "/") + qs
-	if c.Debug {
-		t.Logf("Making %s request to %s", method, reqURL)
-		if contentType == "application/json" || strings.HasPrefix(contentType, "text/") {
-			t.Logf("Request body: %s", string(body))
-		} else {
-			t.Logf("Request body: <binary:%s>", contentType)
-		}
-	}
-	req, err := http.NewRequest(method, reqURL, bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("CSAPI.Do failed to create http.NewRequest: %s", err)
-	}
-	req.Header.Set("Content-Type", contentType)
-	res, err := c.Client.Do(req)
-	if c.Debug && res != nil {
-		var dump []byte
-		dump, err = httputil.DumpResponse(res, true)
-		if err != nil {
-			t.Fatalf("CSAPI.Do failed to dump response body: %s", err)
-		}
-		t.Logf("%s", string(dump))
-
-	}
-	return res, err
 }
 
 // NewLoggedClient returns an http.Client which logs requests/responses
