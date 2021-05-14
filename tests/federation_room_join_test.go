@@ -27,7 +27,7 @@ import (
 // m.room.create event would pick that up. We also can't tear down the Complement
 // server because otherwise signing key lookups will fail.
 func TestJoinViaRoomIDAndServerName(t *testing.T) {
-	deployment := Deploy(t, "federation_room_join", b.BlueprintFederationOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	acceptMakeSendJoinRequests := true
@@ -92,7 +92,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 // the properties listed above, then asking HS1 to join them and make sure that
 // they 200 OK.
 func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
-	deployment := Deploy(t, "federation_room_join_unverifiable", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,

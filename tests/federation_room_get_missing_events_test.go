@@ -30,7 +30,7 @@ import (
 // * Ensure that fetching the event results in an error.
 // sytest: Outbound federation will ignore a missing event with bad JSON for room version 6
 func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *testing.T) {
-	deployment := Deploy(t, "federation_get_missing_events", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),

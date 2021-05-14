@@ -13,7 +13,7 @@ import (
 )
 
 func TestPresence(t *testing.T) {
-	deployment := Deploy(t, "presence", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
