@@ -11,7 +11,7 @@ import (
 )
 
 func TestRequestEncodingFails(t *testing.T) {
-	deployment := Deploy(t, "request_encoding", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	testString := `{ "test":"a` + "\x81" + `" }`
