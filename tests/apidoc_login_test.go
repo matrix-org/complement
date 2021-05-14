@@ -21,7 +21,7 @@ func TestLogin(t *testing.T) {
 		// sytest: GET /login yields a set of flows
 		t.Run("GET /login yields a set of flows", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{}`))
+			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "login"}, client.WithRawBody(json.RawMessage(`{}`)))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				Headers: map[string]string{
 					"Content-Type": "application/json",

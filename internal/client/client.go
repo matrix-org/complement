@@ -17,6 +17,10 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 )
 
+// RequestOpt is a functional option which will modify an outgoing HTTP request.
+// See functions starting with `With...` in this package for more info.
+type RequestOpt func(req *http.Request)
+
 type CSAPI struct {
 	UserID      string
 	AccessToken string
@@ -245,6 +249,98 @@ func (c *CSAPI) DoWithAuthRaw(t *testing.T, method string, paths []string, body 
 	}
 	query.Set("access_token", c.AccessToken)
 	return c.DoRaw(t, method, paths, body, contentType, query)
+}
+
+// WithRawBody sets the HTTP request body to `body`
+func WithRawBody(body []byte) RequestOpt {
+	return func(req *http.Request) {
+		req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+	}
+}
+
+// WithContentType sets the HTTP request Content-Type header to `cType`
+func WithContentType(cType string) RequestOpt {
+	return func(req *http.Request) {
+		req.Header.Set("Content-Type", cType)
+	}
+}
+
+// WithJSONBody sets the HTTP request body to the JSON serialised form of `obj`
+func WithJSONBody(t *testing.T, obj interface{}) RequestOpt {
+	return func(req *http.Request) {
+		t.Helper()
+		b, err := json.Marshal(obj)
+		if err != nil {
+			t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
+		}
+		WithRawBody(b)(req)
+	}
+}
+
+// WithoutAuthorizationHeader removes the Authorization header from the request.
+// By default, requests will attempt to set an auth header if there is an access_token available.
+func WithoutAuthorizationHeader() RequestOpt {
+	return func(req *http.Request) {
+		req.Header.Del("Authorization")
+	}
+}
+
+// WithQueries sets the query parameters on the request. Does not modify access tokens.
+func WithQueries(q url.Values) RequestOpt {
+	return func(req *http.Request) {
+		req.URL.RawQuery = q.Encode()
+	}
+}
+
+// DoFunc is like Do but with functional request options
+func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
+	t.Helper()
+	for i := range paths {
+		paths[i] = url.PathEscape(paths[i])
+	}
+	reqURL := c.BaseURL + "/" + strings.Join(paths, "/")
+	req, err := http.NewRequest(method, reqURL, nil)
+	if err != nil {
+		t.Fatalf("CSAPI.DoFunc failed to create http.NewRequest: %s", err)
+	}
+	// set defaults before RequestOpts
+	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
+
+	// set functional options
+	for _, o := range opts {
+		o(req)
+	}
+	// set defaults after RequestOpts
+	if req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	// debug log the request
+	if c.Debug {
+		t.Logf("Making %s request to %s", method, reqURL)
+		contentType := req.Header.Get("Content-Type")
+		if contentType == "application/json" || strings.HasPrefix(contentType, "text/") {
+			body, _ := ioutil.ReadAll(req.Body)
+			t.Logf("Request body: %s", string(body))
+			req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		} else {
+			t.Logf("Request body: <binary:%s>", contentType)
+		}
+	}
+	// Perform the HTTP request
+	res, err := c.Client.Do(req)
+	if err != nil {
+		t.Fatalf("CSAPI.DoFunc response returned error: %s", err)
+	}
+	// debug log the response
+	if c.Debug && res != nil {
+		var dump []byte
+		dump, err = httputil.DumpResponse(res, true)
+		if err != nil {
+			t.Fatalf("CSAPI.DoFunc failed to dump response body: %s", err)
+		}
+		t.Logf("%s", string(dump))
+	}
+	return res
 }
 
 // Do a JSON request.
