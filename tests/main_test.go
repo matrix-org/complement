@@ -56,6 +56,7 @@ func TestMain(m *testing.M) {
 // which tests can interact with.
 func Deploy(t *testing.T, namespace string, blueprint b.Blueprint) *docker.Deployment {
 	t.Helper()
+	timeStartBlueprint := time.Now()
 	cfg := config.NewConfigFromEnvVars()
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
@@ -68,10 +69,12 @@ func Deploy(t *testing.T, namespace string, blueprint b.Blueprint) *docker.Deplo
 	if err != nil {
 		t.Fatalf("Deploy: NewDeployer returned error %s", err)
 	}
+	timeStartDeploy := time.Now()
 	dep, err := d.Deploy(context.Background(), blueprint.Name)
 	if err != nil {
 		t.Fatalf("Deploy: Deploy returned error %s", err)
 	}
+	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Now().Sub(timeStartDeploy))
 	return dep
 }
 
