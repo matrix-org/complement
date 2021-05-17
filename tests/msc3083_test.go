@@ -14,10 +14,6 @@ import (
 	"github.com/matrix-org/complement/internal/docker"
 )
 
-var (
-	msc1772SpaceChildEventType = "org.matrix.msc1772.space.child"
-)
-
 func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverName string) {
 	t.Helper()
 
@@ -68,7 +64,7 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 		},
 	})
 	alice.SendEventSynced(t, space, b.Event{
-		Type:     msc1772SpaceChildEventType,
+		Type:     "m.space.child",
 		StateKey: &room,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
