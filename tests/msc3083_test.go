@@ -21,7 +21,7 @@ var (
 	msc1772SpaceChildEventType = "org.matrix.msc1772.space.child"
 )
 
-func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverName string) {
+func failJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverName string) {
 	// This is copied from Client.JoinRoom to test a join failure.
 	query := make(url.Values, 1)
 	query.Set("server_name", serverName)
@@ -39,7 +39,7 @@ func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverNam
 // Create a space and put a room in it which is set to:
 // * The experimental room version.
 // * restricted join rules with allow set to the space.
-func SetupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.CSAPI, string, string) {
+func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.CSAPI, string, string) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	space := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -77,8 +77,8 @@ func SetupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 	return alice, space, room
 }
 
-func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, space string, room string) {
-	FailJoinRoom(bob, t, room, "hs1")
+func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, space string, room string) {
+	failJoinRoom(bob, t, room, "hs1")
 
 	// Join the space, attempt to join the room again, which now should succeed.
 	bob.JoinRoom(t, space, []string{"hs1"})
@@ -87,7 +87,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 	// Leaving the room works and the user is unable to re-join.
 	bob.LeaveRoom(t, room)
 	bob.LeaveRoom(t, space)
-	FailJoinRoom(bob, t, room, "hs1")
+	failJoinRoom(bob, t, room, "hs1")
 
 	// Invite the user and joining should work.
 	alice.InviteRoom(t, room, bob.UserID)
@@ -114,7 +114,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 		},
 	)
 	// Fails since invalid values get filtered out of allow.
-	FailJoinRoom(bob, t, room, "hs1")
+	failJoinRoom(bob, t, room, "hs1")
 
 	alice.SendEventSynced(
 		t,
@@ -130,7 +130,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 		},
 	)
 	// Fails since a fully invalid allow key requires an invite.
-	FailJoinRoom(bob, t, room, "hs1")
+	failJoinRoom(bob, t, room, "hs1")
 }
 
 // Test joining a room with join rules restricted to membership in a space.
@@ -139,13 +139,13 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Setup the user, space, and restricted room.
-	alice, space, room := SetupRestrictedRoom(t, deployment)
+	alice, space, room := setupRestrictedRoom(t, deployment)
 
 	// Create a second user on the same homeserver.
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	// Execute the checks.
-	CheckRestrictedRoom(t, alice, bob, space, room)
+	checkRestrictedRoom(t, alice, bob, space, room)
 }
 
 // Test joining a room with join rules restricted to membership in a space.
@@ -154,17 +154,17 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Setup the user, space, and restricted room.
-	alice, space, room := SetupRestrictedRoom(t, deployment)
+	alice, space, room := setupRestrictedRoom(t, deployment)
 
 	// Create a second user on a different homeserver.
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
 	// Execute the checks.
-	CheckRestrictedRoom(t, alice, bob, space, room)
+	checkRestrictedRoom(t, alice, bob, space, room)
 }
 
 // Request the room summary and ensure the expected rooms are in the response.
-func RequestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, expected_rooms []interface{}) {
+func requestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, expected_rooms []interface{}) {
 	res := user.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
@@ -238,11 +238,11 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	// Querying the space returns only the space, as the room is restricted.
-	RequestAndAssertSummary(t, bob, space, []interface{}{space})
+	requestAndAssertSummary(t, bob, space, []interface{}{space})
 
 	// Join the space, and now the restricted room should appear.
 	bob.JoinRoom(t, space, []string{"hs1"})
-	RequestAndAssertSummary(t, bob, space, []interface{}{space, room})
+	requestAndAssertSummary(t, bob, space, []interface{}{space, room})
 }
 
 // Tests that MSC2946 works over federation for a restricted room.
@@ -307,13 +307,13 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	})
 
 	// The room appears for no one at first since hs2 doesn't know about who is in ss1.
-	RequestAndAssertSummary(t, alice, space, []interface{}{space})
-	RequestAndAssertSummary(t, bob, space, []interface{}{space})
+	requestAndAssertSummary(t, alice, space, []interface{}{space})
+	requestAndAssertSummary(t, bob, space, []interface{}{space})
 
 	// Charlie joins ss1 and now hs2 knows that alice is in it.
 	charlie.JoinRoom(t, space, []string{"hs1"})
 
 	// The restricted room should appear for alice (who is in the space).
-	RequestAndAssertSummary(t, alice, space, []interface{}{space, room})
-	RequestAndAssertSummary(t, bob, space, []interface{}{space})
+	requestAndAssertSummary(t, alice, space, []interface{}{space, room})
+	requestAndAssertSummary(t, bob, space, []interface{}{space})
 }
