@@ -165,7 +165,6 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 
 // Request the room summary and ensure the expected rooms are in the response.
 func RequestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, expected_rooms []interface{}) {
-	// The room appears for no one at first since hs2 doesn't know about who is in ss1.
 	res := user.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
