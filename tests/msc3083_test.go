@@ -14,10 +14,6 @@ import (
 	"github.com/matrix-org/complement/internal/docker"
 )
 
-var (
-	msc1772SpaceChildEventType = "org.matrix.msc1772.space.child"
-)
-
 func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverName string) {
 	// This is copied from Client.JoinRoom to test a join failure.
 	query := make(url.Values, 1)
@@ -64,7 +60,7 @@ func SetupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 		},
 	})
 	alice.SendEventSynced(t, space, b.Event{
-		Type:     msc1772SpaceChildEventType,
+		Type:     "m.space.child",
 		StateKey: &room,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
