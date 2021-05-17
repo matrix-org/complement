@@ -14,7 +14,9 @@ import (
 	"github.com/matrix-org/complement/internal/docker"
 )
 
-func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverName string) {
+func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverName string) {
+	t.Helper()
+
 	// This is copied from Client.JoinRoom to test a join failure.
 	query := make(url.Values, 1)
 	query.Set("server_name", serverName)
@@ -32,7 +34,9 @@ func FailJoinRoom(c *client.CSAPI, t *testing.T, roomIDOrAlias string, serverNam
 // Create a space and put a room in it which is set to:
 // * The experimental room version.
 // * restricted join rules with allow set to the space.
-func SetupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.CSAPI, string, string) {
+func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.CSAPI, string, string) {
+	t.Helper()
+
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	space := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -70,8 +74,10 @@ func SetupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 	return alice, space, room
 }
 
-func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, space string, room string) {
-	FailJoinRoom(bob, t, room, "hs1")
+func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, space string, room string) {
+	t.Helper()
+
+	failJoinRoom(t, bob, room, "hs1")
 
 	// Join the space, attempt to join the room again, which now should succeed.
 	bob.JoinRoom(t, space, []string{"hs1"})
@@ -80,7 +86,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 	// Leaving the room works and the user is unable to re-join.
 	bob.LeaveRoom(t, room)
 	bob.LeaveRoom(t, space)
-	FailJoinRoom(bob, t, room, "hs1")
+	failJoinRoom(t, bob, room, "hs1")
 
 	// Invite the user and joining should work.
 	alice.InviteRoom(t, room, bob.UserID)
@@ -107,7 +113,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 		},
 	)
 	// Fails since invalid values get filtered out of allow.
-	FailJoinRoom(bob, t, room, "hs1")
+	failJoinRoom(t, bob, room, "hs1")
 
 	alice.SendEventSynced(
 		t,
@@ -123,7 +129,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 		},
 	)
 	// Fails since a fully invalid allow key requires an invite.
-	FailJoinRoom(bob, t, room, "hs1")
+	failJoinRoom(t, bob, room, "hs1")
 }
 
 // Test joining a room with join rules restricted to membership in a space.
@@ -132,13 +138,13 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Setup the user, space, and restricted room.
-	alice, space, room := SetupRestrictedRoom(t, deployment)
+	alice, space, room := setupRestrictedRoom(t, deployment)
 
 	// Create a second user on the same homeserver.
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	// Execute the checks.
-	CheckRestrictedRoom(t, alice, bob, space, room)
+	checkRestrictedRoom(t, alice, bob, space, room)
 }
 
 // Test joining a room with join rules restricted to membership in a space.
@@ -147,11 +153,11 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Setup the user, space, and restricted room.
-	alice, space, room := SetupRestrictedRoom(t, deployment)
+	alice, space, room := setupRestrictedRoom(t, deployment)
 
 	// Create a second user on a different homeserver.
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
 	// Execute the checks.
-	CheckRestrictedRoom(t, alice, bob, space, room)
+	checkRestrictedRoom(t, alice, bob, space, room)
 }
