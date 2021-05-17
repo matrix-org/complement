@@ -215,8 +215,9 @@ func WithJSONBody(t *testing.T, obj interface{}) RequestOpt {
 	}
 }
 
-// WithQueries sets the query parameters on the request. Does not modify access token as it
-// is set as an Authorization header.
+// WithQueries sets the query parameters on the request.
+// This function should not be used to set an "access_token" parameter for Matrix authentication.
+// Instead, set CSAPI.AccessToken.
 func WithQueries(q url.Values) RequestOpt {
 	return func(req *http.Request) {
 		req.URL.RawQuery = q.Encode()
