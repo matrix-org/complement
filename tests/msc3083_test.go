@@ -128,7 +128,7 @@ func CheckRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 
 // Test joining a room with join rules restricted to membership in a space.
 func TestRestrictedRoomsLocalJoin(t *testing.T) {
-	deployment := Deploy(t, "msc3083_local", b.BlueprintOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	// Setup the user, space, and restricted room.
@@ -143,7 +143,7 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 
 // Test joining a room with join rules restricted to membership in a space.
 func TestRestrictedRoomsRemoteJoin(t *testing.T) {
-	deployment := Deploy(t, "msc3083_remote", b.BlueprintFederationOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	// Setup the user, space, and restricted room.
