@@ -223,7 +223,7 @@ func WithQueries(q url.Values) RequestOpt {
 	}
 }
 
-// MustDoFunc is the same as DoFunc but fails the test if it is not 2xx.
+// MustDoFunc is the same as DoFunc but fails the test if the returned HTTP response code is not 2xx.
 func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
 	res := c.DoFunc(t, method, paths, opts...)
