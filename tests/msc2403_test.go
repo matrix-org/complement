@@ -99,15 +99,16 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			"server_name": []string{"hs1"},
 		}
 
-		knockingUser.MustDoWithStatusRaw(
+		res := knockingUser.DoFunc(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "r0", "join", roomID},
-			[]byte("{}"),
-			"application/json",
-			query,
-			403,
+			client.WithQueries(query),
+			client.WithRawBody([]byte(`{}`)),
 		)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 403,
+		})
 	})
 
 	t.Run("Knocking on a room with join rule '"+knockUnstableIdentifier+"' should succeed", func(t *testing.T) {
@@ -319,27 +320,24 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 	}
 
 	// Knock on the room
-	c.MustDoWithStatusRaw(
+	res := c.DoFunc(
 		t,
 		"POST",
 		[]string{"_matrix", "client", "unstable", knockUnstableIdentifier, roomID},
-		b,
-		"application/json",
-		query,
-		expectedStatus,
+		client.WithQueries(query),
+		client.WithRawBody(b),
 	)
-
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: expectedStatus,
+	})
 }
 
 // doInitialSync will carry out an initial sync and return the next_batch token
 func doInitialSync(t *testing.T, c *client.CSAPI) string {
 	query := url.Values{
-		"access_token": []string{c.AccessToken},
-		"timeout":      []string{"1000"},
+		"timeout": []string{"1000"},
 	}
-	res, err := c.Do(t, "GET", []string{"_matrix", "client", "r0", "sync"}, nil, query)
-	must.NotError(t, "doInitialSync failed to marshal JSON body", err)
-
+	res := c.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(query))
 	body := client.ParseJSON(t, res)
 	since := client.GetJSONFieldStr(t, body, "next_batch")
 	return since

@@ -12,6 +12,8 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/docker"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
 )
 
 func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverName string) {
@@ -20,15 +22,15 @@ func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverNam
 	// This is copied from Client.JoinRoom to test a join failure.
 	query := make(url.Values, 1)
 	query.Set("server_name", serverName)
-	c.MustDoWithStatusRaw(
+	res := c.DoFunc(
 		t,
 		"POST",
 		[]string{"_matrix", "client", "r0", "join", roomIDOrAlias},
-		nil,
-		"application/json",
-		query,
-		403,
+		client.WithQueries(query),
 	)
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: 403,
+	})
 }
 
 // Create a space and put a room in it which is set to:

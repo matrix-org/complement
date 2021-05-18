@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
@@ -210,13 +211,11 @@ func TestClientSpacesSummary(t *testing.T) {
 		// SS2 -> R3,R4 (but only 1 is allowed)
 		query := make(url.Values, 1)
 		query.Set("max_rooms_per_space", "1")
-		res := alice.MustDoRaw(
+		res := alice.MustDoFunc(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", ss1, "spaces"},
-			nil,
-			"application/json",
-			query,
+			client.WithQueries(query),
 		)
 		wantItems := []interface{}{
 			ss1ToSS2,
