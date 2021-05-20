@@ -19,8 +19,7 @@ func TestPresence(t *testing.T) {
 	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
 	// sytest: GET /presence/:user_id/status fetches initial status
 	t.Run("GET /presence/:user_id/status fetches initial status", func(t *testing.T) {
-		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "presence", "@alice:hs1", "status"}, nil)
-
+		res := authedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "presence", "@alice:hs1", "status"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyPresent("presence"),
