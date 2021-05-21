@@ -25,7 +25,7 @@ RUN pg_ctlcluster 11 main start &&  su postgres -c "echo \
 # and the disabling of rate-limiting
 COPY synapse/workers-shared.yaml /conf/workers/shared.yaml
 
-WORKDIR /root
+WORKDIR /data
 
 # Copy the caddy config
 COPY synapse/caddy.complement.json /root/caddy.json
