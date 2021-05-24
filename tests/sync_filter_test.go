@@ -10,14 +10,14 @@ import (
 )
 
 func TestSyncFilter(t *testing.T) {
-	deployment := Deploy(t, "sync_filter", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
 	// sytest: Can create filter
 	reqBody, err := json.Marshal(map[string]interface{}{
 		"room": map[string]interface{}{
-			"timeline": map[string]string{
-				"limit": "10",
+			"timeline": map[string]int{
+				"limit": 10,
 			},
 		},
 	})
