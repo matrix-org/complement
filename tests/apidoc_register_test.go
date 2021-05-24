@@ -8,6 +8,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -28,15 +29,14 @@ import (
 // Can register using an email address
 
 func TestRegistration(t *testing.T) {
-	deployment := Deploy(t, "registration", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: POST {} returns a set of flows
 		t.Run("POST {} returns a set of flows", func(t *testing.T) {
 			t.Parallel()
-			res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{}`), nil)
-			must.NotError(t, "POST returned error", err)
+			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithRawBody(json.RawMessage(`{}`)))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 401,
 				Headers: map[string]string{
@@ -55,13 +55,13 @@ func TestRegistration(t *testing.T) {
 		// sytest: POST /register can create a user
 		t.Run("POST /register can create a user", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
+			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
 				"username": "post-can-create-a-user",
 				"password": "sUp3rs3kr1t"
-			}`))
+			}`)))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
@@ -72,13 +72,13 @@ func TestRegistration(t *testing.T) {
 		// sytest: POST /register downcases capitals in usernames
 		t.Run("POST /register downcases capitals in usernames", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
+			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
 				"username": "user-UPPER",
 				"password": "sUp3rs3kr1t"
-			}`))
+			}`)))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
@@ -90,14 +90,14 @@ func TestRegistration(t *testing.T) {
 		t.Run("POST /register returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
 			deviceID := "my_device_id"
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
+			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
 				"username": "user-device",
 				"password": "sUp3rs3kr1t",
 				"device_id": "`+deviceID+`"
-			}`))
+			}`)))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
@@ -126,18 +126,14 @@ func TestRegistration(t *testing.T) {
 				`'`,
 			}
 			for _, ch := range specialChars {
-				reqBody, err := json.Marshal(map[string]interface{}{
-					"auth": map[string]string{
-						"type": "m.login.dummy",
-					},
-					"username": "user-" + ch + "-reject-please",
-					"password": "sUp3rs3kr1t",
-				})
-				if err != nil {
-					t.Fatalf("failed to marshal JSON request body: %s", err)
-				}
-				res, err := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(reqBody), nil)
-				must.NotError(t, "POST returned error", err)
+				res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"},
+					client.WithJSONBody(t, map[string]interface{}{
+						"auth": map[string]string{
+							"type": "m.login.dummy",
+						},
+						"username": "user-" + ch + "-reject-please",
+						"password": "sUp3rs3kr1t",
+					}))
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,
 					JSON: []match.JSON{
@@ -148,26 +144,29 @@ func TestRegistration(t *testing.T) {
 		})
 		t.Run("POST /register rejects if user already exists", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
+			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
 				"username": "post-can-create-a-user-once",
 				"password": "sUp3rs3kr1t"
-			}`))
+			}`)))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
 					match.JSONKeyTypeEqual("user_id", gjson.String),
 				},
 			})
-			unauthedClient.MustDoWithStatus(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(`{
+			res = unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
 				"username": "post-can-create-a-user-once",
 				"password": "anotherSuperSecret"
-			}`), 400)
+			}`)))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 400,
+			})
 		})
 	})
 }

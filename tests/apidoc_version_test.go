@@ -12,7 +12,7 @@ import (
 )
 
 func TestVersionStructure(t *testing.T) {
-	deployment := Deploy(t, "test_version", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	// sytest: Version responds 200 OK with valid structure

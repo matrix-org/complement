@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 )
+
+var namespaceCounter uint64
 
 // TestMain is the main entry point for Complement.
 //
@@ -50,12 +53,13 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-// Deploy will deploy the given blueprint in the given namespace or terminate the test.
+// Deploy will deploy the given blueprint or terminate the test.
 // It will construct the blueprint if it doesn't already exist in the docker image cache.
 // This function is the main setup function for all tests as it provides a deployment with
 // which tests can interact with.
-func Deploy(t *testing.T, namespace string, blueprint b.Blueprint) *docker.Deployment {
+func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	t.Helper()
+	timeStartBlueprint := time.Now()
 	cfg := config.NewConfigFromEnvVars()
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
@@ -64,14 +68,17 @@ func Deploy(t *testing.T, namespace string, blueprint b.Blueprint) *docker.Deplo
 	if err = builder.ConstructBlueprintsIfNotExist([]b.Blueprint{blueprint}); err != nil {
 		t.Fatalf("Deploy: Failed to construct blueprint: %s", err)
 	}
+	namespace := fmt.Sprintf("%d", atomic.AddUint64(&namespaceCounter, 1))
 	d, err := docker.NewDeployer(namespace, cfg)
 	if err != nil {
 		t.Fatalf("Deploy: NewDeployer returned error %s", err)
 	}
+	timeStartDeploy := time.Now()
 	dep, err := d.Deploy(context.Background(), blueprint.Name)
 	if err != nil {
 		t.Fatalf("Deploy: Deploy returned error %s", err)
 	}
+	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy))
 	return dep
 }
 

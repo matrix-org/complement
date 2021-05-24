@@ -17,6 +17,10 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 )
 
+// RequestOpt is a functional option which will modify an outgoing HTTP request.
+// See functions starting with `With...` in this package for more info.
+type RequestOpt func(req *http.Request)
+
 type CSAPI struct {
 	UserID      string
 	AccessToken string
@@ -37,7 +41,10 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 	if fileName != "" {
 		query.Set("filename", fileName)
 	}
-	res := c.MustDoRaw(t, "POST", []string{"_matrix", "media", "r0", "upload"}, fileBody, contentType, query)
+	res := c.MustDoFunc(
+		t, "POST", []string{"_matrix", "media", "r0", "upload"},
+		WithRawBody(fileBody), WithContentType(contentType), WithQueries(query),
+	)
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "content_uri")
 }
@@ -74,7 +81,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 		query.Add("server_name", serverName)
 	}
 	// join the room
-	res := c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, nil, "application/json", query)
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, WithQueries(query))
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
@@ -88,7 +95,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 	t.Helper()
 	// leave the room
-	c.MustDoRaw(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"}, nil, "application/json", nil)
+	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
@@ -140,19 +147,12 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 			t.Fatalf("syncUntil timed out. Called check function %d times", checkCounter)
 		}
 		query := url.Values{
-			"access_token": []string{c.AccessToken},
-			"timeout":      []string{"1000"},
+			"timeout": []string{"1000"},
 		}
 		if since != "" {
 			query["since"] = []string{since}
 		}
-		res, err := c.Do(t, "GET", []string{"_matrix", "client", "r0", "sync"}, nil, query)
-		if err != nil {
-			t.Fatalf("CSAPI.syncUntil since=%s error: %s", since, err)
-		}
-		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			t.Fatalf("CSAPI.syncUntil since=%s returned HTTP %d", since, res.StatusCode)
-		}
+		res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, WithQueries(query))
 		body := ParseJSON(t, res)
 		since = GetJSONFieldStr(t, body, "next_batch")
 		keyRes := gjson.GetBytes(body, key)
@@ -175,122 +175,129 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 	}
 }
 
-// MustDoWithStatus is the same as MustDo but fails the test if the response code does not match that provided
-func (c *CSAPI) MustDoWithStatus(t *testing.T, method string, paths []string, jsonBody interface{}, status int) *http.Response {
-	t.Helper()
-	res, err := c.DoWithAuth(t, method, paths, jsonBody)
-	if err != nil {
-		t.Fatalf("CSAPI.MustDoWithStatus %s %s error: %s", method, strings.Join(paths, "/"), err)
-	}
-	if res.StatusCode != status {
-		t.Fatalf("CSAPI.MustDoWithStatus %s %s returned HTTP %d, expected %d", method, res.Request.URL.String(), res.StatusCode, status)
-	}
-	return res
-}
-
-// MustDoWithStatusRaw is the same as MustDoRaw but fails the test if the response code does not match that provided
-func (c *CSAPI) MustDoWithStatusRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values, status int) *http.Response {
-	t.Helper()
-	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
-	if err != nil {
-		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
-	}
-	if res.StatusCode != status {
-		t.Fatalf("CSAPI.MustDoWithStatusRaw %s %s returned HTTP %d, expected %d", method, res.Request.URL.String(), res.StatusCode, status)
-	}
-	return res
-}
-
-// MustDo is the same as Do but fails the test if the response is not 2xx
+// MustDo will do the HTTP request and fail the test if the response is not 2xx
 func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
 	t.Helper()
-	res, err := c.DoWithAuth(t, method, paths, jsonBody)
-	if err != nil {
-		t.Fatalf("CSAPI.MustDo %s %s error: %s", method, strings.Join(paths, "/"), err)
-	}
+	res := c.DoFunc(t, method, paths, WithJSONBody(t, jsonBody))
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
 	}
 	return res
 }
 
-func (c *CSAPI) MustDoRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) *http.Response {
-	t.Helper()
-	res, err := c.DoWithAuthRaw(t, method, paths, body, contentType, query)
-	if err != nil {
-		t.Fatalf("CSAPI.MustDoRaw %s %s error: %s", method, strings.Join(paths, "/"), err)
+// WithRawBody sets the HTTP request body to `body`
+func WithRawBody(body []byte) RequestOpt {
+	return func(req *http.Request) {
+		req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		// we need to manually set this because we don't set the body
+		// in http.NewRequest due to using functional options, and only in NewRequest
+		// does the stdlib set this for us.
+		req.ContentLength = int64(len(body))
 	}
+}
+
+// WithContentType sets the HTTP request Content-Type header to `cType`
+func WithContentType(cType string) RequestOpt {
+	return func(req *http.Request) {
+		req.Header.Set("Content-Type", cType)
+	}
+}
+
+// WithJSONBody sets the HTTP request body to the JSON serialised form of `obj`
+func WithJSONBody(t *testing.T, obj interface{}) RequestOpt {
+	return func(req *http.Request) {
+		t.Helper()
+		b, err := json.Marshal(obj)
+		if err != nil {
+			t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
+		}
+		WithRawBody(b)(req)
+	}
+}
+
+// WithQueries sets the query parameters on the request.
+// This function should not be used to set an "access_token" parameter for Matrix authentication.
+// Instead, set CSAPI.AccessToken.
+func WithQueries(q url.Values) RequestOpt {
+	return func(req *http.Request) {
+		req.URL.RawQuery = q.Encode()
+	}
+}
+
+// MustDoFunc is the same as DoFunc but fails the test if the returned HTTP response code is not 2xx.
+func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
+	t.Helper()
+	res := c.DoFunc(t, method, paths, opts...)
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		t.Fatalf("CSAPI.MustDoRaw %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+		t.Fatalf("CSAPI.MustDoFunc response return non-2xx code: %s", res.Status)
 	}
 	return res
 }
 
-// DoWithAuth a JSON request. The access token for this user will automatically be added.
-func (c *CSAPI) DoWithAuth(t *testing.T, method string, paths []string, jsonBody interface{}) (*http.Response, error) {
+// DoFunc performs an arbitrary HTTP request to the server. This function supports RequestOpts to set
+// extra information on the request such as an HTTP request body, query parameters and content-type.
+// See all functions in this package starting with `With...`.
+//
+// Fails the test if an HTTP request could not be made or if there was a network error talking to the
+// server. To do assertions on the HTTP response, see the `must` package. For example:
+//    must.MatchResponse(t, res, match.HTTPResponse{
+//    	StatusCode: 400,
+//    	JSON: []match.JSON{
+//    		match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
+//    	},
+//    })
+func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
-	var query url.Values
-	if c.AccessToken != "" {
-		query = url.Values{
-			"access_token": []string{c.AccessToken},
-		}
-	}
-	return c.Do(t, method, paths, jsonBody, query)
-}
-
-func (c *CSAPI) DoWithAuthRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) (*http.Response, error) {
-	t.Helper()
-	if query == nil {
-		query = url.Values{}
-	}
-	query.Set("access_token", c.AccessToken)
-	return c.DoRaw(t, method, paths, body, contentType, query)
-}
-
-// Do a JSON request.
-func (c *CSAPI) Do(t *testing.T, method string, paths []string, jsonBody interface{}, query url.Values) (*http.Response, error) {
-	b, err := json.Marshal(jsonBody)
-	if err != nil {
-		t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
-	}
-	return c.DoRaw(t, method, paths, b, "application/json", query)
-}
-
-func (c *CSAPI) DoRaw(t *testing.T, method string, paths []string, body []byte, contentType string, query url.Values) (*http.Response, error) {
-	t.Helper()
-	qs := ""
-	if len(query) > 0 {
-		qs = "?" + query.Encode()
-	}
 	for i := range paths {
 		paths[i] = url.PathEscape(paths[i])
 	}
+	reqURL := c.BaseURL + "/" + strings.Join(paths, "/")
+	req, err := http.NewRequest(method, reqURL, nil)
+	if err != nil {
+		t.Fatalf("CSAPI.DoFunc failed to create http.NewRequest: %s", err)
+	}
+	// set defaults before RequestOpts
+	if c.AccessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.AccessToken)
+	}
 
-	reqURL := c.BaseURL + "/" + strings.Join(paths, "/") + qs
+	// set functional options
+	for _, o := range opts {
+		o(req)
+	}
+	// set defaults after RequestOpts
+	if req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	// debug log the request
 	if c.Debug {
 		t.Logf("Making %s request to %s", method, reqURL)
+		contentType := req.Header.Get("Content-Type")
 		if contentType == "application/json" || strings.HasPrefix(contentType, "text/") {
-			t.Logf("Request body: %s", string(body))
+			if req.Body != nil {
+				body, _ := ioutil.ReadAll(req.Body)
+				t.Logf("Request body: %s", string(body))
+				req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+			}
 		} else {
 			t.Logf("Request body: <binary:%s>", contentType)
 		}
 	}
-	req, err := http.NewRequest(method, reqURL, bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("CSAPI.Do failed to create http.NewRequest: %s", err)
-	}
-	req.Header.Set("Content-Type", contentType)
+	// Perform the HTTP request
 	res, err := c.Client.Do(req)
+	if err != nil {
+		t.Fatalf("CSAPI.DoFunc response returned error: %s", err)
+	}
+	// debug log the response
 	if c.Debug && res != nil {
 		var dump []byte
 		dump, err = httputil.DumpResponse(res, true)
 		if err != nil {
-			t.Fatalf("CSAPI.Do failed to dump response body: %s", err)
+			t.Fatalf("CSAPI.DoFunc failed to dump response body: %s", err)
 		}
 		t.Logf("%s", string(dump))
-
 	}
-	return res, err
+	return res
 }
 
 // NewLoggedClient returns an http.Client which logs requests/responses

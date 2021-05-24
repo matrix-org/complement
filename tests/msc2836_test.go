@@ -36,7 +36,7 @@ import (
 // an event which the server does have, event B, to ensure that this request also works and also does
 // federated hits to return missing events (A,C).
 func TestEventRelationships(t *testing.T) {
-	deployment := Deploy(t, "msc2836", b.BlueprintFederationOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	// Create the room and send events A,B,C,D
@@ -185,7 +185,7 @@ func TestEventRelationships(t *testing.T) {
 // We then check that B, which wasn't on the return path on the previous request, was persisted by calling
 // /event_relationships again with event ID 'A' and direction 'down'.
 func TestFederatedEventRelationships(t *testing.T) {
-	deployment := Deploy(t, "msc2836_fed", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),

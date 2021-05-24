@@ -11,6 +11,7 @@ import (
 	"github.com/tidwall/sjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
@@ -27,7 +28,7 @@ import (
 // m.room.create event would pick that up. We also can't tear down the Complement
 // server because otherwise signing key lookups will fail.
 func TestJoinViaRoomIDAndServerName(t *testing.T) {
-	deployment := Deploy(t, "federation_room_join", b.BlueprintFederationOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	acceptMakeSendJoinRequests := true
@@ -70,8 +71,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 
 	queryParams := url.Values{}
 	queryParams.Set("server_name", "hs1")
-	res, err := bob.DoWithAuthRaw(t, "POST", []string{"_matrix", "client", "r0", "join", serverRoom.RoomID}, nil, "application/json", queryParams)
-	must.NotError(t, "failed to join room", err)
+	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{
@@ -92,7 +92,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 // the properties listed above, then asking HS1 to join them and make sure that
 // they 200 OK.
 func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
-	deployment := Deploy(t, "federation_room_join_unverifiable", b.BlueprintAlice)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
