@@ -31,8 +31,8 @@ func eventKey(srcRoomID, dstRoomID, evType string) string {
 // _____|________
 // |    |       |
 // R1  SS1      R2
-//      |
-//     SS2
+//      |       |
+//     SS2      R5
 //      |________
 //      |       |
 //      R3      R4
@@ -41,7 +41,6 @@ func eventKey(srcRoomID, dstRoomID, evType string) string {
 // - the user is joined to all rooms except R4.
 // - R2 <---> Root is a two-way link.
 // - The remaining links are just children links.
-// - SS1 is marked as a "space", but SS2 is not.
 //
 // Tests that:
 // - Querying the root returns the entire graph
@@ -61,6 +60,9 @@ func TestClientSpacesSummary(t *testing.T) {
 	root := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Root",
+		"creation_content": map[string]interface{}{
+			"type": "m.space",
+		},
 	})
 	roomNames[root] = "Root"
 	r1 := alice.CreateRoom(t, map[string]interface{}{
@@ -85,6 +87,9 @@ func TestClientSpacesSummary(t *testing.T) {
 	ss2 := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "SS2",
+		"creation_content": map[string]interface{}{
+			"type": "m.space",
+		},
 	})
 	roomNames[ss2] = "SS2"
 	r3 := alice.CreateRoom(t, map[string]interface{}{
@@ -108,6 +113,10 @@ func TestClientSpacesSummary(t *testing.T) {
 		},
 	})
 	roomNames[r4] = "R4"
+	r5 := bob.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		"name":   "R5",
+	})
 
 	// create the links
 	rootToR1 := eventKey(root, r1, spaceChildEventType)
@@ -130,6 +139,14 @@ func TestClientSpacesSummary(t *testing.T) {
 	alice.SendEventSynced(t, root, b.Event{
 		Type:     spaceChildEventType,
 		StateKey: &r2,
+		Content: map[string]interface{}{
+			"via": []string{"hs1"},
+		},
+	})
+	// Note that this link gets ignored since R2 is not a space.
+	alice.SendEventSynced(t, r2, b.Event{
+		Type:     spaceChildEventType,
+		StateKey: &r5,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
 		},
@@ -283,6 +300,9 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	root := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Root",
+		"creation_content": map[string]interface{}{
+			"type": "m.space",
+		},
 	})
 	r1 := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "private_chat",
@@ -438,15 +458,30 @@ func TestFederatedClientSpaces(t *testing.T) {
 			},
 		},
 	}
+	worldReadableSpace := map[string]interface{}{
+		"preset": "public_chat",
+		"creation_content": map[string]interface{}{
+			"type": "m.space",
+		},
+		"initial_state": []map[string]interface{}{
+			{
+				"type":      "m.room.history_visibility",
+				"state_key": "",
+				"content": map[string]string{
+					"history_visibility": "world_readable",
+				},
+			},
+		},
+	}
 	// create the rooms
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	root := alice.CreateRoom(t, worldReadable)
+	root := alice.CreateRoom(t, worldReadableSpace)
 	r1 := alice.CreateRoom(t, worldReadable)
-	ss1 := alice.CreateRoom(t, worldReadable)
+	ss1 := alice.CreateRoom(t, worldReadableSpace)
 	r4 := alice.CreateRoom(t, worldReadable)
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 	r2 := bob.CreateRoom(t, worldReadable)
-	ss2 := bob.CreateRoom(t, worldReadable)
+	ss2 := bob.CreateRoom(t, worldReadableSpace)
 	r3 := bob.CreateRoom(t, worldReadable)
 
 	// create the links

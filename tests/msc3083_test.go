@@ -44,6 +44,9 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 	space := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
+		"creation_content": map[string]interface{}{
+			"type": "m.space",
+		},
 	})
 	// The room is an unstable room version which supports the restricted join_rule.
 	room := alice.CreateRoom(t, map[string]interface{}{
@@ -195,6 +198,9 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 	space := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
+		"creation_content": map[string]interface{}{
+			"type": "m.space",
+		},
 		// World readable to allow peeking without joining.
 		"initial_state": []map[string]interface{}{
 			{
@@ -272,6 +278,9 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	space := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
+		"creation_content": map[string]interface{}{
+			"type": "m.space",
+		},
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.history_visibility",
