@@ -181,15 +181,12 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 // return user ID & access token, and fail the test on network error
 func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken string) {
 	t.Helper()
-	reqBody, err := json.Marshal(map[string]interface{}{
+	reqBody := map[string]interface{}{
 		"auth": map[string]string{
 			"type": "m.login.dummy",
 		},
 		"username": localpart,
 		"password": password,
-	})
-	if err != nil {
-		t.Fatalf("unable to marshal json: %v", err)
 	}
 	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, reqBody)
 	must.MatchResponse(t, res, match.HTTPResponse{
