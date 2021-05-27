@@ -72,7 +72,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	if len(images) == 0 {
 		return nil, fmt.Errorf("Deploy: No images have been built for blueprint %s", blueprintName)
 	}
-	networkID, err := CreateNetwork(d.Docker, blueprintName)
+	networkID, err := CreateNetworkIfNotExists(d.Docker, blueprintName)
 	if err != nil {
 		return nil, fmt.Errorf("Deploy: %w", err)
 	}
@@ -115,12 +115,6 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 		})
 		if err != nil {
 			log.Printf("Destroy: Failed to remove container %s : %s\n", hsDep.ContainerID, err)
-		}
-	}
-	if d.networkID != "" {
-		err := d.Docker.NetworkRemove(context.Background(), d.networkID)
-		if err != nil {
-			log.Printf("Destroy: Failed to destroy network %s : %s\n", d.networkID, err)
 		}
 	}
 }

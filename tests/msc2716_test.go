@@ -51,7 +51,7 @@ var (
 
 // Test that the message events we insert between A and B come back in the correct order from /messages
 func TestBackfillingHistory(t *testing.T) {
-	deployment := Deploy(t, "rooms_state", b.BlueprintHSWithApplicationService)
+	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 	//defer time.Sleep(2 * time.Hour)
 
