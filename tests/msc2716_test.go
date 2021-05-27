@@ -535,7 +535,14 @@ func ensureRegistered(t *testing.T, c *client.CSAPI, virtualUserLocalpart string
 	// 	t.Fatalf("msc2716.ensureRegistered failed to marshal JSON body: %s", err)
 	// }
 
-	res, err := c.DoWithAuthRaw(t, "POST", []string{"_matrix", "client", "r0", "register"}, json.RawMessage(fmt.Sprintf(`{ "username": "%s" }`, virtualUserLocalpart)), "application/json", url.Values{})
+	res, err := c.DoWithAuthRaw(
+		t,
+		"POST",
+		[]string{"_matrix", "client", "r0", "register"},
+		json.RawMessage(fmt.Sprintf(`{ "type": "m.login.application_service", "username": "%s" }`, virtualUserLocalpart)),
+		"application/json",
+		url.Values{},
+	)
 
 	if err != nil {
 		t.Error(err)
