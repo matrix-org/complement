@@ -42,8 +42,11 @@ var (
 	MSC2716_INSERTION = "org.matrix.msc2716.insertion"
 	MSC2716_MARKER    = "org.matrix.msc2716.marker"
 
-	MSC2716_NEXT_CHUNK_ID = "org.matrix.msc2716.next_chunk_id"
-	MSC2716_CHUNK_ID      = "org.matrix.msc2716.chunk_id"
+	MSC2716_HISTORICAL                   = "org.matrix.msc2716.historical"
+	MSC2716_NEXT_CHUNK_ID                = "org.matrix.msc2716.next_chunk_id"
+	MSC2716_CHUNK_ID                     = "org.matrix.msc2716.chunk_id"
+	MSC2716_MARKER_INSERTION             = "org.matrix.msc2716.marker.insertion"
+	MSC2716_MARKER_INSERTION_PREV_EVENTS = "org.matrix.msc2716.marker.insertion_prev_events"
 )
 
 // Test that the message events we insert between A and B come back in the correct order from /messages
@@ -96,7 +99,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
 
 			// Insert the most recent chunk of backfilled history
-			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillRes := backfillBulkHistoricalMessages(
 				t,
 				as,
 				virtualUserID,
@@ -113,7 +116,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// Insert another older chunk of backfilled history from the same user.
 			// Make sure the meta data and joins still work on the subsequent chunk
-			backfillRes2 := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillRes2 := backfillBulkHistoricalMessages(
 				t,
 				as,
 				virtualUserID,
@@ -129,10 +132,8 @@ func TestBackfillingHistory(t *testing.T) {
 
 			var expectedMessageOrder []string
 			expectedMessageOrder = append(expectedMessageOrder, eventsBefore...)
-			// Historical events were inserted in reverse chronological
-			// But we expect them to come out in /messages in the correct order
-			expectedMessageOrder = append(expectedMessageOrder, reversed(historicalEvents2)...)
-			expectedMessageOrder = append(expectedMessageOrder, reversed(historicalEvents)...)
+			expectedMessageOrder = append(expectedMessageOrder, historicalEvents2...)
+			expectedMessageOrder = append(expectedMessageOrder, historicalEvents...)
 			expectedMessageOrder = append(expectedMessageOrder, eventsAfter...)
 			// Order events from newest to oldest
 			expectedMessageOrder = reversed(expectedMessageOrder)
@@ -179,7 +180,7 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
-		t.Run("Backfilled historical events with m.historical do not come down /sync", func(t *testing.T) {
+		t.Run("Backfilled historical events with MSC2716_HISTORICAL do not come down /sync", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, struct{}{})
@@ -194,7 +195,7 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 5)
 
 			// Insert a backfilled event
-			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillRes := backfillBulkHistoricalMessages(
 				t,
 				as,
 				virtualUserID,
@@ -225,7 +226,7 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
-		t.Run("Backfilled historical events without m.historical come down /sync", func(t *testing.T) {
+		t.Run("Backfilled historical events without MSC2716_HISTORICAL come down /sync", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, struct{}{})
@@ -236,7 +237,7 @@ func TestBackfillingHistory(t *testing.T) {
 			timeAfterEventBefore := time.Now()
 			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / int64(time.Millisecond))
 
-			// Send an event that has `prev_event` and `ts` set but not `m.historical`.
+			// Send an event that has `prev_event` and `ts` set but not `MSC2716_HISTORICAL`.
 			// We should see these type of events in the `/sync` response
 			eventWeShouldSee := sendEvent(t, as, "", roomID, event{
 				Type: "m.room.message",
@@ -246,10 +247,10 @@ func TestBackfillingHistory(t *testing.T) {
 				OriginServerTS: insertOriginServerTs,
 				Content: map[string]interface{}{
 					"msgtype": "m.text",
-					"body":    "Message with prev_event and ts but no m.historical",
+					"body":    "Message with prev_event and ts but no MSC2716_HISTORICAL",
 					// This is commented out on purpse.
-					// We are explicitely testing when m.historical isn't present
-					//"m.historical": true,
+					// We are explicitely testing when MSC2716_HISTORICAL isn't present
+					//MSC2716_HISTORICAL: true,
 				},
 			})
 
@@ -263,7 +264,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			roomID := as.CreateRoom(t, struct{}{})
 
-			backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillBulkHistoricalMessages(
 				t,
 				as,
 				virtualUserID,
@@ -290,7 +291,7 @@ func TestBackfillingHistory(t *testing.T) {
 			eventBefore := eventsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillBulkHistoricalMessages(
 				t,
 				alice,
 				virtualUserID,
@@ -321,7 +322,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Register and join the virtual user
 			ensureRegistered(t, as, virtualUserLocalpart)
 
-			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillRes := backfillBulkHistoricalMessages(
 				t,
 				as,
 				virtualUserID,
@@ -378,7 +379,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Register and join the virtual user
 			ensureRegistered(t, as, virtualUserLocalpart)
 
-			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillRes := backfillBulkHistoricalMessages(
 				t,
 				as,
 				virtualUserID,
@@ -433,7 +434,7 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 
 			// Historical messages are inserted where we have already scrolled back to
-			backfillRes := backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+			backfillRes := backfillBulkHistoricalMessages(
 				t,
 				as,
 				virtualUserID,
@@ -574,7 +575,7 @@ func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count in
 
 var chunkCount int64 = 0
 
-func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
+func backfillBulkHistoricalMessages(
 	t *testing.T,
 	c *client.CSAPI,
 	virtualUserID string,
@@ -592,25 +593,15 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 
 	evs := make([]map[string]interface{}, count)
 	for i := 0; i < len(evs); i++ {
-		// We have to backfill historical messages from most recent to oldest
-		// since backfilled messages decrement their `stream_order` and we want messages
-		// to appear in order from the `/messages` endpoint
-		messageIndex := (count - 1) - i
-
 		newEvent := map[string]interface{}{
 			"type":             "m.room.message",
 			"sender":           virtualUserID,
-			"origin_server_ts": insertOriginServerTs + (timeBetweenMessagesMS * uint64(messageIndex)),
+			"origin_server_ts": insertOriginServerTs + (timeBetweenMessagesMS * uint64(i)),
 			"content": map[string]interface{}{
-				"msgtype":      "m.text",
-				"body":         fmt.Sprintf("Historical %d (chunk=%d)", messageIndex, chunkCount),
-				"m.historical": true,
+				"msgtype":          "m.text",
+				"body":             fmt.Sprintf("Historical %d (chunk=%d)", i, chunkCount),
+				MSC2716_HISTORICAL: true,
 			},
-		}
-
-		// If provided, connect the chunk to the last insertion point
-		if chunkID != "" && i == 0 {
-			newEvent["content"].(map[string]interface{})[MSC2716_CHUNK_ID] = chunkID
 		}
 
 		evs[i] = newEvent
@@ -629,13 +620,17 @@ func backfillBulkHistoricalMessagesInReverseChronologicalAtTime(
 	query := make(url.Values, 2)
 	query.Add("prev_event", insertAfterEventId)
 	query.Add("user_id", virtualUserID)
+	// If provided, connect the chunk to the last insertion point
+	if chunkID != "" {
+		query.Add("chunk_id", chunkID)
+	}
 
 	b, err := json.Marshal(map[string]interface{}{
 		"events":                evs,
 		"state_events_at_start": []map[string]interface{}{joinEvent},
 	})
 	if err != nil {
-		t.Fatalf("msc2716.backfillBulkHistoricalMessagesInReverseChronologicalAtTime failed to marshal JSON body: %s", err)
+		t.Fatalf("msc2716.backfillBulkHistoricalMessages failed to marshal JSON body: %s", err)
 	}
 
 	res = c.MustDoWithStatusRaw(
