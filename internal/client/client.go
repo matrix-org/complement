@@ -15,8 +15,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
 )
 
 // RequestOpt is a functional option which will modify an outgoing HTTP request.
@@ -189,18 +187,14 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 		"password": password,
 	}
 	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, reqBody)
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONKeyTypeEqual("access_token", gjson.String),
-			match.JSONKeyTypeEqual("user_id", gjson.String),
-		},
-	})
+
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("unable to read response body: %v", err)
 	}
-	userID = gjson.Get(string(body), "user_id").String()
-	accessToken = gjson.Get(string(body), "access_token").String()
+
+	userID = gjson.GetBytes(body, "user_id").Str
+	accessToken = gjson.GetBytes(body, "access_token").Str
 	return userID, accessToken
 }
 
