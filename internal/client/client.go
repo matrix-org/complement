@@ -175,6 +175,29 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 	}
 }
 
+//RegisterUser will register the user with given parameters and
+// return user ID & access token, and fail the test on network error
+func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken string) {
+	t.Helper()
+	reqBody := map[string]interface{}{
+		"auth": map[string]string{
+			"type": "m.login.dummy",
+		},
+		"username": localpart,
+		"password": password,
+	}
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, reqBody)
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+
+	userID = gjson.GetBytes(body, "user_id").Str
+	accessToken = gjson.GetBytes(body, "access_token").Str
+	return userID, accessToken
+}
+
 // MustDo will do the HTTP request and fail the test if the response is not 2xx
 func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
 	t.Helper()
