@@ -273,7 +273,7 @@ func TestClientSpacesSummary(t *testing.T) {
 // - The links are just children links.
 //
 // Tests that:
-// - Rooms/spaces the user not invited to should not appear.
+// - Rooms/spaces the user is not invited to should not appear.
 func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
