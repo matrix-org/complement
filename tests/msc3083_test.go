@@ -258,7 +258,7 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 // are a member of the space.
 //
 // This tests the interactions over federation where the space and room are on
-// difference homeservers, which might not have the proper information needed to
+// different homeservers, and one might not have the proper information needed to
 // decide if a user is in a room.
 func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
@@ -321,7 +321,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	requestAndAssertSummary(t, bob, space, []interface{}{space})
 
 	// charlie joins the space and now hs2 knows that alice is in the space (and
-	// can join room).
+	// can join the room).
 	charlie.JoinRoom(t, space, []string{"hs1"})
 
 	// The restricted room should appear for alice (who is in the space).
