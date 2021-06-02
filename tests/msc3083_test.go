@@ -256,6 +256,10 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 //
 // The user should be unable to see the room in the spaces summary unless they
 // are a member of the space.
+//
+// This tests the interactions over federation where the space and room are on
+// difference homeservers, which might not have the proper information needed to
+// decide if a user is in a room.
 func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
@@ -265,6 +269,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	space := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
+		"name":   "Space",
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.history_visibility",
@@ -310,11 +315,13 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 		},
 	})
 
-	// The room appears for no one at first since hs2 doesn't know about who is in ss1.
+	// The room appears for neither alice or bob initially. Although alice is in
+	// the space and should be able to access the room, hs2 doesn't know this!
 	requestAndAssertSummary(t, alice, space, []interface{}{space})
 	requestAndAssertSummary(t, bob, space, []interface{}{space})
 
-	// Charlie joins ss1 and now hs2 knows that alice is in it.
+	// charlie joins the space and now hs2 knows that alice is in the space (and
+	// can join room).
 	charlie.JoinRoom(t, space, []string{"hs1"})
 
 	// The restricted room should appear for alice (who is in the space).
