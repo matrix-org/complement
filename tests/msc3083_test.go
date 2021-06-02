@@ -252,7 +252,9 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 // Tests that MSC2946 works over federation for a restricted room.
 //
 // Create a space with a room in it that has join rules restricted to membership
-// in that space. The space and room are on different homeservers.
+// in that space. The space and room are on different homeservers. While generating
+// the summary of space hs1 needs to ask hs2 to generate the summary for room since
+// it is not participating in the room.
 //
 // The user should be unable to see the room in the spaces summary unless they
 // are a member of the space.
