@@ -2,12 +2,12 @@ package tests
 
 import (
 	"encoding/json"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/tidwall/gjson"
 	"io/ioutil"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
+	"github.com/tidwall/gjson"
 )
 
 func TestSyncFilter(t *testing.T) {
