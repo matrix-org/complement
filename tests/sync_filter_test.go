@@ -5,9 +5,10 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/tidwall/gjson"
 )
 
 func TestSyncFilter(t *testing.T) {
