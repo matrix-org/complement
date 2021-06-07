@@ -2,6 +2,8 @@ package tests
 
 import (
 	"encoding/json"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
 	"io/ioutil"
 	"testing"
 
@@ -27,11 +29,32 @@ func TestSyncFilter(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to marshal JSON request body: %s", err)
 		}
-		create_filter(authedClient, reqBody, t, "@alice:hs1")
+		createFilter(authedClient, reqBody, t, "@alice:hs1")
+	})
+	t.Run("Can download filter", func(t *testing.T) {
+		reqBody, err := json.Marshal(map[string]interface{}{
+			"room": map[string]interface{}{
+				"timeline": map[string]int{
+					"limit": 10,
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("failed to marshal JSON request body: %s", err)
+		}
+		filterID := createFilter(authedClient, reqBody, t, "@alice:hs1")
+		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "user", "@alice:hs1", "filter", filterID}, nil)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyPresent("room"),
+				match.JSONKeyEqual("room.timeline.limit", "10"),
+			},
+		})
+
 	})
 }
 
-func create_filter(authedClient *client.CSAPI, reqBody []byte, t *testing.T, userID string) string {
+func createFilter(authedClient *client.CSAPI, reqBody []byte, t *testing.T, userID string) string {
 	res := authedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "user", userID, "filter"}, json.RawMessage(reqBody))
 	if res.StatusCode != 200 {
 		t.Fatalf("MatchResponse got status %d want 200", res.StatusCode)
