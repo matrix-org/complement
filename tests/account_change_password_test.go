@@ -19,7 +19,7 @@ func TestChangePassword(t *testing.T) {
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
 
-		changePassword(passwordClient, oldPassword, newPassword, t)
+		changePassword(t, passwordClient, oldPassword, newPassword)
 
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"identifier": map[string]interface{}{
@@ -55,7 +55,8 @@ func TestChangePassword(t *testing.T) {
 	})
 }
 
-func changePassword(passwordClient *client.CSAPI, oldPassword string, newPassword string, t *testing.T) {
+func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword string, newPassword string) {
+	t.Helper()
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"auth": map[string]interface{}{
 			"type":     "m.login.password",
