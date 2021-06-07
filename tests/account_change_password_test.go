@@ -12,12 +12,14 @@ import (
 func TestChangePassword(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", "superuser")
+	oldPassword := "superuser"
+	newPassword := "my_new_password"
+	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", oldPassword)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
 
-		changePassword(passwordClient, "superuser", "my_new_password", t)
+		changePassword(passwordClient, oldPassword, newPassword, t)
 
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"identifier": map[string]interface{}{
@@ -25,7 +27,7 @@ func TestChangePassword(t *testing.T) {
 				"user": passwordClient.UserID,
 			},
 			"type":     "m.login.password",
-			"password": "superuser",
+			"password": oldPassword,
 		})
 		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -35,10 +37,8 @@ func TestChangePassword(t *testing.T) {
 			},
 		})
 	})
-	// sytest: After changing password, can log in with old password
-	t.Run("After changing password, can log in with old password", func(t *testing.T) {
-
-		changePassword(passwordClient, "my_new_password", "new_password", t)
+	// sytest: After changing password, can log in with new password
+	t.Run("After changing password, can log in with new password", func(t *testing.T) {
 
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"identifier": map[string]interface{}{
@@ -46,7 +46,7 @@ func TestChangePassword(t *testing.T) {
 				"user": passwordClient.UserID,
 			},
 			"type":     "m.login.password",
-			"password": "new_password",
+			"password": newPassword,
 		})
 		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
