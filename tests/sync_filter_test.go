@@ -2,8 +2,6 @@ package tests
 
 import (
 	"encoding/json"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
 	"io/ioutil"
 	"testing"
 
@@ -11,6 +9,8 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
 )
 
 func TestSyncFilter(t *testing.T) {
