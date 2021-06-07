@@ -164,7 +164,7 @@ func TestBackfillingHistory(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONArrayEach("chunk", func(r gjson.Result) error {
 						// Find all events in order
-						if len(r.Get("content").Get("body").Str) > 0 {
+						if len(r.Get("content").Get("body").Str) > 0 || r.Get("type").Str == MSC2716_INSERTION || r.Get("type").Str == MSC2716_MARKER {
 							// Pop the next message off the expected list
 							nextEventInOrder := workingExpectedMessageOrder[0]
 							workingExpectedMessageOrder = workingExpectedMessageOrder[1:]
@@ -483,7 +483,7 @@ func getEventIDsFromResponseBody(t *testing.T, body []byte) (eventIDsFromRespons
 	}
 
 	res.ForEach(func(key, r gjson.Result) bool {
-		if len(r.Get("content").Get("body").Str) > 0 {
+		if len(r.Get("content").Get("body").Str) > 0 || r.Get("type").Str == MSC2716_INSERTION || r.Get("type").Str == MSC2716_MARKER {
 			eventIDsFromResponse = append(eventIDsFromResponse, r.Get("event_id").Str+" ("+r.Get("content").Get("body").Str+")")
 		}
 		return true
