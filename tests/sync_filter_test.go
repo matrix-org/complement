@@ -29,7 +29,7 @@ func TestSyncFilter(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to marshal JSON request body: %s", err)
 		}
-		createFilter(authedClient, reqBody, t, "@alice:hs1")
+		createFilter(t, authedClient, reqBody, "@alice:hs1")
 	})
 	t.Run("Can download filter", func(t *testing.T) {
 		reqBody, err := json.Marshal(map[string]interface{}{
@@ -42,7 +42,7 @@ func TestSyncFilter(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to marshal JSON request body: %s", err)
 		}
-		filterID := createFilter(authedClient, reqBody, t, "@alice:hs1")
+		filterID := createFilter(t, authedClient, reqBody, "@alice:hs1")
 		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "user", "@alice:hs1", "filter", filterID}, nil)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -54,7 +54,8 @@ func TestSyncFilter(t *testing.T) {
 	})
 }
 
-func createFilter(authedClient *client.CSAPI, reqBody []byte, t *testing.T, userID string) string {
+func createFilter(t *testing.T, authedClient *client.CSAPI, reqBody []byte, userID string) string {
+	t.Helper()
 	res := authedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "user", userID, "filter"}, json.RawMessage(reqBody))
 	if res.StatusCode != 200 {
 		t.Fatalf("MatchResponse got status %d want 200", res.StatusCode)
