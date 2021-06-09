@@ -379,9 +379,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 			}, func(r gjson.Result) interface{} {
 				return r.Get("room_id").Str
 			}, nil),
-			match.JSONCheckOff("events", []interface{}{
-				rootToR1, rootToSS1,
-			}, func(r gjson.Result) interface{} {
+			match.JSONCheckOff("events", []interface{}{}, func(r gjson.Result) interface{} {
 				return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
 			}, nil),
 		},
@@ -400,7 +398,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 				return r.Get("room_id").Str
 			}, nil),
 			match.JSONCheckOff("events", []interface{}{
-				rootToR1, rootToSS1,
+				rootToR1,
 			}, func(r gjson.Result) interface{} {
 				return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
 			}, nil),
