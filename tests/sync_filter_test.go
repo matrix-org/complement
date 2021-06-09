@@ -31,6 +31,7 @@ func TestSyncFilter(t *testing.T) {
 		}
 		createFilter(t, authedClient, reqBody, "@alice:hs1")
 	})
+	// sytest: Can download filter
 	t.Run("Can download filter", func(t *testing.T) {
 		reqBody, err := json.Marshal(map[string]interface{}{
 			"room": map[string]interface{}{
@@ -47,7 +48,7 @@ func TestSyncFilter(t *testing.T) {
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyPresent("room"),
-				match.JSONKeyEqual("room.timeline.limit", "10"),
+				match.JSONKeyEqual("room.timeline.limit", float64(10)),
 			},
 		})
 
