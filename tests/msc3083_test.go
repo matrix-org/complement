@@ -228,7 +228,7 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 		},
 	})
 	alice.SendEventSynced(t, space, b.Event{
-		Type:     "org.matrix.msc1772.space.child",
+		Type:     "m.space.child",
 		StateKey: &room,
 		Content: map[string]interface{}{
 			"via": []string{"hs1"},
