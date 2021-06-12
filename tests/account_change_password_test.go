@@ -51,6 +51,16 @@ func TestChangePassword(t *testing.T) {
 		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("user_id", passwordClient.UserID),
+			},
+		})
+	})
+	// sytest: After changing password, existing session still works
+	t.Run("After changing password, existing session still works", func(t *testing.T) {
+		res := passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "account", "whoami"})
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 200,
 		})
 	})
 }
