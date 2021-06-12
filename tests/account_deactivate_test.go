@@ -16,23 +16,22 @@ func TestDeactivateAccount(t *testing.T) {
 	password := "superuser"
 	authedClient := deployment.RegisterUser(t, "hs1", "test_deactivate_user", password)
 	unauthedClient := deployment.Client(t, "hs1", "")
+	// sytest: Can't deactivate account with wrong password
+	t.Run("Can't deactivate account with wrong password", func(t *testing.T) {
+		res := deactivateAccount(t, authedClient, "wrong_password")
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 401,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
+			},
+		})
+	})
 	// sytest: Can deactivate account
 	t.Run("Can deactivate account", func(t *testing.T) {
 
 		res := deactivateAccount(t, authedClient, password)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
-		})
-	})
-	// sytest: Can't deactivate account with wrong password
-	t.Run("Can't deactivate account with wrong password", func(t *testing.T) {
-
-		res := deactivateAccount(t, authedClient, password)
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 401,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
-			},
 		})
 	})
 	// sytest: After deactivating account, can't log in with password
