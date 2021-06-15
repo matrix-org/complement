@@ -3,14 +3,6 @@
 // This file contains tests for knocking, a currently experimental feature defined by MSC2403,
 // which you can read here: https://github.com/matrix-org/matrix-doc/pull/2403
 
-// Once this feature is included in a released version of the Matrix specification, the following
-// will need to be carried out for these tests:
-// * Update instances of `xyz.amorgan.knock` to `knock`.
-// * Update endpoints from `/_matrix/client/unstable/xyz.amorgan.knock/...` to `/_matrix/client/rX/...`.
-// * Remove the `build ...` line at the top so the tests are built by default.
-// * Update the name of the test file to `knock_test.go` or similar.
-// * Remove the conditional on rescinding knocks over federation. Synapse will need to support that if the spec says it's possible.
-
 package tests
 
 import (
@@ -28,9 +20,6 @@ import (
 
 // A reason to include in the request body when testing knock reason parameters
 const testKnockReason string = "Let me in... LET ME IN!!!"
-
-// The unstable identifier to use while this feature is still unstable
-const knockUnstableIdentifier string = "xyz.amorgan.knock"
 
 // TestKnocking tests sending knock membership events and transitioning from knock to other membership states.
 // Knocking is currently an experimental feature and not in the matrix spec.
@@ -56,8 +45,8 @@ func TestKnocking(t *testing.T) {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
-		"private_chat",          // Set to private in order to get an invite-only room
-		knockUnstableIdentifier, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
+		"private_chat", // Set to private in order to get an invite-only room
+		"7",            // Room version required for knocking.
 	})
 
 	// Test knocking between two users on the same homeserver
@@ -68,8 +57,8 @@ func TestKnocking(t *testing.T) {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
-		"private_chat",          // Set to private in order to get an invite-only room
-		knockUnstableIdentifier, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
+		"private_chat", // Set to private in order to get an invite-only room
+		"7",            // Room version required for knocking.
 	})
 
 	// Test knocking between two users, each on a separate homeserver
@@ -77,23 +66,23 @@ func TestKnocking(t *testing.T) {
 }
 
 func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, federation bool) {
-	t.Run("Knocking on a room with a join rule other than '"+knockUnstableIdentifier+"' should fail", func(t *testing.T) {
+	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
 		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{"hs1"}, 403)
 	})
 
-	t.Run("Change the join rule of a room from 'invite' to '"+knockUnstableIdentifier+"'", func(t *testing.T) {
+	t.Run("Change the join rule of a room from 'invite' to 'knock'", func(t *testing.T) {
 		emptyStateKey := ""
 		inRoomUser.SendEventSynced(t, roomID, b.Event{
 			Type:     "m.room.join_rules",
 			Sender:   inRoomUser.UserID,
 			StateKey: &emptyStateKey,
 			Content: map[string]interface{}{
-				"join_rule": knockUnstableIdentifier,
+				"join_rule": "knock",
 			},
 		})
 	})
 
-	t.Run("Attempting to join a room with join rule '"+knockUnstableIdentifier+"' without an invite should fail", func(t *testing.T) {
+	t.Run("Attempting to join a room with join rule 'knock' without an invite should fail", func(t *testing.T) {
 		// Set server_name so we can find rooms via ID over federation
 		query := url.Values{
 			"server_name": []string{"hs1"},
@@ -111,7 +100,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		})
 	})
 
-	t.Run("Knocking on a room with join rule '"+knockUnstableIdentifier+"' should succeed", func(t *testing.T) {
+	t.Run("Knocking on a room with join rule 'knock' should succeed", func(t *testing.T) {
 		knockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []string{"hs1"})
 	})
 
@@ -125,14 +114,13 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				return false
 			}
 			must.EqualStr(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, knockUnstableIdentifier, "incorrect membership for knocking user")
+			must.EqualStr(t, ev.Get("content").Get("membership").Str, "knock", "incorrect membership for knocking user")
 			return true
 		})
 	})
 
 	if !federation {
-		// Rescinding a knock over federation is currently not supported in Synapse
-		// TODO: Preventing another homeserver from running this test just because Synapse cannot is unfortunate
+		// Rescinding a knock over federation is currently not specced
 		t.Run("A user that has knocked on a local room can rescind their knock and then knock again", func(t *testing.T) {
 			// We need to carry out an incremental sync after knocking in order to get leave information
 			// Carry out an initial sync here and save the since token
@@ -286,7 +274,7 @@ func knockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, ser
 	c.SyncUntil(
 		t,
 		"",
-		"rooms."+client.GjsonEscape(knockUnstableIdentifier)+"."+client.GjsonEscape(roomID)+".knock_state.events",
+		"rooms.knock."+client.GjsonEscape(roomID)+".knock_state.events",
 		func(ev gjson.Result) bool {
 			// We don't currently define any required state event types to be sent.
 			// If we've reached this point, then an entry for this room was found
@@ -323,7 +311,7 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 	res := c.DoFunc(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "unstable", knockUnstableIdentifier, roomID},
+		[]string{"_matrix", "client", "r0", "knock", roomID},
 		client.WithQueries(query),
 		client.WithRawBody(b),
 	)
@@ -360,8 +348,8 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
-		"private_chat",          // Set to private in order to get an invite-only room
-		knockUnstableIdentifier, // Room version required for knocking. TODO: Remove when knocking is in a stable room version
+		"private_chat", // Set to private in order to get an invite-only room
+		"7",            // Room version required for knocking.
 	})
 
 	// Change the join_rule to allow knocking
@@ -371,12 +359,12 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 		Sender:   alice.UserID,
 		StateKey: &emptyStateKey,
 		Content: map[string]interface{}{
-			"join_rule": knockUnstableIdentifier,
+			"join_rule": "knock",
 		},
 	})
 
 	// Publish the room to the public room directory and check that the 'join_rule' key is knock
-	publishAndCheckRoomJoinRule(t, alice, roomID, knockUnstableIdentifier)
+	publishAndCheckRoomJoinRule(t, alice, roomID, "knock")
 
 	// Create a public room
 	roomID = alice.CreateRoom(t, struct {
