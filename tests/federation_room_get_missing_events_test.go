@@ -116,7 +116,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		w.Write(responseBytes)
 	}).Methods("POST")
 
-	fedClient := srv.FederationClient(deployment, "hs1")
+	fedClient := srv.FederationClient(deployment)
 	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "wut",
 		Destination:   gomatrixserverlib.ServerName("hs1"),
