@@ -643,7 +643,7 @@ func backfillBatchHistoricalMessages(
 	res = c.MustDoWithStatusRaw(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "r0", "rooms", roomID, "batchsend"},
+		[]string{"_matrix", "client", "unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"},
 		b,
 		"application/json",
 		query,
