@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"github.com/tidwall/gjson"
+	"io/ioutil"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -16,6 +18,7 @@ func TestChangePassword(t *testing.T) {
 	newPassword := "my_new_password"
 	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", oldPassword)
 	unauthedClient := deployment.Client(t, "hs1", "")
+	sessionTest := createSession(t, unauthedClient, "test_change_password_user", "superuser")
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
 
@@ -63,6 +66,38 @@ func TestChangePassword(t *testing.T) {
 			StatusCode: 200,
 		})
 	})
+	// sytest: After changing password, a different session no longer works by default
+	t.Run("After changing password, a different session no longer works by default", func(t *testing.T) {
+		res := sessionTest.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "account", "whoami"})
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 401,
+		})
+	})
+
+	// sytest: After changing password, different sessions can optionally be kept
+	t.Run("After changing password, different sessions can optionally be kept", func(t *testing.T) {
+		sessionOptional := createSession(t, unauthedClient, "test_change_password_user", newPassword)
+		reqBody := client.WithJSONBody(t, map[string]interface{}{
+			"auth": map[string]interface{}{
+				"type":     "m.login.password",
+				"user":     passwordClient.UserID,
+				"password": newPassword,
+			},
+			"new_password": "new_optional_password",
+			"logout_devices": false,
+		})
+
+		res := passwordClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "account", "password"}, reqBody)
+
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 200,
+		})
+		res = sessionOptional.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "account", "whoami"})
+
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 200,
+		})
+	})
 }
 
 func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword string, newPassword string) {
@@ -81,4 +116,25 @@ func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword stri
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
 	})
+}
+
+func createSession(t *testing.T, unauthedClient *client.CSAPI, userID, password string) *client.CSAPI {
+	authedClient := unauthedClient
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"identifier": map[string]interface{}{
+			"type": "m.id.user",
+			"user": userID,
+		},
+		"type":     "m.login.password",
+		"password": password,
+	})
+	res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+
+	authedClient.UserID = gjson.GetBytes(body, "user_id").Str
+	authedClient.AccessToken = gjson.GetBytes(body, "access_token").Str
+	return authedClient
 }
