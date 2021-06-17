@@ -58,8 +58,9 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 					"join_rule": "restricted",
 					"allow": []map[string]interface{}{
 						{
-							"space": &space,
-							"via":   []string{"hs1"},
+							"type":    "m.room_membership",
+							"room_id": &space,
+							"via":     []string{"hs1"},
 						},
 					},
 				},
@@ -219,8 +220,9 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 					"join_rule": "restricted",
 					"allow": []map[string]interface{}{
 						{
-							"space": &space,
-							"via":   []string{"hs1"},
+							"type":    "m.room_membership",
+							"room_id": &space,
+							"via":     []string{"hs1"},
 						},
 					},
 				},
@@ -298,8 +300,9 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 					"join_rule": "restricted",
 					"allow": []map[string]interface{}{
 						{
-							"space": &space,
-							"via":   []string{"hs1"},
+							"type":    "m.room_membership",
+							"room_id": &space,
+							"via":     []string{"hs1"},
 						},
 					},
 				},

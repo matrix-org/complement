@@ -78,7 +78,7 @@ Get a Federation client:
 // automatically maps localhost:12345 to the right container
 // automatically signs requests
 // srv == federation.Server
-fedClient := srv.FederationClient(deployment, "hs1")
+fedClient := srv.FederationClient(deployment)
 ```
 
 ## FAQ

@@ -310,7 +310,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 		},
 	})
 	room.AddEvent(eventE)
-	fedClient := srv.FederationClient(deployment, "hs1")
+	fedClient := srv.FederationClient(deployment)
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement",
 		Origin:         gomatrixserverlib.ServerName(srv.ServerName),
