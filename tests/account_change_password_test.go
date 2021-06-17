@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"github.com/tidwall/gjson"
 	"io/ioutil"
 	"testing"
 
@@ -9,6 +8,8 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+
+	"github.com/tidwall/gjson"
 )
 
 func TestChangePassword(t *testing.T) {
@@ -83,7 +84,7 @@ func TestChangePassword(t *testing.T) {
 				"user":     passwordClient.UserID,
 				"password": newPassword,
 			},
-			"new_password": "new_optional_password",
+			"new_password":   "new_optional_password",
 			"logout_devices": false,
 		})
 
