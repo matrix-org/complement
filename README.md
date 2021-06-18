@@ -132,21 +132,26 @@ $ go run sytest_coverage.go -v
 10apidoc/01request-encoding 1/1 tests
     ✓ POST rejects invalid utf-8 in JSON
 
-10apidoc/02login 3/6 tests
+10apidoc/02login 6/6 tests
     ✓ GET /login yields a set of flows
     ✓ POST /login can log in as a user
     ✓ POST /login returns the same device_id as that in the request
-    × POST /login can log in as a user with just the local part of the id
-    × POST /login as non-existing user is rejected
-    × POST /login wrong password is rejected
+    ✓ POST /login can log in as a user with just the local part of the id
+    ✓ POST /login as non-existing user is rejected
+    ✓ POST /login wrong password is rejected
 
 10apidoc/03events-initial 0/2 tests
-10apidoc/04version 0/1 tests
+10apidoc/04version 1/1 tests
+    ✓ Version responds 200 OK with valid structure
+
 10apidoc/10profile-displayname 0/2 tests
 10apidoc/11profile-avatar_url 0/2 tests
 10apidoc/12device_management 0/8 tests
 10apidoc/13ui-auth 0/4 tests
-10apidoc/20presence 0/2 tests
+10apidoc/20presence 2/2 tests
+    ✓ GET /presence/:user_id/status fetches initial status
+    ✓ PUT /presence/:user_id/status updates my presence
+
 10apidoc/30room-create 0/10 tests
 10apidoc/31room-state 0/14 tests
 10apidoc/32room-alias 0/2 tests
@@ -162,8 +167,21 @@ $ go run sytest_coverage.go -v
 12login/01threepid-and-password 0/1 tests
 12login/02cas 0/3 tests
 13logout 0/4 tests
-14account/01change-password 0/7 tests
-14account/02deactivate 0/4 tests
+14account/01change-password 5/7 tests
+    ✓ After changing password, can't log in with old password
+    ✓ After changing password, can log in with new password
+    ✓ After changing password, existing session still works
+    ✓ After changing password, a different session no longer works by default
+    ✓ After changing password, different sessions can optionally be kept
+    × Pushers created with a different access token are deleted on password change
+    × Pushers created with a the same access token are not deleted on password change
+
+14account/02deactivate 3/4 tests
+    ✓ Can deactivate account
+    ✓ Can't deactivate account with wrong password
+    ✓ After deactivating account, can't log in with password
+    × After deactivating account, can't log in with an email
+
 21presence-events 0/3 tests
 30rooms/01state 2/9 tests
     ✓ Room creation reports m.room.create to myself
@@ -202,7 +220,10 @@ $ go run sytest_coverage.go -v
 30rooms/52members 0/3 tests
 30rooms/60version_upgrade 0/19 tests
 30rooms/70publicroomslist 0/5 tests
-31sync/01filter 0/2 tests
+31sync/01filter 2/2 tests
+    ✓ Can create filter
+    ✓ Can download filter
+
 31sync/02sync 0/1 tests
 31sync/03joined 0/6 tests
 31sync/04timeline 0/8 tests
@@ -329,5 +350,5 @@ $ go run sytest_coverage.go -v
 90jira/SYN-516 0/1 tests
 90jira/SYN-627 0/1 tests
 
-TOTAL: 15/690 tests converted
+TOTAL: 31/690 tests converted
 ```
