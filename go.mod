@@ -9,7 +9,7 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/gorilla/mux v1.8.0
-	github.com/matrix-org/gomatrixserverlib v0.0.0-20210122154608-a38974bd8a37
+	github.com/matrix-org/gomatrixserverlib v0.0.0-20210621174423-185789a71f3a
 	github.com/matrix-org/util v0.0.0-20190711121626-527ce5ddefc7
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

@@ -10,12 +10,17 @@ import (
 	"fmt"
 	"net/url"
 	"testing"
+	"time"
+
+	"github.com/matrix-org/gomatrixserverlib"
+
+	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/gjson"
 )
 
 // A reason to include in the request body when testing knock reason parameters
@@ -40,6 +45,20 @@ func TestKnocking(t *testing.T) {
 	charlieUserID := "@charlie:hs2"
 	charlie := deployment.Client(t, "hs2", charlieUserID)
 
+	// Create a server to observe
+	inviteWaiter := NewWaiter()
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleInviteRequests(func(ev *gomatrixserverlib.Event) {
+			inviteWaiter.Finish()
+		}),
+		federation.HandleTransactionRequests(nil, nil),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+	srv.UnexpectedRequestsAreErrors = false
+	david := srv.UserID("david")
+
 	// Create a room for alice and bob to test knocking with
 	roomIDOne := alice.CreateRoom(t, struct {
 		Preset      string `json:"preset"`
@@ -48,9 +67,12 @@ func TestKnocking(t *testing.T) {
 		"private_chat", // Set to private in order to get an invite-only room
 		"7",            // Room version required for knocking.
 	})
+	alice.InviteRoom(t, roomIDOne, david)
+	inviteWaiter.Wait(t, 5*time.Second)
+	serverRoomOne := srv.MustJoinRoom(t, deployment, "hs1", roomIDOne, david)
 
 	// Test knocking between two users on the same homeserver
-	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, false)
+	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, serverRoomOne, false)
 
 	// Create a room for alice and charlie to test knocking with
 	roomIDTwo := alice.CreateRoom(t, struct {
@@ -60,12 +82,16 @@ func TestKnocking(t *testing.T) {
 		"private_chat", // Set to private in order to get an invite-only room
 		"7",            // Room version required for knocking.
 	})
+	inviteWaiter = NewWaiter()
+	alice.InviteRoom(t, roomIDTwo, david)
+	inviteWaiter.Wait(t, 5*time.Second)
+	serverRoomTwo := srv.MustJoinRoom(t, deployment, "hs1", roomIDTwo, david)
 
 	// Test knocking between two users, each on a separate homeserver
-	knockingBetweenTwoUsersTest(t, roomIDTwo, alice, charlie, true)
+	knockingBetweenTwoUsersTest(t, roomIDTwo, alice, charlie, serverRoomTwo, true)
 }
 
-func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, federation bool) {
+func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, serverRoom *federation.ServerRoom, testFederation bool) {
 	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
 		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{"hs1"}, 403)
 	})
@@ -109,6 +135,19 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
+		// check the membership seen over the federation
+		knockerState := serverRoom.CurrentState("m.room.member", knockingUser.UserID)
+		if knockerState == nil {
+			t.Errorf("Did not get membership state for knocking user")
+		} else {
+			m, err := knockerState.Membership()
+			if err != nil {
+				t.Errorf("Unable to unpack membership state for knocking user: %v", err)
+			} else if m != "knock" {
+				t.Errorf("membership for knocking user: got %#v, want \"knock\"", m)
+			}
+		}
+
 		inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
 			if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
 				return false
@@ -119,7 +158,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		})
 	})
 
-	if !federation {
+	if !testFederation {
 		// Rescinding a knock over federation is currently not specced
 		t.Run("A user that has knocked on a local room can rescind their knock and then knock again", func(t *testing.T) {
 			// We need to carry out an incremental sync after knocking in order to get leave information
