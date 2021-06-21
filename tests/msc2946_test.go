@@ -8,14 +8,15 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 )
 
 var (
-	spaceChildEventType  = "org.matrix.msc1772.space.child"
-	spaceParentEventType = "org.matrix.msc1772.space.parent"
+	spaceChildEventType  = "m.space.child"
+	spaceParentEventType = "m.space.parent"
 )
 
 // the API doesn't return event IDs so we need to key off the
@@ -46,7 +47,7 @@ func eventKey(srcRoomID, dstRoomID, evType string) string {
 // - Querying the root returns the entire graph
 // - Setting max_rooms_per_space works correctly
 // - Setting limit works correctly
-// - Rooms are returned correctly along with the custom fields `num_refs` and `room_type`.
+// - Rooms are returned correctly along with the custom fields `room_type`.
 // - Events are returned correctly.
 // - Redacting links works correctly.
 func TestClientSpacesSummary(t *testing.T) {
@@ -72,7 +73,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		"name":   "Sub-Space 1",
 		"topic":  "Some topic for sub-space 1",
 		"creation_content": map[string]interface{}{
-			"org.matrix.msc1772.type": "org.matrix.msc1772.space",
+			"type": "m.space",
 		},
 	})
 	roomNames[ss1] = "Sub-Space 1"
@@ -185,7 +186,7 @@ func TestClientSpacesSummary(t *testing.T) {
 						}
 					}
 					if roomID == ss1 {
-						wantType := "org.matrix.msc1772.space"
+						wantType := "m.space"
 						if data.Get("room_type").Str != wantType {
 							return fmt.Errorf("room %s got type %s want %s", roomID, data.Get("room_type").Str, wantType)
 						}
@@ -210,13 +211,11 @@ func TestClientSpacesSummary(t *testing.T) {
 		// SS2 -> R3,R4 (but only 1 is allowed)
 		query := make(url.Values, 1)
 		query.Set("max_rooms_per_space", "1")
-		res := alice.MustDoRaw(
+		res := alice.MustDoFunc(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", ss1, "spaces"},
-			nil,
-			"application/json",
-			query,
+			client.WithQueries(query),
 		)
 		wantItems := []interface{}{
 			ss1ToSS2,
@@ -256,6 +255,155 @@ func TestClientSpacesSummary(t *testing.T) {
 				}, nil),
 			},
 		})
+	})
+}
+
+// Tests that the CS API for MSC2946 correctly handles join rules. Creates a space directory like:
+//     Root
+//      |
+// _____|
+// |    |
+// R1  SS1
+//      |________
+//      |       |
+//      R2      R3
+//
+// Where:
+// - All rooms and spaces are invite-only, except R2 (which is public)
+// - The links are just children links.
+//
+// Tests that:
+// - Rooms/spaces the user is not invited to should not appear.
+func TestClientSpacesSummaryJoinRules(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	// create the rooms
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	root := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		"name":   "Root",
+	})
+	r1 := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "private_chat",
+		"name":   "R1",
+	})
+	ss1 := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "private_chat",
+		"name":   "Sub-Space 1",
+		"creation_content": map[string]interface{}{
+			"type": "m.space",
+		},
+	})
+	r2 := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		"name":   "R2",
+		"initial_state": []map[string]interface{}{
+			{
+				"type":      "m.room.history_visibility",
+				"state_key": "",
+				"content": map[string]string{
+					"history_visibility": "world_readable",
+				},
+			},
+		},
+	})
+	r3 := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "private_chat",
+		"name":   "R3",
+	})
+
+	// create the links
+	rootToR1 := eventKey(root, r1, spaceChildEventType)
+	alice.SendEventSynced(t, root, b.Event{
+		Type:     spaceChildEventType,
+		StateKey: &r1,
+		Content: map[string]interface{}{
+			"via": []string{"hs1"},
+		},
+	})
+	rootToSS1 := eventKey(root, ss1, spaceChildEventType)
+	alice.SendEventSynced(t, root, b.Event{
+		Type:     spaceChildEventType,
+		StateKey: &ss1,
+		Content: map[string]interface{}{
+			"via": []string{"hs1"},
+		},
+	})
+	ss1ToR2 := eventKey(ss1, r2, spaceChildEventType)
+	alice.SendEventSynced(t, ss1, b.Event{
+		Type:     spaceChildEventType,
+		StateKey: &r2,
+		Content: map[string]interface{}{
+			"via": []string{"hs1"},
+		},
+	})
+	ss1ToR3 := eventKey(ss1, r3, spaceChildEventType)
+	alice.SendEventSynced(t, ss1, b.Event{
+		Type:     spaceChildEventType,
+		StateKey: &r3,
+		Content: map[string]interface{}{
+			"via": []string{"hs1"},
+		},
+	})
+
+	// Querying is done by bob who is not yet in any of the rooms.
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob.JoinRoom(t, root, []string{"hs1"})
+
+	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				root,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+			match.JSONCheckOff("events", []interface{}{
+				rootToR1, rootToSS1,
+			}, func(r gjson.Result) interface{} {
+				return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
+			}, nil),
+		},
+	})
+
+	// Invite to R1 and R3, querying again should only show R1 (since SS1 is not visible).
+	alice.InviteRoom(t, r1, bob.UserID)
+	alice.InviteRoom(t, r3, bob.UserID)
+
+	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				root, r1,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+			match.JSONCheckOff("events", []interface{}{
+				rootToR1, rootToSS1,
+			}, func(r gjson.Result) interface{} {
+				return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
+			}, nil),
+		},
+	})
+
+	// Invite to SS1 and it now appears, as well as the rooms under it.
+	alice.InviteRoom(t, ss1, bob.UserID)
+
+	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				root, r1, ss1, r2, r3,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+			match.JSONCheckOff("events", []interface{}{
+				rootToR1, rootToSS1, ss1ToR2, ss1ToR3,
+			}, func(r gjson.Result) interface{} {
+				return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
+			}, nil),
+		},
 	})
 }
 

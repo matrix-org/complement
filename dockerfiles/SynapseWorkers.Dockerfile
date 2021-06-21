@@ -1,6 +1,6 @@
 # This dockerfile builds on top of Dockerfile-worker and includes a built-in postgres instance
 # as well as sets up the homeserver so that it is ready for testing via Complement
-FROM matrixdotorg/synapse:workers
+FROM matrixdotorg/synapse-workers
 
 # Download a caddy server to stand in front of nginx and terminate TLS using Complement's
 # custom CA.
@@ -25,7 +25,7 @@ RUN pg_ctlcluster 11 main start &&  su postgres -c "echo \
 # and the disabling of rate-limiting
 COPY synapse/workers-shared.yaml /conf/workers/shared.yaml
 
-WORKDIR /root
+WORKDIR /data
 
 # Copy the caddy config
 COPY synapse/caddy.complement.json /root/caddy.json
@@ -46,8 +46,21 @@ ENTRYPOINT \
   SYNAPSE_REPORT_STATS=no \
   # Set postgres authentication details which will be placed in the homeserver config file
   POSTGRES_PASSWORD=somesecret POSTGRES_USER=postgres POSTGRES_HOST=localhost \
-  # Use all available worker types
-  SYNAPSE_WORKERS=* \
+  # Specify the workers to test with
+  SYNAPSE_WORKER_TYPES="\
+    event_persister, \
+    event_persister, \
+    background_worker, \
+    frontend_proxy, \
+    event_creator, \
+    user_dir, \
+    media_repository, \
+    federation_inbound, \
+    federation_reader, \
+    federation_sender, \
+    synchrotron, \
+    appservice, \
+    pusher" \
   # Run the script that writes the necessary config files and starts supervisord, which in turn
   # starts everything else
   /configure_workers_and_start.py
