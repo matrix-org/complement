@@ -21,7 +21,6 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
@@ -53,7 +52,6 @@ var (
 func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
-	//defer time.Sleep(2 * time.Hour)
 
 	// Create the application service bridge user that is able to backfill messages
 	asUserID := "@the-bridge-user:hs1"
@@ -95,8 +93,6 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// Register and join the virtual user
 			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
-
-			// TODO: Try adding avatar and displayName and see if historical messages get this info
 
 			// Insert the most recent chunk of backfilled history
 			backfillRes := backfillBatchHistoricalMessages(
@@ -147,15 +143,6 @@ func TestBackfillingHistory(t *testing.T) {
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
-			// TODO: Remove, the context request is just for TARDIS visualizations
-			contextRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[len(eventsAfter)-1]}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"limit": []string{"100"},
-			}))
-			contextResBody := client.ParseJSON(t, contextRes)
-			logrus.WithFields(logrus.Fields{
-				"contextResBody": string(contextResBody),
-			}).Error("context res")
-
 			// Copy the array by value so we can modify it as we iterate in the foreach loop.
 			// We save the full untouched `expectedMessageOrder` for use in the log messages
 			workingExpectedMessageOrder := expectedMessageOrder
@@ -180,7 +167,7 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
-		t.Run("Backfilled historical events with MSC2716_HISTORICAL do not come down /sync", func(t *testing.T) {
+		t.Run("Backfilled historical events with MSC2716_HISTORICAL do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, struct{}{})
@@ -223,39 +210,6 @@ func TestBackfillingHistory(t *testing.T) {
 				}
 
 				return r.Get("event_id").Str == eventAfterBackfill
-			})
-		})
-
-		t.Run("Backfilled historical events without MSC2716_HISTORICAL come down /sync", func(t *testing.T) {
-			t.Parallel()
-
-			roomID := as.CreateRoom(t, struct{}{})
-			alice.JoinRoom(t, roomID, nil)
-
-			eventsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventBefore := eventsBefore[0]
-			timeAfterEventBefore := time.Now()
-			insertOriginServerTs := uint64(timeAfterEventBefore.UnixNano() / int64(time.Millisecond))
-
-			// Send an event that has `prev_event` and `ts` set but not `MSC2716_HISTORICAL`.
-			// We should see these type of events in the `/sync` response
-			eventWeShouldSee := sendEvent(t, as, "", roomID, event{
-				Type: "m.room.message",
-				PrevEvents: []string{
-					eventBefore,
-				},
-				OriginServerTS: insertOriginServerTs,
-				Content: map[string]interface{}{
-					"msgtype": "m.text",
-					"body":    "Message with prev_event and ts but no MSC2716_HISTORICAL",
-					// This is commented out on purpse.
-					// We are explicitely testing when MSC2716_HISTORICAL isn't present
-					//MSC2716_HISTORICAL: true,
-				},
-			})
-
-			alice.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
-				return r.Get("event_id").Str == eventWeShouldSee
 			})
 		})
 
@@ -304,6 +258,11 @@ func TestBackfillingHistory(t *testing.T) {
 				// Normal user alice should not be able to backfill messages
 				403,
 			)
+		})
+
+		t.Run("TODO: Test if historical avatar/display name set back in time are picked up on historical messages", func(t *testing.T) {
+			t.Skip("Skipping until implemented")
+			// TODO: Try adding avatar and displayName and see if historical messages get this info
 		})
 
 		t.Run("Historical messages are visible when joining on federated server", func(t *testing.T) {

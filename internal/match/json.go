@@ -126,7 +126,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 // it's an object).
 //
 // Usage: (ensures `events` has these events in any order, with the right event type)
-//    JSONCheckOff("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
+//    JSONCheckOffAllowUnwanted("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
 //        return r.Get("event_id").Str
 //    }, func(eventID interface{}, eventBody gjson.Result) error {
 //        if eventBody.Get("type").Str != "m.room.message" {
