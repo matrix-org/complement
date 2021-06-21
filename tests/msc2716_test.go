@@ -94,7 +94,7 @@ func TestBackfillingHistory(t *testing.T) {
 			eventsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
 			// Register and join the virtual user
-			ensureRegistered(t, as, virtualUserLocalpart)
+			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
 
@@ -138,19 +138,19 @@ func TestBackfillingHistory(t *testing.T) {
 			// Order events from newest to oldest
 			expectedMessageOrder = reversed(expectedMessageOrder)
 
-			messagesRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
-			})
+			}))
 			messsageResBody := client.ParseJSON(t, messagesRes)
 			eventIDsFromResponse := getEventIDsFromResponseBody(t, messsageResBody)
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
 			// TODO: Remove, the context request is just for TARDIS visualizations
-			contextRes := alice.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[len(eventsAfter)-1]}, nil, "application/json", url.Values{
+			contextRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventsAfter[len(eventsAfter)-1]}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"limit": []string{"100"},
-			})
+			}))
 			contextResBody := client.ParseJSON(t, contextRes)
 			logrus.WithFields(logrus.Fields{
 				"contextResBody": string(contextResBody),
@@ -320,7 +320,7 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 3)
 
 			// Register and join the virtual user
-			ensureRegistered(t, as, virtualUserLocalpart)
+			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 			backfillRes := backfillBatchHistoricalMessages(
 				t,
@@ -339,10 +339,10 @@ func TestBackfillingHistory(t *testing.T) {
 			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
-			messagesRes := remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
-			})
+			}))
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -370,14 +370,14 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 10)
 
 			// Mimic scrollback just through the latest messages
-			remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+			remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir": []string{"b"},
 				// Limited so we can only see a few of the latest messages
 				"limit": []string{"5"},
-			})
+			}))
 
 			// Register and join the virtual user
-			ensureRegistered(t, as, virtualUserLocalpart)
+			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 			backfillRes := backfillBatchHistoricalMessages(
 				t,
@@ -393,10 +393,10 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 			_, historicalEvents := getEventsFromBatchSendResponse(t, backfillRes)
 
-			messagesRes := remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
-			})
+			}))
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -424,14 +424,14 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 3)
 
 			// Register and join the virtual user
-			ensureRegistered(t, as, virtualUserLocalpart)
+			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 			// Mimic scrollback to all of the messages
 			// scrollbackMessagesRes
-			remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+			remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
-			})
+			}))
 
 			// Historical messages are inserted where we have already scrolled back to
 			backfillRes := backfillBatchHistoricalMessages(
@@ -448,10 +448,10 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 			_, historicalEvents := getEventsFromBatchSendResponse(t, backfillRes)
 
-			messagesRes := remoteCharlie.MustDoRaw(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, nil, "application/json", url.Values{
+			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
-			})
+			}))
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -518,35 +518,30 @@ func sendEvent(t *testing.T, c *client.CSAPI, virtualUserID string, roomID strin
 		t.Fatalf("msc2716.sendEvent failed to marshal JSON body: %s", err)
 	}
 
-	res := c.MustDoRaw(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + strconv.Itoa(txnID)}, b, "application/json", query)
+	res := c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + strconv.Itoa(txnID)}, client.WithRawBody(b), client.WithContentType("application/json"), client.WithQueries(query))
 	body := client.ParseJSON(t, res)
 	eventID := client.GetJSONFieldStr(t, body, "event_id")
 
 	return eventID
 }
 
-// ensureRegistered makes sure the user is registered for the homeserver regardless
+// ensureVirtualUserRegistered makes sure the user is registered for the homeserver regardless
 // if they are already registered or not. If unable to register, fails the test
-func ensureRegistered(t *testing.T, c *client.CSAPI, virtualUserLocalpart string) {
+func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocalpart string) {
 	// b, err := json.Marshal(map[string]interface{}{
 	// 	"username": virtualUserLocalpart,
 	// })
 	// if err != nil {
-	// 	t.Fatalf("msc2716.ensureRegistered failed to marshal JSON body: %s", err)
+	// 	t.Fatalf("msc2716.ensureVirtualUserRegistered failed to marshal JSON body: %s", err)
 	// }
 
-	res, err := c.DoWithAuthRaw(
+	res := c.DoFunc(
 		t,
 		"POST",
 		[]string{"_matrix", "client", "r0", "register"},
-		json.RawMessage(fmt.Sprintf(`{ "type": "m.login.application_service", "username": "%s" }`, virtualUserLocalpart)),
-		"application/json",
-		url.Values{},
+		client.WithRawBody(json.RawMessage(fmt.Sprintf(`{ "type": "m.login.application_service", "username": "%s" }`, virtualUserLocalpart))),
+		client.WithContentType("application/json"),
 	)
-
-	if err != nil {
-		t.Error(err)
-	}
 
 	if res.StatusCode == 200 {
 		return
@@ -559,7 +554,7 @@ func ensureRegistered(t *testing.T, c *client.CSAPI, virtualUserLocalpart string
 		return
 	} else {
 		errorMessage := client.GetJSONFieldStr(t, body, "error")
-		t.Fatalf("msc2716.ensureRegistered failed to register: (%s) %s", errcode, errorMessage)
+		t.Fatalf("msc2716.ensureVirtualUserRegistered failed to register: (%s) %s", errcode, errorMessage)
 	}
 }
 
@@ -640,15 +635,24 @@ func backfillBatchHistoricalMessages(
 		t.Fatalf("msc2716.backfillBatchHistoricalMessages failed to marshal JSON body: %s", err)
 	}
 
-	res = c.MustDoWithStatusRaw(
+	res = c.DoFunc(
 		t,
 		"POST",
 		[]string{"_matrix", "client", "unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"},
-		b,
-		"application/json",
-		query,
-		status,
+		client.WithRawBody(b),
+		client.WithContentType("application/json"),
+		client.WithQueries(query),
 	)
+	// Save the body so we can re-create after the buffer closes
+	body := client.ParseJSON(t, res)
+	// Since the original body can only be read once, create a new one from the body bytes we just read
+	res.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: status,
+	})
+	// After using up the body in the must.MatchResponse above, create the body again
+	// Since the original body can only be read once, create a new one from the body bytes we just read
+	res.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 
 	chunkCount++
 
