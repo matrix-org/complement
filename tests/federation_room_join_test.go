@@ -2,10 +2,12 @@ package tests
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
 
+	"github.com/matrix-org/gomatrix"
 	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/tidwall/sjson"
@@ -190,5 +192,126 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		room.AddEvent(unsignedEvent)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
 		alice.JoinRoom(t, roomAlias, nil)
+	})
+}
+
+// This test checks that we cannot submit anything via /v1/send_join except a join.
+func TestCannotSendNonJoinViaSendJoinV1(t *testing.T) {
+	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v1/send_join", "join", nil)
+}
+
+// This test checks that we cannot submit anything via /v2/send_join except a join.
+func TestCannotSendNonJoinViaSendJoinV2(t *testing.T) {
+	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v2/send_join", "join", nil)
+}
+
+// This test checks that we cannot submit anything via /v1/send_leave except a leave.
+func TestCannotSendNonLeaveViaSendLeaveV1(t *testing.T) {
+	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v1/send_leave", "leave", nil)
+}
+
+// This test checks that we cannot submit anything via /v2/send_leave except a leave.
+func TestCannotSendNonLeaveViaSendLeaveV2(t *testing.T) {
+	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v2/send_leave", "leave", nil)
+}
+
+// testValidationForSendMembershipEndpoint attempts to submit a range of events via the given endpoint
+// and checks that they are all rejected.
+func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expectedMembership string, createRoomOpts map[string]interface{}) {
+	if createRoomOpts == nil {
+		createRoomOpts = map[string]interface{}{}
+	}
+
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+
+	// alice creates a room, and charlie joins it
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	roomId := alice.CreateRoom(t, createRoomOpts)
+	charlie := srv.UserID("charlie")
+	room := srv.MustJoinRoom(t, deployment, "hs1", roomId, charlie)
+
+	// a helper function which makes a send_* request to the given path and checks
+	// that it fails with a 400 error
+	assertRequestFails := func(t *testing.T, event *gomatrixserverlib.Event) {
+		req := gomatrixserverlib.NewFederationRequest("PUT", "hs1",
+			fmt.Sprintf("%s/%s/%s",
+				baseApiPath,
+				url.PathEscape(event.RoomID()),
+				url.PathEscape(event.EventID()),
+			))
+		if err := req.SetContent(event); err != nil {
+			t.Errorf("req.SetContent: %v", err)
+			return
+		}
+
+		err := srv.SendFederationRequest(deployment, req, map[string]interface{}{})
+		if err == nil {
+			t.Errorf("send request returned 200")
+			return
+		}
+
+		httpError, ok := err.(gomatrix.HTTPError)
+		if !ok {
+			t.Errorf("not an HTTPError: %v", err)
+			return
+		}
+
+		t.Logf("%s returned %d/%s", baseApiPath, httpError.Code, string(httpError.Contents))
+		if httpError.Code != 400 {
+			t.Errorf("expected 400, got %d", httpError.Code)
+		}
+	}
+
+	t.Run("regular event", func(t *testing.T) {
+		event := srv.MustCreateEvent(t, room, b.Event{
+			Type:    "m.room.message",
+			Sender:  charlie,
+			Content: map[string]interface{}{"body": "bzz"},
+		})
+		assertRequestFails(t, event)
+	})
+	t.Run("non-state membership event", func(t *testing.T) {
+		event := srv.MustCreateEvent(t, room, b.Event{
+			Type:    "m.room.message",
+			Sender:  charlie,
+			Content: map[string]interface{}{"body": "bzz"},
+		})
+		assertRequestFails(t, event)
+	})
+
+	// try membership events of various types, other than that expected by
+	// the endpoint
+	for _, membershipType := range []string{"join", "leave", "knock", "invite"} {
+		if membershipType == expectedMembership {
+			continue
+		}
+		event := srv.MustCreateEvent(t, room, b.Event{
+			Type:     "m.room.member",
+			Sender:   charlie,
+			StateKey: &charlie,
+			Content:  map[string]interface{}{"membership": membershipType},
+		})
+		t.Run(membershipType+" event", func(t *testing.T) {
+			assertRequestFails(t, event)
+		})
+	}
+
+	// right sort of membership, but mismatched state_key
+	t.Run("event with mismatched state key", func(t *testing.T) {
+		event := srv.MustCreateEvent(t, room, b.Event{
+			Type:     "m.room.member",
+			Sender:   charlie,
+			StateKey: b.Ptr(srv.UserID("doris")),
+			Content:  map[string]interface{}{"membership": expectedMembership},
+		})
+		assertRequestFails(t, event)
 	})
 }
