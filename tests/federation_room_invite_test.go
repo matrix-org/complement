@@ -23,16 +23,20 @@ func TestFederationRejectInvite(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
 
-	waiter := NewWaiter()
+	// we'll awaken this Waiter when we receive a membership event for Charlie
+	var waiter *Waiter
+
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleTransactionRequests(func(ev *gomatrixserverlib.Event) {
-			defer waiter.Finish()
 			sk := "<nil>"
 			if ev.StateKey() != nil {
 				sk = *ev.StateKey()
 			}
 			t.Logf("Received PDU %s/%s", ev.Type(), sk)
+			if waiter != nil && ev.Type() == "m.room.member" && ev.StateKey() != nil && *ev.StateKey() == charlie.UserID {
+				waiter.Finish()
+			}
 		}, nil),
 	)
 	srv.UnexpectedRequestsAreErrors = false
@@ -45,6 +49,7 @@ func TestFederationRejectInvite(t *testing.T) {
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, delia)
 
 	// Alice invites Charlie; Delia should see the invite
+	waiter = NewWaiter()
 	alice.InviteRoom(t, roomID, charlie.UserID)
 	waiter.Wait(t, 5*time.Second)
 	if err := checkMembershipForUser(room, charlie.UserID, "invite"); err != nil {
