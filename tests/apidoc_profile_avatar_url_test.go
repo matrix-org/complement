@@ -9,7 +9,7 @@ import (
 	"github.com/matrix-org/complement/internal/must"
 )
 
-func TestProfileAvatarURL(t *testing.T){
+func TestProfileAvatarURL(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
