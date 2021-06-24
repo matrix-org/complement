@@ -50,6 +50,14 @@ If you want to develop Complement tests while working on a local dev instance of
 COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh "TestOutboundFederation(Profile|Send)"
 ```
 
+To run Complement against a specific release of Synapse, set the
+`SYNAPSE_VERSION` build argument. For example:
+
+```sh
+docker build -t complement-synapse:v1.36.0 -f dockerfiles/Synapse.Dockerfile --build-arg=SYNAPSE_VERSION=v1.36.0 dockerfiles
+COMPLEMENT_BASE_IMAGE=complement-synapse:v1.36.0 go test ./tests
+```
+
 ### Image requirements
 
 If you're looking to run against a custom Dockerfile, it must meet the following requirements:

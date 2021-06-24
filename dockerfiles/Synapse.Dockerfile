@@ -11,7 +11,9 @@
 # (cd dockerfiles && docker build -t complement-synapse -f Synapse.Dockerfile .)
 # COMPLEMENT_BASE_IMAGE=complement-synapse go test -v ./tests
 
-FROM matrixdotorg/synapse:latest
+ARG SYNAPSE_VERSION=latest
+
+FROM matrixdotorg/synapse:${SYNAPSE_VERSION}
 
 ENV SERVER_NAME=localhost
 
