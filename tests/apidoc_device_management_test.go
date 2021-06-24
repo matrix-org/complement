@@ -2,16 +2,16 @@ package tests
 
 import (
 	"encoding/json"
+	"net/http"
+	"testing"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-
-	"net/http"
-	"testing"
 )
 
-func TestDeviceManagement(t *testing.T){
+func TestDeviceManagement(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
@@ -36,13 +36,12 @@ func TestDeviceManagement(t *testing.T){
 			JSON: []match.JSON{
 				match.JSONKeyEqual("device_id", deviceID),
 				match.JSONKeyEqual("display_name", "device display"),
-
 			},
 		})
 	})
 }
 
-func getDevice(t *testing.T, authedClient *client.CSAPI, deviceID string) *http.Response{
+func getDevice(t *testing.T, authedClient *client.CSAPI, deviceID string) *http.Response {
 	res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "devices", deviceID}, nil)
 	return res
 }
