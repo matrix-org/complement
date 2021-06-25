@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -14,11 +13,14 @@ func TestProfileDisplayName(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
-	authedClient := deployment.RegisterUser(t, "hs1", "display_name_user", "superuser")
+	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
 	displayName := "my_display_name"
 	// sytest: PUT /profile/:user_id/displayname sets my name
 	t.Run("PUT /profile/:user_id/displayname sets my name", func(t *testing.T) {
-		setDisplayName(t, authedClient, displayName)
+		reqBody := client.WithJSONBody(t, map[string]interface{}{
+			"displayname":     displayName,
+		})
+		_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "displayname"}, reqBody)
 		res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "displayname"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
@@ -29,7 +31,7 @@ func TestProfileDisplayName(t *testing.T) {
 	})
 	// sytest: GET /profile/:user_id/displayname publicly accessible
 	t.Run("GET /profile/:user_id/displayname publicly accessible", func(t *testing.T) {
-		res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "profile", "@display_name_user:hs1", "displayname"})
+		res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "displayname"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
@@ -37,10 +39,4 @@ func TestProfileDisplayName(t *testing.T) {
 			},
 		})
 	})
-}
-
-func setDisplayName(t *testing.T, authedClient *client.CSAPI, displayName string) {
-	_ = authedClient.MustDo(t, "PUT", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "displayname"}, json.RawMessage(`{
-				"displayname": "`+displayName+`"
-			}`))
 }
