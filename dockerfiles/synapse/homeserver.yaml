@@ -93,12 +93,6 @@ rc_joins:
 
 federation_rr_transactions_per_room_per_second: 9999
 
-
-## Registration ##
-
-enable_registration: True
-registration_shared_secret: "$FZjMa&9fAAi9Xf[F)jAY[C#y?QwT[!qnBi+:ZLj.-)zVf]:C39H4Y99c$LPCh}{"
-
 ## API Configuration ##
 
 # A list of application service config files to use

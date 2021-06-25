@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 	"testing"
 	"time"
 
@@ -35,7 +34,7 @@ type event struct {
 
 // This is configurable because it can be nice to change it to `time.Second` while
 // checking out the test result in a Synapse instance
-const TimeBetweenMessages = time.Millisecond
+const timeBetweenMessages = time.Millisecond
 
 var (
 	MSC2716_INSERTION = "org.matrix.msc2716.insertion"
@@ -85,7 +84,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			numHistoricalMessages := 6
 			// wait X number of ms to ensure that the timestamp changes enough for each of the messages we try to backfill later
-			time.Sleep(time.Duration(numHistoricalMessages) * TimeBetweenMessages)
+			time.Sleep(time.Duration(numHistoricalMessages) * timeBetweenMessages)
 
 			// Create some events after.
 			// Fill up the buffer so we have to scrollback to the inserted history later
@@ -101,7 +100,7 @@ func TestBackfillingHistory(t *testing.T) {
 				virtualUserID,
 				roomID,
 				eventBefore,
-				timeAfterEventBefore.Add(TimeBetweenMessages*3),
+				timeAfterEventBefore.Add(timeBetweenMessages*3),
 				"",
 				3,
 				// Status
@@ -454,49 +453,9 @@ func getEventIDsFromResponseBody(t *testing.T, body []byte) (eventIDsFromRespons
 	return eventIDsFromResponse
 }
 
-var txnID int = 0
-
-// The transactions need to be prefixed so they don't collide with the txnID in client.go
-var txnPrefix string = "msc2716-txn"
-
-func sendEvent(t *testing.T, c *client.CSAPI, virtualUserID string, roomID string, e event) string {
-	txnID++
-
-	query := make(url.Values, len(e.PrevEvents))
-	for _, prevEvent := range e.PrevEvents {
-		query.Add("prev_event", prevEvent)
-	}
-
-	if e.OriginServerTS != 0 {
-		query.Add("ts", strconv.FormatUint(e.OriginServerTS, 10))
-	}
-
-	if virtualUserID != "" {
-		query.Add("user_id", virtualUserID)
-	}
-
-	b, err := json.Marshal(e.Content)
-	if err != nil {
-		t.Fatalf("msc2716.sendEvent failed to marshal JSON body: %s", err)
-	}
-
-	res := c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, txnPrefix + strconv.Itoa(txnID)}, client.WithRawBody(b), client.WithContentType("application/json"), client.WithQueries(query))
-	body := client.ParseJSON(t, res)
-	eventID := client.GetJSONFieldStr(t, body, "event_id")
-
-	return eventID
-}
-
 // ensureVirtualUserRegistered makes sure the user is registered for the homeserver regardless
 // if they are already registered or not. If unable to register, fails the test
 func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocalpart string) {
-	// b, err := json.Marshal(map[string]interface{}{
-	// 	"username": virtualUserLocalpart,
-	// })
-	// if err != nil {
-	// 	t.Fatalf("msc2716.ensureVirtualUserRegistered failed to marshal JSON body: %s", err)
-	// }
-
 	res := c.DoFunc(
 		t,
 		"POST",
@@ -553,7 +512,7 @@ func backfillBatchHistoricalMessages(
 	// Timestamp in milliseconds
 	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
 
-	timeBetweenMessagesMS := uint64(TimeBetweenMessages / time.Millisecond)
+	timeBetweenMessagesMS := uint64(timeBetweenMessages / time.Millisecond)
 
 	evs := make([]map[string]interface{}, count)
 	for i := 0; i < len(evs); i++ {
