@@ -18,7 +18,7 @@ func TestProfileDisplayName(t *testing.T) {
 	// sytest: PUT /profile/:user_id/displayname sets my name
 	t.Run("PUT /profile/:user_id/displayname sets my name", func(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
-			"displayname":     displayName,
+			"displayname": displayName,
 		})
 		_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "displayname"}, reqBody)
 		res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "displayname"})
