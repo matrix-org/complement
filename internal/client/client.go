@@ -371,7 +371,7 @@ func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	return res.Str
 }
 
-func GetJSONFieldArray(t *testing.T, body []byte, wantKey string) []string {
+func GetJSONFieldStringArray(t *testing.T, body []byte, wantKey string) []string {
 	t.Helper()
 
 	res := gjson.GetBytes(body, wantKey)
