@@ -65,7 +65,7 @@ func main() {
 		anonMappings.Rooms = make(map[string]string)
 		anonMappings.AnonUserToDevices = make(map[string]map[string]bool)
 		anonMappings.SingleServerName = "hs1"
-		snapshot := internal.Redact(syncData, anonMappings)
+		snapshot = internal.Redact(syncData, anonMappings)
 		snapshot.UserID = anonMappings.User(*flagUserID)
 		if *flagAnonOnly {
 			b, err := json.MarshalIndent(snapshot, "", "  ")
