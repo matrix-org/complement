@@ -21,6 +21,12 @@ or on Mac:
 ```
 brew install libolm
 ```
+If you are on an Apple Silicon Mac then you'll need to set these environment variables too:
+```
+export LIBRARY_PATH=/opt/homebrew/lib
+export CPATH=/opt/homebrew/include
+export PATH=/opt/homebrew/bin:$PATH
+```
 
 You can either use your own image, or one of the ones supplied in the [dockerfiles](./dockerfiles) directory.
 
