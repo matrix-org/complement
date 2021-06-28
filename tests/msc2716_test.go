@@ -60,11 +60,98 @@ func TestBackfillingHistory(t *testing.T) {
 	alice := deployment.Client(t, "hs1", userID)
 
 	// Create the federated user which will fetch the messages from a remote homeserver
-	remoteUserID := "@charlie:hs2"
-	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+	remoteCharlieUserID := "@charlie:hs2"
+	remoteCharlie := deployment.Client(t, "hs2", remoteCharlieUserID)
+	remoteCharlieAlreadyJoined := deployment.RegisterUser(t, "hs2", "remoteCharlieAlready", "123")
+	remoteCharlieWithFullScrollback := deployment.RegisterUser(t, "hs2", "remoteCharlieWithFullScrollback", "123")
 
 	virtualUserLocalpart := "maria"
 	virtualUserID := fmt.Sprintf("@%s:hs1", virtualUserLocalpart)
+
+	roomID := as.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		"name":   "the hangout spot",
+	})
+	alice.JoinRoom(t, roomID, nil)
+
+	// Join the room from a remote homeserver before any backfilled messages are sent
+	remoteCharlieAlreadyJoined.JoinRoom(t, roomID, []string{"hs1"})
+
+	// Create some normal messages in the timeline. We're creating them in
+	// two batches so we can create some time in between where we are going
+	// to backfill.
+	//
+	// Create the first batch including the "live" event we are going to
+	// insert our backfilled events next to.
+	eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2)
+	eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
+	timeAfterEventBefore := time.Now()
+
+	// wait X number of ms to ensure that the timestamp changes enough for
+	// each of the messages we try to backfill later
+	numHistoricalMessages := 6
+	time.Sleep(time.Duration(numHistoricalMessages) * timeBetweenMessages)
+
+	// Create the second batch of events.
+	// This will also fill up the buffer so we have to scrollback to the
+	// inserted history later.
+	eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
+
+	// Mimic scrollback to all of the messages
+	// scrollbackMessagesRes
+	remoteCharlieWithFullScrollback.JoinRoom(t, roomID, []string{"hs1"})
+	remoteCharlieWithFullScrollback.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		"dir":   []string{"b"},
+		"limit": []string{"100"},
+	}))
+
+	// Register and join the virtual user
+	ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
+
+	// Insert the most recent chunk of backfilled history
+	backfillRes := backfillBatchHistoricalMessages(
+		t,
+		as,
+		virtualUserID,
+		roomID,
+		eventIdBefore,
+		timeAfterEventBefore.Add(timeBetweenMessages*3),
+		"",
+		3,
+		// Status
+		200,
+	)
+	historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
+	nextChunkID := getNextChunkIdFromBatchSendResponse(t, backfillRes)
+
+	// Insert another older chunk of backfilled history from the same user.
+	// Make sure the meta data and joins still work on the subsequent chunk
+	backfillRes2 := backfillBatchHistoricalMessages(
+		t,
+		as,
+		virtualUserID,
+		roomID,
+		eventIdBefore,
+		timeAfterEventBefore,
+		nextChunkID,
+		3,
+		// Status
+		200,
+	)
+	historicalEventIDs2 := getEventsFromBatchSendResponse(t, backfillRes2)
+
+	var expectedEventIDOrder []string
+	expectedEventIDOrder = append(expectedEventIDOrder, eventIDsBefore...)
+	expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs2...)
+	expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs...)
+	expectedEventIDOrder = append(expectedEventIDOrder, eventIDsAfter...)
+	// Order events from newest to oldest
+	expectedEventIDOrder = reversed(expectedEventIDOrder)
+
+	// 2 eventIDsBefore + 6 historical events + 3 insertion events + 2 eventIDsAfter
+	if len(expectedEventIDOrder) != 13 {
+		t.Fatalf("Expected eventID list should be length 13 but saw %d: %s", len(expectedEventIDOrder), expectedEventIDOrder)
+	}
 
 	t.Run("parallel", func(t *testing.T) {
 		// Final timeline output: ( [n] = historical chunk )
@@ -72,80 +159,6 @@ func TestBackfillingHistory(t *testing.T) {
 		//                chunk 1              chunk 0
 		t.Run("Backfilled historical events resolve with proper state in correct order", func(t *testing.T) {
 			t.Parallel()
-
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
-			})
-			alice.JoinRoom(t, roomID, nil)
-
-			// Create some normal messages in the timeline. We're creating them in
-			// two batches so we can create some time in between where we are going
-			// to backfill.
-			//
-			// Create the first batch including the "live" event we are going to
-			// insert our backfilled events next to.
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2)
-			eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
-			timeAfterEventBefore := time.Now()
-
-			// wait X number of ms to ensure that the timestamp changes enough for
-			// each of the messages we try to backfill later
-			numHistoricalMessages := 6
-			time.Sleep(time.Duration(numHistoricalMessages) * timeBetweenMessages)
-
-			// Create the second batch of events.
-			// This will also fill up the buffer so we have to scrollback to the
-			// inserted history later.
-			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
-
-			// Register and join the virtual user
-			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
-
-			// Insert the most recent chunk of backfilled history
-			backfillRes := backfillBatchHistoricalMessages(
-				t,
-				as,
-				virtualUserID,
-				roomID,
-				eventIdBefore,
-				timeAfterEventBefore.Add(timeBetweenMessages*3),
-				"",
-				3,
-				// Status
-				200,
-			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
-			nextChunkID := getNextChunkIdFromBatchSendResponse(t, backfillRes)
-
-			// Insert another older chunk of backfilled history from the same user.
-			// Make sure the meta data and joins still work on the subsequent chunk
-			backfillRes2 := backfillBatchHistoricalMessages(
-				t,
-				as,
-				virtualUserID,
-				roomID,
-				eventIdBefore,
-				timeAfterEventBefore,
-				nextChunkID,
-				3,
-				// Status
-				200,
-			)
-			historicalEventIDs2 := getEventsFromBatchSendResponse(t, backfillRes2)
-
-			var expectedEventIDOrder []string
-			expectedEventIDOrder = append(expectedEventIDOrder, eventIDsBefore...)
-			expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs2...)
-			expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs...)
-			expectedEventIDOrder = append(expectedEventIDOrder, eventIDsAfter...)
-			// Order events from newest to oldest
-			expectedEventIDOrder = reversed(expectedEventIDOrder)
-
-			// 2 eventIDsBefore + 6 historical events + 3 insertion events + 2 eventIDsAfter
-			if len(expectedEventIDOrder) != 13 {
-				t.Fatalf("Expected eventID list should be length 13 but saw %d: %s", len(expectedEventIDOrder), expectedEventIDOrder)
-			}
 
 			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
@@ -184,49 +197,18 @@ func TestBackfillingHistory(t *testing.T) {
 			}
 		})
 
-		t.Run("Backfilled historical events with m.historical do not come down in an incremental sync", func(t *testing.T) {
+		t.Run("Backfilled historical events do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
-
-			roomID := as.CreateRoom(t, struct{}{})
-			alice.JoinRoom(t, roomID, nil)
-
-			// Create the "live" event we are going to insert our backfilled events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdBefore := eventIDsBefore[0]
-			timeAfterEventBefore := time.Now()
-
-			// Create some "live" events to saturate and fill up the /sync response
-			createMessagesInRoom(t, alice, roomID, 5)
-
-			// Insert a backfilled event
-			backfillRes := backfillBatchHistoricalMessages(
-				t,
-				as,
-				virtualUserID,
-				roomID,
-				eventIdBefore,
-				timeAfterEventBefore,
-				"",
-				1,
-				// Status
-				200,
-			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
-			backfilledEventId := historicalEventIDs[0]
-
-			// This is just a dummy event we search for after the backfilledEventId
-			eventIDsAfterBackfill := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdAfterBackfill := eventIDsAfterBackfill[0]
 
 			// Sync until we find the eventIdAfterBackfill. If we're able to see the eventIdAfterBackfill
 			// that occurs after the backfilledEventId without seeing eventIdAfterBackfill in between,
 			// we're probably safe to assume it won't sync
-			alice.SyncUntil(t, "", `{ "room": { "timeline": { "limit": 3 } } }`, "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
-				if r.Get("event_id").Str == backfilledEventId {
-					t.Fatalf("We should not see the %s backfilled event in /sync response but it was present", backfilledEventId)
+			alice.SyncUntil(t, "", `{ "room": { "timeline": { "limit": 2 } } }`, "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
+				if containsItem(historicalEventIDs, r.Get("event_id").Str) || containsItem(historicalEventIDs2, r.Get("event_id").Str) {
+					t.Fatalf("We should not see the %s backfilled event in /sync response but it was present", r.Get("event_id").Str)
 				}
 
-				return r.Get("event_id").Str == eventIdAfterBackfill
+				return containsItem(eventIDsAfter, r.Get("event_id").Str)
 			})
 		})
 
@@ -255,13 +237,6 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Normal users aren't allowed to backfill messages", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
-			alice.JoinRoom(t, roomID, nil)
-
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdBefore := eventIDsBefore[0]
-			timeAfterEventBefore := time.Now()
-
 			backfillBatchHistoricalMessages(
 				t,
 				alice,
@@ -286,33 +261,6 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
-			alice.JoinRoom(t, roomID, nil)
-
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdBefore := eventIDsBefore[0]
-			timeAfterEventBefore := time.Now()
-
-			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 3)
-
-			// Register and join the virtual user
-			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
-
-			backfillRes := backfillBatchHistoricalMessages(
-				t,
-				as,
-				virtualUserID,
-				roomID,
-				eventIdBefore,
-				timeAfterEventBefore,
-				"",
-				2,
-				// Status
-				200,
-			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
-
 			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
@@ -334,43 +282,6 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
-			alice.JoinRoom(t, roomID, nil)
-
-			// Join the room from a remote homeserver before any backfilled messages are sent
-			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
-
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdBefore := eventIDsBefore[0]
-			timeAfterEventBefore := time.Now()
-
-			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 10)
-
-			// Mimic scrollback just through the latest messages
-			remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir": []string{"b"},
-				// Limited so we can only see a few of the latest messages
-				"limit": []string{"5"},
-			}))
-
-			// Register and join the virtual user
-			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
-
-			backfillRes := backfillBatchHistoricalMessages(
-				t,
-				as,
-				virtualUserID,
-				roomID,
-				eventIdBefore,
-				timeAfterEventBefore,
-				"",
-				2,
-				// Status
-				200,
-			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
-
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
@@ -389,45 +300,7 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
-			alice.JoinRoom(t, roomID, nil)
-
-			// Join the room from a remote homeserver before any backfilled messages are sent
-			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
-
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdBefore := eventIDsBefore[0]
-			timeAfterEventBefore := time.Now()
-
-			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 3)
-
-			// Register and join the virtual user
-			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
-
-			// Mimic scrollback to all of the messages
-			// scrollbackMessagesRes
-			remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			// Historical messages are inserted where we have already scrolled back to
-			backfillRes := backfillBatchHistoricalMessages(
-				t,
-				as,
-				virtualUserID,
-				roomID,
-				eventIdBefore,
-				timeAfterEventBefore,
-				"",
-				2,
-				// Status
-				200,
-			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
-
-			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			messagesRes := remoteCharlieWithFullScrollback.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			}))
@@ -449,6 +322,15 @@ func reversed(in []string) []string {
 		out[i] = in[len(in)-i-1]
 	}
 	return out
+}
+
+func containsItem(slice []string, item string) bool {
+	for _, a := range slice {
+		if a == item {
+			return true
+		}
+	}
+	return false
 }
 
 func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, body []byte) (eventIDsFromResponse []string) {
