@@ -21,7 +21,7 @@ or on Mac:
 ```
 brew install libolm
 ```
-If you are on an Apple Silicon Mac then you'll need to set these environment variables too:
+If you are on an Apple Silicon Mac then you'll need to set these environment variables too so Go can find `libolm`:
 ```
 export LIBRARY_PATH=/opt/homebrew/lib
 export CPATH=/opt/homebrew/include
