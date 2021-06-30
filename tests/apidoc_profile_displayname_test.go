@@ -21,13 +21,6 @@ func TestProfileDisplayName(t *testing.T) {
 			"displayname": displayName,
 		})
 		_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "displayname"}, reqBody)
-		res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "displayname"})
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("displayname", displayName),
-			},
-		})
 	})
 	// sytest: GET /profile/:user_id/displayname publicly accessible
 	t.Run("GET /profile/:user_id/displayname publicly accessible", func(t *testing.T) {
