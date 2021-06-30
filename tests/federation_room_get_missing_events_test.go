@@ -1,3 +1,5 @@
+// +build !synapse_blacklist
+
 package tests
 
 import (
