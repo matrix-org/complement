@@ -106,7 +106,7 @@ func TestBackfillingHistory(t *testing.T) {
 			backfillRes := backfillBatchHistoricalMessages(
 				t,
 				as,
-				virtualUserID,
+				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
 				timeAfterEventBefore.Add(timeBetweenMessages*3),
@@ -123,7 +123,7 @@ func TestBackfillingHistory(t *testing.T) {
 			backfillRes2 := backfillBatchHistoricalMessages(
 				t,
 				as,
-				virtualUserID,
+				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
 				timeAfterEventBefore,
@@ -184,6 +184,48 @@ func TestBackfillingHistory(t *testing.T) {
 			}
 		})
 
+		t.Run("Backfilled historical events from multiple users in the same chunk", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, struct{}{})
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create the "live" event we are going to insert our backfilled events next to
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIdBefore := eventIDsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// Insert a backfilled event
+			virtualUserID2 := "@ricky:hs1"
+			virtualUserID3 := "@carol:hs1"
+			backfillRes := backfillBatchHistoricalMessages(
+				t,
+				as,
+				[]string{virtualUserID, virtualUserID2, virtualUserID3},
+				roomID,
+				eventIdBefore,
+				timeAfterEventBefore,
+				"",
+				3,
+				// Status
+				200,
+			)
+			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
+
+			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEventIDs[0], historicalEventIDs[1], historicalEventIDs[2]}, func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
+		})
+
 		t.Run("Backfilled historical events with m.historical do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 
@@ -202,7 +244,7 @@ func TestBackfillingHistory(t *testing.T) {
 			backfillRes := backfillBatchHistoricalMessages(
 				t,
 				as,
-				virtualUserID,
+				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
 				timeAfterEventBefore,
@@ -238,7 +280,7 @@ func TestBackfillingHistory(t *testing.T) {
 			backfillBatchHistoricalMessages(
 				t,
 				as,
-				virtualUserID,
+				[]string{virtualUserID},
 				roomID,
 				"$some-non-existant-event-id",
 				time.Now(),
@@ -265,7 +307,7 @@ func TestBackfillingHistory(t *testing.T) {
 			backfillBatchHistoricalMessages(
 				t,
 				alice,
-				virtualUserID,
+				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
 				timeAfterEventBefore,
@@ -302,7 +344,7 @@ func TestBackfillingHistory(t *testing.T) {
 			backfillRes := backfillBatchHistoricalMessages(
 				t,
 				as,
-				virtualUserID,
+				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
 				timeAfterEventBefore,
@@ -360,7 +402,7 @@ func TestBackfillingHistory(t *testing.T) {
 			backfillRes := backfillBatchHistoricalMessages(
 				t,
 				as,
-				virtualUserID,
+				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
 				timeAfterEventBefore,
@@ -416,7 +458,7 @@ func TestBackfillingHistory(t *testing.T) {
 			backfillRes := backfillBatchHistoricalMessages(
 				t,
 				as,
-				virtualUserID,
+				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
 				timeAfterEventBefore,
@@ -521,7 +563,7 @@ var chunkCount int64 = 0
 func backfillBatchHistoricalMessages(
 	t *testing.T,
 	c *client.CSAPI,
-	virtualUserID string,
+	virtualUserIDs []string,
 	roomID string,
 	insertAfterEventId string,
 	insertTime time.Time,
@@ -536,6 +578,8 @@ func backfillBatchHistoricalMessages(
 
 	evs := make([]map[string]interface{}, count)
 	for i := 0; i < len(evs); i++ {
+		virtualUserID := virtualUserIDs[i%len(virtualUserIDs)]
+
 		newEvent := map[string]interface{}{
 			"type":             "m.room.message",
 			"sender":           virtualUserID,
@@ -550,19 +594,23 @@ func backfillBatchHistoricalMessages(
 		evs[i] = newEvent
 	}
 
-	joinEvent := map[string]interface{}{
-		"type":             "m.room.member",
-		"sender":           virtualUserID,
-		"origin_server_ts": insertOriginServerTs,
-		"content": map[string]interface{}{
-			"membership": "join",
-		},
-		"state_key": virtualUserID,
+	state_evs := make([]map[string]interface{}, len(virtualUserIDs))
+	for i, virtualUserID := range virtualUserIDs {
+		joinEvent := map[string]interface{}{
+			"type":             "m.room.member",
+			"sender":           virtualUserID,
+			"origin_server_ts": insertOriginServerTs,
+			"content": map[string]interface{}{
+				"membership": "join",
+			},
+			"state_key": virtualUserID,
+		}
+
+		state_evs[i] = joinEvent
 	}
 
 	query := make(url.Values, 2)
 	query.Add("prev_event", insertAfterEventId)
-	query.Add("user_id", virtualUserID)
 	// If provided, connect the chunk to the last insertion point
 	if chunkID != "" {
 		query.Add("chunk_id", chunkID)
@@ -574,7 +622,7 @@ func backfillBatchHistoricalMessages(
 		[]string{"_matrix", "client", "unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"events":                evs,
-			"state_events_at_start": []map[string]interface{}{joinEvent},
+			"state_events_at_start": state_evs,
 		}),
 		client.WithContentType("application/json"),
 		client.WithQueries(query),
