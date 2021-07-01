@@ -205,11 +205,18 @@ func (s *Server) Mux() *mux.Router {
 func (s *Server) Listen() (cancel func()) {
 	var wg sync.WaitGroup
 	wg.Add(1)
+
+	ln, err := net.Listen("tcp", s.srv.Addr)
+	if err != nil {
+		s.t.Fatalf("ListenFederationServer: net.Listen failed: %s", err)
+	}
+
 	go func() {
+		defer ln.Close()
 		defer wg.Done()
-		err := s.srv.ListenAndServeTLS(s.certPath, s.keyPath)
+		err := s.srv.ServeTLS(ln, s.certPath, s.keyPath)
 		if err != nil && err != http.ErrServerClosed {
-			s.t.Logf("ListenFederationServer: ListenAndServeTLS failed: %s", err)
+			s.t.Logf("ListenFederationServer: ServeTLS failed: %s", err)
 			// Note that running s.t.FailNow is not allowed in a separate goroutine
 			// Tests will likely fail if the server is not listening anyways
 		}
