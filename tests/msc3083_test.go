@@ -52,7 +52,7 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 	room := alice.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
-		"room_version": "org.matrix.msc3083",
+		"room_version": "org.matrix.msc3083.v2",
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.join_rules",
@@ -201,7 +201,7 @@ func TestRestrictedRoomsLimitedJoin(t *testing.T) {
 	room := charlie.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
-		"room_version": "org.matrix.msc3083",
+		"room_version": "org.matrix.msc3083.v2",
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.join_rules",
@@ -353,7 +353,7 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 	room := alice.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
-		"room_version": "org.matrix.msc3083",
+		"room_version": "org.matrix.msc3083.v2",
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.join_rules",
@@ -436,7 +436,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	room := charlie.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
-		"room_version": "org.matrix.msc3083",
+		"room_version": "org.matrix.msc3083.v2",
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.join_rules",
