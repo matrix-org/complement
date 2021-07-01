@@ -1,9 +1,10 @@
 package tests
 
 import (
-	"github.com/tidwall/gjson"
 	"io/ioutil"
 	"testing"
+
+	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
@@ -71,7 +72,6 @@ func TestDeviceManagement(t *testing.T) {
 		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "devices"})
 
 		foundDeviceId := 0
-
 
 		// Complement also logged the login device used to create the authedClient, hence the use of the following hack
 
