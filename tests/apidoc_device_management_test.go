@@ -1,10 +1,10 @@
 package tests
 
 import (
-	"github.com/matrix-org/complement/internal/client"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -24,8 +24,8 @@ func TestDeviceManagement(t *testing.T) {
 				"type": "m.id.user",
 				"user": "@test_device_management_user:hs1",
 			},
-			"password": "superuser",
-			"device_id": deviceID,
+			"password":                    "superuser",
+			"device_id":                   deviceID,
 			"initial_device_display_name": "device display",
 		})
 		_ = unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
