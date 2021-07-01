@@ -28,9 +28,9 @@ func TestDeviceManagement(t *testing.T) {
 			"device_id":                   deviceID,
 			"initial_device_display_name": "device display",
 		})
-		_ = unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
+		_ = unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
 
-		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "devices", deviceID}, nil)
+		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "devices", deviceID})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
