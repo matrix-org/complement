@@ -1,12 +1,10 @@
 package tests
 
 import (
-	"encoding/json"
-	"net/http"
+	"github.com/matrix-org/complement/internal/client"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -20,17 +18,19 @@ func TestDeviceManagement(t *testing.T) {
 	// sytest: GET /device/{deviceId}
 	t.Run("GET /device/{deviceId}", func(t *testing.T) {
 		deviceID := "login_device"
-		_ = unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
-				"type": "m.login.password",
-				"identifier": {
-					"type": "m.id.user",
-					"user": "@test_device_management_user:hs1"
-				},
-				"password": "superuser",
-				"device_id": "`+deviceID+`",
-				"initial_device_display_name": "device display"
-			}`))
-		res := getDevice(t, authedClient, deviceID)
+		reqBody := client.WithJSONBody(t, map[string]interface{}{
+			"type": "m.login.password",
+			"identifier": map[string]interface{}{
+				"type": "m.id.user",
+				"user": "@test_device_management_user:hs1",
+			},
+			"password": "superuser",
+			"device_id": deviceID,
+			"initial_device_display_name": "device display",
+		})
+		_ = unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
+
+		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "devices", deviceID}, nil)
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -39,9 +39,4 @@ func TestDeviceManagement(t *testing.T) {
 			},
 		})
 	})
-}
-
-func getDevice(t *testing.T, authedClient *client.CSAPI, deviceID string) *http.Response {
-	res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "r0", "devices", deviceID}, nil)
-	return res
 }
