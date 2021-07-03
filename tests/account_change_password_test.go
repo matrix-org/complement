@@ -162,7 +162,7 @@ func TestChangePassword(t *testing.T) {
 			StatusCode: 200,
 		})
 
-		changePassword(t, passwordClient, "new_optional_password", newPassword)
+		changePassword(t, passwordClient, newPassword, "new_optional_password")
 
 		res = passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushers"})
 		must.MatchResponse(t, res, match.HTTPResponse{
