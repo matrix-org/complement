@@ -107,15 +107,15 @@ func TestChangePassword(t *testing.T) {
 		sessionOptional := createSession(t, deployment, "test_change_password_user", "new_optional_password")
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"data": map[string]interface{}{
-				"url":     "https://dummy.url/_matrix/push/v1/notify",
+				"url": "https://dummy.url/_matrix/push/v1/notify",
 			},
-			"profile_tag":   "tag",
-			"kind": "http",
-			"app_id": "complement",
-			"app_display_name": "complement_display_name",
+			"profile_tag":         "tag",
+			"kind":                "http",
+			"app_id":              "complement",
+			"app_display_name":    "complement_display_name",
 			"device_display_name": "device_display_name",
-			"pushkey": "a_push_key",
-			"lang": "en",
+			"pushkey":             "a_push_key",
+			"lang":                "en",
 		})
 
 		res := sessionOptional.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
@@ -132,7 +132,7 @@ func TestChangePassword(t *testing.T) {
 			JSON: []match.JSON{
 				match.JSONKeyPresent("pushers"),
 				match.JSONArrayEach("pushers", func(val gjson.Result) error {
-					if len(val.Array()) != 0{
+					if len(val.Array()) != 0 {
 						return fmt.Errorf("expected array length to be zero: %v", val.Raw)
 					}
 					return nil
@@ -145,15 +145,15 @@ func TestChangePassword(t *testing.T) {
 	t.Run("Pushers created with a the same access token are not deleted on password change", func(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"data": map[string]interface{}{
-				"url":     "https://dummy.url/_matrix/push/v1/notify",
+				"url": "https://dummy.url/_matrix/push/v1/notify",
 			},
-			"profile_tag":   "tag",
-			"kind": "http",
-			"app_id": "complement",
-			"app_display_name": "complement_display_name",
+			"profile_tag":         "tag",
+			"kind":                "http",
+			"app_id":              "complement",
+			"app_display_name":    "complement_display_name",
 			"device_display_name": "device_display_name",
-			"pushkey": "a_push_key",
-			"lang": "en",
+			"pushkey":             "a_push_key",
+			"lang":                "en",
 		})
 
 		res := passwordClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
@@ -170,7 +170,7 @@ func TestChangePassword(t *testing.T) {
 			JSON: []match.JSON{
 				match.JSONKeyPresent("pushers"),
 				match.JSONArrayEach("pushers", func(val gjson.Result) error {
-					if len(val.Array()) == 1{
+					if len(val.Array()) == 1 {
 						return fmt.Errorf("expected array length to be zero: %v", val.Raw)
 					}
 					return nil
