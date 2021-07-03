@@ -26,6 +26,7 @@ import (
 var KnownBlueprints = map[string]*Blueprint{
 	BlueprintCleanHS.Name:                     &BlueprintCleanHS,
 	BlueprintAlice.Name:                       &BlueprintAlice,
+	BlueprintAliceAndBob.Name:                 &BlueprintAliceAndBob,
 	BlueprintFederationOneToOneRoom.Name:      &BlueprintFederationOneToOneRoom,
 	BlueprintFederationTwoLocalOneRemote.Name: &BlueprintFederationTwoLocalOneRemote,
 	BlueprintHSWithApplicationService.Name:    &BlueprintHSWithApplicationService,
