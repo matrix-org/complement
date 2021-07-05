@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"io/ioutil"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -61,7 +60,7 @@ func TestDeviceManagement(t *testing.T) {
 			"type": "m.login.password",
 			"identifier": map[string]interface{}{
 				"type": "m.id.user",
-				"user": "@test_device_management_user:hs1",
+				"user": authedClient.UserID,
 			},
 			"password":                    "superuser",
 			"device_id":                   deviceIDSecond,
@@ -69,27 +68,26 @@ func TestDeviceManagement(t *testing.T) {
 		})
 		_ = unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
 
+		wantDeviceIDs := map[string]bool{
+			deviceID:       true,
+			deviceIDSecond: true,
+		}
 		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "devices"})
-
-		foundDeviceId := 0
-
-		// Complement also logged the login device used to create the authedClient, hence the use of the following hack
-
-		jsonBody, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			t.Fatalf("unable to read response body: %v", err)
-		}
-
-		deviceKey := gjson.Get(string(jsonBody), "devices.#.device_id")
-
-		for _, devicesID := range deviceKey.Array() {
-			if devicesID.Str == deviceID || devicesID.Str == deviceIDSecond {
-				foundDeviceId++
-			}
-		}
-
-		if foundDeviceId != 2 {
-			t.Errorf("Unable to find device_id in the response " + string(jsonBody))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONArrayEach("devices", func(r gjson.Result) error {
+					gotDeviceID := r.Get("device_id").Str
+					if wantDeviceIDs[gotDeviceID] {
+						delete(wantDeviceIDs, gotDeviceID)
+						return nil
+					}
+					return nil
+				}),
+			},
+		})
+		if len(wantDeviceIDs) != 0 {
+			t.Errorf("/devices did not return the following expected devices: %v", wantDeviceIDs)
 		}
 	})
 
