@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -19,14 +18,13 @@ func TestChangePassword(t *testing.T) {
 	defer deployment.Destroy(t)
 	password1 := "superuser"
 	password2 := "my_new_password"
-	password3 := "new_optional_password"
 	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", password1)
 	unauthedClient := deployment.Client(t, "hs1", "")
-	sessionTest := createSession(t, deployment, "test_change_password_user", "superuser")
+	sessionTest := CreateSession(t, deployment, "test_change_password_user", "superuser")
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
 
-		changePassword(t, passwordClient, password1, password2)
+		ChangePassword(t, passwordClient, password1, password2)
 
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"identifier": map[string]interface{}{
@@ -80,7 +78,7 @@ func TestChangePassword(t *testing.T) {
 
 	// sytest: After changing password, different sessions can optionally be kept
 	t.Run("After changing password, different sessions can optionally be kept", func(t *testing.T) {
-		sessionOptional := createSession(t, deployment, "test_change_password_user", password2)
+		sessionOptional := CreateSession(t, deployment, "test_change_password_user", password2)
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"auth": map[string]interface{}{
 				"type":     "m.login.password",
@@ -102,78 +100,9 @@ func TestChangePassword(t *testing.T) {
 			StatusCode: 200,
 		})
 	})
-
-	// sytest: Pushers created with a different access token are deleted on password change
-	t.Run("Pushers created with a different access token are deleted on password change", func(t *testing.T) {
-		sessionOptional := createSession(t, deployment, "test_change_password_user", "new_optional_password")
-		reqBody := client.WithJSONBody(t, map[string]interface{}{
-			"data": map[string]interface{}{
-				"url": "https://dummy.url/_matrix/push/v1/notify",
-			},
-			"profile_tag":         "tag",
-			"kind":                "http",
-			"app_id":              "complement",
-			"app_display_name":    "complement_display_name",
-			"device_display_name": "device_display_name",
-			"pushkey":             "a_push_key",
-			"lang":                "en",
-		})
-
-		res := sessionOptional.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
-
-		changePassword(t, passwordClient, password3, password2)
-
-		res = passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushers"})
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyPresent("pushers"),
-				match.JSONArrayEach("pushers", func(val gjson.Result) error {
-					if len(val.Array()) != 0 {
-						return fmt.Errorf("expected array length to be zero: %v", val.Raw)
-					}
-					return nil
-				}),
-			},
-		})
-	})
-
-	// sytest: Pushers created with a the same access token are not deleted on password change
-	t.Run("Pushers created with a the same access token are not deleted on password change", func(t *testing.T) {
-		reqBody := client.WithJSONBody(t, map[string]interface{}{
-			"data": map[string]interface{}{
-				"url": "https://dummy.url/_matrix/push/v1/notify",
-			},
-			"profile_tag":         "tag",
-			"kind":                "http",
-			"app_id":              "complement",
-			"app_display_name":    "complement_display_name",
-			"device_display_name": "device_display_name",
-			"pushkey":             "a_push_key",
-			"lang":                "en",
-		})
-
-		res := passwordClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
-
-		changePassword(t, passwordClient, password2, password3)
-
-		res = passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushers"})
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyPresent("pushers"),
-				match.JSONArrayEach("pushers", func(val gjson.Result) error {
-					if len(val.Array()) != 1 {
-						return fmt.Errorf("expected array length to be one: %v", val.Raw)
-					}
-					return nil
-				}),
-			},
-		})
-	})
 }
 
-func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword string, newPassword string) {
+func ChangePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword string, newPassword string) {
 	t.Helper()
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"auth": map[string]interface{}{
@@ -191,7 +120,7 @@ func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword stri
 	})
 }
 
-func createSession(t *testing.T, deployment *docker.Deployment, userID, password string) *client.CSAPI {
+func CreateSession(t *testing.T, deployment *docker.Deployment, userID, password string) *client.CSAPI {
 	authedClient := deployment.Client(t, "hs1", "")
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"identifier": map[string]interface{}{
