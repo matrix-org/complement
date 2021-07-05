@@ -17,15 +17,16 @@ import (
 func TestChangePassword(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	oldPassword := "superuser"
-	newPassword := "my_new_password"
-	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", oldPassword)
+	password1 := "superuser"
+	password2 := "my_new_password"
+	password3 := "new_optional_password"
+	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", password1)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	sessionTest := createSession(t, deployment, "test_change_password_user", "superuser")
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
 
-		changePassword(t, passwordClient, oldPassword, newPassword)
+		changePassword(t, passwordClient, password1, password2)
 
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"identifier": map[string]interface{}{
@@ -33,7 +34,7 @@ func TestChangePassword(t *testing.T) {
 				"user": passwordClient.UserID,
 			},
 			"type":     "m.login.password",
-			"password": oldPassword,
+			"password": password1,
 		})
 		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -52,7 +53,7 @@ func TestChangePassword(t *testing.T) {
 				"user": passwordClient.UserID,
 			},
 			"type":     "m.login.password",
-			"password": newPassword,
+			"password": password2,
 		})
 		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -79,12 +80,12 @@ func TestChangePassword(t *testing.T) {
 
 	// sytest: After changing password, different sessions can optionally be kept
 	t.Run("After changing password, different sessions can optionally be kept", func(t *testing.T) {
-		sessionOptional := createSession(t, deployment, "test_change_password_user", newPassword)
+		sessionOptional := createSession(t, deployment, "test_change_password_user", password2)
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"auth": map[string]interface{}{
 				"type":     "m.login.password",
 				"user":     passwordClient.UserID,
-				"password": newPassword,
+				"password": password2,
 			},
 			"new_password":   "new_optional_password",
 			"logout_devices": false,
@@ -118,13 +119,9 @@ func TestChangePassword(t *testing.T) {
 			"lang":                "en",
 		})
 
-		res := sessionOptional.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
+		res := sessionOptional.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
 
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-		})
-
-		changePassword(t, passwordClient, "new_optional_password", newPassword)
+		changePassword(t, passwordClient, password3, password2)
 
 		res = passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushers"})
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -156,13 +153,9 @@ func TestChangePassword(t *testing.T) {
 			"lang":                "en",
 		})
 
-		res := passwordClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
+		res := passwordClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
 
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-		})
-
-		changePassword(t, passwordClient, newPassword, "new_optional_password")
+		changePassword(t, passwordClient, password2, password3)
 
 		res = passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushers"})
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -170,8 +163,8 @@ func TestChangePassword(t *testing.T) {
 			JSON: []match.JSON{
 				match.JSONKeyPresent("pushers"),
 				match.JSONArrayEach("pushers", func(val gjson.Result) error {
-					if len(val.Array()) == 1 {
-						return fmt.Errorf("expected array length to be zero: %v", val.Raw)
+					if len(val.Array()) != 1 {
+						return fmt.Errorf("expected array length to be one: %v", val.Raw)
 					}
 					return nil
 				}),
