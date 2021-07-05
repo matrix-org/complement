@@ -80,7 +80,7 @@ func TestChangePasswordPushers(t *testing.T) {
 			StatusCode: 200,
 			JSON: []match.JSON{
 				match.JSONArrayEach("pushers", func(val gjson.Result) error {
-					if len(val.Array()) != 1{
+					if len(val.Array()) != 1 {
 						return fmt.Errorf("expected array length to be one: %v", val.Raw)
 					}
 					return nil
