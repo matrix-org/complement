@@ -16,7 +16,7 @@ func TestRoomCreate(t *testing.T) {
 	defer deployment.Destroy(t)
 	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
 	t.Run("Parallel", func(t *testing.T) {
-		// Sytest: POST /createRoom makes a public room
+		// sytest: POST /createRoom makes a public room
 		t.Run("POST /createRoom makes a public room", func(t *testing.T) {
 			t.Parallel()
 			reqBody := client.WithJSONBody(t, map[string]interface{}{
@@ -32,7 +32,7 @@ func TestRoomCreate(t *testing.T) {
 				},
 			})
 		})
-		// Sytest: POST /createRoom makes a private room
+		// sytest: POST /createRoom makes a private room
 		t.Run("POST /createRoom makes a private room", func(t *testing.T) {
 			t.Parallel()
 			reqBody := client.WithJSONBody(t, map[string]interface{}{
