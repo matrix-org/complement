@@ -34,14 +34,16 @@ func Redact(syncData []byte, anonMappings AnonMappings) *Snapshot {
 	joins := gjson.GetBytes(syncData, "rooms.join")
 	// sort the room IDs
 	var joinedRooms []string
+	roomIDToRoomData := make(map[string]gjson.Result)
 	joins.ForEach(func(k, v gjson.Result) bool {
 		joinedRooms = append(joinedRooms, k.Str)
+		roomIDToRoomData[k.Str] = v
 		return true
 	})
 	sort.Strings(joinedRooms)
 	for i, roomID := range joinedRooms {
 		log.Printf("Processing room %s %d/%d\n", roomID, i+1, len(joinedRooms))
-		roomData := gjson.GetBytes(syncData, "rooms.join."+gjsonEscape(roomID))
+		roomData := roomIDToRoomData[roomID]
 		room, err := mapAnonRoom(i, roomID, roomData, &anonMappings)
 		if err != nil {
 			log.Printf("WARNING: skipping room - failed to anonymise room: %s\n", err)
@@ -74,8 +76,9 @@ func Redact(syncData []byte, anonMappings AnonMappings) *Snapshot {
 }
 
 // RedactRules are the rules to apply.
-// Only the event types present in this map will be kept, all other ones are dropped, hence some types
-// have empty rules (e.g m.room.history_visibility)
+// Only the event types present in this map will be kept, all other ones are dropped.
+// Only keys matched in the redact rules are kept, all other keys are dropped, hence some rules are
+// pass-through (e.g. room_version, type)
 var RedactRules = map[string][]redaction{
 	"all": {
 		{
@@ -99,6 +102,10 @@ var RedactRules = map[string][]redaction{
 				return strings.HasPrefix(key.Str, "@")
 			},
 		},
+		{
+			key:         "type",
+			replaceWith: passThrough,
+		},
 	},
 	// TODO:
 	// m.room.third_party_invite
@@ -117,10 +124,12 @@ var RedactRules = map[string][]redaction{
 			},
 		},
 		{
-			key: "content.predecessor.event_id",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return ""
-			},
+			key:         "content.m\\.federate",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.room_version",
+			replaceWith: passThrough,
 		},
 	},
 	"m.room.name": {
@@ -146,6 +155,22 @@ var RedactRules = map[string][]redaction{
 				return "yes"
 			},
 		},
+		{
+			key:         "content.info.h",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.info.w",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.info.mimetype",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.info.size",
+			replaceWith: passThrough,
+		},
 	},
 	"m.room.canonical_alias": {
 		{
@@ -156,32 +181,20 @@ var RedactRules = map[string][]redaction{
 				return "#" + strings.Replace(anonRoomID[1:], ":", "", -1) + ":" + anonServer
 			},
 		},
-		{
-			key: "content.alt_aliases",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
+		// TODO alt_aliases
 	},
 	"m.room.server_acl": {
 		{
-			key: "content.deny",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				arrint := key.Value()
-				arr, ok := arrint.([]interface{})
-				if !ok {
-					return []string{}
-				}
-				var list []string
-				for _, a := range arr {
-					astr, ok := a.(string)
-					if !ok {
-						continue
-					}
-					list = append(list, strings.Map(redactFunc, astr))
-				}
-				return list
-			},
+			key:         "content.deny",
+			replaceWith: redactStringArray,
+		},
+		{
+			key:         "content.allow",
+			replaceWith: redactStringArray,
+		},
+		{
+			key:         "content.allow_ip_literals",
+			replaceWith: passThrough,
 		},
 	},
 	"m.reaction": {
@@ -193,11 +206,44 @@ var RedactRules = map[string][]redaction{
 			},
 		},
 	}, // TODO
-	"m.room.encryption":            {}, // TODO
-	"m.room.guest_access":          {},
-	"m.room.history_visibility":    {},
-	"m.room.join_rules":            {},
-	"org.matrix.room.preview_urls": {}, // TODO
+	"m.room.encryption": {
+		{
+			key:         "content.algorithm",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.rotation_period_ms",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.rotation_period_msgs",
+			replaceWith: passThrough,
+		},
+	},
+	"m.room.guest_access": {
+		{
+			key:         "content.guest_access",
+			replaceWith: passThrough,
+		},
+	},
+	"m.room.history_visibility": {
+		{
+			key:         "content.history_visibility",
+			replaceWith: passThrough,
+		},
+	},
+	"m.room.join_rules": {
+		{
+			key:         "content.join_rule",
+			replaceWith: passThrough,
+		},
+	},
+	"org.matrix.room.preview_urls": {
+		{
+			key:         "content.disable",
+			replaceWith: passThrough,
+		},
+	},
 	"m.room.tombstone": {
 		{
 			key: "content.body",
@@ -214,10 +260,8 @@ var RedactRules = map[string][]redaction{
 	},
 	"m.room.pinned_events": {
 		{
-			key: "content.pinned",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return strings.Map(redactFunc, key.Str)
-			},
+			key:         "content.pinned",
+			replaceWith: redactStringArray,
 		},
 	},
 	"m.room.member": {
@@ -248,28 +292,14 @@ var RedactRules = map[string][]redaction{
 			},
 		},
 		{
-			key: "content.uk\\.half-shot\\.discord\\.member",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.third_party_signed",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.third_party_invite",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
 			key: "content.inviter",
 			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
 				return mappings.User(key.Str)
 			},
+		},
+		{
+			key:         "content.membership",
+			replaceWith: passThrough,
 		},
 	},
 	"m.room.power_levels": {
@@ -287,6 +317,42 @@ var RedactRules = map[string][]redaction{
 			onCondition: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) bool {
 				return event.Get("type").Str == "m.room.power_levels" && event.Get("state_key").Str == ""
 			},
+		},
+		{
+			key:         "content.ban",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.events",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.events_default",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.invite",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.kick",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.redact",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.state_default",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.users_default",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.notifications",
+			replaceWith: passThrough,
 		},
 	},
 	"m.room.encrypted": {
@@ -320,95 +386,41 @@ var RedactRules = map[string][]redaction{
 				return map[string]interface{}{}
 			},
 		},
+		{
+			key:         "content.reason",
+			replaceWith: bodyReplacer,
+		},
 	},
 	"m.room.message": {
 		{
+			key:         "content.msgtype",
+			replaceWith: passThrough,
+		},
+		{
+			key:         "content.format",
+			replaceWith: passThrough,
+		},
+		{
 			key:         "content.body",
-			replaceWith: bodyReplacer,
-		},
-		{
-			key: "content.formatted_body",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.format",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.info.url",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.url",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.file.url",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.info.thumbnail_file.url",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.info.thumbnail_url",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key:         "content.m\\.relates_to.m\\.in_reply_to.event_id",
-			replaceWith: bodyReplacer,
-		},
-		{
-			key:         "content.m\\.relates_to.event_id",
 			replaceWith: bodyReplacer,
 		},
 		{
 			key:         "content.m\\.new_content.body",
 			replaceWith: bodyReplacer,
 		},
-		{
-			key: "content.m\\.new_content.formatted_body",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.m\\.new_content.format",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.m\\.new_content.info.url",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
-		{
-			key: "content.m\\.new_content.url",
-			replaceWith: func(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
-				return nil
-			},
-		},
 	},
+}
+
+// passThrough the value as-is without modification
+func passThrough(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
+	return key.Value()
 }
 
 func redact(rawJSON, roomID string, mappings *AnonMappings, redactions []redaction) string {
 	val := gjson.Parse(rawJSON)
+	// whitelist fields, only fields caught in the redaction rules will be passed through,
+	// the rest are dropped.
+	outputVal := json.RawMessage(`{"content":{}}`)
 	for _, r := range redactions {
 		field := val.Get(r.key)
 		if !field.Exists() {
@@ -421,12 +433,27 @@ func redact(rawJSON, roomID string, mappings *AnonMappings, redactions []redacti
 		}
 		newVal := r.replaceWith(mappings, val, field, roomID)
 		if newVal != nil {
-			rawJSON, _ = sjson.Set(rawJSON, r.key, newVal)
-		} else {
-			rawJSON, _ = sjson.Delete(rawJSON, r.key)
+			outputVal, _ = sjson.SetBytes(outputVal, r.key, newVal)
 		}
 	}
-	return rawJSON
+	return string(outputVal)
+}
+
+func redactStringArray(mappings *AnonMappings, event, key gjson.Result, anonRoomID string) interface{} {
+	arrint := key.Value()
+	arr, ok := arrint.([]interface{})
+	if !ok {
+		return []string{}
+	}
+	var list []string
+	for _, a := range arr {
+		astr, ok := a.(string)
+		if !ok {
+			continue
+		}
+		list = append(list, strings.Map(redactFunc, astr))
+	}
+	return list
 }
 
 func redactFunc(r rune) rune {
@@ -449,7 +476,7 @@ func bodyReplacer(mappings *AnonMappings, event, key gjson.Result, anonRoomID st
 	// replace @xxx:xxx.xxx with a user ID from anonUserID
 	for _, au := range anonUserIDs {
 		xu := strings.Map(redactFunc, au)
-		redactedBody = strings.Replace(redactedBody, xu, au, 1)
+		redactedBody = strings.Replace(redactedBody, xu, " "+au+" ", 1)
 	}
 
 	return redactedBody
@@ -599,7 +626,9 @@ func findEventInArray(evType, stateKey string, arrs ...gjson.Result) (event *gjs
 
 func mapAnonRoom(index int, roomID string, roomData gjson.Result, mappings *AnonMappings) (*AnonSnapshotRoom, error) {
 	// pull out the create event
-	createEvent := findEventInArray("m.room.create", "", roomData.Get("state.events"), roomData.Get("timeline.events"))
+	stateEvents := roomData.Get("state.events")
+	timelineEvents := roomData.Get("timeline.events")
+	createEvent := findEventInArray("m.room.create", "", stateEvents, timelineEvents)
 	if createEvent == nil {
 		return nil, fmt.Errorf("failed to find m.room.create event")
 	}
@@ -625,12 +654,14 @@ func mapAnonRoom(index int, roomID string, roomData gjson.Result, mappings *Anon
 	}
 
 	// apply redaction rules "all" and $event_type
-	roomData.Get("state.events").ForEach(func(_, v gjson.Result) bool {
-		if dropEventType(v.Get("type").Str) {
+	stateEvents.ForEach(func(_, v gjson.Result) bool {
+		eventType := v.Get("type").Str
+		if dropEventType(eventType) {
 			return true
 		}
-		evJSON := redact(v.Raw, anonRoomID, mappings, RedactRules["all"])
-		evJSON = redact(evJSON, anonRoomID, mappings, RedactRules[v.Get("type").Str])
+		redactions := RedactRules["all"]
+		redactions = append(redactions, RedactRules[eventType]...)
+		evJSON := redact(v.Raw, anonRoomID, mappings, redactions)
 		// blueprints only care about a few fields, so just add those fields on a whitelist basis
 		blueprintEvent := map[string]interface{}{}
 		blueprintEvent["sender"] = gjson.Get(evJSON, "sender").Str
@@ -645,12 +676,14 @@ func mapAnonRoom(index int, roomID string, roomData gjson.Result, mappings *Anon
 		room.State = append(room.State, be)
 		return true
 	})
-	roomData.Get("timeline.events").ForEach(func(_, v gjson.Result) bool {
-		if dropEventType(v.Get("type").Str) {
+	timelineEvents.ForEach(func(_, v gjson.Result) bool {
+		eventType := v.Get("type").Str
+		if dropEventType(eventType) {
 			return true
 		}
-		evJSON := redact(v.Raw, anonRoomID, mappings, RedactRules["all"])
-		evJSON = redact(evJSON, anonRoomID, mappings, RedactRules[v.Get("type").Str])
+		redactions := RedactRules["all"]
+		redactions = append(redactions, RedactRules[eventType]...)
+		evJSON := redact(v.Raw, anonRoomID, mappings, redactions)
 		// blueprints only care about a few fields, so just add those fields on a whitelist basis
 		blueprintEvent := map[string]interface{}{}
 		blueprintEvent["sender"] = gjson.Get(evJSON, "sender").Str
