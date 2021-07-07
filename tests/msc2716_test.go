@@ -46,7 +46,6 @@ var (
 	markerInsertionPrevEventsContentField = "org.matrix.msc2716.marker.insertion_prev_events"
 )
 
-// Test that the message events we insert between A and B come back in the correct order from /messages
 func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
@@ -67,6 +66,8 @@ func TestBackfillingHistory(t *testing.T) {
 	virtualUserID := fmt.Sprintf("@%s:hs1", virtualUserLocalpart)
 
 	t.Run("parallel", func(t *testing.T) {
+		// Test that the message events we insert between A and B come back in the correct order from /messages
+		//
 		// Final timeline output: ( [n] = historical chunk )
 		// (oldest) A, B, [insertion, c, d, e] [insertion, f, g, h, insertion], I, J (newest)
 		//                chunk 1              chunk 0
