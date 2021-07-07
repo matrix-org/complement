@@ -93,6 +93,18 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 	// Leaving the room works and the user is unable to re-join.
 	bob.LeaveRoom(t, room)
 	bob.LeaveRoom(t, space)
+
+	// Wait until Alice sees Bob leave the space. This ensures that Alice's HS
+	// has processed the leave before Bob tries rejoining, so that it rejects his
+	// attempt to join the room.
+	alice.SyncUntilTimelineHas(t, space, func(ev gjson.Result) bool {
+		if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
+			return false
+		}
+
+		return ev.Get("content").Get("membership").Str == "leave"
+	})
+
 	failJoinRoom(t, bob, room, "hs1")
 
 	// Invite the user and joining should work.
