@@ -103,7 +103,7 @@ func TestBackfillingHistory(t *testing.T) {
 			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 			// Insert the most recent chunk of backfilled history
-			backfillRes := backfillBatchHistoricalMessages(
+			backfillRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -120,7 +120,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// Insert another older chunk of backfilled history from the same user.
 			// Make sure the meta data and joins still work on the subsequent chunk
-			backfillRes2 := backfillBatchHistoricalMessages(
+			backfillRes2 := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -198,7 +198,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Insert a backfilled event
 			virtualUserID2 := "@ricky:hs1"
 			virtualUserID3 := "@carol:hs1"
-			backfillRes := backfillBatchHistoricalMessages(
+			backfillRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID, virtualUserID2, virtualUserID3},
@@ -241,7 +241,7 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 5)
 
 			// Insert a backfilled event
-			backfillRes := backfillBatchHistoricalMessages(
+			backfillRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -277,7 +277,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			roomID := as.CreateRoom(t, struct{}{})
 
-			backfillBatchHistoricalMessages(
+			batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -304,7 +304,7 @@ func TestBackfillingHistory(t *testing.T) {
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			backfillBatchHistoricalMessages(
+			batchSendHistoricalMessages(
 				t,
 				alice,
 				[]string{virtualUserID},
@@ -341,7 +341,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Register and join the virtual user
 			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
-			backfillRes := backfillBatchHistoricalMessages(
+			backfillRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -399,7 +399,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Register and join the virtual user
 			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
-			backfillRes := backfillBatchHistoricalMessages(
+			backfillRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -455,7 +455,7 @@ func TestBackfillingHistory(t *testing.T) {
 			}))
 
 			// Historical messages are inserted where we have already scrolled back to
-			backfillRes := backfillBatchHistoricalMessages(
+			backfillRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -560,7 +560,7 @@ func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count in
 
 var chunkCount int64 = 0
 
-func backfillBatchHistoricalMessages(
+func batchSendHistoricalMessages(
 	t *testing.T,
 	c *client.CSAPI,
 	virtualUserIDs []string,
@@ -569,7 +569,7 @@ func backfillBatchHistoricalMessages(
 	insertTime time.Time,
 	chunkID string,
 	count int,
-	status int,
+	expectedStatus int,
 ) (res *http.Response) {
 	// Timestamp in milliseconds
 	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
@@ -627,16 +627,10 @@ func backfillBatchHistoricalMessages(
 		client.WithContentType("application/json"),
 		client.WithQueries(query),
 	)
-	// Save the body so we can re-create after the buffer closes
-	body := client.ParseJSON(t, res)
-	// Since the original body can only be read once, create a new one from the body bytes we just read
-	res.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-	must.MatchResponse(t, res, match.HTTPResponse{
-		StatusCode: status,
-	})
-	// After using up the body in the must.MatchResponse above, create the body again
-	// Since the original body can only be read once, create a new one from the body bytes we just read
-	res.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+
+	if res.StatusCode != expectedStatus {
+		t.Fatalf("msc2716.batchSendHistoricalMessages got %d HTTP status code from batch send response but want %d", res.StatusCode, expectedStatus)
+	}
 
 	chunkCount++
 
