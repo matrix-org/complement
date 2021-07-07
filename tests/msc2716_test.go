@@ -115,8 +115,9 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
-			nextChunkID := getNextChunkIdFromBatchSendResponse(t, backfillRes)
+			backfillResBody := client.ParseJSON(t, backfillRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
+			nextChunkID := getNextChunkIdFromBatchSendResponseBody(t, backfillResBody)
 
 			// Insert another older chunk of backfilled history from the same user.
 			// Make sure the meta data and joins still work on the subsequent chunk
@@ -132,7 +133,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			historicalEventIDs2 := getEventsFromBatchSendResponse(t, backfillRes2)
+			backfillResBody2 := client.ParseJSON(t, backfillRes2)
+			historicalEventIDs2 := getEventsFromBatchSendResponseBody(t, backfillResBody2)
 
 			var expectedEventIDOrder []string
 			expectedEventIDOrder = append(expectedEventIDOrder, eventIDsBefore...)
@@ -210,7 +212,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
+			backfillResBody := client.ParseJSON(t, backfillRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
 
 			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
@@ -253,7 +256,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
+			backfillResBody := client.ParseJSON(t, backfillRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
 			backfilledEventId := historicalEventIDs[0]
 
 			// This is just a dummy event we search for after the backfilledEventId
@@ -353,7 +357,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
+			backfillResBody := client.ParseJSON(t, backfillRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
 
 			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -411,7 +416,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
+			backfillResBody := client.ParseJSON(t, backfillRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
 
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
@@ -467,7 +473,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			historicalEventIDs := getEventsFromBatchSendResponse(t, backfillRes)
+			backfillResBody := client.ParseJSON(t, backfillRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
 
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
@@ -637,21 +644,13 @@ func batchSendHistoricalMessages(
 	return res
 }
 
-func getEventsFromBatchSendResponse(t *testing.T, res *http.Response) (eventIDs []string) {
-	body := client.ParseJSON(t, res)
-	// Since the original body can only be read once, create a new one from the body bytes we just read
-	res.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-
+func getEventsFromBatchSendResponseBody(t *testing.T, body []byte) (eventIDs []string) {
 	eventIDs = client.GetJSONFieldStringArray(t, body, "events")
 
 	return eventIDs
 }
 
-func getNextChunkIdFromBatchSendResponse(t *testing.T, res *http.Response) (nextChunkID string) {
-	body := client.ParseJSON(t, res)
-	// Since the original body can only be read once, create a new one from the body bytes we just read
-	res.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-
+func getNextChunkIdFromBatchSendResponseBody(t *testing.T, body []byte) (nextChunkID string) {
 	nextChunkID = client.GetJSONFieldStr(t, body, "next_chunk_id")
 
 	return nextChunkID
