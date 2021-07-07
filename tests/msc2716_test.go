@@ -104,7 +104,7 @@ func TestBackfillingHistory(t *testing.T) {
 			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 			// Insert the most recent chunk of backfilled history
-			backfillRes := batchSendHistoricalMessages(
+			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -116,13 +116,13 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			backfillResBody := client.ParseJSON(t, backfillRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
-			nextChunkID := getNextChunkIdFromBatchSendResponseBody(t, backfillResBody)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+			nextChunkID := getNextChunkIdFromBatchSendResponseBody(t, batchSendResBody)
 
 			// Insert another older chunk of backfilled history from the same user.
 			// Make sure the meta data and joins still work on the subsequent chunk
-			backfillRes2 := batchSendHistoricalMessages(
+			batchSendRes2 := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -134,8 +134,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			backfillResBody2 := client.ParseJSON(t, backfillRes2)
-			historicalEventIDs2 := getEventsFromBatchSendResponseBody(t, backfillResBody2)
+			batchSendResBody2 := client.ParseJSON(t, batchSendRes2)
+			historicalEventIDs2 := getEventsFromBatchSendResponseBody(t, batchSendResBody2)
 
 			var expectedEventIDOrder []string
 			expectedEventIDOrder = append(expectedEventIDOrder, eventIDsBefore...)
@@ -201,7 +201,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Insert a backfilled event
 			virtualUserID2 := "@ricky:hs1"
 			virtualUserID3 := "@carol:hs1"
-			backfillRes := batchSendHistoricalMessages(
+			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID, virtualUserID2, virtualUserID3},
@@ -213,8 +213,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			backfillResBody := client.ParseJSON(t, backfillRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 
 			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
@@ -245,7 +245,7 @@ func TestBackfillingHistory(t *testing.T) {
 			createMessagesInRoom(t, alice, roomID, 5)
 
 			// Insert a backfilled event
-			backfillRes := batchSendHistoricalMessages(
+			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -257,8 +257,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			backfillResBody := client.ParseJSON(t, backfillRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 			backfilledEventId := historicalEventIDs[0]
 
 			// This is just a dummy event we search for after the backfilledEventId
@@ -346,7 +346,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Register and join the virtual user
 			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
-			backfillRes := batchSendHistoricalMessages(
+			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -358,8 +358,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			backfillResBody := client.ParseJSON(t, backfillRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 
 			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -405,7 +405,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Register and join the virtual user
 			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
-			backfillRes := batchSendHistoricalMessages(
+			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -417,8 +417,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			backfillResBody := client.ParseJSON(t, backfillRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
@@ -462,7 +462,7 @@ func TestBackfillingHistory(t *testing.T) {
 			}))
 
 			// Historical messages are inserted where we have already scrolled back to
-			backfillRes := batchSendHistoricalMessages(
+			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				[]string{virtualUserID},
@@ -474,8 +474,8 @@ func TestBackfillingHistory(t *testing.T) {
 				// Status
 				200,
 			)
-			backfillResBody := client.ParseJSON(t, backfillRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, backfillResBody)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
