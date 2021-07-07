@@ -24,7 +24,7 @@ func TestDeviceManagement(t *testing.T) {
 			"type": "m.login.password",
 			"identifier": map[string]interface{}{
 				"type": "m.id.user",
-				"user": "@test_device_management_user:hs1",
+				"user": authedClient.UserID,
 			},
 			"password":                    "superuser",
 			"device_id":                   deviceID,
