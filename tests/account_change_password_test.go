@@ -20,11 +20,11 @@ func TestChangePassword(t *testing.T) {
 	password2 := "my_new_password"
 	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", password1)
 	unauthedClient := deployment.Client(t, "hs1", "")
-	sessionTest := CreateSession(t, deployment, "test_change_password_user", "superuser")
+	sessionTest := createSession(t, deployment, "test_change_password_user", "superuser")
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
 
-		ChangePassword(t, passwordClient, password1, password2)
+		changePassword(t, passwordClient, password1, password2)
 
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"identifier": map[string]interface{}{
@@ -78,7 +78,7 @@ func TestChangePassword(t *testing.T) {
 
 	// sytest: After changing password, different sessions can optionally be kept
 	t.Run("After changing password, different sessions can optionally be kept", func(t *testing.T) {
-		sessionOptional := CreateSession(t, deployment, "test_change_password_user", password2)
+		sessionOptional := createSession(t, deployment, "test_change_password_user", password2)
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"auth": map[string]interface{}{
 				"type":     "m.login.password",
@@ -102,7 +102,7 @@ func TestChangePassword(t *testing.T) {
 	})
 }
 
-func ChangePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword string, newPassword string) {
+func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword string, newPassword string) {
 	t.Helper()
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"auth": map[string]interface{}{
@@ -120,7 +120,7 @@ func ChangePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword stri
 	})
 }
 
-func CreateSession(t *testing.T, deployment *docker.Deployment, userID, password string) *client.CSAPI {
+func createSession(t *testing.T, deployment *docker.Deployment, userID, password string) *client.CSAPI {
 	authedClient := deployment.Client(t, "hs1", "")
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"identifier": map[string]interface{}{
