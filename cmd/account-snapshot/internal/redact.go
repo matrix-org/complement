@@ -457,7 +457,7 @@ func redactStringArray(mappings *AnonMappings, event, key gjson.Result, anonRoom
 }
 
 func redactFunc(r rune) rune {
-	if unicode.IsSpace(r) || unicode.IsPunct(r) {
+	if unicode.IsSpace(r) {
 		return r
 	}
 	return 'x'
