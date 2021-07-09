@@ -34,7 +34,7 @@ func TestFederationRejectInvite(t *testing.T) {
 				sk = *ev.StateKey()
 			}
 			t.Logf("Received PDU %s/%s", ev.Type(), sk)
-			if waiter != nil && ev.Type() == "m.room.member" && ev.StateKey() != nil && *ev.StateKey() == charlie.UserID {
+			if waiter != nil && ev.Type() == "m.room.member" && ev.StateKeyEquals(charlie.UserID) {
 				waiter.Finish()
 			}
 		}, nil),
