@@ -168,9 +168,8 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 			},
 		})
 		defer waiter.Finish()
-		// we don't really care what we return here.
 
-		// return the bad event, which should result in the transaction failing.
+		// we don't really care what we return here, so just return an empty body.
 		w.WriteHeader(200)
 		w.Write([]byte("{}"))
 	}
