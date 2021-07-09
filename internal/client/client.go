@@ -327,7 +327,7 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 }
 
 // NewLoggedClient returns an http.Client which logs requests/responses
-func NewLoggedClient(t *testing.T, cli *http.Client) *http.Client {
+func NewLoggedClient(t *testing.T, hsName string, cli *http.Client) *http.Client {
 	t.Helper()
 	if cli == nil {
 		cli = &http.Client{
@@ -338,22 +338,23 @@ func NewLoggedClient(t *testing.T, cli *http.Client) *http.Client {
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	cli.Transport = &loggedRoundTripper{t, transport}
+	cli.Transport = &loggedRoundTripper{t, hsName, transport}
 	return cli
 }
 
 type loggedRoundTripper struct {
-	t    *testing.T
-	wrap http.RoundTripper
+	t      *testing.T
+	hsName string
+	wrap   http.RoundTripper
 }
 
 func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 	res, err := t.wrap.RoundTrip(req)
 	if err != nil {
-		t.t.Logf("%s %s => error: %s (%s)", req.Method, req.URL.Path, err, time.Since(start))
+		t.t.Logf("%s %s%s => error: %s (%s)", req.Method, t.hsName, req.URL.Path, err, time.Since(start))
 	} else {
-		t.t.Logf("%s %s => %s (%s)", req.Method, req.URL.Path, res.Status, time.Since(start))
+		t.t.Logf("%s %s%s => %s (%s)", req.Method, t.hsName, req.URL.Path, res.Status, time.Since(start))
 	}
 	return res, err
 }
