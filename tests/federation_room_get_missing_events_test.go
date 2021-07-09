@@ -1,5 +1,3 @@
-// +build !synapse_blacklist
-
 package tests
 
 import (
@@ -28,8 +26,12 @@ import (
 // To test this we need to:
 // * Add an event with "bad" data into the room history, but don't send it.
 // * Add a "good" event into the room history and send it.
-// * The homeserver attempts to get the missing event (with the bad data).
-// * Ensure that fetching the event results in an error.
+// * wait for the homeserver to attempt to get the missing event (with the bad data).
+//   (The homeserver should reject the "good" event.)
+// * To check the good event was rejected, send another valid event pointing at
+//   the first "good" event, and wait for a call to `/get_missing_events` for
+//   that event (thus proving that the homeserver rejected the good event).
+//
 // sytest: Outbound federation will ignore a missing event with bad JSON for room version 6
 func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
@@ -42,6 +44,13 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	)
 	cancel := srv.Listen()
 	defer cancel()
+
+	// register a handler for /get_missing_events, via a shim so that we can
+	// behave differently as the test progresses.
+	var onGetMissingEvents func(w http.ResponseWriter, req *http.Request)
+	srv.Mux().HandleFunc("/_matrix/federation/v1/get_missing_events/{roomID}", func(w http.ResponseWriter, req *http.Request) {
+		onGetMissingEvents(w, req)
+	}).Methods("POST")
 
 	ver := gomatrixserverlib.RoomVersionV6
 	charlie := srv.UserID("charlie")
@@ -87,6 +96,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	}
 	room.AddEvent(signedBadEvent)
 
+	// send the first "good" event, referencing the broken event as a prev_event
 	sentEvent := srv.MustCreateEvent(t, room, b.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
@@ -97,7 +107,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	room.AddEvent(sentEvent)
 
 	waiter := NewWaiter()
-	srv.Mux().HandleFunc("/_matrix/federation/v1/get_missing_events/{roomID}", func(w http.ResponseWriter, req *http.Request) {
+	onGetMissingEvents = func(w http.ResponseWriter, req *http.Request) {
 		defer waiter.Finish()
 		must.MatchRequest(t, req, match.HTTPRequest{
 			JSON: []match.JSON{
@@ -116,7 +126,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		responseBytes, err = json.Marshal(&res)
 		must.NotError(t, "failed to marshal response", err)
 		w.Write(responseBytes)
-	}).Methods("POST")
+	}
 
 	fedClient := srv.FederationClient(deployment)
 	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
@@ -131,9 +141,45 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	if len(resp.PDUs) != 1 {
 		t.Fatalf("got %d errors, want 1", len(resp.PDUs))
 	}
-	pduRes, ok := resp.PDUs[sentEvent.EventID()]
+	_, ok := resp.PDUs[sentEvent.EventID()]
 	if !ok {
 		t.Fatalf("wrong PDU returned from send transaction, got %v want %s", resp.PDUs, sentEvent.EventID())
 	}
-	must.NotEqualStr(t, pduRes.Error, "", "wanted an error string for pdu but was blank")
+
+	// older versions of Synapse returned an error for the 'good' PDU; nowadays
+	// it just ignores it, so we need to send another event referring to the
+	// first one and check that we get a /get_missing_events request.
+
+	message3 := srv.MustCreateEvent(t, room, b.Event{
+		Type:   "m.room.message",
+		Sender: charlie,
+		Content: map[string]interface{}{
+			"body": "Message 3",
+		},
+	})
+	room.AddEvent(message3)
+
+	waiter = NewWaiter()
+	onGetMissingEvents = func(w http.ResponseWriter, req *http.Request) {
+		must.MatchRequest(t, req, match.HTTPRequest{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("earliest_events", []interface{}{latestEvent.EventID()}),
+				match.JSONKeyEqual("latest_events", []interface{}{message3.EventID()}),
+			},
+		})
+		defer waiter.Finish()
+
+		// we don't really care what we return here, so just return an empty body.
+		w.WriteHeader(200)
+		w.Write([]byte("{}"))
+	}
+
+	resp, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
+		TransactionID: "t2",
+		Destination:   gomatrixserverlib.ServerName("hs1"),
+		PDUs: []json.RawMessage{
+			message3.JSON(),
+		},
+	})
+	waiter.Wait(t, 5*time.Second)
 }
