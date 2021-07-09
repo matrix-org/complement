@@ -163,9 +163,12 @@ func HandleInviteRequests(inviteCallback func(*gomatrixserverlib.Event)) func(*S
 				inviteCallback(inviteRequest.Event())
 			}
 
+			// Sign the event before we send it back
+			signedEvent := inviteRequest.Event().Sign(s.ServerName, s.KeyID, s.Priv)
+
 			// Send the response
 			res := map[string]interface{}{
-				"event": inviteRequest.Event(),
+				"event": signedEvent,
 			}
 			w.WriteHeader(200)
 			b, _ := json.Marshal(res)
