@@ -64,6 +64,8 @@ func TestBackfillingHistory(t *testing.T) {
 
 	virtualUserLocalpart := "maria"
 	virtualUserID := fmt.Sprintf("@%s:hs1", virtualUserLocalpart)
+	// Register and join the virtual user
+	ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 	t.Run("parallel", func(t *testing.T) {
 		// Test that the message events we insert between A and B come back in the correct order from /messages
@@ -99,9 +101,6 @@ func TestBackfillingHistory(t *testing.T) {
 			// This will also fill up the buffer so we have to scrollback to the
 			// inserted history later.
 			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
-
-			// Register and join the virtual user
-			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 			// Insert the most recent chunk of backfilled history
 			batchSendRes := batchSendHistoricalMessages(
@@ -198,9 +197,13 @@ func TestBackfillingHistory(t *testing.T) {
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			// Insert a backfilled event
+			// Register and join the other virtual users
 			virtualUserID2 := "@ricky:hs1"
+			ensureVirtualUserRegistered(t, as, "ricky")
 			virtualUserID3 := "@carol:hs1"
+			ensureVirtualUserRegistered(t, as, "carol")
+
+			// Insert a backfilled event
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
@@ -343,9 +346,6 @@ func TestBackfillingHistory(t *testing.T) {
 			// eventIDsAfter
 			createMessagesInRoom(t, alice, roomID, 3)
 
-			// Register and join the virtual user
-			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
-
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
@@ -402,9 +402,6 @@ func TestBackfillingHistory(t *testing.T) {
 				"limit": []string{"5"},
 			}))
 
-			// Register and join the virtual user
-			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
-
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
@@ -450,9 +447,6 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// eventIDsAfter
 			createMessagesInRoom(t, alice, roomID, 3)
-
-			// Register and join the virtual user
-			ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 			// Mimic scrollback to all of the messages
 			// scrollbackMessagesRes
