@@ -3,7 +3,6 @@
 package tests
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
