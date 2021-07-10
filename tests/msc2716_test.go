@@ -189,7 +189,10 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Backfilled historical events from multiple users in the same chunk", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+			})
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our backfilled events next to
@@ -236,7 +239,10 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Backfilled historical events with m.historical do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+			})
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our backfilled events next to
@@ -283,7 +289,10 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Unrecognised prev_event ID will throw an error", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+			})
 
 			batchSendHistoricalMessages(
 				t,
@@ -305,7 +314,10 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Normal users aren't allowed to backfill messages", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+			})
 			alice.JoinRoom(t, roomID, nil)
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -336,7 +348,10 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+			})
 			alice.JoinRoom(t, roomID, nil)
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -382,7 +397,10 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+			})
 			alice.JoinRoom(t, roomID, nil)
 
 			// Join the room from a remote homeserver before any backfilled messages are sent
@@ -435,7 +453,10 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, struct{}{})
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+			})
 			alice.JoinRoom(t, roomID, nil)
 
 			// Join the room from a remote homeserver before any backfilled messages are sent
