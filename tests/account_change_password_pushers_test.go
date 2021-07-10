@@ -41,19 +41,21 @@ func TestChangePasswordPushers(t *testing.T) {
 
 		changePassword(t, passwordClient, password1, password2)
 
+		pushersSize := 0
+
 		res := passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushers"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
-				match.JSONKeyPresent("pushers"),
 				match.JSONArrayEach("pushers", func(val gjson.Result) error {
-					if len(val.Array()) != 0 {
-						return fmt.Errorf("expected array length to be zero: %v", val.Raw)
-					}
+					pushersSize++
 					return nil
 				}),
 			},
 		})
+		if pushersSize != 0 {
+			t.Errorf("pushers size expected to be 0, found 1")
+		}
 	})
 
 	// sytest: Pushers created with a the same access token are not deleted on password change
