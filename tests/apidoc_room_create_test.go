@@ -49,10 +49,10 @@ func TestRoomCreate(t *testing.T) {
 		// sytest: POST /createRoom makes a private room with invites
 		t.Run("POST /createRoom makes a private room with invites", func(t *testing.T) {
 			t.Parallel()
-			userInvite := deployment.RegisterUser(t, "hs1", "create_room","superuser")
+			userInvite := deployment.RegisterUser(t, "hs1", "create_room", "superuser")
 			reqBody := client.WithJSONBody(t, map[string]interface{}{
 				"visibility": "private",
-				"invite": []string{userInvite.UserID},
+				"invite":     []string{userInvite.UserID},
 			})
 			res := authedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, reqBody)
 			must.MatchResponse(t, res, match.HTTPResponse{
@@ -66,9 +66,9 @@ func TestRoomCreate(t *testing.T) {
 		t.Run("POST /createRoom rejects attempts to create rooms with numeric versions", func(t *testing.T) {
 			t.Parallel()
 			reqBody := client.WithJSONBody(t, map[string]interface{}{
-				"visibility": "private",
+				"visibility":   "private",
 				"room_version": 1,
-				"preset": "public_chat",
+				"preset":       "public_chat",
 			})
 			res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, reqBody)
 			must.MatchResponse(t, res, match.HTTPResponse{
@@ -83,9 +83,9 @@ func TestRoomCreate(t *testing.T) {
 		t.Run("POST /createRoom rejects attempts to create rooms with unknown versions", func(t *testing.T) {
 			t.Parallel()
 			reqBody := client.WithJSONBody(t, map[string]interface{}{
-				"visibility": "private",
+				"visibility":   "private",
 				"room_version": "ahfgwjyerhgiuveisbruvybseyrugvi",
-				"preset": "public_chat",
+				"preset":       "public_chat",
 			})
 			res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, reqBody)
 			must.MatchResponse(t, res, match.HTTPResponse{
