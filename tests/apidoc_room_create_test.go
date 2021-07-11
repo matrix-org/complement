@@ -50,7 +50,7 @@ func TestRoomCreate(t *testing.T) {
 		t.Run("POST /createRoom makes a room with a topic", func(t *testing.T) {
 			t.Parallel()
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
-				"topic": "Test Room",
+				"topic":  "Test Room",
 				"preset": "public_chat",
 			})
 			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"})
@@ -66,7 +66,7 @@ func TestRoomCreate(t *testing.T) {
 		t.Run("POST /createRoom makes a room with a name", func(t *testing.T) {
 			t.Parallel()
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
-				"name": "Test Room",
+				"name":   "Test Room",
 				"preset": "public_chat",
 			})
 			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"})
@@ -83,7 +83,7 @@ func TestRoomCreate(t *testing.T) {
 			t.Parallel()
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
 				"room_version": "2",
-				"preset": "public_chat",
+				"preset":       "public_chat",
 			})
 			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.create"})
 			must.MatchResponse(t, res, match.HTTPResponse{
