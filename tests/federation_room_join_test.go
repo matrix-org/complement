@@ -241,18 +241,20 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 	// a helper function which makes a send_* request to the given path and checks
 	// that it fails with a 400 error
 	assertRequestFails := func(t *testing.T, event *gomatrixserverlib.Event) {
-		req := gomatrixserverlib.NewFederationRequest("PUT", "hs1",
-			fmt.Sprintf("%s/%s/%s",
-				baseApiPath,
-				url.PathEscape(event.RoomID()),
-				url.PathEscape(event.EventID()),
-			))
+		path := fmt.Sprintf("%s/%s/%s",
+			baseApiPath,
+			url.PathEscape(event.RoomID()),
+			url.PathEscape(event.EventID()),
+		)
+		t.Logf("PUT %s", path)
+		req := gomatrixserverlib.NewFederationRequest("PUT", "hs1", path)
 		if err := req.SetContent(event); err != nil {
 			t.Errorf("req.SetContent: %v", err)
 			return
 		}
 
-		err := srv.SendFederationRequest(deployment, req, map[string]interface{}{})
+		var res map[string]interface{}
+		err := srv.SendFederationRequest(deployment, req, &res)
 		if err == nil {
 			t.Errorf("send request returned 200")
 			return
@@ -280,7 +282,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 	})
 	t.Run("non-state membership event", func(t *testing.T) {
 		event := srv.MustCreateEvent(t, room, b.Event{
-			Type:    "m.room.message",
+			Type:    "m.room.member",
 			Sender:  charlie,
 			Content: map[string]interface{}{"body": "bzz"},
 		})
