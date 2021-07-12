@@ -53,7 +53,7 @@ func TestChangePasswordPushers(t *testing.T) {
 			},
 		})
 		if pushersSize != 0 {
-			t.Errorf("pushers size expected to be 0, found 1")
+			t.Errorf("pushers size expected to be 0, found %d", pushersSize)
 		}
 	})
 
