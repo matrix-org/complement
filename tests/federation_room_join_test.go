@@ -1,11 +1,14 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
+	"github.com/matrix-org/gomatrix"
 	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/tidwall/sjson"
@@ -191,4 +194,71 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
 		alice.JoinRoom(t, roomAlias, nil)
 	})
+}
+
+// This test checks that users cannot circumvent the auth checks via send_join.
+func TestBannedUserCannotSendJoin(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+
+	fedClient := srv.FederationClient(deployment)
+
+	charlie := srv.UserID("charlie")
+
+	// alice creates a room, and bans charlie from it.
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	roomID := alice.CreateRoom(t, map[string]interface{}{})
+
+	alice.SendEventSynced(t, roomID, b.Event{
+		Type:     "m.room.member",
+		Sender:   alice.UserID,
+		StateKey: &charlie,
+		Content: map[string]interface{}{
+			"membership": "ban",
+		},
+	})
+
+	// charlie sends a make_join for a different user
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), "hs1", roomID, srv.UserID("charlie2"), federation.SupportedRoomVersions())
+	must.NotError(t, "MakeJoin", err)
+
+	// ... and does a switcheroo to turn it into a join for himself
+	makeJoinResp.JoinEvent.Sender = charlie
+	makeJoinResp.JoinEvent.StateKey = &charlie
+	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName), srv.KeyID, srv.Priv, makeJoinResp.RoomVersion)
+	must.NotError(t, "JoinEvent.Build", err)
+
+	// SendJoin should return a 403.
+	_, err = fedClient.SendJoin(context.Background(), "hs1", joinEvent, makeJoinResp.RoomVersion)
+	if err == nil {
+		t.Errorf("SendJoin returned 200")
+	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
+		t.Logf("SendJoin => %d/%s", httpError.Code, string(httpError.Contents))
+		if httpError.Code != 403 {
+			t.Errorf("expected 403, got %d", httpError.Code)
+		}
+		errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
+		if errcode != "M_FORBIDDEN" {
+			t.Errorf("errcode: got %s, want M_FORBIDDEN", errcode)
+		}
+	} else {
+		t.Errorf("SendJoin: non-HTTPError: %v", err)
+	}
+
+	// Alice checks the room state to check that charlie isn't a member
+	res := alice.MustDoFunc(
+		t,
+		"GET",
+		[]string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.member", charlie},
+	)
+	stateResp := client.ParseJSON(t, res)
+	membership := must.GetJSONFieldStr(t, stateResp, "membership")
+	must.EqualStr(t, membership, "ban", "membership of charlie")
 }
