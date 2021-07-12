@@ -128,6 +128,55 @@ func HandleMakeSendJoinRequests() func(*Server) {
 	}
 }
 
+// HandleInviteRequests is an option which makes the server process invite requests.
+//
+// inviteCallback is a callback function that if non-nil will be called and passed the incoming invite event
+func HandleInviteRequests(inviteCallback func(*gomatrixserverlib.Event)) func(*Server) {
+	return func(s *Server) {
+		// https://matrix.org/docs/spec/server_server/r0.1.4#put-matrix-federation-v2-invite-roomid-eventid
+		s.mux.Handle("/_matrix/federation/v2/invite/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
+				req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
+			)
+			if fedReq == nil {
+				w.WriteHeader(errResp.Code)
+				b, _ := json.Marshal(errResp.JSON)
+				w.Write(b)
+				return
+			}
+
+			var inviteRequest gomatrixserverlib.InviteV2Request
+			if err := json.Unmarshal(fedReq.Content(), &inviteRequest); err != nil {
+				log.Printf(
+					"complement: Unable to unmarshal incoming /invite request: %s",
+					err.Error(),
+				)
+
+				errResp := util.MessageResponse(400, err.Error())
+				w.WriteHeader(errResp.Code)
+				b, _ := json.Marshal(errResp.JSON)
+				w.Write(b)
+				return
+			}
+
+			if inviteCallback != nil {
+				inviteCallback(inviteRequest.Event())
+			}
+
+			// Sign the event before we send it back
+			signedEvent := inviteRequest.Event().Sign(s.ServerName, s.KeyID, s.Priv)
+
+			// Send the response
+			res := map[string]interface{}{
+				"event": signedEvent,
+			}
+			w.WriteHeader(200)
+			b, _ := json.Marshal(res)
+			w.Write(b)
+		})).Methods("PUT")
+	}
+}
+
 // HandleDirectoryLookups will automatically return room IDs for any aliases present on this server.
 func HandleDirectoryLookups() func(*Server) {
 	return func(s *Server) {

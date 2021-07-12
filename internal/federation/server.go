@@ -133,12 +133,8 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 // The `events` will be added to this room. Returns the created room.
 func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
 	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.ServerName)
-	room := &ServerRoom{
-		RoomID:             roomID,
-		Version:            roomVer,
-		State:              make(map[string]*gomatrixserverlib.Event),
-		ForwardExtremities: make([]string, 0),
-	}
+	room := newRoom(roomVer, roomID)
+
 	// sign all these events
 	for _, ev := range events {
 		signedEvent := s.MustCreateEvent(t, room, ev)
@@ -194,6 +190,37 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		t.Fatalf("MustCreateEvent: failed to sign event: %s", err)
 	}
 	return signedEvent
+}
+
+// MustJoinRoom will make the server send a make_join and a send_join to join a room
+// It returns the resultant room.
+func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string) *ServerRoom {
+	t.Helper()
+	fedClient := s.FederationClient(deployment)
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), remoteServer, roomID, userID, SupportedRoomVersions())
+	if err != nil {
+		t.Fatalf("MustJoinRoom: make_join failed: %v", err)
+	}
+	roomVer := makeJoinResp.RoomVersion
+	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, roomVer)
+	if err != nil {
+		t.Fatalf("MustJoinRoom: failed to sign event: %v", err)
+	}
+	sendJoinResp, err := fedClient.SendJoin(context.Background(), gomatrixserverlib.ServerName(remoteServer), joinEvent, roomVer)
+	if err != nil {
+		t.Fatalf("MustJoinRoom: send_join failed: %v", err)
+	}
+
+	room := newRoom(roomVer, roomID)
+	for _, ev := range sendJoinResp.StateEvents {
+		room.replaceCurrentState(ev)
+	}
+	room.AddEvent(joinEvent)
+	s.rooms[roomID] = room
+
+	t.Logf("Server.MustJoinRoom joined room ID %s", roomID)
+
+	return room
 }
 
 // Mux returns this server's router so you can attach additional paths
@@ -487,4 +514,13 @@ func (f *basicKeyFetcher) FetchKeys(
 
 func (f *basicKeyFetcher) FetcherName() string {
 	return "basicKeyFetcher"
+}
+
+// SupportedRoomVersions is a convenience method which returns a list of the room versions supported by gomatrixserverlib.
+func SupportedRoomVersions() []gomatrixserverlib.RoomVersion {
+	supportedRoomVersions := make([]gomatrixserverlib.RoomVersion, 0, 10)
+	for v := range gomatrixserverlib.SupportedRoomVersions() {
+		supportedRoomVersions = append(supportedRoomVersions, v)
+	}
+	return supportedRoomVersions
 }
