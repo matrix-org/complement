@@ -219,7 +219,7 @@ func TestCannotSendNonLeaveViaSendLeaveV2(t *testing.T) {
 // and checks that they are all rejected.
 func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expectedMembership string, createRoomOpts map[string]interface{}) {
 	if createRoomOpts == nil {
-		createRoomOpts = map[string]interface{}{}
+		createRoomOpts = make(map[string]interface{})
 	}
 
 	deployment := Deploy(t, b.BlueprintAlice)
