@@ -91,9 +91,9 @@ func TestRoomCreate(t *testing.T) {
 					match.JSONKeyPresent("room_version"),
 					match.JSONKeyTypeEqual("room_version", gjson.String),
 					match.JSONKeyEqual("room_version", "2"),
-        },
-      })
-    })
+				},
+			})
+		})
 		// sytest: POST /createRoom makes a private room with invites
 		t.Run("POST /createRoom makes a private room with invites", func(t *testing.T) {
 			t.Parallel()
