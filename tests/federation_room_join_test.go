@@ -214,7 +214,9 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 
 	// alice creates a room, and bans charlie from it.
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+	})
 
 	alice.SendEventSynced(t, roomID, b.Event{
 		Type:     "m.room.member",
@@ -238,7 +240,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	// SendJoin should return a 403.
 	_, err = fedClient.SendJoin(context.Background(), "hs1", joinEvent, makeJoinResp.RoomVersion)
 	if err == nil {
-		t.Errorf("SendJoin returned 200")
+		t.Errorf("SendJoin returned 200, want 403")
 	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
 		t.Logf("SendJoin => %d/%s", httpError.Code, string(httpError.Contents))
 		if httpError.Code != 403 {
