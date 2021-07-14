@@ -39,11 +39,9 @@ var (
 	insertionEventType = "org.matrix.msc2716.insertion"
 	markerEventType    = "org.matrix.msc2716.marker"
 
-	historicalContentField                = "org.matrix.msc2716.historical"
-	nextChunkIdContentField               = "org.matrix.msc2716.next_chunk_id"
-	chunkIdContentField                   = "org.matrix.msc2716.chunk_id"
-	markerInsertionContentField           = "org.matrix.msc2716.marker.insertion"
-	markerInsertionPrevEventsContentField = "org.matrix.msc2716.marker.insertion_prev_events"
+	historicalContentField      = "org.matrix.msc2716.historical"
+	nextChunkIDContentField     = "org.matrix.msc2716.next_chunk_id"
+	markerInsertionContentField = "org.matrix.msc2716.marker.insertion"
 )
 
 func TestBackfillingHistory(t *testing.T) {
@@ -166,7 +164,7 @@ func TestBackfillingHistory(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONArrayEach("chunk", func(r gjson.Result) error {
 						// Find all events in order
-						if len(r.Get("content").Get("body").Str) > 0 || r.Get("type").Str == insertionEventType || r.Get("type").Str == markerEventType {
+						if isRelevantEvent(r) {
 							// Pop the next message off the expected list
 							nextEventIdInOrder := workingExpectedEventIDOrder[0]
 							workingExpectedEventIDOrder = workingExpectedEventIDOrder[1:]
@@ -229,7 +227,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEventIDs[0], historicalEventIDs[1], historicalEventIDs[2]}, func(r gjson.Result) interface{} {
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
 						return r.Get("event_id").Str
 					}, nil),
 				},
@@ -379,6 +377,8 @@ func TestBackfillingHistory(t *testing.T) {
 			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
+			// TODO: I think we need to update this to be similar to
+			// SyncUntilTimelineHas but going back in time because this can be flakey
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
@@ -386,7 +386,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEventIDs[0], historicalEventIDs[1]}, func(r gjson.Result) interface{} {
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
 						return r.Get("event_id").Str
 					}, nil),
 				},
@@ -434,6 +434,57 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+			baseInsertionEventID := historicalEventIDs[len(historicalEventIDs)-1]
+
+			// 2 historical events + 2 insertion events
+			if len(historicalEventIDs) != 4 {
+				t.Fatalf("Expected eventID list should be length 15 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
+			}
+
+			beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
+			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody)
+			// Since the original body can only be read once, create a new one from the body bytes we just read
+			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
+
+			// Make sure the history isn't visible before we expect it to be there.
+			// This is to avoid some bug in the homeserver using some unknown
+			// mechanism to distribute the historical messages to other homeservers.
+			must.MatchResponse(t, beforeMarkerMessagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONArrayEach("chunk", func(r gjson.Result) error {
+						// Throw if we find one of the historical events in the message response
+						for _, historicalEventID := range historicalEventIDs {
+							if r.Get("event_id").Str == historicalEventID {
+								return fmt.Errorf("Historical event (%s) found on remote homeserver before marker event was sent out\nmessage response (%d): %v\nhistoricalEventIDs (%d): %v", historicalEventID, len(eventDebugStringsFromBeforeMarkerResponse), eventDebugStringsFromBeforeMarkerResponse, len(historicalEventIDs), historicalEventIDs)
+							}
+						}
+
+						return nil
+					}),
+				},
+			})
+
+			// Send a marker event to let all of the homeservers know about the
+			// insertion point where all of the historical messages are at
+			markerEvent := b.Event{
+				Type: markerEventType,
+				Content: map[string]interface{}{
+					markerInsertionContentField: baseInsertionEventID,
+				},
+			}
+			// We can't use as.SendEventSynced(...) because application services can't use the /sync API
+			markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", markerEvent.Type, "txn-m123"}, client.WithJSONBody(t, markerEvent.Content))
+			markerSendBody := client.ParseJSON(t, markerSendRes)
+			markerEventID := client.GetJSONFieldStr(t, markerSendBody, "event_id")
+
+			// Make sure the marker event has reached the remote homeserver
+			remoteCharlie.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+				return ev.Get("event_id").Str == markerEventID
+			})
 
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
@@ -442,7 +493,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEventIDs[0], historicalEventIDs[1]}, func(r gjson.Result) interface{} {
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
 						return r.Get("event_id").Str
 					}, nil),
 				},
@@ -492,6 +543,8 @@ func TestBackfillingHistory(t *testing.T) {
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 
+			// TODO: Send marker event
+
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
@@ -499,7 +552,7 @@ func TestBackfillingHistory(t *testing.T) {
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", []interface{}{historicalEventIDs[0], historicalEventIDs[1]}, func(r gjson.Result) interface{} {
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
 						return r.Get("event_id").Str
 					}, nil),
 				},
@@ -508,12 +561,25 @@ func TestBackfillingHistory(t *testing.T) {
 	})
 }
 
+func makeInterfaceSlice(slice []string) []interface{} {
+	interfaceSlice := make([]interface{}, len(slice))
+	for i := range slice {
+		interfaceSlice[i] = slice[i]
+	}
+
+	return interfaceSlice
+}
+
 func reversed(in []string) []string {
 	out := make([]string, len(in))
 	for i := 0; i < len(in); i++ {
 		out[i] = in[len(in)-i-1]
 	}
 	return out
+}
+
+func isRelevantEvent(r gjson.Result) bool {
+	return len(r.Get("content").Get("body").Str) > 0 || r.Get("type").Str == insertionEventType || r.Get("type").Str == markerEventType
 }
 
 func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, body []byte) (eventIDsFromResponse []string) {
@@ -529,7 +595,7 @@ func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, body []byte)
 	}
 
 	res.ForEach(func(key, r gjson.Result) bool {
-		if len(r.Get("content").Get("body").Str) > 0 || r.Get("type").Str == insertionEventType || r.Get("type").Str == markerEventType {
+		if isRelevantEvent(r) {
 			eventIDsFromResponse = append(eventIDsFromResponse, r.Get("event_id").Str+" ("+r.Get("content").Get("body").Str+")")
 		}
 		return true
