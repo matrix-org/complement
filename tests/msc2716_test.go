@@ -342,7 +342,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
 		})
 
-		t.Run("Historical messages are visible when joining on federated server", func(t *testing.T) {
+		t.Run("Historical messages are visible when joining on federated server - auto-generated base insertion event", func(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
@@ -367,6 +367,75 @@ func TestBackfillingHistory(t *testing.T) {
 				eventIdBefore,
 				timeAfterEventBefore,
 				"",
+				2,
+				// Status
+				200,
+			)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+
+			// Join the room from a remote homeserver after the backfilled messages were sent
+			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+			// TODO: I think we need to update this to be similar to
+			// SyncUntilTimelineHas but going back in time because this can be flakey
+			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
+		})
+
+		t.Run("Historical messages are visible when joining on federated server - pre-made insertion event", func(t *testing.T) {
+			t.Skip("Skipping until federation is implemented")
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+			})
+			alice.JoinRoom(t, roomID, nil)
+
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIdBefore := eventIDsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// Create insertion event in the normal DAG
+			chunkId := "mynextchunkid123"
+			insertionEvent := b.Event{
+				Type: insertionEventType,
+				Content: map[string]interface{}{
+					nextChunkIDContentField: chunkId,
+					historicalContentField:  true,
+				},
+			}
+			// We can't use as.SendEventSynced(...) because application services can't use the /sync API
+			insertionSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEvent.Type, "txn-m123"}, client.WithJSONBody(t, insertionEvent.Content))
+			insertionSendBody := client.ParseJSON(t, insertionSendRes)
+			insertionEventID := client.GetJSONFieldStr(t, insertionSendBody, "event_id")
+			// Make sure the insertion event has reached the homeserver
+			alice.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+				return ev.Get("event_id").Str == insertionEventID
+			})
+
+			// eventIDsAfter
+			createMessagesInRoom(t, alice, roomID, 3)
+
+			batchSendRes := batchSendHistoricalMessages(
+				t,
+				as,
+				[]string{virtualUserID},
+				roomID,
+				eventIdBefore,
+				timeAfterEventBefore,
+				chunkId,
 				2,
 				// Status
 				200,
