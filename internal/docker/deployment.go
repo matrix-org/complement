@@ -53,7 +53,7 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		UserID:           userID,
 		AccessToken:      token,
 		BaseURL:          dep.BaseURL,
-		Client:           client.NewLoggedClient(t, nil),
+		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 	}
@@ -69,7 +69,7 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 	}
 	client := &client.CSAPI{
 		BaseURL:          dep.BaseURL,
-		Client:           client.NewLoggedClient(t, nil),
+		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 	}

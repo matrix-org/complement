@@ -19,6 +19,16 @@ type ServerRoom struct {
 	Depth              int64
 }
 
+// newRoom creates an empty room structure with no events
+func newRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *ServerRoom {
+	return &ServerRoom{
+		RoomID:             roomId,
+		Version:            roomVer,
+		State:              make(map[string]*gomatrixserverlib.Event),
+		ForwardExtremities: make([]string, 0),
+	}
+}
+
 // AddEvent adds a new event to the timeline, updating current state if it is a state event.
 // Updates depth and forward extremities.
 func (r *ServerRoom) AddEvent(ev *gomatrixserverlib.Event) {

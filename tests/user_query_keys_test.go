@@ -1,6 +1,6 @@
 // +build !synapse_blacklist
 
-// Rationale for being included in Synapse's blacklist: https://github.com/matrix-org/complement/issues/38
+// Rationale for being included in Synapse's blacklist: https://github.com/matrix-org/synapse/issues/10354
 
 package tests
 
