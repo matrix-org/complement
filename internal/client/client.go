@@ -132,13 +132,13 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
 	t.Helper()
-	c.SyncUntil(t, "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
+	c.SyncUntil(t, "", "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
 }
 
 // SyncUntil blocks and continually calls /sync until the `check` function returns true.
 // If the `check` function fails the test, the failing event will be automatically logged.
 // Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Result) bool) {
+func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
 	checkCounter := 0
@@ -151,6 +151,9 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, key string, check func(gjson.Resu
 		}
 		if since != "" {
 			query["since"] = []string{since}
+		}
+		if filter != "" {
+			query["filter"] = []string{filter}
 		}
 		res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, WithQueries(query))
 		body := ParseJSON(t, res)
@@ -367,6 +370,29 @@ func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 		t.Fatalf("JSONFieldStr: key '%s' is not a string, body: %s", wantKey, string(body))
 	}
 	return res.Str
+}
+
+func GetJSONFieldStringArray(t *testing.T, body []byte, wantKey string) []string {
+	t.Helper()
+
+	res := gjson.GetBytes(body, wantKey)
+
+	if !res.Exists() {
+		t.Fatalf("JSONFieldStr: key '%s' missing from %s", wantKey, string(body))
+	}
+
+	arrLength := len(res.Array())
+	arr := make([]string, arrLength)
+	i := 0
+	res.ForEach(func(key, value gjson.Result) bool {
+		arr[i] = value.Str
+
+		// Keep iterating
+		i++
+		return true
+	})
+
+	return arr
 }
 
 // ParseJSON parses a JSON-encoded HTTP Response body into a byte slice

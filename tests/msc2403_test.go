@@ -182,6 +182,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			knockingUser.SyncUntil(
 				t,
 				since,
+				"",
 				"rooms.leave."+client.GjsonEscape(roomID)+".timeline.events",
 				func(ev gjson.Result) bool {
 					if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
@@ -312,6 +313,7 @@ func knockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, ser
 	// The knock should have succeeded. Block until we see the knock appear down sync
 	c.SyncUntil(
 		t,
+		"",
 		"",
 		"rooms.knock."+client.GjsonEscape(roomID)+".knock_state.events",
 		func(ev gjson.Result) bool {

@@ -55,25 +55,7 @@ func JSONKeyTypeEqual(wantKey string, wantType gjson.Type) JSON {
 	}
 }
 
-// JSONCheckOff returns a matcher which will loop over `wantKey` and ensure that the items
-// (which can be array elements or object keys)
-// are present exactly once in any order in `wantItems`. If there are unexpected items or items
-// appear more than once then the match fails. This matcher can be used to check off items in
-// an array/object. The `mapper` function should map the item to an interface which will be
-// comparable via `reflect.DeepEqual` with items in `wantItems`. The optional `fn` callback
-// allows more checks to be performed other than checking off the item from the list. It is
-// called with 2 args: the result of the `mapper` function and the element itself (or value if
-// it's an object).
-//
-// Usage: (ensures `events` has these events in any order, with the right event type)
-//    JSONCheckOff("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
-//        return r.Get("event_id").Str
-//    }, func(eventID interface{}, eventBody gjson.Result) error {
-//        if eventBody.Get("type").Str != "m.room.message" {
-//	          return fmt.Errorf("expected event to be 'm.room.message'")
-//        }
-//    })
-func JSONCheckOff(wantKey string, wantItems []interface{}, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
+func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwantedItems bool, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
 	return func(body []byte) error {
 		res := gjson.GetBytes(body, wantKey)
 		if !res.Exists() {
@@ -103,12 +85,15 @@ func JSONCheckOff(wantKey string, wantItems []interface{}, mapper func(gjson.Res
 					break
 				}
 			}
-			if want == -1 {
+			if !allowUnwantedItems && want == -1 {
 				err = fmt.Errorf("JSONCheckOff: unexpected item %s", item)
 				return false
 			}
-			// delete the wanted item
-			wantItems = append(wantItems[:want], wantItems[want+1:]...)
+
+			if want != -1 {
+				// delete the wanted item
+				wantItems = append(wantItems[:want], wantItems[want+1:]...)
+			}
 
 			// do further checks
 			if fn != nil {
@@ -128,6 +113,50 @@ func JSONCheckOff(wantKey string, wantItems []interface{}, mapper func(gjson.Res
 
 		return err
 	}
+}
+
+// JSONCheckOffAllowUnwanted returns a matcher which will loop over `wantKey` and ensure that the items
+// (which can be array elements or object keys)
+// are present exactly once in any order in `wantItems`. Allows unexpected items or items
+// appear that more than once. This matcher can be used to check off items in
+// an array/object. The `mapper` function should map the item to an interface which will be
+// comparable via `reflect.DeepEqual` with items in `wantItems`. The optional `fn` callback
+// allows more checks to be performed other than checking off the item from the list. It is
+// called with 2 args: the result of the `mapper` function and the element itself (or value if
+// it's an object).
+//
+// Usage: (ensures `events` has these events in any order, with the right event type)
+//    JSONCheckOffAllowUnwanted("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
+//        return r.Get("event_id").Str
+//    }, func(eventID interface{}, eventBody gjson.Result) error {
+//        if eventBody.Get("type").Str != "m.room.message" {
+//	          return fmt.Errorf("expected event to be 'm.room.message'")
+//        }
+//    })
+func JSONCheckOffAllowUnwanted(wantKey string, wantItems []interface{}, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
+	return jsonCheckOffInternal(wantKey, wantItems, true, mapper, fn)
+}
+
+// JSONCheckOff returns a matcher which will loop over `wantKey` and ensure that the items
+// (which can be array elements or object keys)
+// are present exactly once in any order in `wantItems`. If there are unexpected items or items
+// appear more than once then the match fails. This matcher can be used to check off items in
+// an array/object. The `mapper` function should map the item to an interface which will be
+// comparable via `reflect.DeepEqual` with items in `wantItems`. The optional `fn` callback
+// allows more checks to be performed other than checking off the item from the list. It is
+// called with 2 args: the result of the `mapper` function and the element itself (or value if
+// it's an object).
+//
+// Usage: (ensures `events` has these events in any order, with the right event type)
+//    JSONCheckOff("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
+//        return r.Get("event_id").Str
+//    }, func(eventID interface{}, eventBody gjson.Result) error {
+//        if eventBody.Get("type").Str != "m.room.message" {
+//	          return fmt.Errorf("expected event to be 'm.room.message'")
+//        }
+//    })
+func JSONCheckOff(wantKey string, wantItems []interface{}, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
+	return jsonCheckOffInternal(wantKey, wantItems, false, mapper, fn)
 }
 
 // JSONArrayEach returns a matcher which will check that `wantKey` is an array then loops over each

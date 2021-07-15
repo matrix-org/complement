@@ -2,7 +2,7 @@ package b
 
 // BlueprintHSWithApplicationService who has an application service to interact with
 var BlueprintHSWithApplicationService = MustValidate(Blueprint{
-	Name: "alice",
+	Name: "hs_with_application_service",
 	Homeservers: []Homeserver{
 		{
 			Name: "hs1",
@@ -18,6 +18,15 @@ var BlueprintHSWithApplicationService = MustValidate(Blueprint{
 					URL:             "http://localhost:9000",
 					SenderLocalpart: "the-bridge-user",
 					RateLimited:     false,
+				},
+			},
+		},
+		{
+			Name: "hs2",
+			Users: []User{
+				{
+					Localpart:   "@charlie",
+					DisplayName: "Charlie",
 				},
 			},
 		},
