@@ -163,6 +163,15 @@ There is no syntactically pleasing way to do this. Create a separate function wh
 
 This is done using standard Go testing mechanisms, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
 
+For debugging, you can also use `logrus` to expand a bunch of variables:
+
+```go
+logrus.WithFields(logrus.Fields{
+	"events": events,
+	"context": context,
+}).Error("message response")
+```
+
 ### How do I skip a test?
 
 Use one of `t.Skipf(...)` or `t.SkipNow()`.
