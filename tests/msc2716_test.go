@@ -377,8 +377,15 @@ func TestBackfillingHistory(t *testing.T) {
 			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
-			// TODO: I think we need to update this to be similar to
-			// SyncUntilTimelineHas but going back in time because this can be flakey
+			// Make sure all of the events have been backfilled
+			fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
+				if ev.Get("event_id").Str == eventIdBefore {
+					return true
+				}
+
+				return false
+			})
+
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
@@ -446,8 +453,15 @@ func TestBackfillingHistory(t *testing.T) {
 			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
-			// TODO: I think we need to update this to be similar to
-			// SyncUntilTimelineHas but going back in time because this can be flakey
+			// Make sure all of the events have been backfilled
+			fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
+				if ev.Get("event_id").Str == eventIdBefore {
+					return true
+				}
+
+				return false
+			})
+
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
@@ -645,6 +659,42 @@ func reversed(in []string) []string {
 		out[i] = in[len(in)-i-1]
 	}
 	return out
+}
+
+func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string, check func(gjson.Result) bool) {
+	t.Helper()
+	start := time.Now()
+	checkCounter := 0
+	for {
+		if time.Since(start) > c.SyncUntilTimeout {
+			t.Fatalf("fetchMessagesUntilResponseHas timed out. Called check function %d times", checkCounter)
+		}
+
+		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			"dir":   []string{"b"},
+			"limit": []string{"100"},
+		}))
+		messsageResBody := client.ParseJSON(t, messagesRes)
+		wantKey := "chunk"
+		keyRes := gjson.GetBytes(messsageResBody, wantKey)
+		if !keyRes.Exists() {
+			t.Fatalf("missing key '%s'", wantKey)
+		}
+		if !keyRes.IsArray() {
+			t.Fatalf("key '%s' is not an array (was %s)", wantKey, keyRes.Type)
+		}
+
+		events := keyRes.Array()
+		for _, ev := range events {
+			if check(ev) {
+				return
+			}
+		}
+
+		checkCounter++
+		// Add a slight delay so we don't hammmer the messages endpoint
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func isRelevantEvent(r gjson.Result) bool {
