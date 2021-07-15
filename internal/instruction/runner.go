@@ -138,33 +138,36 @@ func (r *Runner) runInstructionSet(hs b.Homeserver, hsURL string, instrs []instr
 				return err
 			}
 		}
-		if i < 100 || i%200 == 0 {
-			r.log("%s [%d/%d] %s => HTTP %s\n", contextStr, i, len(instrs), req.URL.String(), res.Status)
-		}
-		body, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			err = isFatalErr(fmt.Errorf("%s : failed to read response body: %w", contextStr, err))
-			if err != nil {
-				return err
+		// parse the response if we have one (if bestEffort=true then we don't return an error above)
+		if res != nil && res.Body != nil {
+			if i < 100 || i%200 == 0 {
+				r.log("%s [%d/%d] %s => HTTP %s\n", contextStr, i, len(instrs), req.URL.String(), res.Status)
 			}
-		}
-		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			r.log("INSTRUCTION: %+v\n", instr)
-			err = isFatalErr(fmt.Errorf("%s : request %s returned HTTP %s : %s", contextStr, req.URL.String(), res.Status, string(body)))
+			body, err := ioutil.ReadAll(res.Body)
 			if err != nil {
-				return err
-			}
-		}
-		if instr.storeResponse != nil {
-			if !gjson.ValidBytes(body) {
-				err = isFatalErr(fmt.Errorf("%s : cannot storeResponse as response is not valid JSON. Body: %s", contextStr, string(body)))
+				err = isFatalErr(fmt.Errorf("%s : failed to read response body: %w", contextStr, err))
 				if err != nil {
 					return err
 				}
 			}
-			for k, v := range instr.storeResponse {
-				val := gjson.GetBytes(body, strings.TrimPrefix(v, "."))
-				r.lookup.Store(k, val.Str)
+			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				r.log("INSTRUCTION: %+v\n", instr)
+				err = isFatalErr(fmt.Errorf("%s : request %s returned HTTP %s : %s", contextStr, req.URL.String(), res.Status, string(body)))
+				if err != nil {
+					return err
+				}
+			}
+			if instr.storeResponse != nil {
+				if !gjson.ValidBytes(body) {
+					err = isFatalErr(fmt.Errorf("%s : cannot storeResponse as response is not valid JSON. Body: %s", contextStr, string(body)))
+					if err != nil {
+						return err
+					}
+				}
+				for k, v := range instr.storeResponse {
+					val := gjson.GetBytes(body, strings.TrimPrefix(v, "."))
+					r.lookup.Store(k, val.Str)
+				}
 			}
 		}
 		req, instr, i = r.next(instrs, hsURL, i)
