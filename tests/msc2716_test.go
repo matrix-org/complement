@@ -142,7 +142,8 @@ func TestBackfillingHistory(t *testing.T) {
 			// Order events from newest to oldest
 			expectedEventIDOrder = reversed(expectedEventIDOrder)
 
-			// 2 eventIDsBefore + 6 historical events + 3 insertion events + 2 eventIDsAfter
+			// 2 eventIDsBefore + [1 insertion event + 2 historical events + 1 insertion event] + [2 historical events + 1 insertion event] + 2 eventIDsAfter
+			//                    ^ chunk1                                                        ^ chunk2
 			if len(expectedEventIDOrder) != 13 {
 				t.Fatalf("Expected eventID list should be length 13 but saw %d: %s", len(expectedEventIDOrder), expectedEventIDOrder)
 			}
@@ -519,7 +520,7 @@ func TestBackfillingHistory(t *testing.T) {
 			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 			baseInsertionEventID := historicalEventIDs[len(historicalEventIDs)-1]
 
-			// 2 historical events + 2 insertion events
+			// [1 insertion event + 2 historical events + 1 insertion event]
 			if len(historicalEventIDs) != 4 {
 				t.Fatalf("Expected eventID list should be length 15 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
 			}
