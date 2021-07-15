@@ -90,6 +90,9 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 	bob.JoinRoom(t, space, []string{"hs1"})
 	bob.JoinRoom(t, room, []string{"hs1"})
 
+	// Joining the same room again should work fine (e.g. to change your display name).
+	bob.JoinRoom(t, room, []string{"hs1"})
+
 	// Leaving the room works and the user is unable to re-join.
 	bob.LeaveRoom(t, room)
 	bob.LeaveRoom(t, space)
