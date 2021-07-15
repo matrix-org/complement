@@ -155,6 +155,23 @@ func (s *Server) FederationClient(deployment *docker.Deployment) *gomatrixserver
 	return f
 }
 
+// SendFederationRequest signs and sends an arbitrary federation request from this server.
+//
+// The requests will be routed according to the deployment map in `deployment`.
+func (s *Server) SendFederationRequest(deployment *docker.Deployment, req gomatrixserverlib.FederationRequest, resBody interface{}) error {
+	if err := req.Sign(gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv); err != nil {
+		return err
+	}
+
+	httpReq, err := req.HTTPRequest()
+	if err != nil {
+		return err
+	}
+
+	httpClient := gomatrixserverlib.NewClient(gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}))
+	return httpClient.DoRequestAndParseResponse(context.Background(), httpReq, resBody)
+}
+
 // MustCreateEvent will create and sign a new latest event for the given room.
 // It does not insert this event into the room however. See ServerRoom.AddEvent for that.
 func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *gomatrixserverlib.Event {
