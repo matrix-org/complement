@@ -188,6 +188,25 @@ For Goland:
  * Under "Run"->"Edit Configurations..."->"Templates"->"Go Test", add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest`
  * Then you can right-click on any test file or test case and "Run <test name>".
 
+
+
+### Access database for homeserver after Complement test runs
+
+
+For Synapse:
+
+```
+# You can use `docker ps -f name=complement_` to just filter to the Complement containers
+$ docker ps
+$ docker exec -it complement_1_hs_with_application_service.hs1_2 /bin/bash
+
+$ apt-get update && apt-get install -y sqlite3
+
+$ sqlite3
+> .open /conf/homeserver.db
+```
+
+
 ### What do I need to know if I'm coming from sytest?
 
 Sytest has a concept of a `fixture` to configure the homeserver or test in a particular way, these are replaced with a `Blueprint` in Complement.
