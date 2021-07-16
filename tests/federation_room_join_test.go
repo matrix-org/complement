@@ -290,7 +290,9 @@ func TestCannotSendNonLeaveViaSendLeaveV2(t *testing.T) {
 // and checks that they are all rejected.
 func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expectedMembership string, createRoomOpts map[string]interface{}) {
 	if createRoomOpts == nil {
-		createRoomOpts = make(map[string]interface{})
+		createRoomOpts = map[string]interface{}{
+			"preset": "public_chat",
+		}
 	}
 
 	deployment := Deploy(t, b.BlueprintAlice)
