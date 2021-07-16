@@ -163,6 +163,12 @@ There is no syntactically pleasing way to do this. Create a separate function wh
 
 This is done using standard Go testing mechanisms, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
 
+
+### How do I show the server logs even when the tests pass?
+
+Normally, server logs are only printed when one of the tests fail. To override that behavior to always show server logs, you can use `COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1`.
+
+
 ### How do I skip a test?
 
 Use one of `t.Skipf(...)` or `t.SkipNow()`.
