@@ -71,30 +71,30 @@ func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byt
 	t.Helper()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("MatchResponse: Failed to read response body: %s", err)
+		t.Errorf("MatchResponse: Failed to read response body: %s", err)
 	}
 
 	contextStr := fmt.Sprintf("%s => %s", res.Request.URL.String(), string(body))
 
 	if m.StatusCode != 0 {
 		if res.StatusCode != m.StatusCode {
-			t.Fatalf("MatchResponse got status %d want %d - %s", res.StatusCode, m.StatusCode, contextStr)
+			t.Errorf("MatchResponse got status %d want %d - %s", res.StatusCode, m.StatusCode, contextStr)
 		}
 	}
 	if m.Headers != nil {
 		for name, val := range m.Headers {
 			if res.Header.Get(name) != val {
-				t.Fatalf("MatchResponse got %s: %s want %s - %s", name, res.Header.Get(name), val, contextStr)
+				t.Errorf("MatchResponse got %s: %s want %s - %s", name, res.Header.Get(name), val, contextStr)
 			}
 		}
 	}
 	if m.JSON != nil {
 		if !gjson.ValidBytes(body) {
-			t.Fatalf("MatchResponse response body is not valid JSON - %s", contextStr)
+			t.Errorf("MatchResponse response body is not valid JSON - %s", contextStr)
 		}
 		for _, jm := range m.JSON {
 			if err = jm(body); err != nil {
-				t.Fatalf("MatchResponse %s - %s", err, contextStr)
+				t.Errorf("MatchResponse %s - %s", err, contextStr)
 			}
 		}
 	}

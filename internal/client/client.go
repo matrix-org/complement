@@ -112,12 +112,7 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
-	c.txnID++
-	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
-	if e.StateKey != nil {
-		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
-	}
-	res := c.MustDo(t, "PUT", paths, e.Content)
+	res := c.SendEvent(t, roomID, e)
 	body := ParseJSON(t, res)
 	eventID := GetJSONFieldStr(t, body, "event_id")
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
@@ -125,6 +120,18 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 		return r.Get("event_id").Str == eventID
 	})
 	return eventID
+}
+
+// SendEventSynced sends `e` into the room.
+func (c *CSAPI) SendEvent(t *testing.T, roomID string, e b.Event) *http.Response {
+	t.Helper()
+	c.txnID++
+	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
+	if e.StateKey != nil {
+		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
+	}
+	res := c.DoFunc(t, "PUT", paths, WithJSONBody(t, e.Content))
+	return res
 }
 
 // SyncUntilTimelineHas blocks and continually calls /sync until the `check` function returns true.
