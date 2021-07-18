@@ -16,7 +16,6 @@ func TestRoomState(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
-	unauthedClient := deployment.Client(t, "hs1", "")
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership
 		t.Run("GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership", func(t *testing.T) {
@@ -105,7 +104,7 @@ func TestRoomState(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			res := unauthedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "publicRooms"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "publicRooms"})
 			foundRoom := false
 
 			must.MatchResponse(t, res, match.HTTPResponse{
