@@ -326,7 +326,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 			return
 		}
 
-		var res map[string]interface{}
+		var res interface{}
 		err := srv.SendFederationRequest(deployment, req, &res)
 		if err == nil {
 			t.Errorf("send request returned 200")
