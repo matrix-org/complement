@@ -29,24 +29,24 @@ import (
 )
 
 type Deployer struct {
-	Namespace    string
-	Docker       *client.Client
-	Counter      int
-	networkID    string
-	debugLogging bool
-	config       *config.Complement
+	DeployNamespace string
+	Docker          *client.Client
+	Counter         int
+	networkID       string
+	debugLogging    bool
+	config          *config.Complement
 }
 
-func NewDeployer(namespace string, cfg *config.Complement) (*Deployer, error) {
+func NewDeployer(deployNamespace string, cfg *config.Complement) (*Deployer, error) {
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		return nil, err
 	}
 	return &Deployer{
-		Namespace:    namespace,
-		Docker:       cli,
-		debugLogging: cfg.DebugLoggingEnabled,
-		config:       cfg,
+		DeployNamespace: deployNamespace,
+		Docker:          cli,
+		debugLogging:    cfg.DebugLoggingEnabled,
+		config:          cfg,
 	}, nil
 }
 
@@ -64,7 +64,10 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		HS:            make(map[string]HomeserverDeployment),
 	}
 	images, err := d.Docker.ImageList(ctx, types.ImageListOptions{
-		Filters: label("complement_blueprint=" + blueprintName),
+		Filters: label(
+			"complement_pkg="+d.config.PackageNamespace,
+			"complement_blueprint="+blueprintName,
+		),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("Deploy: failed to ImageList: %w", err)
@@ -72,7 +75,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	if len(images) == 0 {
 		return nil, fmt.Errorf("Deploy: No images have been built for blueprint %s", blueprintName)
 	}
-	networkID, err := CreateNetworkIfNotExists(d.Docker, blueprintName)
+	networkID, err := createNetworkIfNotExists(d.Docker, d.config.PackageNamespace, blueprintName)
 	if err != nil {
 		return nil, fmt.Errorf("Deploy: %w", err)
 	}
@@ -85,8 +88,8 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 
 		// TODO: Make CSAPI port configurable
 		deployment, err := deployImage(
-			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%d", d.Namespace, contextStr, d.Counter),
-			blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config.VersionCheckIterations)
+			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, d.Counter),
+			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config.VersionCheckIterations)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
 				// print logs to help debug

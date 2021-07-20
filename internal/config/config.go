@@ -14,6 +14,8 @@ type Complement struct {
 	BestEffort             bool
 	VersionCheckIterations int
 	KeepBlueprints         []string
+	// The namespace for all complement created blueprints and deployments
+	PackageNamespace string
 }
 
 func NewConfigFromEnvVars() *Complement {

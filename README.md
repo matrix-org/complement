@@ -131,7 +131,8 @@ update-ca-certificates
 ## Sytest parity
 
 ```
-$ go run sytest_coverage.go -v
+$ go build ./cmd/sytest-coverage
+$ ./sytest-coverage -v
 10apidoc/01register 3/9 tests
     × GET /register yields a set of flows
     ✓ POST /register can create a user
