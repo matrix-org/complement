@@ -29,6 +29,7 @@ func NewConfigFromEnvVars() *Complement {
 	if cfg.BaseImageURI == "" {
 		panic("COMPLEMENT_BASE_IMAGE must be set")
 	}
+	cfg.PackageNamespace = "pkg"
 	return cfg
 }
 
