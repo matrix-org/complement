@@ -163,6 +163,12 @@ There is no syntactically pleasing way to do this. Create a separate function wh
 
 This is done using standard Go testing mechanisms, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
 
+
+### How do I show the server logs even when the tests pass?
+
+Normally, server logs are only printed when one of the tests fail. To override that behavior to always show server logs, you can use `COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1`.
+
+
 ### How do I skip a test?
 
 Use one of `t.Skipf(...)` or `t.SkipNow()`.
@@ -187,6 +193,35 @@ For VSCode, add to `settings.json`:
 For Goland:
  * Under "Run"->"Edit Configurations..."->"Templates"->"Go Test", add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest`
  * Then you can right-click on any test file or test case and "Run <test name>".
+
+
+### How do I hook up a Matrix client like Element to the homeservers spun up by Complement after a test runs?
+
+It can be useful to view the output of a test in Element to better debug something going wrong or just make sure your test is doing what you expect before you try to assert everything.
+
+ 1. In your test comment out `defer deployment.Destroy(t)` and replace with `defer time.Sleep(2 * time.Hour)` to keep the homeserver running after the tests complete
+ 1. Start the Complement tests
+ 1. Save the Element config as `~/Downloads/riot-complement-config.json` and replace the port according to the output from `docker ps` (`docker ps -f name=complement_` to just filter to the Complement containers)
+    ```json
+    {
+      "default_server_config": {
+        "m.homeserver": {
+          "base_url": "http://localhost:55449",
+          "server_name": "my.complement.host"
+        }
+      },
+      "brand": "Element"
+    }
+    ```
+ 1. Start up Element (your matrix client)
+    ```
+    docker run -it --rm \
+        --publish 7080:80 \
+        --volume ~/Downloads/riot-complement-config.json:/app/config.json \
+        --name riot-complement \
+        vectorim/riot-web:v1.7.8
+    ```
+ 1. Now you can visit http://localhost:7080/ and register a new user and explore the rooms from the test output
 
 
 ### Access database for homeserver after Complement test runs
