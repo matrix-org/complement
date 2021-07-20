@@ -290,7 +290,9 @@ func TestCannotSendNonLeaveViaSendLeaveV2(t *testing.T) {
 // and checks that they are all rejected.
 func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expectedMembership string, createRoomOpts map[string]interface{}) {
 	if createRoomOpts == nil {
-		createRoomOpts = make(map[string]interface{})
+		createRoomOpts = map[string]interface{}{
+			"preset": "public_chat",
+		}
 	}
 
 	deployment := Deploy(t, b.BlueprintAlice)
@@ -324,7 +326,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 			return
 		}
 
-		var res map[string]interface{}
+		var res interface{}
 		err := srv.SendFederationRequest(deployment, req, &res)
 		if err == nil {
 			t.Errorf("send request returned 200")
