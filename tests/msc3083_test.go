@@ -17,7 +17,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverName string) {
+func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverName string, expectedErrorCode int) {
 	t.Helper()
 
 	// This is copied from Client.JoinRoom to test a join failure.
@@ -30,7 +30,7 @@ func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverNam
 		client.WithQueries(query),
 	)
 	must.MatchResponse(t, res, match.HTTPResponse{
-		StatusCode: 403,
+		StatusCode: expectedErrorCode,
 	})
 }
 
@@ -84,7 +84,7 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, space string, room string) {
 	t.Helper()
 
-	failJoinRoom(t, bob, room, "hs1")
+	failJoinRoom(t, bob, room, "hs1", 403)
 
 	// Join the space, attempt to join the room again, which now should succeed.
 	bob.JoinRoom(t, space, []string{"hs1"})
@@ -108,7 +108,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 		return ev.Get("content").Get("membership").Str == "leave"
 	})
 
-	failJoinRoom(t, bob, room, "hs1")
+	failJoinRoom(t, bob, room, "hs1", 403)
 
 	// Invite the user and joining should work.
 	alice.InviteRoom(t, room, bob.UserID)
@@ -135,7 +135,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 		},
 	)
 	// Fails since invalid values get filtered out of allow.
-	failJoinRoom(t, bob, room, "hs1")
+	failJoinRoom(t, bob, room, "hs1", 403)
 
 	alice.SendEventSynced(
 		t,
@@ -151,7 +151,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 		},
 	)
 	// Fails since a fully invalid allow key requires an invite.
-	failJoinRoom(t, bob, room, "hs1")
+	failJoinRoom(t, bob, room, "hs1", 403)
 }
 
 // Test joining a room with join rules restricted to membership in a space.
@@ -250,7 +250,7 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 	})
 
 	// Bob cannot join the room.
-	failJoinRoom(t, bob, room, "hs1")
+	failJoinRoom(t, bob, room, "hs1", 403)
 
 	// Join the space via hs2.
 	bob.JoinRoom(t, space, []string{"hs2"})
@@ -307,6 +307,83 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 	// the room anymore!
 	bob.LeaveRoom(t, room)
 	bob.JoinRoom(t, room, []string{"hs1"})
+}
+
+// A server will request a failover if asked to /make_join and it does not have
+// the appropriate authorisation to complete the request.
+//
+// Setup 3 homeservers:
+// * hs1 creates the space/room.
+// * hs2 joins the room
+// * hs3 attempts to join via hs2 (should fail) and hs3 (should work)
+func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
+	deployment := Deploy(t, b.Blueprint{
+		Name: "federation_three_homeservers",
+		Homeservers: []b.Homeserver{
+			{
+				Name: "hs1",
+				Users: []b.User{
+					{
+						Localpart:   "alice",
+						DisplayName: "Alice",
+					},
+				},
+			},
+			{
+				Name: "hs2",
+				Users: []b.User{
+					{
+						Localpart:   "bob",
+						DisplayName: "Bob",
+					},
+				},
+			},
+			{
+				Name: "hs3",
+				Users: []b.User{
+					{
+						Localpart:   "charlie",
+						DisplayName: "Charlie",
+					},
+				},
+			},
+		},
+	})
+	defer deployment.Destroy(t)
+
+	// Setup the user, space, and restricted room.
+	alice, space, room := setupRestrictedRoom(t, deployment)
+
+	// Raise the power level so that only alice can invite.
+	state_key := ""
+	alice.SendEventSynced(t, room, b.Event{
+		Type:     "m.room.power_levels",
+		StateKey: &state_key,
+		Content: map[string]interface{}{
+			"invite": 100,
+			"users": map[string]interface{}{
+				alice.UserID: 100,
+			},
+		},
+	})
+
+	// Create a second user on a different homeserver.
+	bob := deployment.Client(t, "hs2", "@bob:hs2")
+
+	// Bob joins the room and space.
+	bob.JoinRoom(t, space, []string{"hs1"})
+	bob.JoinRoom(t, room, []string{"hs1"})
+
+	// Charlie should join the space (which gives access to the room), but joining
+	// via just hs1 will fail.
+	charlie := deployment.Client(t, "hs3", "@charlie:hs3")
+	charlie.JoinRoom(t, space, []string{"hs1"})
+
+	// hs2 doesn't have anyone to invite from.
+	failJoinRoom(t, charlie, room, "hs2", 502)
+
+	// Failing over to hs1 works.
+	charlie.JoinRoom(t, room, []string{"hs2", "hs1"})
 }
 
 // Request the room summary and ensure the expected rooms are in the response.
