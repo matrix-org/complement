@@ -374,16 +374,85 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 	bob.JoinRoom(t, space, []string{"hs1"})
 	bob.JoinRoom(t, room, []string{"hs1"})
 
-	// Charlie should join the space (which gives access to the room), but joining
-	// via just hs1 will fail.
+	// Charlie should join the space (which gives access to the room).
 	charlie := deployment.Client(t, "hs3", "@charlie:hs3")
 	charlie.JoinRoom(t, space, []string{"hs1"})
 
-	// hs2 doesn't have anyone to invite from.
+	// hs2 doesn't have anyone to invite from, so the join fails.
 	failJoinRoom(t, charlie, room, "hs2", 502)
 
-	// Failing over to hs1 works.
+	// Including hs1 (and failing over to it) allows the join to succeed.
 	charlie.JoinRoom(t, room, []string{"hs2", "hs1"})
+
+	// Double check that the join was authorised via hs1.
+	bob.SyncUntilTimelineHas(
+		t,
+		room,
+		func(ev gjson.Result) bool {
+			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
+				return false
+			}
+			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
+			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join_authorised_via_users_server", alice.UserID)
+
+			return true
+		},
+	)
+
+	// Bump the power-level of bob.
+	alice.SendEventSynced(t, room, b.Event{
+		Type:     "m.room.power_levels",
+		StateKey: &state_key,
+		Content: map[string]interface{}{
+			"invite": 100,
+			"users": map[string]interface{}{
+				alice.UserID: 100,
+				bob.UserID:   100,
+			},
+		},
+	})
+
+	// Charlie leaves the room (so they can rejoin).
+	charlie.LeaveRoom(t, room)
+
+	// Ensure the events have synced to hs2.
+	bob.SyncUntilTimelineHas(
+		t,
+		room,
+		func(ev gjson.Result) bool {
+			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
+				return false
+			}
+			must.EqualStr(t, ev.Get("content").Get("membership").Str, "leave", "Charlie failed to leave the room")
+
+			return true
+		},
+	)
+
+	// Bob leaves the space so that hs2 doesn't know if Charlie is in the space or not.
+	bob.LeaveRoom(t, space)
+
+	// hs2 cannot complete the join since they do not know if Charlie meets the
+	// requirements (since it is no longer in the space).
+	failJoinRoom(t, charlie, room, "hs2", 502)
+
+	// Including hs1 (and failing over to it) allows the join to succeed.
+	charlie.JoinRoom(t, room, []string{"hs2", "hs1"})
+
+	// Double check that the join was authorised via hs1.
+	bob.SyncUntilTimelineHas(
+		t,
+		room,
+		func(ev gjson.Result) bool {
+			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
+				return false
+			}
+			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
+			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join_authorised_via_users_server", alice.UserID)
+
+			return true
+		},
+	)
 }
 
 // Request the room summary and ensure the expected rooms are in the response.
