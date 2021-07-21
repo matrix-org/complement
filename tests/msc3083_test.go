@@ -235,7 +235,7 @@ func TestRestrictedRoomsLimitedJoin(t *testing.T) {
 	charlie.InviteRoom(t, room, alice.UserID)
 	alice.JoinRoom(t, room, []string{"hs2"})
 
-	// Alice should not be able to issue invites.
+	// Confirm that Alice cannot issue invites (due to the default power levels).
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	body := map[string]interface{}{
 		"user_id": bob.UserID,
@@ -253,8 +253,10 @@ func TestRestrictedRoomsLimitedJoin(t *testing.T) {
 	// Bob cannot join the room.
 	failJoinRoom(t, bob, room, "hs1")
 
-	// Join the space, joining the room should work, but will bounce through hs2.
+	// Join the space via hs2.
 	bob.JoinRoom(t, space, []string{"hs2"})
+	// Joining the room should work, although we're joining via hs1, it will end up
+	// as a remote join through hs2.
 	bob.JoinRoom(t, room, []string{"hs1"})
 
 	// Ensure that the join comes down sync on hs2. Note that we want to ensure hs2
