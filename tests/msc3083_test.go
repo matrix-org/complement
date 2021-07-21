@@ -184,10 +184,9 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	checkRestrictedRoom(t, alice, bob, space, room)
 }
 
-// Not all servers can issue join events for a restricted room. Ensure a join
-// completes successfully when a server is in a room, but unable to issue joins
-// for it.
-func TestRestrictedRoomsLimitedJoin(t *testing.T) {
+// A server will do a remote join for a local user if it is unable to to issue
+// joins in a restricted room it is already participating in.
+func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 
