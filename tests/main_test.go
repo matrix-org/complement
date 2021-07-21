@@ -20,6 +20,9 @@ import (
 
 var namespaceCounter uint64
 
+// persist the complement builder which is set when the tests start via TestMain
+var complementBuilder *docker.Builder
+
 // TestMain is the main entry point for Complement.
 //
 // It will clean up any old containers/images/networks from the previous run, then run the tests, then clean up
@@ -32,6 +35,7 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Error: %s", err)
 		os.Exit(1)
 	}
+	complementBuilder = builder
 	// remove any old images/containers/networks in case we died horribly before
 	builder.Cleanup()
 
@@ -60,16 +64,14 @@ func TestMain(m *testing.M) {
 func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	t.Helper()
 	timeStartBlueprint := time.Now()
-	cfg := config.NewConfigFromEnvVars()
-	builder, err := docker.NewBuilder(cfg)
-	if err != nil {
-		t.Fatalf("Deploy: docker.NewBuilder returned error: %s", err)
+	if complementBuilder == nil {
+		t.Fatalf("complementBuilder not set, did you forget to call TestMain?")
 	}
-	if err = builder.ConstructBlueprintsIfNotExist([]b.Blueprint{blueprint}); err != nil {
+	if err := complementBuilder.ConstructBlueprintsIfNotExist([]b.Blueprint{blueprint}); err != nil {
 		t.Fatalf("Deploy: Failed to construct blueprint: %s", err)
 	}
 	namespace := fmt.Sprintf("%d", atomic.AddUint64(&namespaceCounter, 1))
-	d, err := docker.NewDeployer(namespace, cfg)
+	d, err := docker.NewDeployer(namespace, complementBuilder.Config)
 	if err != nil {
 		t.Fatalf("Deploy: NewDeployer returned error %s", err)
 	}
