@@ -40,6 +40,8 @@ jobs:
         - /var/run/docker.sock:/var/run/docker.sock
 
     steps:
+      - name: Get number of CPU cores
+        uses: SimenB/github-actions-cpu-cores@v1
       - uses: actions/checkout@v2
       - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
       - run: go test -v -tags "${{ matrix.tags }}" ./tests/...
