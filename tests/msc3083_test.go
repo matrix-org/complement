@@ -393,7 +393,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 				return false
 			}
 			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join_authorised_via_users_server", alice.UserID)
+			must.EqualStr(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
 
 			return true
 		},
@@ -448,7 +448,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 				return false
 			}
 			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join_authorised_via_users_server", alice.UserID)
+			must.EqualStr(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
 
 			return true
 		},
