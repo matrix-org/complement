@@ -10,7 +10,7 @@ Complement is a black box integration testing framework for Matrix homeservers.
 You need to have Go and Docker installed, as well as `libolm3` and `libolm-dev`. Then:
 
 ```
-$ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl COMPLEMENT_BASE_IMAGE_ARGS='-foo bar -baz 1' go test -v ./tests
+$ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl COMPLEMENT_BASE_IMAGE_ARGS='-foo bar -baz 1' go test -v ./tests/...
 ```
 
 You can install `libolm3` on Debian using something like:
@@ -33,7 +33,7 @@ You can either use your own image, or one of the ones supplied in the [dockerfil
 A full list of config options can be found [in the config file](./internal/config/config.go). All normal Go test config
 options will work, so to just run 1 named test and include a timeout for the test run:
 ```
-$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests
+$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests/...
 ```
 
 ### Running against Dendrite
@@ -43,7 +43,7 @@ For instance, for Dendrite:
 # build a docker image for Dendrite...
 $ (cd dockerfiles && docker build -t complement-dendrite -f Dendrite.Dockerfile .)
 # ...and test it
-$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests
+$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests/...
 ```
 
 ### Running against Synapse
@@ -61,7 +61,7 @@ To run Complement against a specific release of Synapse, set the
 
 ```sh
 docker build -t complement-synapse:v1.36.0 -f dockerfiles/Synapse.Dockerfile --build-arg=SYNAPSE_VERSION=v1.36.0 dockerfiles
-COMPLEMENT_BASE_IMAGE=complement-synapse:v1.36.0 go test ./tests
+COMPLEMENT_BASE_IMAGE=complement-synapse:v1.36.0 go test ./tests/...
 ```
 
 ### Image requirements
@@ -95,7 +95,7 @@ being picked up by `go test`. For example, `apidoc_presence_test.go` has:
 ```
 and all Dendrite tests run with `-tags="dendrite_blacklist"` to cause this file to be skipped. You can run tests with build tags like this:
 ```
-COMPLEMENT_BASE_IMAGE=complement-synapse:latest go test -v -tags="synapse_blacklist,msc2403" ./tests
+COMPLEMENT_BASE_IMAGE=complement-synapse:latest go test -v -tags="synapse_blacklist,msc2403" ./tests/...
 ```
 This runs Complement with a Synapse HS and ignores tests which Synapse doesn't implement, and includes tests for MSC2403.
 
