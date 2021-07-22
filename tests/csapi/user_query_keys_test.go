@@ -2,7 +2,7 @@
 
 // Rationale for being included in Synapse's blacklist: https://github.com/matrix-org/synapse/issues/10354
 
-package tests
+package csapi_tests
 
 import (
 	"testing"
