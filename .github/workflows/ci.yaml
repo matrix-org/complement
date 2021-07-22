@@ -40,7 +40,6 @@ jobs:
         - /var/run/docker.sock:/var/run/docker.sock
 
     steps:
-      - run: lscpu
       - uses: actions/checkout@v2
       - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
       - run: go test -p 2 -v -tags "${{ matrix.tags }}" ./tests/...
