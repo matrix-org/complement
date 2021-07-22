@@ -423,9 +423,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
 				return false
 			}
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, "leave", "Charlie failed to leave the room")
-
-			return true
+			return ev.Get("content").Get("membership").Str == "leave"
 		},
 	)
 
