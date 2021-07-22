@@ -42,6 +42,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
-      - run: go test -v -tags "${{ matrix.tags }}" ./tests
+      - run: go test -p 2 -v -tags "${{ matrix.tags }}" ./tests/...
         env:
           COMPLEMENT_BASE_IMAGE: homeserver
