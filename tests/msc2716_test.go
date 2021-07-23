@@ -76,8 +76,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -190,8 +191,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -240,8 +242,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -290,8 +293,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 
 			batchSendHistoricalMessages(
@@ -315,8 +319,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -349,8 +354,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -407,8 +413,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -483,8 +490,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -521,9 +529,9 @@ func TestBackfillingHistory(t *testing.T) {
 			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 			baseInsertionEventID := historicalEventIDs[len(historicalEventIDs)-1]
 
-			// [1 insertion event + 2 historical events + 1 insertion event]
-			if len(historicalEventIDs) != 4 {
-				t.Fatalf("Expected eventID list should be length 15 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
+			// [1 insertion event + 2 historical events + 1 chunk event + 1 insertion event]
+			if len(historicalEventIDs) != 5 {
+				t.Fatalf("Expected eventID list should be length 5 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
 			}
 
 			beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -571,12 +579,12 @@ func TestBackfillingHistory(t *testing.T) {
 				return ev.Get("event_id").Str == markerEventID
 			})
 
-			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			}))
 
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+			must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
 						return r.Get("event_id").Str
@@ -590,8 +598,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
