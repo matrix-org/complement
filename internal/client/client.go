@@ -142,9 +142,25 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gj
 	t.Helper()
 	start := time.Now()
 	checkCounter := 0
+	// Print failing events in a defer() so we handle t.Fatalf in the same way as t.Errorf
+	var wasFailed = t.Failed()
+	var lastEvent *gjson.Result
+	timedOut := false
+	defer func() {
+		if !wasFailed && t.Failed() {
+			raw := ""
+			if lastEvent != nil {
+				raw = lastEvent.Raw
+			}
+			if !timedOut {
+				t.Logf("SyncUntil: failing event %s", raw)
+			}
+		}
+	}()
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
-			t.Fatalf("syncUntil timed out. Called check function %d times", checkCounter)
+			timedOut = true
+			t.Fatalf("SyncUntil: timed out. Called check function %d times", checkCounter)
 		}
 		query := url.Values{
 			"timeout": []string{"1000"},
@@ -161,17 +177,12 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gj
 		keyRes := gjson.GetBytes(body, key)
 		if keyRes.IsArray() {
 			events := keyRes.Array()
-			for _, ev := range events {
-				wasFailed := t.Failed()
+			for i, ev := range events {
+				lastEvent = &events[i]
 				if check(ev) {
-					if !wasFailed && t.Failed() {
-						t.Logf("failing event %s", ev.Raw)
-					}
 					return
 				}
-				if !wasFailed && t.Failed() {
-					t.Logf("failing event %s", ev.Raw)
-				}
+				wasFailed = t.Failed()
 				checkCounter++
 			}
 		}
