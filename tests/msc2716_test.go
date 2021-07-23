@@ -37,6 +37,7 @@ const timeBetweenMessages = time.Millisecond
 
 var (
 	insertionEventType = "org.matrix.msc2716.insertion"
+	chunkEventType     = "org.matrix.msc2716.chunk"
 	markerEventType    = "org.matrix.msc2716.marker"
 
 	historicalContentField      = "org.matrix.msc2716.historical"
@@ -69,8 +70,8 @@ func TestBackfillingHistory(t *testing.T) {
 		// Test that the message events we insert between A and B come back in the correct order from /messages
 		//
 		// Final timeline output: ( [n] = historical chunk )
-		// (oldest) A, B, [insertion, c, d, e] [insertion, f, g, h, insertion], I, J (newest)
-		//                chunk 1              chunk 0
+		// (oldest) A, B, [insertion, c, d, e, chunk] [insertion, f, g, h, chunk, insertion], I, J (newest)
+		//                historical chunk 1          historical chunk 0
 		t.Run("Backfilled historical events resolve with proper state in correct order", func(t *testing.T) {
 			t.Parallel()
 
@@ -142,10 +143,10 @@ func TestBackfillingHistory(t *testing.T) {
 			// Order events from newest to oldest
 			expectedEventIDOrder = reversed(expectedEventIDOrder)
 
-			// 2 eventIDsBefore + [1 insertion event + 2 historical events + 1 insertion event] + [2 historical events + 1 insertion event] + 2 eventIDsAfter
-			//                    ^ chunk1                                                        ^ chunk2
-			if len(expectedEventIDOrder) != 13 {
-				t.Fatalf("Expected eventID list should be length 13 but saw %d: %s", len(expectedEventIDOrder), expectedEventIDOrder)
+			// (oldest) A, B, [insertion, c, d, e, chunk] [insertion, f, g, h, chunk, insertion], I, J (newest)
+			//                historical chunk 1          historical chunk 0
+			if len(expectedEventIDOrder) != 15 {
+				t.Fatalf("Expected eventID list should be length 15 but saw %d: %s", len(expectedEventIDOrder), expectedEventIDOrder)
 			}
 
 			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -520,8 +521,8 @@ func TestBackfillingHistory(t *testing.T) {
 			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 			baseInsertionEventID := historicalEventIDs[len(historicalEventIDs)-1]
 
-			// [1 insertion event + 2 historical events + 1 insertion event]
-			if len(historicalEventIDs) != 4 {
+			// [1 insertion event + 2 historical events + 1 chunk event + 1 insertion event]
+			if len(historicalEventIDs) != 5 {
 				t.Fatalf("Expected eventID list should be length 15 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
 			}
 
@@ -699,7 +700,10 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 }
 
 func isRelevantEvent(r gjson.Result) bool {
-	return len(r.Get("content").Get("body").Str) > 0 || r.Get("type").Str == insertionEventType || r.Get("type").Str == markerEventType
+	return len(r.Get("content").Get("body").Str) > 0 ||
+		r.Get("type").Str == insertionEventType ||
+		r.Get("type").Str == chunkEventType ||
+		r.Get("type").Str == markerEventType
 }
 
 func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, body []byte) (eventIDsFromResponse []string) {
