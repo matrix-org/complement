@@ -75,8 +75,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -189,8 +190,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -239,8 +241,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -289,8 +292,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 
 			batchSendHistoricalMessages(
@@ -314,8 +318,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -348,8 +353,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -406,8 +412,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -482,8 +489,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
@@ -589,8 +597,9 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-				"name":   "the hangout spot",
+				"room_version": "org.matrix.msc2716",
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
 			})
 			alice.JoinRoom(t, roomID, nil)
 
