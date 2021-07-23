@@ -521,8 +521,8 @@ func TestBackfillingHistory(t *testing.T) {
 			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
 			baseInsertionEventID := historicalEventIDs[len(historicalEventIDs)-1]
 
-			// [1 insertion event + 2 historical events + 1 insertion event]
-			if len(historicalEventIDs) != 4 {
+			// [1 insertion event + 2 historical events + 1 chunk event + 1 insertion event]
+			if len(historicalEventIDs) != 5 {
 				t.Fatalf("Expected eventID list should be length 15 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
 			}
 
