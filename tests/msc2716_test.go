@@ -44,6 +44,12 @@ var (
 	markerInsertionContentField = "org.matrix.msc2716.marker.insertion"
 )
 
+var createRoomOpts = map[string]interface{}{
+	"preset":       "public_chat",
+	"name":         "the hangout spot",
+	"room_version": "org.matrix.msc2716",
+}
+
 func TestBackfillingHistory(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
@@ -74,11 +80,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Backfilled historical events resolve with proper state in correct order", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"room_version": "org.matrix.msc2716",
-				"preset":       "public_chat",
-				"name":         "the hangout spot",
-			})
+			roomID := as.CreateRoom(t, createRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create some normal messages in the timeline. We're creating them in
@@ -189,11 +191,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Backfilled historical events from multiple users in the same chunk", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"room_version": "org.matrix.msc2716",
-				"preset":       "public_chat",
-				"name":         "the hangout spot",
-			})
+			roomID := as.CreateRoom(t, createRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our backfilled events next to
@@ -240,11 +238,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Backfilled historical events with m.historical do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"room_version": "org.matrix.msc2716",
-				"preset":       "public_chat",
-				"name":         "the hangout spot",
-			})
+			roomID := as.CreateRoom(t, createRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our backfilled events next to
@@ -291,11 +285,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Unrecognised prev_event ID will throw an error", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"room_version": "org.matrix.msc2716",
-				"preset":       "public_chat",
-				"name":         "the hangout spot",
-			})
+			roomID := as.CreateRoom(t, createRoomOpts)
 
 			batchSendHistoricalMessages(
 				t,
@@ -317,11 +307,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Normal users aren't allowed to backfill messages", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"room_version": "org.matrix.msc2716",
-				"preset":       "public_chat",
-				"name":         "the hangout spot",
-			})
+			roomID := as.CreateRoom(t, createRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -352,11 +338,7 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"room_version": "org.matrix.msc2716",
-				"preset":       "public_chat",
-				"name":         "the hangout spot",
-			})
+			roomID := as.CreateRoom(t, createRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -411,11 +393,7 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"room_version": "org.matrix.msc2716",
-				"preset":       "public_chat",
-				"name":         "the hangout spot",
-			})
+			roomID := as.CreateRoom(t, createRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -488,11 +466,7 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"room_version": "org.matrix.msc2716",
-				"preset":       "public_chat",
-				"name":         "the hangout spot",
-			})
+			roomID := as.CreateRoom(t, createRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Join the room from a remote homeserver before any backfilled messages are sent
@@ -596,11 +570,7 @@ func TestBackfillingHistory(t *testing.T) {
 			t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, map[string]interface{}{
-				"room_version": "org.matrix.msc2716",
-				"preset":       "public_chat",
-				"name":         "the hangout spot",
-			})
+			roomID := as.CreateRoom(t, createRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Join the room from a remote homeserver before any backfilled messages are sent
