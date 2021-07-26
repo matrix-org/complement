@@ -45,6 +45,8 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: "Checkout corresponding ${{ matrix.homeserver }} branch"
+        # This is only done for Synapse since Dendrite's docker file pulls in
+        # the Dendrite sources directly.
         if: ${{ matrix.homeserver == 'Synapse' }}
         shell: bash
         run: |
@@ -67,6 +69,9 @@ jobs:
 
       # Build initial homeserver image
       - run: docker build -t matrixdotorg/synapse:latest -f docker/Dockerfile .
+        # We only do this for Synapse since Dendrite's docker file pulls in
+        # the Dendrite sources directly (instead of being based on a previously
+        # built docker image).
         if: ${{ matrix.homeserver == 'Synapse' }}
         working-directory: homeserver
 
