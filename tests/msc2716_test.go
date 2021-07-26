@@ -350,7 +350,7 @@ func TestBackfillingHistory(t *testing.T) {
 		})
 
 		t.Run("Historical messages are visible when joining on federated server - auto-generated base insertion event", func(t *testing.T) {
-			t.Skip("Skipping until federation is implemented")
+			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
@@ -409,7 +409,7 @@ func TestBackfillingHistory(t *testing.T) {
 		})
 
 		t.Run("Historical messages are visible when joining on federated server - pre-made insertion event", func(t *testing.T) {
-			t.Skip("Skipping until federation is implemented")
+			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, map[string]interface{}{
