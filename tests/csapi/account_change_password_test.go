@@ -1,4 +1,4 @@
-package tests
+package csapi_tests
 
 import (
 	"io/ioutil"

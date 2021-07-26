@@ -103,6 +103,13 @@ Adding `// sytest: ...` means `sytest_coverage.go` will know the test is convert
 when run! Use `go run sytest_coverage.go -v` to see the exact string to use, as they may be different to the one produced
 by an actual sytest run due to parameterised tests.
 
+### Where should I put new tests?
+
+If the test *only* has CS API calls, then put it in `/tests/csapi`. If the test involves both CS API and Federation, or just Federation, put it in `/tests`.
+This is because of how parallelisation works currently. All federation tests MUST be in the same directory due to the use of shared resources (for example,
+the local Complement server always binds to `:8448` which is a problem if 2 fed tests want to do that at the same time). This will be resolved in the future
+by the use of `.well-known` but at present this is how things stand.
+
 ### Should I always make a new blueprint for a test?
 
 Probably not. Blueprints are costly, and they should only be made if there is a strong case for plenty of reuse among tests. In the same way that we don't always add fixtures to sytest, we should be sparing with adding blueprints.
@@ -140,6 +147,9 @@ t.Run("parallel", func(t *testing.T) {
 })
 ```
 
+Tests in a directory will run in parallel with tests in other directories by default. You can disable this by invoking `go test -p 1` which will
+force a parallelisation factor of 1 (no parallelisation).
+
 ### How should I do comments in the test?
 
 Add long prose to the start of the function to outline what it is you're testing (and why if it is unclear). For example:
@@ -163,6 +173,14 @@ There is no syntactically pleasing way to do this. Create a separate function wh
 
 This is done using standard Go testing mechanisms, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
 
+For debugging, you can also use `logrus` to expand a bunch of variables:
+
+```go
+logrus.WithFields(logrus.Fields{
+	"events": events,
+	"context": context,
+}).Error("message response")
+```
 
 ### How do I show the server logs even when the tests pass?
 
@@ -176,10 +194,6 @@ Use one of `t.Skipf(...)` or `t.SkipNow()`.
 ### Why do we use `t.Errorf` sometimes and `t.Fatalf` other times?
 
 Error will fail the test but continue execution, where Fatal will fail the test and quit. Use Fatal when continuing to run the test will result in programming errors (e.g nil exceptions).
-
-### Why do I get the error "Error response from daemon: Conflict. The container name "/complement_rooms_state_alice.hs1_1" is already in use by container "c2d1d90c6cff7b7de2678b56c702bd1ff76ca72b930e8f2ca32eef3f2514ff3b". You have to remove (or rename) that container to be able to reuse that name."?
-
-The Docker daemon has a lag time between removing containers and them actually being removed. This means you cannot remove a container called 'foo' and immediately recreate it as 'foo'. To get around this, you need to use a different name. This probably means the namespace you have given the deployment is used by another test. Try changing it to something else e.g `Deploy(t, "rooms_state_2", b.BlueprintAlice.Name)`
 
 ### How do I run tests inside my IDE?
 

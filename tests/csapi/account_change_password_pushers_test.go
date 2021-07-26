@@ -1,6 +1,6 @@
 // +build !dendrite_blacklist
 
-package tests
+package csapi_tests
 
 import (
 	"testing"

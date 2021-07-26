@@ -14,6 +14,8 @@ type Complement struct {
 	BestEffort             bool
 	VersionCheckIterations int
 	KeepBlueprints         []string
+	// The namespace for all complement created blueprints and deployments
+	PackageNamespace string
 }
 
 func NewConfigFromEnvVars() *Complement {
@@ -27,6 +29,7 @@ func NewConfigFromEnvVars() *Complement {
 	if cfg.BaseImageURI == "" {
 		panic("COMPLEMENT_BASE_IMAGE must be set")
 	}
+	cfg.PackageNamespace = "pkg"
 	return cfg
 }
 
