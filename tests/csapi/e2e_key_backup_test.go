@@ -8,6 +8,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/conversation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -156,4 +157,41 @@ func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestConvo(t *testing.T) {
+	fmt.Println("TestConvo")
+	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+	defer deployment.Destroy(t)
+	fmt.Println("TestConvo deployed")
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
+	roomID := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+	})
+	c := conversation.New(t, conversation.WithUsers(alice, bob))
+	c.Do(bob, &conversation.ExchangeMembership{
+		RoomID:     roomID,
+		Membership: "join",
+	}, nil)
+	c.Do(alice, &conversation.ExchangeEvent{
+		RoomID: roomID,
+		Event: b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "Hello world!",
+			},
+		},
+	}, nil)
+	c.AddClient(charlie)
+	c.Do(charlie, &conversation.ExchangeMembership{
+		RoomID:     roomID,
+		Membership: "join",
+	}, nil)
+	c.Do(alice, &conversation.ExchangeMembership{
+		RoomID:     roomID,
+		Membership: "leave",
+	}, []*client.CSAPI{alice})
 }
