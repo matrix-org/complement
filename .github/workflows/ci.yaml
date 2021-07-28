@@ -13,7 +13,7 @@ jobs:
       - run: sudo apt-get -qq install libolm-dev
       - uses: golangci/golangci-lint-action@v2
         with:
-          version: v1.39
+          version: v1.33
           args: ./internal/... ./tests/... 
 
   complement:
