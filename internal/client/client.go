@@ -212,6 +212,27 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 	return userID, accessToken
 }
 
+// GetEvent fetches the given event from the specified room and returns a typed Event
+func (c *CSAPI) GetEvent(t *testing.T, roomID, eventId string) b.Event {
+	t.Helper()
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "event", eventId})
+	body := ParseJSON(t, res)
+
+	statKeyRes := gjson.GetBytes(body, "state_key")
+	var stateKey *string = nil
+	if statKeyRes.Exists() {
+		stateKey = b.Ptr(statKeyRes.Str)
+	}
+
+	return b.Event{
+		Type:     GetJSONFieldStr(t, body, "type"),
+		Sender:   GetJSONFieldStr(t, body, "sender"),
+		StateKey: stateKey,
+		Content:  GetJSONFieldStringMap(t, body, "content"),
+		Unsigned: GetJSONFieldStringMap(t, body, "unsigned"),
+	}
+}
+
 // MustDo will do the HTTP request and fail the test if the response is not 2xx
 func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
 	t.Helper()
@@ -404,6 +425,26 @@ func GetJSONFieldStringArray(t *testing.T, body []byte, wantKey string) []string
 	})
 
 	return arr
+}
+
+func GetJSONFieldStringMap(t *testing.T, body []byte, wantKey string) map[string]interface{} {
+	t.Helper()
+
+	res := gjson.GetBytes(body, wantKey)
+
+	if !res.Exists() {
+		t.Fatalf("GetJSONFieldStringMap: key '%s' missing from %s", wantKey, string(body))
+	}
+
+	jsonMap := map[string]interface{}{}
+	res.ForEach(func(key, value gjson.Result) bool {
+		jsonMap[key.Str] = value.Str
+
+		// Keep iterating
+		return true
+	})
+
+	return jsonMap
 }
 
 // ParseJSON parses a JSON-encoded HTTP Response body into a byte slice
