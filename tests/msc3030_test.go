@@ -7,6 +7,7 @@
 package tests
 
 import (
+	"fmt"
 	"net/url"
 	"strconv"
 	"testing"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
@@ -46,11 +46,6 @@ func TestJumpToDateEndpoint(t *testing.T) {
 	})
 	timeAfterEventB := time.Now()
 
-	logrus.WithFields(logrus.Fields{
-		"eventAID": eventAID,
-		"eventBID": eventBID,
-	}).Error("see messages")
-
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("should find event after given timestmap", func(t *testing.T) {
 			checkEventisReturnedForTime(t, alice, roomID, timeBeforeEventA, eventAID)
@@ -59,28 +54,94 @@ func TestJumpToDateEndpoint(t *testing.T) {
 		t.Run("should find event before given timestmap", func(t *testing.T) {
 			checkEventisReturnedForTime(t, alice, roomID, timeAfterEventB, eventBID)
 		})
-
 	})
-}
-
-func makeTimestampFromTime(t time.Time) int64 {
-	return t.UnixNano() / int64(time.Millisecond)
 }
 
 func checkEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID string, givenTime time.Time, expectedEventId string) {
 	t.Helper()
 
-	timestampString := strconv.FormatInt(makeTimestampFromTime(givenTime), 10)
+	givenTimestamp := makeTimestampFromTime(givenTime)
+	timestampString := strconv.FormatInt(givenTimestamp, 10)
 	timestampToEventRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		"ts": []string{timestampString},
 	}))
 	timestampToEventResBody := client.ParseJSON(t, timestampToEventRes)
 
 	actualEventIdRes := gjson.GetBytes(timestampToEventResBody, "event_id")
-	actualEventId := actualEventIdRes.Str
+	actualEventId := actualEventIdRes.String()
 
 	if actualEventId != expectedEventId {
-		actualEvent := c.GetEvent(t, roomID, actualEventId)
-		t.Fatalf("Expected to see %s but received %s\n%+v", expectedEventId, actualEventId, actualEvent)
+		debugMessageList := getDebugMessageListFromMessagesResponse(t, c, roomID, expectedEventId, actualEventId, givenTimestamp)
+		t.Fatalf(
+			"Expected to see %s given %s but received %s\n%s",
+			decorateStringWithAnsiColor(expectedEventId, AnsiColorGreen),
+			decorateStringWithAnsiColor(timestampString, AnsiColorYellow),
+			decorateStringWithAnsiColor(actualEventId, AnsiColorRed),
+			debugMessageList,
+		)
 	}
+}
+
+func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, roomID string, expectedEventId string, actualEventId string, givenTimestamp int64) string {
+	t.Helper()
+
+	messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		"dir":   []string{"b"},
+		"limit": []string{"100"},
+	}))
+	messsageResBody := client.ParseJSON(t, messagesRes)
+
+	wantKey := "chunk"
+	res := gjson.GetBytes(messsageResBody, wantKey)
+	if !res.Exists() {
+		t.Fatalf("missing key '%s'", wantKey)
+	}
+	if !res.IsArray() {
+		t.Fatalf("key '%s' is not an array (was %s)", wantKey, res.Type)
+	}
+
+	givenTimestampMarker := decorateStringWithAnsiColor(fmt.Sprintf("-- givenTimestamp=%s --\n", strconv.FormatInt(givenTimestamp, 10)), AnsiColorYellow)
+
+	resultantString := ""
+	givenTimestampAlreadyInserted := false
+	res.ForEach(func(key, r gjson.Result) bool {
+		// The timestmap could be after-in-time of any of the events
+		if r.Get("origin_server_ts").Int() < givenTimestamp && !givenTimestampAlreadyInserted {
+			resultantString += givenTimestampMarker
+			givenTimestampAlreadyInserted = true
+		}
+
+		event_id := r.Get("event_id").String()
+		event_id_string := event_id
+		if event_id == expectedEventId {
+			event_id_string = decorateStringWithAnsiColor(event_id, AnsiColorGreen)
+		} else if event_id == actualEventId {
+			event_id_string = decorateStringWithAnsiColor(event_id, AnsiColorRed)
+		}
+
+		resultantString += fmt.Sprintf("%s (%s) - %s\n", event_id_string, strconv.FormatInt(r.Get("origin_server_ts").Int(), 10), r.Get("type").String())
+
+		// The timestmap could be before-in-time of any of the events
+		if r.Get("origin_server_ts").Int() > givenTimestamp && !givenTimestampAlreadyInserted {
+			resultantString += givenTimestampMarker
+			givenTimestampAlreadyInserted = true
+		}
+
+		// keep iterating
+		return true
+	})
+
+	return resultantString
+}
+
+func makeTimestampFromTime(t time.Time) int64 {
+	return t.UnixNano() / int64(time.Millisecond)
+}
+
+const AnsiColorRed string = "31"
+const AnsiColorGreen string = "32"
+const AnsiColorYellow string = "33"
+
+func decorateStringWithAnsiColor(inputString, decorationColor string) string {
+	return fmt.Sprintf("\033[%sm%s\033[0m", decorationColor, inputString)
 }
