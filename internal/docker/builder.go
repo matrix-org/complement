@@ -63,15 +63,10 @@ func init() {
 const complementLabel = "complement_context"
 
 type Builder struct {
-	BaseImage      string
-	ImageArgs      []string
-	KeepBlueprints []string
+	Config         *config.Complement
 	CSAPIPort      int
 	FederationPort int
 	Docker         *client.Client
-	debugLogging   bool
-	bestEffort     bool
-	config         *config.Complement
 }
 
 func NewBuilder(cfg *config.Complement) (*Builder, error) {
@@ -81,19 +76,14 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 	}
 	return &Builder{
 		Docker:         cli,
-		BaseImage:      cfg.BaseImageURI,
-		ImageArgs:      cfg.BaseImageArgs,
-		KeepBlueprints: cfg.KeepBlueprints,
+		Config:         cfg,
 		CSAPIPort:      8008,
 		FederationPort: 8448,
-		debugLogging:   cfg.DebugLoggingEnabled,
-		bestEffort:     cfg.BestEffort,
-		config:         cfg,
 	}, nil
 }
 
 func (d *Builder) log(str string, args ...interface{}) {
-	if !d.debugLogging {
+	if !d.Config.DebugLoggingEnabled {
 		return
 	}
 	log.Printf(str, args...)
@@ -117,7 +107,10 @@ func (d *Builder) Cleanup() {
 // removeImages removes all images with `complementLabel`.
 func (d *Builder) removeNetworks() error {
 	networks, err := d.Docker.NetworkList(context.Background(), types.NetworkListOptions{
-		Filters: label(complementLabel),
+		Filters: label(
+			complementLabel,
+			"complement_pkg="+d.Config.PackageNamespace,
+		),
 	})
 	if err != nil {
 		return err
@@ -134,7 +127,10 @@ func (d *Builder) removeNetworks() error {
 // removeImages removes all images with `complementLabel`.
 func (d *Builder) removeImages() error {
 	images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
-		Filters: label(complementLabel),
+		Filters: label(
+			complementLabel,
+			"complement_pkg="+d.Config.PackageNamespace,
+		),
 	})
 	if err != nil {
 		return err
@@ -156,7 +152,7 @@ func (d *Builder) removeImages() error {
 		}
 		bprintName := img.Labels["complement_blueprint"]
 		keep := false
-		for _, keepBprint := range d.KeepBlueprints {
+		for _, keepBprint := range d.Config.KeepBlueprints {
 			if bprintName == keepBprint {
 				keep = true
 				break
@@ -180,8 +176,11 @@ func (d *Builder) removeImages() error {
 // removeContainers removes all containers with `complementLabel`.
 func (d *Builder) removeContainers() error {
 	containers, err := d.Docker.ContainerList(context.Background(), types.ContainerListOptions{
-		All:     true,
-		Filters: label(complementLabel),
+		All: true,
+		Filters: label(
+			complementLabel,
+			"complement_pkg="+d.Config.PackageNamespace,
+		),
 	})
 	if err != nil {
 		return err
@@ -201,7 +200,10 @@ func (d *Builder) ConstructBlueprintsIfNotExist(bs []b.Blueprint) error {
 	var blueprintsToBuild []b.Blueprint
 	for _, bprint := range bs {
 		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
-			Filters: label("complement_blueprint=" + bprint.Name),
+			Filters: label(
+				"complement_blueprint="+bprint.Name,
+				"complement_pkg="+d.Config.PackageNamespace,
+			),
 		})
 		if err != nil {
 			return fmt.Errorf("ConstructBlueprintsIfNotExist: failed to ImageList: %w", err)
@@ -242,7 +244,10 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	foundImages := false
 	for i := 0; i < 50; i++ { // max 5s
 		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
-			Filters: label(complementLabel),
+			Filters: label(
+				complementLabel,
+				"complement_pkg="+d.Config.PackageNamespace,
+			),
 		})
 		if err != nil {
 			return err
@@ -265,12 +270,12 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 
 // construct all Homeservers sequentially then commits them
 func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
-	networkID, err := CreateNetworkIfNotExists(d.Docker, bprint.Name)
+	networkID, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
 	if err != nil {
 		return []error{err}
 	}
 
-	runner := instruction.NewRunner(bprint.Name, d.bestEffort, d.debugLogging)
+	runner := instruction.NewRunner(bprint.Name, d.Config.BestEffort, d.Config.DebugLoggingEnabled)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
 		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
@@ -342,7 +347,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 
 // construct this homeserver and execute its instructions, keeping the container alive.
 func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
-	contextStr := fmt.Sprintf("%s.%s", blueprintName, hs.Name)
+	contextStr := fmt.Sprintf("%s.%s.%s", d.Config.PackageNamespace, blueprintName, hs.Name)
 	d.log("%s : constructing homeserver...\n", contextStr)
 	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
 	if err != nil {
@@ -376,8 +381,9 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 
 	return deployImage(
-		d.Docker, d.BaseImage, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr), blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
-		networkID, d.config.VersionCheckIterations,
+		d.Docker, d.Config.BaseImageURI, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr),
+		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
+		networkID, d.Config.VersionCheckIterations,
 	)
 }
 
@@ -385,6 +391,7 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 // If running CI, returns an error if it's unable to find a volume that has /ca
 // Otherwise, returns an error if we're unable to find the <cwd>/ca directory on the local host
 func getCaVolume(ctx context.Context, docker *client.Client) (caMount mount.Mount, err error) {
+	// TODO: wrap in a lockfile
 	if os.Getenv("CI") == "true" {
 		// When in CI, Complement itself is a container with the CA volume mounted at /ca.
 		// We need to mount this volume to all homeserver containers to synchronize the CA cert.
@@ -484,7 +491,7 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 }
 
 func deployImage(
-	docker *client.Client, imageID string, csPort int, containerName, blueprintName, hsName string, asIDToRegistrationMap map[string]string, contextStr, networkID string, versionCheckIterations int,
+	docker *client.Client, imageID string, csPort int, containerName, pkgNamespace, blueprintName, hsName string, asIDToRegistrationMap map[string]string, contextStr, networkID string, versionCheckIterations int,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -526,6 +533,7 @@ func deployImage(
 		Labels: map[string]string{
 			complementLabel:        contextStr,
 			"complement_blueprint": blueprintName,
+			"complement_pkg":       pkgNamespace,
 			"complement_hs_name":   hsName,
 		},
 	}, &container.HostConfig{
@@ -616,12 +624,15 @@ func deployImage(
 	return d, nil
 }
 
-// CreateNetworkIfNotExists creates a docker network and returns its id.
+// createNetworkIfNotExists creates a docker network and returns its id.
 // ID is guaranteed not to be empty when err == nil
-func CreateNetworkIfNotExists(docker *client.Client, blueprintName string) (networkID string, err error) {
+func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkID string, err error) {
 	// check if a network already exists for this blueprint
 	nws, err := docker.NetworkList(context.Background(), types.NetworkListOptions{
-		Filters: label("complement_blueprint=" + blueprintName),
+		Filters: label(
+			"complement_pkg="+pkgNamespace,
+			"complement_blueprint="+blueprintName,
+		),
 	})
 	if err != nil {
 		return "", fmt.Errorf("%s: failed to list networks. %w", blueprintName, err)
@@ -631,10 +642,11 @@ func CreateNetworkIfNotExists(docker *client.Client, blueprintName string) (netw
 		return nws[0].ID, nil
 	}
 	// make a user-defined network so we get DNS based on the container name
-	nw, err := docker.NetworkCreate(context.Background(), "complement_"+blueprintName, types.NetworkCreate{
+	nw, err := docker.NetworkCreate(context.Background(), "complement_"+pkgNamespace+"_"+blueprintName, types.NetworkCreate{
 		Labels: map[string]string{
 			complementLabel:        blueprintName,
 			"complement_blueprint": blueprintName,
+			"complement_pkg":       pkgNamespace,
 		},
 	})
 	if err != nil {
@@ -668,9 +680,14 @@ func printLogs(docker *client.Client, containerID, contextStr string) {
 	log.Printf("============== %s : END LOGS ==============\n\n\n", contextStr)
 }
 
-func label(in string) filters.Args {
+// label returns a filter for the presence of certain labels ("complement_context") or a match of
+// labels ("complement_blueprint=foo").
+func label(labelFilters ...string) filters.Args {
 	f := filters.NewArgs()
-	f.Add("label", in)
+	// label=<key> or label=<key>=<value>
+	for _, in := range labelFilters {
+		f.Add("label", in)
+	}
 	return f
 }
 

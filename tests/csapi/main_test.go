@@ -1,4 +1,4 @@
-package tests
+package csapi_tests
 
 import (
 	"context"
@@ -29,6 +29,7 @@ var complementBuilder *docker.Builder
 // again. No blueprints are made at this point as they are lazily made on demand.
 func TestMain(m *testing.M) {
 	cfg := config.NewConfigFromEnvVars()
+	cfg.PackageNamespace = "csapi"
 	log.Printf("config: %+v", cfg)
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
@@ -84,6 +85,7 @@ func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	return dep
 }
 
+// nolint:unused
 type Waiter struct {
 	mu     sync.Mutex
 	ch     chan bool
@@ -93,6 +95,7 @@ type Waiter struct {
 // NewWaiter returns a generic struct which can be waited on until `Waiter.Finish` is called.
 // A Waiter is similar to a `sync.WaitGroup` of size 1, but without the ability to underflow and
 // with built-in timeouts.
+// nolint:unused
 func NewWaiter() *Waiter {
 	return &Waiter{
 		ch: make(chan bool),
