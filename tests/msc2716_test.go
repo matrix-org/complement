@@ -534,39 +534,15 @@ func TestBackfillingHistory(t *testing.T) {
 				},
 			})
 
-			// Send a marker event to let all of the homeservers know about the
-			// insertion point where all of the historical messages are at
-			markerEvent := b.Event{
-				Type: markerEventType,
-				Content: map[string]interface{}{
-					markerInsertionContentField: baseInsertionEventID,
-				},
-			}
-			// We can't use as.SendEventSynced(...) because application services can't use the /sync API
-			markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", markerEvent.Type, "txn-m123"}, client.WithJSONBody(t, markerEvent.Content))
-			markerSendBody := client.ParseJSON(t, markerSendRes)
-			markerEventID := client.GetJSONFieldStr(t, markerSendBody, "event_id")
-
-			// Make sure the marker event has reached the remote homeserver
-			remoteCharlie.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
-				return ev.Get("event_id").Str == markerEventID
-			})
-
-			// Make sure all of the base insertion event has been backfilled
-			// after the marker was received
-			fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
-				if ev.Get("event_id").Str == baseInsertionEventID {
-					return true
-				}
-
-				return false
-			})
+			// Send the marker event
+			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
 			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			}))
 
+			// Make sure all of the historical messages are visible when we scrollback again
 			must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
@@ -577,7 +553,7 @@ func TestBackfillingHistory(t *testing.T) {
 		})
 
 		t.Run("When messages have already been scrolled back through, new historical messages are visible in next scroll back on federated server", func(t *testing.T) {
-			t.Skip("Skipping until federation is implemented")
+			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createRoomOpts)
@@ -615,15 +591,48 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+			baseInsertionEventID := historicalEventIDs[len(historicalEventIDs)-1]
 
-			// TODO: Send marker event
+			// [1 insertion event + 2 historical events + 1 chunk event + 1 insertion event]
+			if len(historicalEventIDs) != 5 {
+				t.Fatalf("Expected eventID list should be length 5 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
+			}
 
-			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
+			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody)
+			// Since the original body can only be read once, create a new one from the body bytes we just read
+			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
+			// Make sure the history isn't visible before we expect it to be there.
+			// This is to avoid some bug in the homeserver using some unknown
+			// mechanism to distribute the historical messages to other homeservers.
+			must.MatchResponse(t, beforeMarkerMessagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONArrayEach("chunk", func(r gjson.Result) error {
+						// Throw if we find one of the historical events in the message response
+						for _, historicalEventID := range historicalEventIDs {
+							if r.Get("event_id").Str == historicalEventID {
+								return fmt.Errorf("Historical event (%s) found on remote homeserver before marker event was sent out\nmessage response (%d): %v\nhistoricalEventIDs (%d): %v", historicalEventID, len(eventDebugStringsFromBeforeMarkerResponse), eventDebugStringsFromBeforeMarkerResponse, len(historicalEventIDs), historicalEventIDs)
+							}
+						}
+						return nil
+					}),
+				},
+			})
+
+			// Send the marker event
+			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
+
+			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			}))
 
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+			// Make sure all of the historical messages are visible when we scrollback again
+			must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
 						return r.Get("event_id").Str
@@ -740,6 +749,36 @@ func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocal
 		errorMessage := client.GetJSONFieldStr(t, body, "error")
 		t.Fatalf("msc2716.ensureVirtualUserRegistered failed to register: (%s) %s", errcode, errorMessage)
 	}
+}
+
+func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSAPI, roomID, insertionEventID string) {
+	// Send a marker event to let all of the homeservers know about the
+	// insertion point where all of the historical messages are at
+	markerEvent := b.Event{
+		Type: markerEventType,
+		Content: map[string]interface{}{
+			markerInsertionContentField: insertionEventID,
+		},
+	}
+	// We can't use as.SendEventSynced(...) because application services can't use the /sync API
+	markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", markerEvent.Type, "txn-m123"}, client.WithJSONBody(t, markerEvent.Content))
+	markerSendBody := client.ParseJSON(t, markerSendRes)
+	markerEventID := client.GetJSONFieldStr(t, markerSendBody, "event_id")
+
+	// Make sure the marker event has reached the remote homeserver
+	c.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+		return ev.Get("event_id").Str == markerEventID
+	})
+
+	// Make sure all of the base insertion event has been backfilled
+	// after the marker was received
+	fetchUntilMessagesResponseHas(t, c, roomID, func(ev gjson.Result) bool {
+		if ev.Get("event_id").Str == insertionEventID {
+			return true
+		}
+
+		return false
+	})
 }
 
 func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count int) (eventIDs []string) {
