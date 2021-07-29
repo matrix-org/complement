@@ -666,7 +666,7 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 	checkCounter := 0
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
-			t.Fatalf("fetchMessagesUntilResponseHas timed out. Called check function %d times", checkCounter)
+			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", checkCounter)
 		}
 
 		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
