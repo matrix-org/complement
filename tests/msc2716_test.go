@@ -337,7 +337,6 @@ func TestBackfillingHistory(t *testing.T) {
 		})
 
 		t.Run("Historical messages are visible when joining on federated server - auto-generated base insertion event", func(t *testing.T) {
-			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createRoomOpts)
@@ -392,7 +391,6 @@ func TestBackfillingHistory(t *testing.T) {
 		})
 
 		t.Run("Historical messages are visible when joining on federated server - pre-made insertion event", func(t *testing.T) {
-			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createRoomOpts)
@@ -465,7 +463,7 @@ func TestBackfillingHistory(t *testing.T) {
 		})
 
 		t.Run("Historical messages are visible when already joined on federated server", func(t *testing.T) {
-			t.Skip("Skipping until federation is implemented")
+			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createRoomOpts)
@@ -484,7 +482,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// Mimic scrollback just through the latest messages
 			remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir": []string{"b"},
-				// Limited so we can only see a few of the latest messages
+				// Limited so we can only see a portion of the latest messages
 				"limit": []string{"5"},
 			}))
 
@@ -552,6 +550,16 @@ func TestBackfillingHistory(t *testing.T) {
 			// Make sure the marker event has reached the remote homeserver
 			remoteCharlie.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
 				return ev.Get("event_id").Str == markerEventID
+			})
+
+			// Make sure all of the base insertion event has been backfilled
+			// after the marker was received
+			fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
+				if ev.Get("event_id").Str == baseInsertionEventID {
+					return true
+				}
+
+				return false
 			})
 
 			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
