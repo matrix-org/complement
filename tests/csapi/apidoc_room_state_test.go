@@ -195,5 +195,130 @@ func TestRoomState(t *testing.T) {
 				},
 			})
 		})
+		// sytest: POST /rooms/:room_id/state/m.room.name sets name
+		t.Run("POST /rooms/:room_id/state/m.room.name sets name", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+				"visibility":      "public",
+				"preset":          "public_chat",
+			})
+
+			reqBody := client.WithJSONBody(t, map[string]interface{}{
+				"name": "room_test_name",
+			})
+
+			res := authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"}, reqBody)
+
+			res = authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"})
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyPresent("name"),
+					match.JSONKeyEqual("name", "room_test_name"),
+				},
+			})
+		})
+		// sytest: GET /rooms/:room_id/state/m.room.topic gets topic
+		t.Run("GET /rooms/:room_id/state/m.room.topic gets topic", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+				"visibility":      "public",
+				"preset":          "public_chat",
+				"topic": "room_topic_test",
+			})
+
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"})
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyPresent("topic"),
+					match.JSONKeyEqual("topic", "room_topic_test"),
+				},
+			})
+		})
+		// sytest: POST /rooms/:room_id/state/m.room.topic sets topic
+		t.Run("POST /rooms/:room_id/state/m.room.topic sets topic", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+				"visibility":      "public",
+				"preset":          "public_chat",
+			})
+
+			reqBody := client.WithJSONBody(t, map[string]interface{}{
+				"topic": "room_test_topic",
+			})
+
+
+			res := authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"}, reqBody)
+
+			res = authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"})
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyPresent("topic"),
+					match.JSONKeyEqual("topic", "room_test_topic"),
+				},
+			})
+		})
+		// sytest: GET /rooms/:room_id/state fetches entire room state
+		t.Run("GET /rooms/:room_id/state fetches entire room state", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+				"visibility":      "public",
+				"preset":          "public_chat",
+				"name": "room_test",
+				"topic": "room_topic_test",
+			})
+
+			wantKeys := map[string]bool{
+				"m.room.create":       true,
+				"m.room.join_rules": true,
+				"m.room.name": true,
+				"m.room.power_levels": true,
+			}
+
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state"})
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONArrayEach("", func(val gjson.Result) error {
+						gotKey := val.Get("type").Str
+						if wantKeys[gotKey] {
+							delete(wantKeys, gotKey)
+							return nil
+						}
+						return nil
+					}),
+				},
+			})
+			if len(wantKeys) != 0 {
+				t.Errorf("/state did not return the following expected keys: %v", wantKeys)
+			}
+		})
+		// sytest: POST /createRoom with creation content
+		t.Run("POST /createRoom with creation content", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+				"visibility":      "public",
+				"preset":          "public_chat",
+				"creation_content": map[string]interface{}{
+					"m.federate": false,
+				},
+			})
+
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.create"})
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyPresent("m.federate"),
+					match.JSONKeyEqual("m.federate", false),
+				},
+			})
+		})
 	})
 }
