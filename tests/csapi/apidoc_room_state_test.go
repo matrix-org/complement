@@ -208,9 +208,9 @@ func TestRoomState(t *testing.T) {
 				"name": "room_test_name",
 			})
 
-			res := authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"}, reqBody)
+			_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"}, reqBody)
 
-			res = authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -251,9 +251,9 @@ func TestRoomState(t *testing.T) {
 				"topic": "room_test_topic",
 			})
 
-			res := authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"}, reqBody)
+			_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"}, reqBody)
 
-			res = authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
