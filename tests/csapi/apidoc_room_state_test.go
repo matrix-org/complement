@@ -200,8 +200,8 @@ func TestRoomState(t *testing.T) {
 			t.Parallel()
 
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
-				"visibility":      "public",
-				"preset":          "public_chat",
+				"visibility": "public",
+				"preset":     "public_chat",
 			})
 
 			reqBody := client.WithJSONBody(t, map[string]interface{}{
@@ -224,9 +224,9 @@ func TestRoomState(t *testing.T) {
 			t.Parallel()
 
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
-				"visibility":      "public",
-				"preset":          "public_chat",
-				"topic": "room_topic_test",
+				"visibility": "public",
+				"preset":     "public_chat",
+				"topic":      "room_topic_test",
 			})
 
 			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"})
@@ -243,14 +243,13 @@ func TestRoomState(t *testing.T) {
 			t.Parallel()
 
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
-				"visibility":      "public",
-				"preset":          "public_chat",
+				"visibility": "public",
+				"preset":     "public_chat",
 			})
 
 			reqBody := client.WithJSONBody(t, map[string]interface{}{
 				"topic": "room_test_topic",
 			})
-
 
 			res := authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"}, reqBody)
 
@@ -268,16 +267,16 @@ func TestRoomState(t *testing.T) {
 			t.Parallel()
 
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
-				"visibility":      "public",
-				"preset":          "public_chat",
-				"name": "room_test",
-				"topic": "room_topic_test",
+				"visibility": "public",
+				"preset":     "public_chat",
+				"name":       "room_test",
+				"topic":      "room_topic_test",
 			})
 
 			wantKeys := map[string]bool{
 				"m.room.create":       true,
-				"m.room.join_rules": true,
-				"m.room.name": true,
+				"m.room.join_rules":   true,
+				"m.room.name":         true,
 				"m.room.power_levels": true,
 			}
 
@@ -304,8 +303,8 @@ func TestRoomState(t *testing.T) {
 			t.Parallel()
 
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
-				"visibility":      "public",
-				"preset":          "public_chat",
+				"visibility": "public",
+				"preset":     "public_chat",
 				"creation_content": map[string]interface{}{
 					"m.federate": false,
 				},
