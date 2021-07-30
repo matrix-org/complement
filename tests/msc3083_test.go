@@ -315,7 +315,7 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 // Setup 3 homeservers:
 // * hs1 creates the space/room.
 // * hs2 joins the room
-// * hs3 attempts to join via hs2 (should fail) and hs3 (should work)
+// * hs3 attempts to join via hs2 (should fail) and hs1 (should work)
 func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 	deployment := Deploy(t, b.Blueprint{
 		Name: "federation_three_homeservers",
