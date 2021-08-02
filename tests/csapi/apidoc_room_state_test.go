@@ -239,7 +239,7 @@ func TestRoomState(t *testing.T) {
 			})
 		})
 		// sytest: POST /rooms/:room_id/state/m.room.topic sets topic
-		t.Run("POST /rooms/:room_id/state/m.room.topic sets topic", func(t *testing.T) {
+		t.Run("PUT /rooms/:room_id/state/m.room.topic sets topic", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
@@ -278,6 +278,7 @@ func TestRoomState(t *testing.T) {
 				"m.room.join_rules":   true,
 				"m.room.name":         true,
 				"m.room.power_levels": true,
+				"m.room.topic":        true,
 			}
 
 			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state"})
@@ -299,7 +300,7 @@ func TestRoomState(t *testing.T) {
 			}
 		})
 		// sytest: POST /createRoom with creation content
-		t.Run("POST /createRoom with creation content", func(t *testing.T) {
+		t.Run("PUT /createRoom with creation content", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
@@ -314,8 +315,8 @@ func TestRoomState(t *testing.T) {
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONKeyPresent("m.federate"),
-					match.JSONKeyEqual("m.federate", false),
+					match.JSONKeyPresent("m\\.federate"),
+					match.JSONKeyEqual("m\\.federate", false),
 				},
 			})
 		})
