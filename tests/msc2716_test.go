@@ -46,8 +46,14 @@ var (
 	markerInsertionContentField = "org.matrix.msc2716.marker.insertion"
 )
 
-var createRoomOpts = map[string]interface{}{
+var createPublicRoomOpts = map[string]interface{}{
 	"preset":       "public_chat",
+	"name":         "the hangout spot",
+	"room_version": "org.matrix.msc2716",
+}
+
+var createPrivateRoomOpts = map[string]interface{}{
+	"preset":       "private_chat",
 	"name":         "the hangout spot",
 	"room_version": "org.matrix.msc2716",
 }
@@ -82,7 +88,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Backfilled historical events resolve with proper state in correct order", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, createRoomOpts)
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create some normal messages in the timeline. We're creating them in
@@ -193,7 +199,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Backfilled historical events from multiple users in the same chunk", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, createRoomOpts)
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our backfilled events next to
@@ -237,10 +243,10 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
-		t.Run("Backfilled historical events with m.historical do not come down in an incremental sync", func(t *testing.T) {
+		t.Run("Backfilled historical events do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, createRoomOpts)
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our backfilled events next to
@@ -287,7 +293,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Unrecognised prev_event ID will throw an error", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, createRoomOpts)
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
 
 			batchSendHistoricalMessages(
 				t,
@@ -309,7 +315,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Normal users aren't allowed to backfill messages", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, createRoomOpts)
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -331,6 +337,48 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 		})
 
+		t.Run("Should be able to backfill into private room", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, createPrivateRoomOpts)
+			as.InviteRoom(t, roomID, alice.UserID)
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create the "live" event we are going to insert our backfilled events next to
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIdBefore := eventIDsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// Insert a backfilled event
+			batchSendRes := batchSendHistoricalMessages(
+				t,
+				as,
+				[]string{virtualUserID},
+				roomID,
+				eventIdBefore,
+				timeAfterEventBefore,
+				"",
+				3,
+				// Status
+				200,
+			)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+
+			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
+		})
+
 		t.Run("TODO: Test if historical avatar/display name set back in time are picked up on historical messages", func(t *testing.T) {
 			t.Skip("Skipping until implemented")
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
@@ -339,7 +387,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Historical messages are visible when joining on federated server - auto-generated base insertion event", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, createRoomOpts)
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -393,7 +441,7 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("Historical messages are visible when joining on federated server - pre-made insertion event", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, createRoomOpts)
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -466,7 +514,7 @@ func TestBackfillingHistory(t *testing.T) {
 			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, createRoomOpts)
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Join the room from a remote homeserver before any backfilled messages are sent
@@ -556,7 +604,7 @@ func TestBackfillingHistory(t *testing.T) {
 			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
-			roomID := as.CreateRoom(t, createRoomOpts)
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Join the room from a remote homeserver before any backfilled messages are sent
@@ -798,6 +846,72 @@ func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count in
 	return eventIDs
 }
 
+func asdf(
+	virtualUserIDs []string,
+	insertTime time.Time,
+) []map[string]interface{} {
+	// Timestamp in milliseconds
+	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
+
+	state_evs := make([]map[string]interface{}, 2*len(virtualUserIDs))
+	for i, virtualUserID := range virtualUserIDs {
+		inviteEvent := map[string]interface{}{
+			"type":             "m.room.member",
+			"sender":           c.UserID,
+			"origin_server_ts": insertOriginServerTs,
+			"content": map[string]interface{}{
+				"membership": "invite",
+			},
+			"state_key": virtualUserID,
+		}
+		state_evs[2*i] = inviteEvent
+
+		joinEvent := map[string]interface{}{
+			"type":             "m.room.member",
+			"sender":           virtualUserID,
+			"origin_server_ts": insertOriginServerTs,
+			"content": map[string]interface{}{
+				"membership": "join",
+			},
+			"state_key": virtualUserID,
+		}
+
+		state_evs[2*i+1] = joinEvent
+	}
+
+	return state_evs
+}
+
+func createBatchSendMessages(
+	virtualUserIDs []string,
+	insertTime time.Time,
+	count int,
+) []map[string]interface{} {
+	// Timestamp in milliseconds
+	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
+	timeBetweenMessagesMS := uint64(timeBetweenMessages / time.Millisecond)
+
+	evs := make([]map[string]interface{}, count)
+	for i := 0; i < len(evs); i++ {
+		virtualUserID := virtualUserIDs[i%len(virtualUserIDs)]
+
+		newEvent := map[string]interface{}{
+			"type":             "m.room.message",
+			"sender":           virtualUserID,
+			"origin_server_ts": insertOriginServerTs + (timeBetweenMessagesMS * uint64(i)),
+			"content": map[string]interface{}{
+				"msgtype":              "m.text",
+				"body":                 fmt.Sprintf("Historical %d (chunk=%d)", i, chunkCount),
+				historicalContentField: true,
+			},
+		}
+
+		evs[i] = newEvent
+	}
+
+	return evs
+}
+
 var chunkCount int64 = 0
 
 func batchSendHistoricalMessages(
@@ -834,8 +948,19 @@ func batchSendHistoricalMessages(
 		evs[i] = newEvent
 	}
 
-	state_evs := make([]map[string]interface{}, len(virtualUserIDs))
+	state_evs := make([]map[string]interface{}, 2*len(virtualUserIDs))
 	for i, virtualUserID := range virtualUserIDs {
+		inviteEvent := map[string]interface{}{
+			"type":             "m.room.member",
+			"sender":           c.UserID,
+			"origin_server_ts": insertOriginServerTs,
+			"content": map[string]interface{}{
+				"membership": "invite",
+			},
+			"state_key": virtualUserID,
+		}
+		state_evs[2*i] = inviteEvent
+
 		joinEvent := map[string]interface{}{
 			"type":             "m.room.member",
 			"sender":           virtualUserID,
@@ -846,7 +971,7 @@ func batchSendHistoricalMessages(
 			"state_key": virtualUserID,
 		}
 
-		state_evs[i] = joinEvent
+		state_evs[2*i+1] = joinEvent
 	}
 
 	query := make(url.Values, 2)
