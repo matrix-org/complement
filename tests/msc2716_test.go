@@ -112,15 +112,15 @@ func TestBackfillingHistory(t *testing.T) {
 			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
 			// Insert the most recent chunk of backfilled history
+			insertTime1 := timeAfterEventBefore.Add(timeBetweenMessages * 3)
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore.Add(timeBetweenMessages*3),
 				"",
-				3,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime1),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime1, 3),
 				// Status
 				200,
 			)
@@ -130,15 +130,15 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// Insert another older chunk of backfilled history from the same user.
 			// Make sure the meta data and joins still work on the subsequent chunk
+			insertTime2 := timeAfterEventBefore
 			batchSendRes2 := batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore,
 				nextChunkID,
-				3,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime2),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime2, 3),
 				// Status
 				200,
 			)
@@ -213,16 +213,17 @@ func TestBackfillingHistory(t *testing.T) {
 			virtualUserID3 := "@carol:hs1"
 			ensureVirtualUserRegistered(t, as, "carol")
 
+			virtualUserList := []string{virtualUserID, virtualUserID2, virtualUserID3}
+
 			// Insert a backfilled event
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID, virtualUserID2, virtualUserID3},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore,
 				"",
-				3,
+				createJoinStateEventsForBackfillRequest(virtualUserList, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest(virtualUserList, timeAfterEventBefore, 3),
 				// Status
 				200,
 			)
@@ -261,12 +262,11 @@ func TestBackfillingHistory(t *testing.T) {
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore,
 				"",
-				1,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 				// Status
 				200,
 			)
@@ -295,15 +295,15 @@ func TestBackfillingHistory(t *testing.T) {
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 
+			insertTime := time.Now()
 			batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID},
 				roomID,
 				"$some-non-existant-event-id",
-				time.Now(),
 				"",
-				1,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime, 1),
 				// Status
 				// TODO: Seems like this makes more sense as a 404
 				// But the current Synapse code around unknown prev events will throw ->
@@ -325,12 +325,11 @@ func TestBackfillingHistory(t *testing.T) {
 			batchSendHistoricalMessages(
 				t,
 				alice,
-				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore,
 				"",
-				1,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 				// Status
 				// Normal user alice should not be able to backfill messages
 				403,
@@ -349,16 +348,19 @@ func TestBackfillingHistory(t *testing.T) {
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
+			var stateEvents []map[string]interface{}
+			stateEvents = append(stateEvents, createInviteStateEventsForBackfillRequest(as.UserID, []string{virtualUserID}, timeAfterEventBefore)...)
+			stateEvents = append(stateEvents, createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore)...)
+
 			// Insert a backfilled event
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore,
 				"",
-				3,
+				stateEvents,
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 3),
 				// Status
 				200,
 			)
@@ -400,12 +402,11 @@ func TestBackfillingHistory(t *testing.T) {
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore,
 				"",
-				2,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
 				// Status
 				200,
 			)
@@ -472,12 +473,11 @@ func TestBackfillingHistory(t *testing.T) {
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore,
 				chunkId,
-				2,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
 				// Status
 				200,
 			)
@@ -537,12 +537,11 @@ func TestBackfillingHistory(t *testing.T) {
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore,
 				"",
-				2,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
 				// Status
 				200,
 			)
@@ -628,12 +627,11 @@ func TestBackfillingHistory(t *testing.T) {
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
-				[]string{virtualUserID},
 				roomID,
 				eventIdBefore,
-				timeAfterEventBefore,
 				"",
-				2,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
 				// Status
 				200,
 			)
@@ -846,26 +844,41 @@ func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count in
 	return eventIDs
 }
 
-func asdf(
+func createInviteStateEventsForBackfillRequest(
+	invitedByUserID string,
 	virtualUserIDs []string,
 	insertTime time.Time,
 ) []map[string]interface{} {
 	// Timestamp in milliseconds
 	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
 
-	state_evs := make([]map[string]interface{}, 2*len(virtualUserIDs))
+	state_evs := make([]map[string]interface{}, len(virtualUserIDs))
 	for i, virtualUserID := range virtualUserIDs {
 		inviteEvent := map[string]interface{}{
 			"type":             "m.room.member",
-			"sender":           c.UserID,
+			"sender":           invitedByUserID,
 			"origin_server_ts": insertOriginServerTs,
 			"content": map[string]interface{}{
 				"membership": "invite",
 			},
 			"state_key": virtualUserID,
 		}
-		state_evs[2*i] = inviteEvent
 
+		state_evs[i] = inviteEvent
+	}
+
+	return state_evs
+}
+
+func createJoinStateEventsForBackfillRequest(
+	virtualUserIDs []string,
+	insertTime time.Time,
+) []map[string]interface{} {
+	// Timestamp in milliseconds
+	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
+
+	state_evs := make([]map[string]interface{}, len(virtualUserIDs))
+	for i, virtualUserID := range virtualUserIDs {
 		joinEvent := map[string]interface{}{
 			"type":             "m.room.member",
 			"sender":           virtualUserID,
@@ -876,13 +889,13 @@ func asdf(
 			"state_key": virtualUserID,
 		}
 
-		state_evs[2*i+1] = joinEvent
+		state_evs[i] = joinEvent
 	}
 
 	return state_evs
 }
 
-func createBatchSendMessages(
+func createMessageEventsForBackfillRequest(
 	virtualUserIDs []string,
 	insertTime time.Time,
 	count int,
@@ -917,63 +930,13 @@ var chunkCount int64 = 0
 func batchSendHistoricalMessages(
 	t *testing.T,
 	c *client.CSAPI,
-	virtualUserIDs []string,
 	roomID string,
 	insertAfterEventId string,
-	insertTime time.Time,
 	chunkID string,
-	count int,
+	state_events_at_start []map[string]interface{},
+	events []map[string]interface{},
 	expectedStatus int,
 ) (res *http.Response) {
-	// Timestamp in milliseconds
-	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
-
-	timeBetweenMessagesMS := uint64(timeBetweenMessages / time.Millisecond)
-
-	evs := make([]map[string]interface{}, count)
-	for i := 0; i < len(evs); i++ {
-		virtualUserID := virtualUserIDs[i%len(virtualUserIDs)]
-
-		newEvent := map[string]interface{}{
-			"type":             "m.room.message",
-			"sender":           virtualUserID,
-			"origin_server_ts": insertOriginServerTs + (timeBetweenMessagesMS * uint64(i)),
-			"content": map[string]interface{}{
-				"msgtype":              "m.text",
-				"body":                 fmt.Sprintf("Historical %d (chunk=%d)", i, chunkCount),
-				historicalContentField: true,
-			},
-		}
-
-		evs[i] = newEvent
-	}
-
-	state_evs := make([]map[string]interface{}, 2*len(virtualUserIDs))
-	for i, virtualUserID := range virtualUserIDs {
-		inviteEvent := map[string]interface{}{
-			"type":             "m.room.member",
-			"sender":           c.UserID,
-			"origin_server_ts": insertOriginServerTs,
-			"content": map[string]interface{}{
-				"membership": "invite",
-			},
-			"state_key": virtualUserID,
-		}
-		state_evs[2*i] = inviteEvent
-
-		joinEvent := map[string]interface{}{
-			"type":             "m.room.member",
-			"sender":           virtualUserID,
-			"origin_server_ts": insertOriginServerTs,
-			"content": map[string]interface{}{
-				"membership": "join",
-			},
-			"state_key": virtualUserID,
-		}
-
-		state_evs[2*i+1] = joinEvent
-	}
-
 	query := make(url.Values, 2)
 	query.Add("prev_event", insertAfterEventId)
 	// If provided, connect the chunk to the last insertion point
@@ -986,8 +949,8 @@ func batchSendHistoricalMessages(
 		"POST",
 		[]string{"_matrix", "client", "unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"},
 		client.WithJSONBody(t, map[string]interface{}{
-			"events":                evs,
-			"state_events_at_start": state_evs,
+			"events":                events,
+			"state_events_at_start": state_events_at_start,
 		}),
 		client.WithContentType("application/json"),
 		client.WithQueries(query),
