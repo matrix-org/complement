@@ -312,6 +312,47 @@ func TestClientSpacesSummary(t *testing.T) {
 		})
 	})
 
+	// - Setting max_depth works correctly
+	t.Run("pagination", func(t *testing.T) {
+		// The initial page should only include Root, R1, SS1, and SS2.
+		query := make(url.Values, 1)
+		query.Set("limit", "4")
+		res := alice.MustDoFunc(
+			t,
+			"GET",
+			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"},
+			client.WithQueries(query),
+		)
+		body := must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONCheckOff("rooms", []interface{}{
+					root, r1, ss1, ss2,
+				}, func(r gjson.Result) interface{} {
+					return r.Get("room_id").Str
+				}, nil),
+			},
+		})
+
+		// The following page should include R3, R4, and R2.
+		query = make(url.Values, 1)
+		query.Set("from", client.GetJSONFieldStr(t, body, "next_token"))
+		res = alice.MustDoFunc(
+			t,
+			"GET",
+			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"},
+			client.WithQueries(query),
+		)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONCheckOff("rooms", []interface{}{
+					r3, r4, r2,
+				}, func(r gjson.Result) interface{} {
+					return r.Get("room_id").Str
+				}, nil),
+			},
+		})
+	})
+
 	t.Run("redact link", func(t *testing.T) {
 		// Remove the root -> SS1 link
 		alice.SendEventSynced(t, root, b.Event{
