@@ -42,6 +42,7 @@ func eventKey(srcRoomID, dstRoomID, evType string) string {
 // - the user is joined to all rooms except R4.
 // - R2 <---> Root is a two-way link.
 // - The remaining links are just children links.
+// - R1 and R2 are suggested rooms.
 //
 // Tests that:
 // - Querying the root returns the entire graph
@@ -125,7 +126,8 @@ func TestClientSpacesSummary(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r1,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via":       []string{"hs1"},
+			"suggested": true,
 		},
 	})
 	rootToSS1 := eventKey(root, ss1, spaceChildEventType)
@@ -141,7 +143,8 @@ func TestClientSpacesSummary(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r2,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via":       []string{"hs1"},
+			"suggested": true,
 		},
 	})
 	// Note that this link gets ignored since R2 is not a space.
@@ -305,6 +308,34 @@ func TestClientSpacesSummary(t *testing.T) {
 				// All of the links are still there.
 				match.JSONCheckOff("rooms.#.children_state|@flatten", []interface{}{
 					rootToR1, rootToR2, rootToSS1, ss1ToSS2,
+				}, func(r gjson.Result) interface{} {
+					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
+				}, nil),
+			},
+		})
+	})
+
+	// - Setting suggested_only works correctly
+	t.Run("suggested_only", func(t *testing.T) {
+		// Should only include R1, SS1, and R2.
+		query := make(url.Values, 1)
+		query.Set("suggested_only", "true")
+		res := alice.MustDoFunc(
+			t,
+			"GET",
+			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"},
+			client.WithQueries(query),
+		)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONCheckOff("rooms", []interface{}{
+					root, r1, r2,
+				}, func(r gjson.Result) interface{} {
+					return r.Get("room_id").Str
+				}, nil),
+				// All of the links are still there.
+				match.JSONCheckOff("rooms.#.children_state|@flatten", []interface{}{
+					rootToR1, rootToR2,
 				}, func(r gjson.Result) interface{} {
 					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
 				}, nil),
