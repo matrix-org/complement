@@ -92,7 +92,7 @@ func countConvertedTests(files []fs.FileInfo, convertedTests map[string]bool, te
 		}
 		astFile, err := parser.ParseFile(fset, path+file.Name(), nil, parser.ParseComments)
 		if err != nil {
-			panic(file.Name())
+			panic(err)
 		}
 		for _, cmt := range astFile.Comments {
 			comment := strings.TrimSpace(cmt.Text())
