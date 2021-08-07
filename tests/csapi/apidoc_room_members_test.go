@@ -74,8 +74,8 @@ func TestRoomMembers(t *testing.T) {
 		t.Run("POST /join/:room_id can join a room", func(t *testing.T) {
 			t.Parallel()
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{
-				"visibility":      "public",
-				"preset":          "public_chat",
+				"visibility": "public",
+				"preset":     "public_chat",
 			})
 
 			res := authedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", roomID})
