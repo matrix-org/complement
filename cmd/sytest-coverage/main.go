@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -49,24 +50,14 @@ func main() {
 		panic(err)
 	}
 	convertedTests := make(map[string]bool)
-	for _, file := range files {
-		fset := token.NewFileSet()
-		astFile, err := parser.ParseFile(fset, "./tests/"+file.Name(), nil, parser.ParseComments)
-		if err != nil {
-			panic(err)
-		}
-		for _, cmt := range astFile.Comments {
-			comment := strings.TrimSpace(cmt.Text())
-			lines := strings.Split(comment, "\n")
-			for _, line := range lines {
-				_, ok := testNameToFilename[line]
-				if !ok {
-					continue
-				}
-				convertedTests[line] = true
-			}
-		}
+
+	countConvertedTests(files, convertedTests, testNameToFilename, "./tests/")
+	files, err = ioutil.ReadDir("./tests/csapi")
+	if err != nil {
+		panic(err)
 	}
+	countConvertedTests(files, convertedTests, testNameToFilename, "./tests/csapi/")
+
 	numComplementTests := len(convertedTests)
 	for _, fname := range sorted(filenameToTestName) {
 		testNames := filenameToTestName[fname]
@@ -91,6 +82,30 @@ func main() {
 		fmt.Println()
 	}
 	fmt.Printf("\nTOTAL: %d/%d tests converted\n", numComplementTests, total)
+}
+
+func countConvertedTests(files []fs.FileInfo, convertedTests map[string]bool, testNameToFilename map[string]string, path string) {
+	for _, file := range files {
+		fset := token.NewFileSet()
+		if file.Name() == "csapi" {
+			continue
+		}
+		astFile, err := parser.ParseFile(fset, path+file.Name(), nil, parser.ParseComments)
+		if err != nil {
+			panic(err)
+		}
+		for _, cmt := range astFile.Comments {
+			comment := strings.TrimSpace(cmt.Text())
+			lines := strings.Split(comment, "\n")
+			for _, line := range lines {
+				_, ok := testNameToFilename[line]
+				if !ok {
+					continue
+				}
+				convertedTests[line] = true
+			}
+		}
+	}
 }
 
 func sorted(in map[string][]string) []string {
