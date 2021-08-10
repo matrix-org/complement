@@ -511,7 +511,6 @@ func TestBackfillingHistory(t *testing.T) {
 		})
 
 		t.Run("Historical messages are visible when already joined on federated server", func(t *testing.T) {
-			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -600,7 +599,6 @@ func TestBackfillingHistory(t *testing.T) {
 		})
 
 		t.Run("When messages have already been scrolled back through, new historical messages are visible in next scroll back on federated server", func(t *testing.T) {
-			//t.Skip("Skipping until federation is implemented")
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
