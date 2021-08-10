@@ -55,10 +55,14 @@ jobs:
           # current build. Depending on whether this is a PR or release, etc. we
           # need to use different fallbacks.
           #
-          # 1. First check if there's a similarly named branch (GITHUB_HEAD_REF
-          #    for pull requests, otherwise GITHUB_REF).
-          # 2. Use the default homeserver branch.
-          for BRANCH_NAME in "$GITHUB_HEAD_REF" "${GITHUB_REF#refs/heads/}" "${{ matrix.default_branch }}"; do
+          # Check if there's a similarly named branch (GITHUB_HEAD_REF for pull
+          # requests, otherwise GITHUB_REF), but if this is the default complement
+          # branch, use the default homeserver branch.
+          if [[ "$GITHUB_HEAD_REF" == "master" ]]
+            GITHUB_HEAD_REF="${{ matrix.default_branch }}"
+          fi
+
+          for BRANCH_NAME in "$GITHUB_HEAD_REF" "${GITHUB_REF#refs/heads/}"; do
             # Skip empty branch names and merge commits.
             if [[ -z "$BRANCH_NAME" || $BRANCH_NAME =~ ^refs/pull/.* ]]; then
               continue
