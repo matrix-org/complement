@@ -59,7 +59,7 @@ jobs:
           #    requests, otherwise GITHUB_REF), but if this is the default complement
           #    branch, use the default homeserver branch.
           # 2. Use the default homeserver branch.
-          if [[ "$GITHUB_HEAD_REF" == "master" ]]
+          if [[ "$GITHUB_HEAD_REF" == "master" ]]; then
             GITHUB_HEAD_REF="${{ matrix.default_branch }}"
           fi
 
