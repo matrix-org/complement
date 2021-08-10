@@ -290,6 +290,39 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
+		t.Run("Batch send endpoint only returns state events that we passed in via state_events_at_start", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create the "live" event we are going to insert our backfilled events next to
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIdBefore := eventIDsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// Insert a backfilled event
+			batchSendRes := batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				"",
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+				// Status
+				200,
+			)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			stateEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "state_events")
+
+			// We only expect 1 state event to be returned because we only passed in 1
+			// event into `?state_events_at_start`
+			if len(stateEventIDs) != 1 {
+				t.Fatalf("Expected only 1 state event to be returned but received %d: %s", len(stateEventIDs), stateEventIDs)
+			}
+		})
+
 		t.Run("Unrecognised prev_event ID will throw an error", func(t *testing.T) {
 			t.Parallel()
 
@@ -334,6 +367,11 @@ func TestBackfillingHistory(t *testing.T) {
 				// Normal user alice should not be able to backfill messages
 				403,
 			)
+		})
+
+		t.Run("TODO: Trying to send insertion event with same `next_chunk_id` will reject", func(t *testing.T) {
+			t.Skip("Skipping until implemented")
+			// (room_id, next_chunk_id) should be unique
 		})
 
 		t.Run("Should be able to backfill into private room", func(t *testing.T) {
@@ -384,6 +422,10 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("TODO: Test if historical avatar/display name set back in time are picked up on historical messages", func(t *testing.T) {
 			t.Skip("Skipping until implemented")
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
+		})
+
+		t.Run("TODO: What happens when you point multiple chunks at the same insertion event?", func(t *testing.T) {
+			t.Skip("Skipping until implemented")
 		})
 
 		t.Run("Historical messages are visible when joining on federated server - auto-generated base insertion event", func(t *testing.T) {
