@@ -1,5 +1,18 @@
 // +build msc2946
 
+// This file includes tests for MSC2946, the spaces summary API.
+//
+// There are currently tests for two unstable versions of it for backwards
+// compatibility:
+//
+// * The /spaces endpoint, which was the original version.
+// * The /hierarchy endpoint, which is an updated version.
+//
+// Both endpoints return data from the same set of rooms / spaces, but have
+// different API shapes.
+//
+// TODO When support for this is stable, the tests for /spaces should be removed.
+
 package tests
 
 import (
