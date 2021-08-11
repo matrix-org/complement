@@ -726,7 +726,103 @@ func TestBackfillingHistory(t *testing.T) {
 				},
 			})
 		})
+
+		t.Run("Existing room versions", func(t *testing.T) {
+			createUnsupportedMSC2716RoomOpts := map[string]interface{}{
+				"preset": "public_chat",
+				"name":   "the hangout spot",
+				// v6 is an existing room version that does not support MSC2716
+				"room_version": "6",
+			}
+
+			t.Run("Room creator can send MSC2716 events", func(t *testing.T) {
+				t.Parallel()
+
+				roomID := as.CreateRoom(t, createUnsupportedMSC2716RoomOpts)
+				alice.JoinRoom(t, roomID, nil)
+
+				// Create the "live" event we are going to insert our backfilled events next to
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+				eventIdBefore := eventIDsBefore[0]
+				timeAfterEventBefore := time.Now()
+
+				// Insert a backfilled event
+				batchSendRes := batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					"",
+					createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+					// Status
+					200,
+				)
+				batchSendResBody := client.ParseJSON(t, batchSendRes)
+				historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+
+				messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+				}))
+
+				must.MatchResponse(t, messagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						}, nil),
+					},
+				})
+			})
+
+			t.Run("Not allowed to redact MSC2716 insertion, chunk, marker events", func(t *testing.T) {
+				t.Parallel()
+
+				roomID := as.CreateRoom(t, createUnsupportedMSC2716RoomOpts)
+				alice.JoinRoom(t, roomID, nil)
+
+				// Create the "live" event we are going to insert our backfilled events next to
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+				eventIdBefore := eventIDsBefore[0]
+				timeAfterEventBefore := time.Now()
+
+				// Insert a backfilled event
+				batchSendRes := batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					"",
+					createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+					// Status
+					200,
+				)
+				batchSendResBody := client.ParseJSON(t, batchSendRes)
+				historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+				insertionEventID := historicalEventIDs[0]
+				chunkEventID := historicalEventIDs[2]
+				baseInsertionEventID := historicalEventIDs[3]
+
+				// Send the marker event
+				markerEventID := sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
+
+				redactEventID(t, alice, roomID, insertionEventID, 403)
+				redactEventID(t, alice, roomID, chunkEventID, 403)
+				redactEventID(t, alice, roomID, markerEventID, 403)
+			})
+		})
 	})
+}
+
+var txnCounter int = 0
+
+func getTxnID(prefix string) (txnID string) {
+	txnId := fmt.Sprintf("%s-%d", prefix, txnCounter)
+
+	txnCounter++
+
+	return txnId
 }
 
 func makeInterfaceSlice(slice []string) []interface{} {
@@ -837,7 +933,7 @@ func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocal
 	}
 }
 
-func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSAPI, roomID, insertionEventID string) {
+func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSAPI, roomID, insertionEventID string) (markerEventID string) {
 	// Send a marker event to let all of the homeservers know about the
 	// insertion point where all of the historical messages are at
 	markerEvent := b.Event{
@@ -846,10 +942,11 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 			markerInsertionContentField: insertionEventID,
 		},
 	}
+	txnId := getTxnID("sendMarkerAndEnsureBackfilled-txn")
 	// We can't use as.SendEventSynced(...) because application services can't use the /sync API
-	markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", markerEvent.Type, "txn-m123"}, client.WithJSONBody(t, markerEvent.Content))
+	markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", markerEvent.Type, txnId}, client.WithJSONBody(t, markerEvent.Content))
 	markerSendBody := client.ParseJSON(t, markerSendRes)
-	markerEventID := client.GetJSONFieldStr(t, markerSendBody, "event_id")
+	markerEventID = client.GetJSONFieldStr(t, markerSendBody, "event_id")
 
 	// Make sure the marker event has reached the remote homeserver
 	c.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
@@ -865,6 +962,8 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 
 		return false
 	})
+
+	return markerEventID
 }
 
 func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count int) (eventIDs []string) {
@@ -963,6 +1062,26 @@ func createMessageEventsForBackfillRequest(
 	}
 
 	return evs
+}
+
+func redactEventID(t *testing.T, c *client.CSAPI, roomID, eventID string, expectedStatus int) {
+	t.Helper()
+
+	txnID := getTxnID("redactEventID-txn")
+	redactionRes := c.DoFunc(
+		t,
+		"PUT",
+		[]string{"_matrix", "client", "r0", "rooms", roomID, "redact", eventID, txnID},
+		client.WithJSONBody(t, map[string]interface{}{"reason": "chaos"}),
+		client.WithContentType("application/json"),
+	)
+	redactionResBody := client.ParseJSON(t, redactionRes)
+	redactionResErrcode := client.GetJSONFieldStr(t, redactionResBody, "error")
+	redactionResError := client.GetJSONFieldStr(t, redactionResBody, "errcode")
+
+	if redactionRes.StatusCode != expectedStatus {
+		t.Fatalf("msc2716.redactEventID: Expected redaction response to be %d but received %d -> %s: %s", expectedStatus, redactionRes.StatusCode, redactionResErrcode, redactionResError)
+	}
 }
 
 var chunkCount int64 = 0
