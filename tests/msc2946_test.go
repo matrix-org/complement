@@ -379,7 +379,7 @@ func TestClientSpacesSummary(t *testing.T) {
 
 		// The following page should include R3, R4, and R2.
 		query = make(url.Values, 1)
-		query.Set("from", client.GetJSONFieldStr(t, body, "next_token"))
+		query.Set("from", client.GetJSONFieldStr(t, body, "next_batch"))
 		res = alice.MustDoFunc(
 			t,
 			"GET",
