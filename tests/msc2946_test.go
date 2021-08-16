@@ -758,4 +758,14 @@ func TestFederatedClientSpaces(t *testing.T) {
 			}, nil),
 		},
 	})
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"}, nil)
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOff("rooms", []interface{}{
+				root, r1, r2, r3, r4, ss1, ss2,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("room_id").Str
+			}, nil),
+		},
+	})
 }
