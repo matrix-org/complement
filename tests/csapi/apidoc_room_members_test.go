@@ -1,12 +1,12 @@
 package csapi_tests
 
 import (
-	"github.com/matrix-org/complement/internal/client"
 	"testing"
 
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -138,7 +138,7 @@ func TestRoomMembers(t *testing.T) {
 						return false
 					}
 					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
-					must.EqualStr(t, ev.Get("content").Get("foo").Str, "bar", "Failed to propogate custom content")
+					must.EqualStr(t, ev.Get("content").Get("foo").Str, "bar", "Failed to propagate custom content")
 					return true
 				},
 			)
@@ -147,8 +147,8 @@ func TestRoomMembers(t *testing.T) {
 		t.Run("POST /join/:room_alias can join a room with custom content", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"visibility": "public",
-				"preset":     "public_chat",
+				"visibility":      "public",
+				"preset":          "public_chat",
 				"room_alias_name": "room_alias_random_2",
 			})
 
@@ -174,7 +174,7 @@ func TestRoomMembers(t *testing.T) {
 						return false
 					}
 					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
-					must.EqualStr(t, ev.Get("content").Get("foo").Str, "bar", "Failed to propogate custom content")
+					must.EqualStr(t, ev.Get("content").Get("foo").Str, "bar", "Failed to propagate custom content")
 					return true
 				},
 			)
@@ -209,7 +209,7 @@ func TestRoomMembers(t *testing.T) {
 				},
 			)
 
-			res = bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
+			_ = bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
 
 			bob.SyncUntilTimelineHas(
 				t,
