@@ -838,6 +838,8 @@ func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocal
 }
 
 func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSAPI, roomID, insertionEventID string) {
+	t.Helper()
+
 	// Send a marker event to let all of the homeservers know about the
 	// insertion point where all of the historical messages are at
 	markerEvent := b.Event{
@@ -977,6 +979,8 @@ func batchSendHistoricalMessages(
 	events []map[string]interface{},
 	expectedStatus int,
 ) (res *http.Response) {
+	t.Helper()
+
 	query := make(url.Values, 2)
 	query.Add("prev_event", insertAfterEventId)
 	// If provided, connect the chunk to the last insertion point
