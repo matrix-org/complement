@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"go/parser"
 	"go/token"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -84,7 +83,7 @@ func main() {
 	fmt.Printf("\nTOTAL: %d/%d tests converted\n", numComplementTests, total)
 }
 
-func countConvertedTests(files []fs.FileInfo, convertedTests map[string]bool, testNameToFilename map[string]string, path string) {
+func countConvertedTests(files []os.FileInfo, convertedTests map[string]bool, testNameToFilename map[string]string, path string) {
 	for _, file := range files {
 		fset := token.NewFileSet()
 		if file.Name() == "csapi" {
