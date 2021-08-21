@@ -1,11 +1,12 @@
 package csapi_tests
 
 import (
-	"github.com/tidwall/gjson"
 	"io/ioutil"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
