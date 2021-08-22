@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -44,18 +45,34 @@ func main() {
 		testNameToFilename[name] = strings.TrimSpace(filename)
 	}
 	total := len(testNameToFilename)
-	files, err := ioutil.ReadDir("./tests")
-	if err != nil {
-		panic(err)
-	}
+
 	convertedTests := make(map[string]bool)
 
-	countConvertedTests(files, convertedTests, testNameToFilename, "./tests/")
-	files, err = ioutil.ReadDir("./tests/csapi")
-	if err != nil {
-		panic(err)
-	}
-	countConvertedTests(files, convertedTests, testNameToFilename, "./tests/csapi/")
+	// Walk all files defined under ./tests
+	// we already panic inside Walk, so we can ignore the error
+	_ = filepath.Walk("./tests", func(path string, info os.FileInfo, err error) error {
+		// we don't care about directories or files not named "_test.go"
+		if info.IsDir() || !strings.HasSuffix(info.Name(), "_test.go") {
+			return nil
+		}
+		fset := token.NewFileSet()
+		astFile, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			panic(err)
+		}
+		for _, cmt := range astFile.Comments {
+			comment := strings.TrimSpace(cmt.Text())
+			lines := strings.Split(comment, "\n")
+			for _, line := range lines {
+				_, ok := testNameToFilename[line]
+				if !ok {
+					continue
+				}
+				convertedTests[line] = true
+			}
+		}
+		return nil
+	})
 
 	numComplementTests := len(convertedTests)
 	for _, fname := range sorted(filenameToTestName) {
@@ -81,30 +98,6 @@ func main() {
 		fmt.Println()
 	}
 	fmt.Printf("\nTOTAL: %d/%d tests converted\n", numComplementTests, total)
-}
-
-func countConvertedTests(files []os.FileInfo, convertedTests map[string]bool, testNameToFilename map[string]string, path string) {
-	for _, file := range files {
-		fset := token.NewFileSet()
-		if file.Name() == "csapi" {
-			continue
-		}
-		astFile, err := parser.ParseFile(fset, path+file.Name(), nil, parser.ParseComments)
-		if err != nil {
-			panic(err)
-		}
-		for _, cmt := range astFile.Comments {
-			comment := strings.TrimSpace(cmt.Text())
-			lines := strings.Split(comment, "\n")
-			for _, line := range lines {
-				_, ok := testNameToFilename[line]
-				if !ok {
-					continue
-				}
-				convertedTests[line] = true
-			}
-		}
-	}
 }
 
 func sorted(in map[string][]string) []string {
