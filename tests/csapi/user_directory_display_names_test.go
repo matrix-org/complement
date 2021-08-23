@@ -4,10 +4,11 @@
 package csapi_tests
 
 import (
+	"testing"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"testing"
 )
 
 func TestRoomSpecificUsernameNotLeaked(t *testing.T) {
