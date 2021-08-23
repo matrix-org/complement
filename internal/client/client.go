@@ -213,6 +213,9 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 }
 
 // MustDo will do the HTTP request and fail the test if the response is not 2xx
+//
+// Deprecated: Prefer MustDoFunc. MustDo is the older format which doesn't allow for vargs
+// and will be removed in the future. MustDoFunc also logs HTTP response bodies on error.
 func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
 	t.Helper()
 	res := c.DoFunc(t, method, paths, WithJSONBody(t, jsonBody))
