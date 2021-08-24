@@ -69,7 +69,7 @@ func JSONKeyArrayOfSize(wantKey string, wantSize int) JSON {
 		}
 		entries := res.Array()
 		if len(entries) != wantSize {
-			return fmt.Errorf("key '%s' is an array of the wrong size, got %s want %s", wantKey, len(entries), wantSize)
+			return fmt.Errorf("key '%s' is an array of the wrong size, got %v want %v", wantKey, len(entries), wantSize)
 		}
 		return nil
 	}
