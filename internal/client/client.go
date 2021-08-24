@@ -127,7 +127,10 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	return eventID
 }
 
-// SyncUntilTimelineHas blocks and continually calls /sync until the `check` function returns true.
+// SyncUntilTimelineHas is a wrapper around `SyncUntil`.
+// It blocks and continually calls `/sync` until
+// - we have joined the given room
+// - we see an event in the room for which the `check` function returns True
 // If the `check` function fails the test, the failing event will be automatically logged.
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
@@ -135,7 +138,23 @@ func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjs
 	c.SyncUntil(t, "", "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
 }
 
-// SyncUntil blocks and continually calls /sync until the `check` function returns true.
+// SyncUntilInvitedTo is a wrapper around SyncUntil.
+// It blocks and continually calls `/sync` until we've been invited to the given room.
+// Will time out after CSAPI.SyncUntilTimeout.
+func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
+	t.Helper()
+	check := func(event gjson.Result) bool {
+		return event.Get("type").Str == "m.room.member" &&
+			event.Get("content.membership").Str == "invite" &&
+			event.Get("state_key").Str == c.UserID
+	}
+	c.SyncUntil(t, "", "", "rooms.invite."+GjsonEscape(roomID)+".invite_state.events", check)
+}
+
+// SyncUntil blocks and continually calls /sync until
+// - the response contains a particular `key`, and
+// - its corresponding value is an array
+// - some element in that array makes the `check` function return true.
 // If the `check` function fails the test, the failing event will be automatically logged.
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
