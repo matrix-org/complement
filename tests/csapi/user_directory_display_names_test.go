@@ -1,6 +1,3 @@
-// +build !synapse_blacklist
-
-// Rationale for being included in Synapse's blacklist: https://github.com/matrix-org/synapse/issues/5677
 package csapi_tests
 
 import (
