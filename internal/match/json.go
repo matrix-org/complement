@@ -17,7 +17,7 @@ type JSON func(body []byte) error
 func JSONKeyEqual(wantKey string, wantValue interface{}) JSON {
 	return func(body []byte) error {
 		res := gjson.GetBytes(body, wantKey)
-		if res.Index == 0 {
+		if !res.Exists() {
 			return fmt.Errorf("key '%s' missing", wantKey)
 		}
 		gotValue := res.Value()
