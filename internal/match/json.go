@@ -55,6 +55,26 @@ func JSONKeyTypeEqual(wantKey string, wantType gjson.Type) JSON {
 	}
 }
 
+// JSONKeyArrayOfSize returns a matcher which will check that `wantKey` is present and
+// its value is an array with the given size.
+// `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
+func JSONKeyArrayOfSize(wantKey string, wantSize int) JSON {
+	return func(body []byte) error {
+		res := gjson.GetBytes(body, wantKey)
+		if !res.Exists() {
+			return fmt.Errorf("key '%s' missing", wantKey)
+		}
+		if !res.IsArray() {
+			return fmt.Errorf("key '%s' is not an array", wantKey)
+		}
+		entries := res.Array()
+		if len(entries) != wantSize {
+			return fmt.Errorf("key '%s' is an array of the wrong size, got %s want %s", wantKey, len(entries), wantSize)
+		}
+		return nil
+	}
+}
+
 func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwantedItems bool, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
 	return func(body []byte) error {
 		res := gjson.GetBytes(body, wantKey)
