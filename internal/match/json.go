@@ -3,6 +3,7 @@ package match
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/tidwall/gjson"
 )
@@ -222,5 +223,31 @@ func JSONMapEach(wantKey string, fn func(k, v gjson.Result) error) JSON {
 			return err == nil
 		})
 		return err
+	}
+}
+
+// AnyOf takes 1 or more `checkers`, and builds a new checker which accepts a given
+// json body iff it's accepted by at least one of the original `checkers`.
+func AnyOf(checkers ...JSON) JSON {
+	return func(body []byte) error {
+		if len(checkers) == 0 {
+			return fmt.Errorf("must provide at least one checker to AnyOf")
+		}
+
+		errors := make([]error, len(checkers))
+		for i, check := range checkers {
+			errors[i] = check(body)
+			if errors[i] == nil {
+				return nil
+			}
+		}
+
+		builder := strings.Builder{}
+		builder.WriteString("all checks failed:")
+		for _, err := range errors {
+			builder.WriteString("\n    ")
+			builder.WriteString(err.Error())
+		}
+		return fmt.Errorf(builder.String())
 	}
 }
