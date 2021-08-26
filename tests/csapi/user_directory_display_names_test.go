@@ -46,28 +46,24 @@ func TestRoomSpecificUsernameHandling(t *testing.T) {
 		"PUT",
 		[]string{"_matrix", "client", "r0", "rooms", privateRoom, "state", "m.room.member", "@alice:hs1"},
 		client.WithJSONBody(t, map[string]interface{}{
-			"displayname": "Alice Cooper",
+			"displayname": "Freddy",
 			"membership":  "join",
 		}),
 	)
 
 	justAliceByPublicName := []match.JSON{
 		match.JSONKeyArrayOfSize("results", 1),
-		match.JSONKeyEqual("results.0.display_name", "alice"),
+		match.JSONKeyEqual("results.0.display_name", "Alice"),
 		match.JSONKeyEqual("results.0.user_id", alice.UserID),
 	}
 
-	t.Run("Searcher can find target by display name "+
-		"when searcher and target have no room in common, share a homeserver, and "+
-		"target is in a public room on that homeserver",
+	t.Run("Eve can find Alice by profile display name",
 		func(t *testing.T) {
-			res := eve.SearchUserDirectory(t, "alice")
+			res := eve.SearchUserDirectory(t, "Alice")
 			must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName})
 		})
 
-	t.Run("Searcher can find target by mxid "+
-		"when searcher and target have no room in common, share a homeserver, and "+
-		"target is in a public room on that homeserver",
+	t.Run("Eve can find Alice by mxid",
 		func(t *testing.T) {
 			res := eve.SearchUserDirectory(t, alice.UserID)
 			must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName})
@@ -77,48 +73,25 @@ func TestRoomSpecificUsernameHandling(t *testing.T) {
 		match.JSONKeyArrayOfSize("results", 0),
 	}
 
-	t.Run("Searcher cannot find target by room-specific name they are not privy to "+
-		"when searcher and target have no room in common, share a homeserver, and "+
-		"target is in a public room on that homeserver",
+	t.Run("Eve cannot find Alice by room-specific name that Eve is not privy to",
 		func(t *testing.T) {
-			res := eve.SearchUserDirectory(t, "Alice Cooper")
+			res := eve.SearchUserDirectory(t, "Freddy")
 			must.MatchResponse(t, res, match.HTTPResponse{JSON: noResults})
 		})
 
-	justAliceByPublicOrPrivateName := []match.JSON{
-		match.JSONKeyArrayOfSize("results", 1),
-		// TODO should bob find alice by her public or private name?
-		match.AnyOf(
-			match.JSONKeyEqual("results.0.display_name", "Alice Cooper"),
-			match.JSONKeyEqual("results.0.display_name", "alice"),
-		),
-		match.JSONKeyEqual("results.0.user_id", alice.UserID),
-	}
-
-	t.Run("Searcher can find target by public display name "+
-		"when searcher and target share a private room with a specific display_name for the target",
+	t.Run("Bob can find Alice by profile display name",
 		func(t *testing.T) {
-			res := bob.SearchUserDirectory(t, "alice")
+			res := bob.SearchUserDirectory(t, "Alice")
 			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: justAliceByPublicOrPrivateName,
+				JSON: justAliceByPublicName,
 			})
 		})
 
-	t.Run("Searcher can find target by mxid "+
-		"when searcher and target share a private room with a specific display_name for the target",
+	t.Run("Bob can find Alice by mxid",
 		func(t *testing.T) {
 			res := bob.SearchUserDirectory(t, alice.UserID)
 			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: justAliceByPublicOrPrivateName,
-			})
-		})
-
-	t.Run("Searcher can find target by room-specific name"+
-		"when searcher and target share a private room with a specific display_name for the target",
-		func(t *testing.T) {
-			res := bob.SearchUserDirectory(t, "Alice Cooper")
-			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: justAliceByPublicOrPrivateName,
+				JSON: justAliceByPublicName,
 			})
 		})
 }
