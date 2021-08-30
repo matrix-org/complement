@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/gomatrix"
 	"github.com/matrix-org/gomatrixserverlib"
 
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -389,4 +390,77 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		})
 		assertRequestFails(t, event)
 	})
+}
+
+// The (partial) event returned via /make_join should not include signatures.
+func TestMakeJoinSignatures(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+
+	fedClient := srv.FederationClient(deployment)
+
+	// alice creates a room.
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	roomID := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+	})
+
+	charlie := srv.UserID("charlie")
+
+	// charlie sends a make_join, note that we can't use the helpers from fedClient
+	// since that discards unknown fields during unmarshalling.
+	//
+	// Below is copied from MakeJoin -> doRequest.
+	path := "/_matrix/federation/v1/make_join/" + url.PathEscape(roomID) + "/" + charlie + "?ver=6"
+	fedReq := gomatrixserverlib.NewFederationRequest("GET", "hs1", path)
+	if err := fedReq.Sign(gomatrixserverlib.ServerName(srv.ServerName), srv.KeyID, srv.Priv); err != nil {
+		t.Fatalf("Unable to sign request")
+	}
+
+	req, err := fedReq.HTTPRequest()
+	if err != nil {
+		t.Fatalf("Creating request failed")
+	}
+	response, err2 := fedClient.Client.DoHTTPRequest(context.Background(), req)
+	if response != nil {
+		defer response.Body.Close() // nolint: errcheck
+	}
+	if response.StatusCode != 200 {
+		t.Fatalf("Unexpected result: %d", response.StatusCode)
+	}
+	if err2 != nil {
+		t.Fatalf("Request failed")
+	}
+	body := must.ParseJSON(t, response.Body)
+
+	// It should have event and room_version.
+	res := gjson.GetBytes(body, "event")
+	if !res.Exists() {
+		t.Errorf("key 'event' missing")
+	}
+	res = gjson.GetBytes(body, "room_version")
+	if !res.Exists() {
+		t.Errorf("key 'room_version' missing")
+	}
+
+	// The event should not have signatures / unsigned / hashes.
+	res = gjson.GetBytes(body, "event.signatures")
+	if res.Exists() {
+		t.Errorf("key 'signatures' exists")
+	}
+	res = gjson.GetBytes(body, "event.unsigned")
+	if res.Exists() {
+		t.Errorf("key 'unsigned' exists")
+	}
+	res = gjson.GetBytes(body, "event.hashes")
+	if res.Exists() {
+		t.Errorf("key 'hashes' exists")
+	}
 }
