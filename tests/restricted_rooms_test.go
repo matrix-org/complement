@@ -1,7 +1,6 @@
-// +build msc2946,msc3083
+// +build msc2946,!dendrite_blacklist
 
-// Tests MSC3083, an experimental feature for joining restricted rooms based on
-// membership in a space.
+// Tests MSC3083, joining restricted rooms based on membership in another room.
 
 package tests
 
@@ -35,21 +34,19 @@ func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverNam
 	})
 }
 
-// Create a space and put a room in it which is set to:
-// * The experimental room version.
-// * restricted join rules with allow set to the space.
+// Creates two rooms on room version 8 and sets the second room to have
+// restricted join rules with allow set to the first room.
 func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.CSAPI, string, string) {
 	t.Helper()
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	space := alice.CreateRoom(t, map[string]interface{}{
+	// The room which membership checks are delegated to. In practice, this will
+	// often be an MSC1772 space, but that is not required.
+	allowed_room := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
-		"name":   "Space",
-		"creation_content": map[string]interface{}{
-			"type": "m.space",
-		},
+		"name":   "Allowed Room",
 	})
-	// The room is an unstable room version which supports the restricted join_rule.
+	// The room is room version 8 which supports the restricted join_rule.
 	room := alice.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
@@ -63,7 +60,7 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 					"allow": []map[string]interface{}{
 						{
 							"type":    "m.room_membership",
-							"room_id": &space,
+							"room_id": &allowed_room,
 							"via":     []string{"hs1"},
 						},
 					},
@@ -71,24 +68,17 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 			},
 		},
 	})
-	alice.SendEventSynced(t, space, b.Event{
-		Type:     "m.space.child",
-		StateKey: &room,
-		Content: map[string]interface{}{
-			"via": []string{"hs1"},
-		},
-	})
 
-	return alice, space, room
+	return alice, allowed_room, room
 }
 
-func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, space string, room string) {
+func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, allowed_room string, room string) {
 	t.Helper()
 
 	failJoinRoom(t, bob, room, "hs1", 403)
 
-	// Join the space, attempt to join the room again, which now should succeed.
-	bob.JoinRoom(t, space, []string{"hs1"})
+	// Join the allowed room, attempt to join the room again, which now should succeed.
+	bob.JoinRoom(t, allowed_room, []string{"hs1"})
 	bob.JoinRoom(t, room, []string{"hs1"})
 
 	// Joining the same room again should work fine (e.g. to change your display name).
@@ -96,12 +86,12 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 
 	// Leaving the room works and the user is unable to re-join.
 	bob.LeaveRoom(t, room)
-	bob.LeaveRoom(t, space)
+	bob.LeaveRoom(t, allowed_room)
 
-	// Wait until Alice sees Bob leave the space. This ensures that Alice's HS
+	// Wait until Alice sees Bob leave the allowed room. This ensures that Alice's HS
 	// has processed the leave before Bob tries rejoining, so that it rejects his
 	// attempt to join the room.
-	alice.SyncUntilTimelineHas(t, space, func(ev gjson.Result) bool {
+	alice.SyncUntilTimelineHas(t, allowed_room, func(ev gjson.Result) bool {
 		if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
 			return false
 		}
@@ -115,9 +105,9 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 	alice.InviteRoom(t, room, bob.UserID)
 	bob.JoinRoom(t, room, []string{"hs1"})
 
-	// Leave the room again, and join the space.
+	// Leave the room again, and join the allowed room.
 	bob.LeaveRoom(t, room)
-	bob.JoinRoom(t, space, []string{"hs1"})
+	bob.JoinRoom(t, allowed_room, []string{"hs1"})
 
 	// Update the room to have bad values in the "allow" field, which should stop
 	// joining from working properly.
@@ -155,34 +145,34 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, s
 	failJoinRoom(t, bob, room, "hs1", 403)
 }
 
-// Test joining a room with join rules restricted to membership in a space.
+// Test joining a room with join rules restricted to membership in another room.
 func TestRestrictedRoomsLocalJoin(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	// Setup the user, space, and restricted room.
-	alice, space, room := setupRestrictedRoom(t, deployment)
+	// Setup the user, allowed room, and restricted room.
+	alice, allowed_room, room := setupRestrictedRoom(t, deployment)
 
 	// Create a second user on the same homeserver.
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	// Execute the checks.
-	checkRestrictedRoom(t, alice, bob, space, room)
+	checkRestrictedRoom(t, alice, bob, allowed_room, room)
 }
 
-// Test joining a room with join rules restricted to membership in a space.
+// Test joining a room with join rules restricted to membership in another room.
 func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	// Setup the user, space, and restricted room.
-	alice, space, room := setupRestrictedRoom(t, deployment)
+	// Setup the user, allowed room, and restricted room.
+	alice, allowed_room, room := setupRestrictedRoom(t, deployment)
 
 	// Create a second user on a different homeserver.
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
 	// Execute the checks.
-	checkRestrictedRoom(t, alice, bob, space, room)
+	checkRestrictedRoom(t, alice, bob, allowed_room, room)
 }
 
 // A server will do a remote join for a local user if it is unable to to issue
@@ -191,16 +181,16 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 
-	// Charlie sets up the space so it is on the other server.
+	// Charlie sets up the allowed room so it is on the other server.
+	//
+	// This is the room which membership checks are delegated to. In practice,
+	// this will often be an MSC1772 space, but that is not required.
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
-	space := charlie.CreateRoom(t, map[string]interface{}{
+	allowed_room := charlie.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
-		"creation_content": map[string]interface{}{
-			"type": "m.space",
-		},
 	})
-	// The room is an unstable room version which supports the restricted join_rule.
+	// The room is room version 8 which supports the restricted join_rule.
 	room := charlie.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
@@ -214,19 +204,12 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 					"allow": []map[string]interface{}{
 						{
 							"type":    "m.room_membership",
-							"room_id": &space,
+							"room_id": &allowed_room,
 							"via":     []string{"hs2"},
 						},
 					},
 				},
 			},
-		},
-	})
-	charlie.SendEventSynced(t, space, b.Event{
-		Type:     "m.space.child",
-		StateKey: &room,
-		Content: map[string]interface{}{
-			"via": []string{"hs2"},
 		},
 	})
 
@@ -253,8 +236,8 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 	// Bob cannot join the room.
 	failJoinRoom(t, bob, room, "hs1", 403)
 
-	// Join the space via hs2.
-	bob.JoinRoom(t, space, []string{"hs2"})
+	// Join the allowed room via hs2.
+	bob.JoinRoom(t, allowed_room, []string{"hs2"})
 	// Joining the room should work, although we're joining via hs1, it will end up
 	// as a remote join through hs2.
 	bob.JoinRoom(t, room, []string{"hs1"})
@@ -314,7 +297,7 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 // the appropriate authorisation to complete the request.
 //
 // Setup 3 homeservers:
-// * hs1 creates the space/room.
+// * hs1 creates the allowed room/room.
 // * hs2 joins the room
 // * hs3 attempts to join via hs2 (should fail) and hs1 (should work)
 func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
@@ -352,8 +335,8 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 	})
 	defer deployment.Destroy(t)
 
-	// Setup the user, space, and restricted room.
-	alice, space, room := setupRestrictedRoom(t, deployment)
+	// Setup the user, allowed room, and restricted room.
+	alice, allowed_room, room := setupRestrictedRoom(t, deployment)
 
 	// Raise the power level so that only alice can invite.
 	state_key := ""
@@ -371,13 +354,13 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 	// Create a second user on a different homeserver.
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
-	// Bob joins the room and space.
-	bob.JoinRoom(t, space, []string{"hs1"})
+	// Bob joins the room and allowed room.
+	bob.JoinRoom(t, allowed_room, []string{"hs1"})
 	bob.JoinRoom(t, room, []string{"hs1"})
 
-	// Charlie should join the space (which gives access to the room).
+	// Charlie should join the allowed room (which gives access to the room).
 	charlie := deployment.Client(t, "hs3", "@charlie:hs3")
-	charlie.JoinRoom(t, space, []string{"hs1"})
+	charlie.JoinRoom(t, allowed_room, []string{"hs1"})
 
 	// hs2 doesn't have anyone to invite from, so the join fails.
 	failJoinRoom(t, charlie, room, "hs2", 502)
@@ -428,11 +411,12 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 		},
 	)
 
-	// Bob leaves the space so that hs2 doesn't know if Charlie is in the space or not.
-	bob.LeaveRoom(t, space)
+	// Bob leaves the allowed room so that hs2 doesn't know if Charlie is in the
+	// allowed room or not.
+	bob.LeaveRoom(t, allowed_room)
 
 	// hs2 cannot complete the join since they do not know if Charlie meets the
-	// requirements (since it is no longer in the space).
+	// requirements (since it is no longer in the allowed room).
 	failJoinRoom(t, charlie, room, "hs2", 502)
 
 	// Including hs1 (and failing over to it) allows the join to succeed.
@@ -498,7 +482,7 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 			},
 		},
 	})
-	// The room is an unstable room version which supports the restricted join_rule.
+	// The room is room version 8 which supports the restricted join_rule.
 	room := alice.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
@@ -579,8 +563,8 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 		},
 	})
 
-	// The room is an unstable room version which supports the restricted join_rule
-	// and is created on hs2.
+	// The room is room version 8 which supports the restricted join_rule and is
+	// created on hs2.
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
 	room := charlie.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
