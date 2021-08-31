@@ -1,10 +1,6 @@
-// +build msc2946,msc3083
+// +build msc2946,!dendrite_blacklist
 
 // Tests MSC3083, joining restricted rooms based on membership in another room.
-//
-// The tests below user the terminology of "allowed_room" to refer to the room
-// where membership checks are delegated to. This would frequently be a MSC1772
-// space, but is not required to be one.
 
 package tests
 
@@ -44,11 +40,13 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 	t.Helper()
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	// The room which membership checks are delegated to. In practice, this will
+	// often be an MSC1772 space, but that is not required.
 	allowed_room := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Allowed Room",
 	})
-	// The room is an unstable room version which supports the restricted join_rule.
+	// The room is room version 8 which supports the restricted join_rule.
 	room := alice.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
@@ -184,12 +182,15 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Charlie sets up the allowed room so it is on the other server.
+	//
+	// This is the room which membership checks are delegated to. In practice,
+	// this will often be an MSC1772 space, but that is not required.
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
 	allowed_room := charlie.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
 	})
-	// The room is an unstable room version which supports the restricted join_rule.
+	// The room is room version 8 which supports the restricted join_rule.
 	room := charlie.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
@@ -481,7 +482,7 @@ func TestRestrictedRoomsSpacesSummary(t *testing.T) {
 			},
 		},
 	})
-	// The room is an unstable room version which supports the restricted join_rule.
+	// The room is room version 8 which supports the restricted join_rule.
 	room := alice.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
@@ -562,8 +563,8 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 		},
 	})
 
-	// The room is an unstable room version which supports the restricted join_rule
-	// and is created on hs2.
+	// The room is room version 8 which supports the restricted join_rule and is
+	// created on hs2.
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
 	room := charlie.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
