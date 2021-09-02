@@ -27,6 +27,19 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 	remoteCharlie := deployment.Client(t, "hs2", "@charlie:hs2")
 	eve := deployment.RegisterUser(t, "hs1", "eve", "eve-has-a-very-secret-pw")
 
+	// Charlie sets her profile displayname. This ensures that her
+	// public name, private name and userid localpart are all
+	// distinguishable, even case-insensitively.
+	const charliePublicName = "Charlie Cooper"
+	remoteCharlie.MustDoFunc(
+		t,
+		"PUT",
+		[]string{"profile", remoteCharlie.UserID, "displayname"},
+		client.WithJSONBody(t, map[string]interface{}{
+			"displayname": charliePublicName,
+		}),
+	)
+
 	// Charlie creates a public room and invites Bob (so Eve can see that Charlie exists)
 	publicRoom := remoteCharlie.CreateRoom(t, map[string]interface{}{
 		"visibility": "public",
@@ -46,12 +59,13 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 	bob.JoinRoom(t, privateRoom, []string{"hs2"})
 
 	// Charlie reveals her private name to Bob
+	const charliePrivateName = "Freddy"
 	remoteCharlie.MustDoFunc(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "r0", "rooms", privateRoom, "state", "m.room.member", remoteCharlie.UserID},
 		client.WithJSONBody(t, map[string]interface{}{
-			"displayname": "Freddy",
+			"displayname": charliePrivateName,
 			"membership":  "join",
 		}),
 	)
@@ -60,7 +74,7 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 	bob.SyncUntilTimelineHas(t, privateRoom, func(ev gjson.Result) bool {
 		return ev.Get("type").Str == "m.room.member" &&
 			ev.Get("state_key").Str == remoteCharlie.UserID &&
-			ev.Get("content.displayname").Str == "Freddy"
+			ev.Get("content.displayname").Str == charliePrivateName
 	})
 
 	// There's no way to know what a remote user's "public profile" is
@@ -69,7 +83,7 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 	justCharlieByPublicNameOrMxid := []match.JSON{
 		match.JSONKeyArrayOfSize("results", 1),
 		match.AnyOf(
-			match.JSONKeyEqual("results.0.display_name", "Charlie"),
+			match.JSONKeyEqual("results.0.display_name", charliePublicName),
 			match.JSONKeyEqual("results.0.display_name", remoteCharlie.UserID),
 		),
 		match.JSONKeyEqual("results.0.user_id", remoteCharlie.UserID),
@@ -77,7 +91,7 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 
 	t.Run("Eve can find Charlie by profile display name",
 		func(t *testing.T) {
-			res := eve.SearchUserDirectory(t, "Charlie")
+			res := eve.SearchUserDirectory(t, charliePublicName)
 			must.MatchResponse(t, res, match.HTTPResponse{JSON: justCharlieByPublicNameOrMxid})
 		})
 
@@ -93,13 +107,13 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 
 	t.Run("Eve cannot find Charlie by room-specific name that Eve is not privy to",
 		func(t *testing.T) {
-			res := eve.SearchUserDirectory(t, "Freddy")
+			res := eve.SearchUserDirectory(t, charliePrivateName)
 			must.MatchResponse(t, res, match.HTTPResponse{JSON: noResults})
 		})
 
 	t.Run("Bob can find Charlie by profile display name",
 		func(t *testing.T) {
-			res := bob.SearchUserDirectory(t, "Charlie")
+			res := bob.SearchUserDirectory(t, charliePublicName)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: justCharlieByPublicNameOrMxid,
 			})

@@ -27,6 +27,19 @@ func TestRoomSpecificUsernameHandling(t *testing.T) {
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bob-has-a-very-secret-pw")
 	eve := deployment.RegisterUser(t, "hs1", "eve", "eve-has-a-very-secret-pw")
 
+	// Alice sets her profile displayname. This ensures that her
+	// public name, private name and userid localpart are all
+	// distinguishable, even case-insensitively.
+	const alicePublicName = "Alice Cooper"
+	alice.MustDoFunc(
+		t,
+		"PUT",
+		[]string{"profile", alice.UserID, "displayname"},
+		client.WithJSONBody(t, map[string]interface{}{
+			"displayname": alicePublicName,
+		}),
+	)
+
 	// Alice creates a public room (so Eve can see that Alice exists)
 	alice.CreateRoom(t, map[string]interface{}{"visibility": "public"})
 
@@ -41,25 +54,26 @@ func TestRoomSpecificUsernameHandling(t *testing.T) {
 	alice.JoinRoom(t, privateRoom, nil)
 
 	// Alice reveals her private name to Bob
+	const alicePrivateName = "Freddy"
 	alice.MustDoFunc(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "r0", "rooms", privateRoom, "state", "m.room.member", "@alice:hs1"},
 		client.WithJSONBody(t, map[string]interface{}{
-			"displayname": "Freddy",
+			"displayname": alicePrivateName,
 			"membership":  "join",
 		}),
 	)
 
 	justAliceByPublicName := []match.JSON{
 		match.JSONKeyArrayOfSize("results", 1),
-		match.JSONKeyEqual("results.0.display_name", "Alice"),
+		match.JSONKeyEqual("results.0.display_name", alicePublicName),
 		match.JSONKeyEqual("results.0.user_id", alice.UserID),
 	}
 
 	t.Run("Eve can find Alice by profile display name",
 		func(t *testing.T) {
-			res := eve.SearchUserDirectory(t, "Alice")
+			res := eve.SearchUserDirectory(t, alicePublicName)
 			must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName})
 		})
 
@@ -75,13 +89,13 @@ func TestRoomSpecificUsernameHandling(t *testing.T) {
 
 	t.Run("Eve cannot find Alice by room-specific name that Eve is not privy to",
 		func(t *testing.T) {
-			res := eve.SearchUserDirectory(t, "Freddy")
+			res := eve.SearchUserDirectory(t, alicePrivateName)
 			must.MatchResponse(t, res, match.HTTPResponse{JSON: noResults})
 		})
 
 	t.Run("Bob can find Alice by profile display name",
 		func(t *testing.T) {
-			res := bob.SearchUserDirectory(t, "Alice")
+			res := bob.SearchUserDirectory(t, alicePublicName)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: justAliceByPublicName,
 			})
