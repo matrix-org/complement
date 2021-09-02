@@ -21,7 +21,6 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 	// - Eve (hs1) shouldn't be able to see that private name.
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
-	//defer time.Sleep(2 * time.Hour)
 
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	remoteCharlie := deployment.Client(t, "hs2", "@charlie:hs2")
