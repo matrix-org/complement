@@ -17,7 +17,7 @@ func TestRoomSpecificUsernameHandling(t *testing.T) {
 	// - Bob can see that private name when he shouldn't be able to.
 	//
 	// I've tweaked the names to be more traditional:
-	// - Even knows about Alice,
+	// - Eve knows about Alice,
 	// - Alice reveals a private name to another friend Bob
 	// - Eve shouldn't be able to see that private name.
 	deployment := Deploy(t, b.BlueprintAlice)
