@@ -108,21 +108,6 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 	c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
 }
 
-// SearchUserDirectory makes a request to search the user directory with a given query.
-// We don't include an explicit limit on the number of results returned, relying on
-// the spec's default of 10.
-func (c *CSAPI) SearchUserDirectory(t *testing.T, query string) *http.Response {
-	t.Helper()
-	return c.MustDoFunc(
-		t,
-		"POST",
-		[]string{"_matrix", "client", "r0", "user_directory", "search"},
-		WithJSONBody(t, map[string]interface{}{
-			"search_term": query,
-		}),
-	)
-}
-
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {

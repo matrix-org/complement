@@ -88,17 +88,29 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 		match.JSONKeyEqual("results.0.user_id", remoteCharlie.UserID),
 	}
 
-	t.Run("Eve can find Charlie by profile display name",
-		func(t *testing.T) {
-			res := eve.SearchUserDirectory(t, charliePublicName)
-			must.MatchResponse(t, res, match.HTTPResponse{JSON: justCharlieByPublicNameOrMxid})
-		})
+	t.Run("Eve can find Charlie by profile display name", func(t *testing.T) {
+		res := eve.MustDoFunc(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			client.WithJSONBody(t, map[string]interface{}{
+				"search_term": charliePublicName,
+			}),
+		)
+		must.MatchResponse(t, res, match.HTTPResponse{JSON: justCharlieByPublicNameOrMxid})
+	})
 
-	t.Run("Eve can find Charlie by mxid",
-		func(t *testing.T) {
-			res := eve.SearchUserDirectory(t, remoteCharlie.UserID)
-			must.MatchResponse(t, res, match.HTTPResponse{JSON: justCharlieByPublicNameOrMxid})
-		})
+	t.Run("Eve can find Charlie by mxid", func(t *testing.T) {
+		res := eve.MustDoFunc(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			client.WithJSONBody(t, map[string]interface{}{
+				"search_term": remoteCharlie.UserID,
+			}),
+		)
+		must.MatchResponse(t, res, match.HTTPResponse{JSON: justCharlieByPublicNameOrMxid})
+	})
 
 	noResults := []match.JSON{
 		match.JSONKeyArrayOfSize("results", 0),
@@ -106,23 +118,42 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 
 	t.Run("Eve cannot find Charlie by room-specific name that Eve is not privy to",
 		func(t *testing.T) {
-			res := eve.SearchUserDirectory(t, charliePrivateName)
+			res := eve.MustDoFunc(
+				t,
+				"POST",
+				[]string{"_matrix", "client", "r0", "user_directory", "search"},
+				client.WithJSONBody(t, map[string]interface{}{
+					"search_term": charliePrivateName,
+				}),
+			)
 			must.MatchResponse(t, res, match.HTTPResponse{JSON: noResults})
 		})
 
-	t.Run("Bob can find Charlie by profile display name",
-		func(t *testing.T) {
-			res := bob.SearchUserDirectory(t, charliePublicName)
-			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: justCharlieByPublicNameOrMxid,
-			})
+	t.Run("Bob can find Charlie by profile display name", func(t *testing.T) {
+		res := bob.MustDoFunc(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			client.WithJSONBody(t, map[string]interface{}{
+				"search_term": charliePublicName,
+			}),
+		)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: justCharlieByPublicNameOrMxid,
 		})
+	})
 
-	t.Run("Bob can find Charlie by mxid",
-		func(t *testing.T) {
-			res := bob.SearchUserDirectory(t, remoteCharlie.UserID)
-			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: justCharlieByPublicNameOrMxid,
-			})
+	t.Run("Bob can find Charlie by mxid", func(t *testing.T) {
+		res := bob.MustDoFunc(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			client.WithJSONBody(t, map[string]interface{}{
+				"search_term": remoteCharlie.UserID,
+			}),
+		)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: justCharlieByPublicNameOrMxid,
 		})
+	})
 }
