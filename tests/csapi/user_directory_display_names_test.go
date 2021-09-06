@@ -47,7 +47,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI) {
 	alice.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"profile", alice.UserID, "displayname"},
+		[]string{"_matrix", "client", "r0", "profile", alice.UserID, "displayname"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"displayname": alicePublicName,
 		}),

@@ -33,7 +33,7 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 	remoteCharlie.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"profile", remoteCharlie.UserID, "displayname"},
+		[]string{"_matrix", "client", "r0", "profile", remoteCharlie.UserID, "displayname"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"displayname": charliePublicName,
 		}),
