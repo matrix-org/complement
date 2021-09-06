@@ -23,7 +23,7 @@ var noResults = []match.JSON{
 	match.JSONKeyArrayOfSize("results", 0),
 }
 
-func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI) {
+func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func(*testing.T)) {
 	// Originally written to reproduce https://github.com/matrix-org/synapse/issues/5677
 	// In that bug report,
 	// - Bob knows about Alice, and
@@ -35,7 +35,9 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI) {
 	// - Alice reveals a private name to another friend Bob
 	// - Eve shouldn't be able to see that private name via the directory.
 	deployment := Deploy(t, b.BlueprintAlice)
-	defer deployment.Destroy(t)
+	cleanup := func(t *testing.T) {
+		deployment.Destroy(t)
+	}
 
 	alice := deployment.Client(t, "hs1", aliceId)
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bob-has-a-very-secret-pw")
@@ -55,8 +57,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI) {
 
 	// Alice creates a public room (so when Eve searches, she can see that Alice exists)
 	alice.CreateRoom(t, map[string]interface{}{"visibility": "public"})
-
-	return alice, bob, eve
+	return alice, bob, eve, cleanup
 }
 
 func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
@@ -126,7 +127,8 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 }
 
 func TestRoomSpecificUsernameChange(t *testing.T) {
-	alice, bob, eve := setupUsers(t)
+	alice, bob, eve, cleanup := setupUsers(t)
+	defer cleanup(t)
 
 	// Bob creates a new room and invites Alice.
 	privateRoom := bob.CreateRoom(t, map[string]interface{}{
@@ -153,7 +155,8 @@ func TestRoomSpecificUsernameChange(t *testing.T) {
 }
 
 func TestRoomSpecificUsernameAtJoin(t *testing.T) {
-	alice, bob, eve := setupUsers(t)
+	alice, bob, eve, cleanup := setupUsers(t)
+	defer cleanup(t)
 
 	// Bob creates a new room and invites Alice.
 	privateRoom := bob.CreateRoom(t, map[string]interface{}{
