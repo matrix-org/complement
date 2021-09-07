@@ -30,6 +30,7 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 	// public name, private name and userid localpart are all
 	// distinguishable, even case-insensitively.
 	const charliePublicName = "Charlie Cooper"
+	const charlieLocalPart = "charlie"
 	remoteCharlie.MustDoFunc(
 		t,
 		"PUT",
@@ -83,6 +84,7 @@ func TestRoomSpecificUsernameHandlingOverFederation(t *testing.T) {
 		match.JSONKeyArrayOfSize("results", 1),
 		match.AnyOf(
 			match.JSONKeyEqual("results.0.display_name", charliePublicName),
+			match.JSONKeyEqual("results.0.display_name", charlieLocalPart),
 			match.JSONKeyEqual("results.0.display_name", remoteCharlie.UserID),
 		),
 		match.JSONKeyEqual("results.0.user_id", remoteCharlie.UserID),
