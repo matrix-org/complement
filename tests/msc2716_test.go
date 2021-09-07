@@ -112,43 +112,53 @@ func TestBackfillingHistory(t *testing.T) {
 			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
 			// Insert the most recent chunk of backfilled history
-			insertTime1 := timeAfterEventBefore.Add(timeBetweenMessages * 3)
+			insertTime0 := timeAfterEventBefore.Add(timeBetweenMessages * 3)
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				roomID,
 				eventIdBefore,
 				"",
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime0),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime0, 3),
+				// Status
+				200,
+			)
+			batchSendResBody0 := client.ParseJSON(t, batchSendRes)
+			insertionEventID0 := getInsertionEventIDFromBatchSendResponseBody(t, batchSendResBody0)
+			historicalEventIDs0 := getEventIDsFromBatchSendResponseBody(t, batchSendResBody0)
+			chunkEventID0 := getChunkEventIdFromBatchSendResponseBody(t, batchSendResBody0)
+			baseInsertionEventID0 := getBaseInsertionEventIDFromBatchSendResponseBody(t, batchSendResBody0)
+			nextChunkID0 := getNextChunkIDFromBatchSendResponseBody(t, batchSendResBody0)
+
+			// Insert another older chunk of backfilled history from the same user.
+			// Make sure the meta data and joins still work on the subsequent chunk
+			insertTime1 := timeAfterEventBefore
+			batchSendRes1 := batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				nextChunkID0,
 				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime1),
 				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime1, 3),
 				// Status
 				200,
 			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
-			nextChunkID := getNextChunkIdFromBatchSendResponseBody(t, batchSendResBody)
-
-			// Insert another older chunk of backfilled history from the same user.
-			// Make sure the meta data and joins still work on the subsequent chunk
-			insertTime2 := timeAfterEventBefore
-			batchSendRes2 := batchSendHistoricalMessages(
-				t,
-				as,
-				roomID,
-				eventIdBefore,
-				nextChunkID,
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime2),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime2, 3),
-				// Status
-				200,
-			)
-			batchSendResBody2 := client.ParseJSON(t, batchSendRes2)
-			historicalEventIDs2 := getEventsFromBatchSendResponseBody(t, batchSendResBody2)
+			batchSendResBody1 := client.ParseJSON(t, batchSendRes1)
+			insertionEventID1 := getInsertionEventIDFromBatchSendResponseBody(t, batchSendResBody1)
+			historicalEventIDs1 := getEventIDsFromBatchSendResponseBody(t, batchSendResBody1)
+			chunkEventID1 := getChunkEventIdFromBatchSendResponseBody(t, batchSendResBody1)
 
 			var expectedEventIDOrder []string
 			expectedEventIDOrder = append(expectedEventIDOrder, eventIDsBefore...)
-			expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs2...)
-			expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs...)
+			expectedEventIDOrder = append(expectedEventIDOrder, insertionEventID1)
+			expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs1...)
+			expectedEventIDOrder = append(expectedEventIDOrder, chunkEventID1)
+			expectedEventIDOrder = append(expectedEventIDOrder, insertionEventID0)
+			expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs0...)
+			expectedEventIDOrder = append(expectedEventIDOrder, chunkEventID0)
+			expectedEventIDOrder = append(expectedEventIDOrder, baseInsertionEventID0)
 			expectedEventIDOrder = append(expectedEventIDOrder, eventIDsAfter...)
 			// Order events from newest to oldest
 			expectedEventIDOrder = reversed(expectedEventIDOrder)
@@ -228,7 +238,7 @@ func TestBackfillingHistory(t *testing.T) {
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+			historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
 
 			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
@@ -271,7 +281,7 @@ func TestBackfillingHistory(t *testing.T) {
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+			historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
 			backfilledEventId := historicalEventIDs[0]
 
 			// This is just a dummy event we search for after the backfilledEventId
@@ -314,7 +324,7 @@ func TestBackfillingHistory(t *testing.T) {
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			stateEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "state_events")
+			stateEventIDs := getStateEventIDsFromBatchSendResponseBody(t, batchSendResBody)
 
 			// We only expect 1 state event to be returned because we only passed in 1
 			// event into `?state_events_at_start`
@@ -426,7 +436,7 @@ func TestBackfillingHistory(t *testing.T) {
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+			historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
 
 			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
@@ -476,7 +486,7 @@ func TestBackfillingHistory(t *testing.T) {
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+			historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
 
 			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -547,7 +557,7 @@ func TestBackfillingHistory(t *testing.T) {
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+			historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
 
 			// Join the room from a remote homeserver after the backfilled messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -610,12 +620,11 @@ func TestBackfillingHistory(t *testing.T) {
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
-			baseInsertionEventID := historicalEventIDs[len(historicalEventIDs)-1]
+			historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
+			baseInsertionEventID := getBaseInsertionEventIDFromBatchSendResponseBody(t, batchSendResBody)
 
-			// [1 insertion event + 2 historical events + 1 chunk event + 1 insertion event]
-			if len(historicalEventIDs) != 5 {
-				t.Fatalf("Expected eventID list should be length 5 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
+			if len(historicalEventIDs) != 2 {
+				t.Fatalf("Expected eventID list should be length 2 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
 			}
 
 			beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -699,12 +708,11 @@ func TestBackfillingHistory(t *testing.T) {
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
-			baseInsertionEventID := historicalEventIDs[len(historicalEventIDs)-1]
+			historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
+			baseInsertionEventID := getBaseInsertionEventIDFromBatchSendResponseBody(t, batchSendResBody)
 
-			// [1 insertion event + 2 historical events + 1 chunk event + 1 insertion event]
-			if len(historicalEventIDs) != 5 {
-				t.Fatalf("Expected eventID list should be length 5 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
+			if len(historicalEventIDs) != 2 {
+				t.Fatalf("Expected eventID list should be length 2 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
 			}
 
 			beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -782,7 +790,7 @@ func TestBackfillingHistory(t *testing.T) {
 					200,
 				)
 				batchSendResBody := client.ParseJSON(t, batchSendRes)
-				historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
+				historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
 
 				messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
@@ -822,10 +830,9 @@ func TestBackfillingHistory(t *testing.T) {
 					200,
 				)
 				batchSendResBody := client.ParseJSON(t, batchSendRes)
-				historicalEventIDs := getEventsFromBatchSendResponseBody(t, batchSendResBody)
-				insertionEventID := historicalEventIDs[0]
-				chunkEventID := historicalEventIDs[2]
-				baseInsertionEventID := historicalEventIDs[3]
+				insertionEventID := getInsertionEventIDFromBatchSendResponseBody(t, batchSendResBody)
+				chunkEventID := getChunkEventIdFromBatchSendResponseBody(t, batchSendResBody)
+				baseInsertionEventID := getBaseInsertionEventIDFromBatchSendResponseBody(t, batchSendResBody)
 
 				// Send the marker event
 				markerEventID := sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
@@ -1147,14 +1154,38 @@ func batchSendHistoricalMessages(
 	return res
 }
 
-func getEventsFromBatchSendResponseBody(t *testing.T, body []byte) (eventIDs []string) {
-	eventIDs = client.GetJSONFieldStringArray(t, body, "events")
+func getStateEventIDsFromBatchSendResponseBody(t *testing.T, body []byte) (stateEventIDs []string) {
+	stateEventIDs = client.GetJSONFieldStringArray(t, body, "state_event_ids")
+
+	return stateEventIDs
+}
+
+func getEventIDsFromBatchSendResponseBody(t *testing.T, body []byte) (eventIDs []string) {
+	eventIDs = client.GetJSONFieldStringArray(t, body, "event_ids")
 
 	return eventIDs
 }
 
-func getNextChunkIdFromBatchSendResponseBody(t *testing.T, body []byte) (nextChunkID string) {
+func getNextChunkIDFromBatchSendResponseBody(t *testing.T, body []byte) (nextChunkID string) {
 	nextChunkID = client.GetJSONFieldStr(t, body, "next_chunk_id")
 
 	return nextChunkID
+}
+
+func getInsertionEventIDFromBatchSendResponseBody(t *testing.T, body []byte) (insertionEventID string) {
+	insertionEventID = client.GetJSONFieldStr(t, body, "insertion_event_id")
+
+	return insertionEventID
+}
+
+func getChunkEventIdFromBatchSendResponseBody(t *testing.T, body []byte) (chunkEventId string) {
+	chunkEventId = client.GetJSONFieldStr(t, body, "chunk_event_id")
+
+	return chunkEventId
+}
+
+func getBaseInsertionEventIDFromBatchSendResponseBody(t *testing.T, body []byte) (baseInsertionEventID string) {
+	baseInsertionEventID = client.GetJSONFieldStr(t, body, "base_insertion_event_id")
+
+	return baseInsertionEventID
 }
