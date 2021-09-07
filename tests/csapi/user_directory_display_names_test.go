@@ -9,14 +9,14 @@ import (
 	"github.com/matrix-org/complement/internal/must"
 )
 
-const aliceId = "@alice:hs1"
+const aliceUserID = "@alice:hs1"
 const alicePublicName = "Alice Cooper"
 const alicePrivateName = "Freddy"
 
 var justAliceByPublicName = []match.JSON{
 	match.JSONKeyArrayOfSize("results", 1),
 	match.JSONKeyEqual("results.0.display_name", alicePublicName),
-	match.JSONKeyEqual("results.0.user_id", aliceId),
+	match.JSONKeyEqual("results.0.user_id", aliceUserID),
 }
 
 var noResults = []match.JSON{
@@ -39,7 +39,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 		deployment.Destroy(t)
 	}
 
-	alice := deployment.Client(t, "hs1", aliceId)
+	alice := deployment.Client(t, "hs1", aliceUserID)
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bob-has-a-very-secret-pw")
 	eve := deployment.RegisterUser(t, "hs1", "eve", "eve-has-a-very-secret-pw")
 
@@ -79,7 +79,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 			"POST",
 			[]string{"_matrix", "client", "r0", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
-				"search_term": aliceId,
+				"search_term": aliceUserID,
 			}),
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName})
@@ -117,7 +117,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 			"POST",
 			[]string{"_matrix", "client", "r0", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
-				"search_term": aliceId,
+				"search_term": aliceUserID,
 			}),
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
