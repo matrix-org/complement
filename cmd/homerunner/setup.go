@@ -41,6 +41,7 @@ func (r *Runtime) CreateDeployment(imageURI string, blueprint *b.Blueprint) (*do
 		DebugLoggingEnabled:    true,
 		VersionCheckIterations: r.Config.VersionCheckIterations,
 		BestEffort:             true,
+		PackageNamespace:       Pkg,
 	}
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
