@@ -501,7 +501,8 @@ func TestBackfillingHistory(t *testing.T) {
 				},
 			}
 			// We can't use as.SendEventSynced(...) because application services can't use the /sync API
-			insertionSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEvent.Type, "txn-i123"}, client.WithJSONBody(t, insertionEvent.Content))
+			txnId := getTxnID("sendInsertionAndEnsureBackfilled-txn")
+			insertionSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEvent.Type, txnId}, client.WithJSONBody(t, insertionEvent.Content))
 			insertionSendBody := client.ParseJSON(t, insertionSendRes)
 			insertionEventID := client.GetJSONFieldStr(t, insertionSendBody, "event_id")
 			// Make sure the insertion event has reached the homeserver
@@ -944,8 +945,8 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 			markerInsertionContentField: insertionEventID,
 		},
 	}
-	txnId := getTxnID("sendMarkerAndEnsureBackfilled-txn")
 	// We can't use as.SendEventSynced(...) because application services can't use the /sync API
+	txnId := getTxnID("sendMarkerAndEnsureBackfilled-txn")
 	markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", markerEvent.Type, txnId}, client.WithJSONBody(t, markerEvent.Content))
 	markerSendBody := client.ParseJSON(t, markerSendRes)
 	markerEventID = client.GetJSONFieldStr(t, markerSendBody, "event_id")
