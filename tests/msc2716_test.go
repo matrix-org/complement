@@ -609,6 +609,7 @@ func TestBackfillingHistory(t *testing.T) {
 				"limit": []string{"5"},
 			}))
 
+			numMessagesSent := 2
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
@@ -616,7 +617,7 @@ func TestBackfillingHistory(t *testing.T) {
 				eventIdBefore,
 				"",
 				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
 				// Status
 				200,
 			)
@@ -624,8 +625,8 @@ func TestBackfillingHistory(t *testing.T) {
 			historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
 			baseInsertionEventID := getBaseInsertionEventIDFromBatchSendResponseBody(t, batchSendResBody)
 
-			if len(historicalEventIDs) != 2 {
-				t.Fatalf("Expected eventID list should be length 2 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
+			if len(historicalEventIDs) != numMessagesSent {
+				t.Fatalf("Expected %d event_ids in the response that correspond to the %d events we sent in the request but saw %d: %s", numMessagesSent, numMessagesSent, len(historicalEventIDs), historicalEventIDs)
 			}
 
 			beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -697,6 +698,7 @@ func TestBackfillingHistory(t *testing.T) {
 			}))
 
 			// Historical messages are inserted where we have already scrolled back to
+			numMessagesSent := 2
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
@@ -704,7 +706,7 @@ func TestBackfillingHistory(t *testing.T) {
 				eventIdBefore,
 				"",
 				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
 				// Status
 				200,
 			)
@@ -712,8 +714,8 @@ func TestBackfillingHistory(t *testing.T) {
 			historicalEventIDs := getEventIDsFromBatchSendResponseBody(t, batchSendResBody)
 			baseInsertionEventID := getBaseInsertionEventIDFromBatchSendResponseBody(t, batchSendResBody)
 
-			if len(historicalEventIDs) != 2 {
-				t.Fatalf("Expected eventID list should be length 2 but saw %d: %s", len(historicalEventIDs), historicalEventIDs)
+			if len(historicalEventIDs) != numMessagesSent {
+				t.Fatalf("Expected %d event_ids in the response that correspond to the %d events we sent in the request but saw %d: %s", numMessagesSent, numMessagesSent, len(historicalEventIDs), historicalEventIDs)
 			}
 
 			beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
