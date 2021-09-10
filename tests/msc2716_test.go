@@ -329,7 +329,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// We only expect 1 state event to be returned because we only passed in 1
 			// event into `?state_events_at_start`
 			if len(stateEventIDs) != 1 {
-				t.Fatalf("Expected only 1 state event to be returned but received %d: %s", len(stateEventIDs), stateEventIDs)
+				t.Fatalf("Expected only 1 state event to be returned but received %d: %v", len(stateEventIDs), stateEventIDs)
 			}
 		})
 
@@ -534,7 +534,8 @@ func TestBackfillingHistory(t *testing.T) {
 				},
 			}
 			// We can't use as.SendEventSynced(...) because application services can't use the /sync API
-			insertionSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEvent.Type, "txn-m123"}, client.WithJSONBody(t, insertionEvent.Content))
+			txnId := getTxnID("sendInsertionAndEnsureBackfilled-txn")
+			insertionSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEvent.Type, txnId}, client.WithJSONBody(t, insertionEvent.Content))
 			insertionSendBody := client.ParseJSON(t, insertionSendRes)
 			insertionEventID := client.GetJSONFieldStr(t, insertionSendBody, "event_id")
 			// Make sure the insertion event has reached the homeserver
@@ -964,6 +965,8 @@ func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocal
 }
 
 func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSAPI, roomID, insertionEventID string) (markerEventID string) {
+	t.Helper()
+
 	// Send a marker event to let all of the homeservers know about the
 	// insertion point where all of the historical messages are at
 	markerEvent := b.Event{
@@ -972,8 +975,8 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 			markerInsertionContentField: insertionEventID,
 		},
 	}
-	txnId := getTxnID("sendMarkerAndEnsureBackfilled-txn")
 	// We can't use as.SendEventSynced(...) because application services can't use the /sync API
+	txnId := getTxnID("sendMarkerAndEnsureBackfilled-txn")
 	markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", markerEvent.Type, txnId}, client.WithJSONBody(t, markerEvent.Content))
 	markerSendBody := client.ParseJSON(t, markerSendRes)
 	markerEventID = client.GetJSONFieldStr(t, markerSendBody, "event_id")
@@ -1021,7 +1024,7 @@ func createInviteStateEventsForBackfillRequest(
 	// Timestamp in milliseconds
 	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
 
-	state_evs := make([]map[string]interface{}, len(virtualUserIDs))
+	stateEvents := make([]map[string]interface{}, len(virtualUserIDs))
 	for i, virtualUserID := range virtualUserIDs {
 		inviteEvent := map[string]interface{}{
 			"type":             "m.room.member",
@@ -1033,10 +1036,10 @@ func createInviteStateEventsForBackfillRequest(
 			"state_key": virtualUserID,
 		}
 
-		state_evs[i] = inviteEvent
+		stateEvents[i] = inviteEvent
 	}
 
-	return state_evs
+	return stateEvents
 }
 
 func createJoinStateEventsForBackfillRequest(
@@ -1046,7 +1049,7 @@ func createJoinStateEventsForBackfillRequest(
 	// Timestamp in milliseconds
 	insertOriginServerTs := uint64(insertTime.UnixNano() / int64(time.Millisecond))
 
-	state_evs := make([]map[string]interface{}, len(virtualUserIDs))
+	stateEvents := make([]map[string]interface{}, len(virtualUserIDs))
 	for i, virtualUserID := range virtualUserIDs {
 		joinEvent := map[string]interface{}{
 			"type":             "m.room.member",
@@ -1058,10 +1061,10 @@ func createJoinStateEventsForBackfillRequest(
 			"state_key": virtualUserID,
 		}
 
-		state_evs[i] = joinEvent
+		stateEvents[i] = joinEvent
 	}
 
-	return state_evs
+	return stateEvents
 }
 
 func createMessageEventsForBackfillRequest(
@@ -1122,10 +1125,12 @@ func batchSendHistoricalMessages(
 	roomID string,
 	insertAfterEventId string,
 	chunkID string,
-	state_events_at_start []map[string]interface{},
+	stateEventsAtStart []map[string]interface{},
 	events []map[string]interface{},
 	expectedStatus int,
 ) (res *http.Response) {
+	t.Helper()
+
 	query := make(url.Values, 2)
 	query.Add("prev_event", insertAfterEventId)
 	// If provided, connect the chunk to the last insertion point
@@ -1139,7 +1144,7 @@ func batchSendHistoricalMessages(
 		[]string{"_matrix", "client", "unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"events":                events,
-			"state_events_at_start": state_events_at_start,
+			"state_events_at_start": stateEventsAtStart,
 		}),
 		client.WithContentType("application/json"),
 		client.WithQueries(query),
