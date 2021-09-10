@@ -55,13 +55,19 @@ jobs:
           # current build. Depending on whether this is a PR or release, etc. we
           # need to use different fallbacks.
           #
-          # 1. First check if there's a similarly named branch (GITHUB_HEAD_REF
-          #    for pull requests, otherwise GITHUB_REF).
+          # 1. Check if there's a similarly named branch (GITHUB_HEAD_REF for pull
+          #    requests, otherwise GITHUB_REF), but if this is the default complement
+          #    branch, use the default homeserver branch.
           # 2. Use the default homeserver branch.
           for BRANCH_NAME in "$GITHUB_HEAD_REF" "${GITHUB_REF#refs/heads/}" "${{ matrix.default_branch }}"; do
             # Skip empty branch names and merge commits.
             if [[ -z "$BRANCH_NAME" || $BRANCH_NAME =~ ^refs/pull/.* ]]; then
               continue
+            fi
+
+            # If this is complement's default branch, use the homeserver's default branch.
+            if [[ "$BRANCH_NAME" == "master" ]]; then
+              BRANCH_NAME="${{ matrix.default_branch }}"
             fi
 
             (wget -O - "https://github.com/matrix-org/${{ matrix.homeserver }}/archive/$BRANCH_NAME.tar.gz" | tar -xz --strip-components=1 -C homeserver) && break

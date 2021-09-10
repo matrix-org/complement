@@ -15,6 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const Pkg = "homerunner"
+
 type Config struct {
 	HomeserverLifetimeMins int
 	Port                   int
@@ -45,6 +47,7 @@ func NewConfig() *Config {
 
 func cleanup(c *Config) {
 	cfg := &config.Complement{
+		PackageNamespace:       Pkg,
 		BaseImageURI:           "nothing",
 		DebugLoggingEnabled:    true,
 		VersionCheckIterations: c.VersionCheckIterations,
