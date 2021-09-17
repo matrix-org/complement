@@ -38,24 +38,24 @@ const timeBetweenMessages = time.Millisecond
 
 var (
 	insertionEventType = "org.matrix.msc2716.insertion"
-	chunkEventType     = "org.matrix.msc2716.chunk"
+	batchEventType     = "org.matrix.msc2716.batch"
 	markerEventType    = "org.matrix.msc2716.marker"
 
 	historicalContentField      = "org.matrix.msc2716.historical"
-	nextChunkIDContentField     = "org.matrix.msc2716.next_chunk_id"
+	nextBatchIDContentField     = "org.matrix.msc2716.next_batch_id"
 	markerInsertionContentField = "org.matrix.msc2716.marker.insertion"
 )
 
 var createPublicRoomOpts = map[string]interface{}{
 	"preset":       "public_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716",
+	"room_version": "org.matrix.msc2716v3",
 }
 
 var createPrivateRoomOpts = map[string]interface{}{
 	"preset":       "private_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716",
+	"room_version": "org.matrix.msc2716v3",
 }
 
 func TestBackfillingHistory(t *testing.T) {
@@ -82,9 +82,9 @@ func TestBackfillingHistory(t *testing.T) {
 	t.Run("parallel", func(t *testing.T) {
 		// Test that the message events we insert between A and B come back in the correct order from /messages
 		//
-		// Final timeline output: ( [n] = historical chunk )
-		// (oldest) A, B, [insertion, c, d, e, chunk] [insertion, f, g, h, chunk, insertion], I, J (newest)
-		//                historical chunk 1          historical chunk 0
+		// Final timeline output: ( [n] = historical batch )
+		// (oldest) A, B, [insertion, c, d, e, batch] [insertion, f, g, h, batch, insertion], I, J (newest)
+		//                historical batch 1          historical batch 0
 		t.Run("Backfilled historical events resolve with proper state in correct order", func(t *testing.T) {
 			t.Parallel()
 
@@ -111,7 +111,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// inserted history later.
 			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
-			// Insert the most recent chunk of backfilled history
+			// Insert the most recent batch of backfilled history
 			insertTime0 := timeAfterEventBefore.Add(timeBetweenMessages * 3)
 			batchSendRes := batchSendHistoricalMessages(
 				t,
@@ -127,19 +127,19 @@ func TestBackfillingHistory(t *testing.T) {
 			batchSendResBody0 := client.ParseJSON(t, batchSendRes)
 			insertionEventID0 := client.GetJSONFieldStr(t, batchSendResBody0, "insertion_event_id")
 			historicalEventIDs0 := client.GetJSONFieldStringArray(t, batchSendResBody0, "event_ids")
-			chunkEventID0 := client.GetJSONFieldStr(t, batchSendResBody0, "chunk_event_id")
+			batchEventID0 := client.GetJSONFieldStr(t, batchSendResBody0, "batch_event_id")
 			baseInsertionEventID0 := client.GetJSONFieldStr(t, batchSendResBody0, "base_insertion_event_id")
-			nextChunkID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_chunk_id")
+			nextBatchID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_batch_id")
 
-			// Insert another older chunk of backfilled history from the same user.
-			// Make sure the meta data and joins still work on the subsequent chunk
+			// Insert another older batch of backfilled history from the same user.
+			// Make sure the meta data and joins still work on the subsequent batch
 			insertTime1 := timeAfterEventBefore
 			batchSendRes1 := batchSendHistoricalMessages(
 				t,
 				as,
 				roomID,
 				eventIdBefore,
-				nextChunkID0,
+				nextBatchID0,
 				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime1),
 				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime1, 3),
 				// Status
@@ -148,23 +148,23 @@ func TestBackfillingHistory(t *testing.T) {
 			batchSendResBody1 := client.ParseJSON(t, batchSendRes1)
 			insertionEventID1 := client.GetJSONFieldStr(t, batchSendResBody1, "insertion_event_id")
 			historicalEventIDs1 := client.GetJSONFieldStringArray(t, batchSendResBody1, "event_ids")
-			chunkEventID1 := client.GetJSONFieldStr(t, batchSendResBody1, "chunk_event_id")
+			batchEventID1 := client.GetJSONFieldStr(t, batchSendResBody1, "batch_event_id")
 
 			var expectedEventIDOrder []string
 			expectedEventIDOrder = append(expectedEventIDOrder, eventIDsBefore...)
 			expectedEventIDOrder = append(expectedEventIDOrder, insertionEventID1)
 			expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs1...)
-			expectedEventIDOrder = append(expectedEventIDOrder, chunkEventID1)
+			expectedEventIDOrder = append(expectedEventIDOrder, batchEventID1)
 			expectedEventIDOrder = append(expectedEventIDOrder, insertionEventID0)
 			expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs0...)
-			expectedEventIDOrder = append(expectedEventIDOrder, chunkEventID0)
+			expectedEventIDOrder = append(expectedEventIDOrder, batchEventID0)
 			expectedEventIDOrder = append(expectedEventIDOrder, baseInsertionEventID0)
 			expectedEventIDOrder = append(expectedEventIDOrder, eventIDsAfter...)
 			// Order events from newest to oldest
 			expectedEventIDOrder = reversed(expectedEventIDOrder)
 
-			// (oldest) A, B, [insertion, c, d, e, chunk] [insertion, f, g, h, chunk, insertion], I, J (newest)
-			//                historical chunk 1          historical chunk 0
+			// (oldest) A, B, [insertion, c, d, e, batch] [insertion, f, g, h, batch, insertion], I, J (newest)
+			//                historical batch 1          historical batch 0
 			if len(expectedEventIDOrder) != 15 {
 				t.Fatalf("Expected eventID list should be length 15 but saw %d: %s", len(expectedEventIDOrder), expectedEventIDOrder)
 			}
@@ -206,7 +206,7 @@ func TestBackfillingHistory(t *testing.T) {
 			}
 		})
 
-		t.Run("Backfilled historical events from multiple users in the same chunk", func(t *testing.T) {
+		t.Run("Backfilled historical events from multiple users in the same batch", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -355,7 +355,7 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 		})
 
-		t.Run("Unrecognised chunk_id will throw an error", func(t *testing.T) {
+		t.Run("Unrecognised batch_id will throw an error", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -370,7 +370,7 @@ func TestBackfillingHistory(t *testing.T) {
 				as,
 				roomID,
 				eventIdBefore,
-				"XXX_DOES_NOT_EXIST_CHUNK_ID",
+				"XXX_DOES_NOT_EXIST_BATCH_ID",
 				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
 				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 				// Status
@@ -402,9 +402,9 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 		})
 
-		t.Run("TODO: Trying to send insertion event with same `next_chunk_id` will reject", func(t *testing.T) {
+		t.Run("TODO: Trying to send insertion event with same `next_batch_id` will reject", func(t *testing.T) {
 			t.Skip("Skipping until implemented")
-			// (room_id, next_chunk_id) should be unique
+			// (room_id, next_batch_id) should be unique
 		})
 
 		t.Run("Should be able to backfill into private room", func(t *testing.T) {
@@ -457,7 +457,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
 		})
 
-		t.Run("TODO: What happens when you point multiple chunks at the same insertion event?", func(t *testing.T) {
+		t.Run("TODO: What happens when you point multiple batches at the same insertion event?", func(t *testing.T) {
 			t.Skip("Skipping until implemented")
 		})
 
@@ -525,11 +525,11 @@ func TestBackfillingHistory(t *testing.T) {
 			timeAfterEventBefore := time.Now()
 
 			// Create insertion event in the normal DAG
-			chunkId := "mynextchunkid123"
+			batchID := "mynextBatchID123"
 			insertionEvent := b.Event{
 				Type: insertionEventType,
 				Content: map[string]interface{}{
-					nextChunkIDContentField: chunkId,
+					nextBatchIDContentField: batchID,
 					historicalContentField:  true,
 				},
 			}
@@ -551,7 +551,7 @@ func TestBackfillingHistory(t *testing.T) {
 				as,
 				roomID,
 				eventIdBefore,
-				chunkId,
+				batchID,
 				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
 				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
 				// Status
@@ -809,7 +809,7 @@ func TestBackfillingHistory(t *testing.T) {
 				})
 			})
 
-			t.Run("Not allowed to redact MSC2716 insertion, chunk, marker events", func(t *testing.T) {
+			t.Run("Not allowed to redact MSC2716 insertion, batch, marker events", func(t *testing.T) {
 				t.Parallel()
 
 				roomID := as.CreateRoom(t, createUnsupportedMSC2716RoomOpts)
@@ -834,14 +834,14 @@ func TestBackfillingHistory(t *testing.T) {
 				)
 				batchSendResBody := client.ParseJSON(t, batchSendRes)
 				insertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "insertion_event_id")
-				chunkEventID := client.GetJSONFieldStr(t, batchSendResBody, "chunk_event_id")
+				batchEventID := client.GetJSONFieldStr(t, batchSendResBody, "batch_event_id")
 				baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
 
 				// Send the marker event
 				markerEventID := sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
 
 				redactEventID(t, alice, roomID, insertionEventID, 403)
-				redactEventID(t, alice, roomID, chunkEventID, 403)
+				redactEventID(t, alice, roomID, batchEventID, 403)
 				redactEventID(t, alice, roomID, markerEventID, 403)
 			})
 		})
@@ -914,7 +914,7 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 func isRelevantEvent(r gjson.Result) bool {
 	return len(r.Get("content").Get("body").Str) > 0 ||
 		r.Get("type").Str == insertionEventType ||
-		r.Get("type").Str == chunkEventType ||
+		r.Get("type").Str == batchEventType ||
 		r.Get("type").Str == markerEventType
 }
 
@@ -1088,7 +1088,7 @@ func createMessageEventsForBackfillRequest(
 			"origin_server_ts": insertOriginServerTs + (timeBetweenMessagesMS * uint64(i)),
 			"content": map[string]interface{}{
 				"msgtype":              "m.text",
-				"body":                 fmt.Sprintf("Historical %d (chunk=%d)", i, chunkCount),
+				"body":                 fmt.Sprintf("Historical %d (batch=%d)", i, batchCount),
 				historicalContentField: true,
 			},
 		}
@@ -1119,14 +1119,14 @@ func redactEventID(t *testing.T, c *client.CSAPI, roomID, eventID string, expect
 	}
 }
 
-var chunkCount int64 = 0
+var batchCount int64 = 0
 
 func batchSendHistoricalMessages(
 	t *testing.T,
 	c *client.CSAPI,
 	roomID string,
 	insertAfterEventId string,
-	chunkID string,
+	batchID string,
 	stateEventsAtStart []map[string]interface{},
 	events []map[string]interface{},
 	expectedStatus int,
@@ -1135,9 +1135,9 @@ func batchSendHistoricalMessages(
 
 	query := make(url.Values, 2)
 	query.Add("prev_event", insertAfterEventId)
-	// If provided, connect the chunk to the last insertion point
-	if chunkID != "" {
-		query.Add("chunk_id", chunkID)
+	// If provided, connect the batch to the last insertion point
+	if batchID != "" {
+		query.Add("batch_id", batchID)
 	}
 
 	res = c.DoFunc(
@@ -1156,7 +1156,7 @@ func batchSendHistoricalMessages(
 		t.Fatalf("msc2716.batchSendHistoricalMessages got %d HTTP status code from batch send response but want %d", res.StatusCode, expectedStatus)
 	}
 
-	chunkCount++
+	batchCount++
 
 	return res
 }
