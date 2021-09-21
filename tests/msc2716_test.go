@@ -1134,7 +1134,7 @@ func batchSendHistoricalMessages(
 	t.Helper()
 
 	query := make(url.Values, 2)
-	query.Add("prev_event", insertAfterEventId)
+	query.Add("prev_event_id", insertAfterEventId)
 	// If provided, connect the batch to the last insertion point
 	if batchID != "" {
 		query.Add("batch_id", batchID)
