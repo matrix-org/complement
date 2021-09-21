@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -455,6 +456,82 @@ func TestBackfillingHistory(t *testing.T) {
 		t.Run("TODO: Test if historical avatar/display name set back in time are picked up on historical messages", func(t *testing.T) {
 			t.Skip("Skipping until implemented")
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
+		})
+
+		t.Run("should resolve member state events for historical events", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create the "live" event we are going to insert our backfilled events next to
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIdBefore := eventIDsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// eventIDsAfter
+			createMessagesInRoom(t, alice, roomID, 2)
+
+			// Insert a backfilled event
+			batchSendRes := batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				"",
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 3),
+				// Status
+				200,
+			)
+			batchSendResBody0 := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs0 := client.GetJSONFieldStringArray(t, batchSendResBody0, "event_ids")
+			nextBatchID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_batch_id")
+
+			contextRes0 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", historicalEventIDs0[1]}, client.WithContentType("application/json"))
+			contextResBody0 := client.ParseJSON(t, contextRes0)
+			stateJsonResult0 := gjson.GetBytes(contextResBody0, "state")
+			stateFromContext0 := stateJsonResult0.Array()
+
+			logrus.WithFields(logrus.Fields{
+				"stateFromContext": stateFromContext0,
+				"len":              len(stateFromContext0),
+			}).Error("gaweegegegwegawagewg 0")
+
+			if len(stateFromContext0) == 0 {
+				t.Fatalf("Expected some state events in the context response for historical event in first batch but saw %d: %s", len(stateFromContext0), stateFromContext0)
+			}
+
+			// Insert another older batch of backfilled history from the same user.
+			// Make sure the meta data and joins still work on the subsequent batch
+			insertTime1 := timeAfterEventBefore
+			batchSendRes1 := batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				nextBatchID0,
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime1),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime1, 3),
+				// Status
+				200,
+			)
+			batchSendResBody1 := client.ParseJSON(t, batchSendRes1)
+			historicalEventIDs1 := client.GetJSONFieldStringArray(t, batchSendResBody1, "event_ids")
+
+			contextRes1 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", historicalEventIDs1[1]}, client.WithContentType("application/json"))
+			contextResBody1 := client.ParseJSON(t, contextRes1)
+			stateJsonResult1 := gjson.GetBytes(contextResBody1, "state")
+			stateFromContext1 := stateJsonResult1.Array()
+
+			logrus.WithFields(logrus.Fields{
+				"stateFromContext": stateFromContext1,
+				"len":              len(stateFromContext1),
+			}).Error("gaweegegegwegawagewg 1")
+
+			if len(stateFromContext1) == 0 {
+				t.Fatalf("Expected some state events in the context response for historical event in second batch but saw %d: %s", len(stateFromContext1), stateFromContext1)
+			}
 		})
 
 		t.Run("TODO: What happens when you point multiple batches at the same insertion event?", func(t *testing.T) {
