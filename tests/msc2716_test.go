@@ -345,6 +345,29 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 		})
 
+		t.Run("Unrecognised chunk_id will throw an error", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
+			alice.JoinRoom(t, roomID, nil)
+
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIdBefore := eventIDsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				"XXX_DOES_NOT_EXIST_CHUNK_ID",
+				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+				// Status
+				400,
+			)
+		})
+
 		t.Run("Normal users aren't allowed to backfill messages", func(t *testing.T) {
 			t.Parallel()
 
