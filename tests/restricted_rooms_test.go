@@ -82,7 +82,30 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 	bob.JoinRoom(t, room, []string{"hs1"})
 
 	// Joining the same room again should work fine (e.g. to change your display name).
-	bob.JoinRoom(t, room, []string{"hs1"})
+	bob.SendEventSynced(
+		t,
+		room,
+		b.Event{
+			Type:     "m.room.member",
+			Sender:   bob.UserID,
+			StateKey: &bob.UserID,
+			Content: map[string]interface{}{
+				"membership": "join",
+				"displayname": "Bobby",
+				// This should be ignored since this is a join -> join transition.
+				"join_authorised_via_users_server": "unused",
+			},
+		},
+	)
+	// Ensure that the membership update has come down sync to alice (before leaving
+	// the room).
+	alice.SyncUntilTimelineHas(t, room, func(ev gjson.Result) bool {
+		if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
+			return false
+		}
+
+		return ev.Get("content").Get("displayname").Str == "Bobby"
+	})
 
 	// Leaving the room works and the user is unable to re-join.
 	bob.LeaveRoom(t, room)
