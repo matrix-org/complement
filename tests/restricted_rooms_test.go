@@ -97,15 +97,6 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 			},
 		},
 	)
-	// Ensure that the membership update has come down sync to alice (before leaving
-	// the room).
-	alice.SyncUntilTimelineHas(t, room, func(ev gjson.Result) bool {
-		if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
-			return false
-		}
-
-		return ev.Get("content").Get("displayname").Str == "Bobby"
-	})
 
 	// Leaving the room works and the user is unable to re-join.
 	bob.LeaveRoom(t, room)
