@@ -90,7 +90,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 			Sender:   bob.UserID,
 			StateKey: &bob.UserID,
 			Content: map[string]interface{}{
-				"membership": "join",
+				"membership":  "join",
 				"displayname": "Bobby",
 				// This should be ignored since this is a join -> join transition.
 				"join_authorised_via_users_server": "unused",
