@@ -29,6 +29,11 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	 * regular event. Doing so means that the regular event should itself be
 	 * rejected.
 	 *
+	 * We actually send two such events. On one of them, we reply to the
+	 * incoming /event_auth request with the bogus outlier in
+	 * the auth_events; for the other, we return a 404. This means we can
+	 * exercise different code paths in Synapse.
+	 *
 	 * We finish up by sending a final, normal, event which should be accepted
 	 * everywhere. This acts as a sentinel so that we can be sure that the
 	 * events have all been correctly propagated.
@@ -42,6 +47,8 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	 *   |   ... O
 	 *   |       ^
 	 *   X .......
+	 *   |       ^
+	 *   Y .......
 	 *   |
 	 *   S
 	 *
@@ -53,6 +60,8 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	 *    O is an outlier, which should be rejected
 	 *    X is an event with O among its auth_events, which should be rejected
 	 *           as a side-effect of O being rejected
+	 *    Y is a second regular event with O in its auth_events, but we give a
+	 *           different reply to /event_auth
 	 *    S is the final regular event, which acts as a sentinel
 	 *
 	 * To check if the outlier is rejected, we simply request the event via
@@ -163,6 +172,18 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	eventAuthMap[sentEvent1.EventID()] = sentEventAuthEvents
 	t.Logf("Created sent event 1 %s", sentEvent1.EventID())
 
+	// another a regular event which refers to the outlier event, but
+	// this time we will give a different answer to /event_auth
+	sentEvent2 := srv.MustCreateEvent(t, room, b.Event{
+		Type:       "m.room.message",
+		Sender:     charlie,
+		Content:    map[string]interface{}{"body": "sentEvent1"},
+		AuthEvents: room.EventIDsOrReferences(sentEventAuthEvents),
+	})
+	room.AddEvent(sentEvent2)
+	// eventAuthMap[sentEvent2.EventID()] = []*gomatrixserverlib.Event{}
+	t.Logf("Created sent event 2 %s", sentEvent2.EventID())
+
 	// finally, a genuine regular event.
 	sentinelEvent := srv.MustCreateEvent(t, room, b.Event{
 		Type:    "m.room.message",
@@ -178,6 +199,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			sentEvent1.JSON(),
+			sentEvent2.JSON(),
 			sentinelEvent.JSON(),
 		},
 	})
@@ -207,6 +229,14 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching sent event 1, but got %d", res.StatusCode)
+		}
+	})
+
+	t.Run("sent event 2 should be rejected", func(t *testing.T) {
+		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", room.RoomID, "event", sentEvent2.EventID()})
+		defer res.Body.Close()
+		if res.StatusCode != 404 {
+			t.Errorf("Expected a 404 when fetching sent event 2, but got %d", res.StatusCode)
 		}
 	})
 }
