@@ -196,12 +196,15 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		RoomID:     room.RoomID,
 		PrevEvents: room.ForwardExtremities,
 		Unsigned:   unsigned,
+		AuthEvents: ev.AuthEvents,
 	}
-	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
-	if err != nil {
-		t.Fatalf("MustCreateEvent: failed to work out auth_events : %s", err)
+	if eb.AuthEvents == nil {
+		stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
+		if err != nil {
+			t.Fatalf("MustCreateEvent: failed to work out auth_events : %s", err)
+		}
+		eb.AuthEvents = room.AuthEvents(stateNeeded)
 	}
-	eb.AuthEvents = room.AuthEvents(stateNeeded)
 	signedEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, room.Version)
 	if err != nil {
 		t.Fatalf("MustCreateEvent: failed to sign event: %s", err)
