@@ -486,52 +486,94 @@ func TestBackfillingHistory(t *testing.T) {
 			)
 			batchSendResBody0 := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs0 := client.GetJSONFieldStringArray(t, batchSendResBody0, "event_ids")
-			nextBatchID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_batch_id")
-
-			contextRes0 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", historicalEventIDs0[1]}, client.WithContentType("application/json"))
-			contextResBody0 := client.ParseJSON(t, contextRes0)
-			stateJsonResult0 := gjson.GetBytes(contextResBody0, "state")
-			stateFromContext0 := stateJsonResult0.Array()
-
+			stateEventIDs0 := client.GetJSONFieldStringArray(t, batchSendResBody0, "state_event_ids")
+			//nextBatchID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_batch_id")
 			logrus.WithFields(logrus.Fields{
-				"stateFromContext": stateFromContext0,
-				"len":              len(stateFromContext0),
-			}).Error("gaweegegegwegawagewg 0")
+				"historicalEventIDs0": historicalEventIDs0,
+				"stateEventIDs0":      stateEventIDs0,
+			}).Error("batchResponse0")
 
-			if len(stateFromContext0) == 0 {
-				t.Fatalf("Expected some state events in the context response for historical event in first batch but saw %d: %s", len(stateFromContext0), stateFromContext0)
-			}
+			//contextRes0 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", historicalEventIDs0[1]}, client.WithContentType("application/json"))
+			// contextResBody0 := client.ParseJSON(t, contextRes0)
+			// stateJsonResult0 := gjson.GetBytes(contextResBody0, "state")
+			// stateFromContext0 := stateJsonResult0.Array()
 
-			// Insert another older batch of backfilled history from the same user.
-			// Make sure the meta data and joins still work on the subsequent batch
-			insertTime1 := timeAfterEventBefore
-			batchSendRes1 := batchSendHistoricalMessages(
-				t,
-				as,
-				roomID,
-				eventIdBefore,
-				nextBatchID0,
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime1),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime1, 3),
-				// Status
-				200,
-			)
-			batchSendResBody1 := client.ParseJSON(t, batchSendRes1)
-			historicalEventIDs1 := client.GetJSONFieldStringArray(t, batchSendResBody1, "event_ids")
+			// logrus.WithFields(logrus.Fields{
+			// 	"stateFromContext": stateFromContext0,
+			// 	"len":              len(stateFromContext0),
+			// }).Error("gaweegegegwegawagewg 0")
 
-			contextRes1 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", historicalEventIDs1[1]}, client.WithContentType("application/json"))
-			contextResBody1 := client.ParseJSON(t, contextRes1)
-			stateJsonResult1 := gjson.GetBytes(contextResBody1, "state")
-			stateFromContext1 := stateJsonResult1.Array()
+			// if len(stateFromContext0) == 0 {
+			// 	t.Fatalf("Expected some state events in the context response for historical event in first batch but saw %d: %s", len(stateFromContext0), stateFromContext0)
+			// }
 
-			logrus.WithFields(logrus.Fields{
-				"stateFromContext": stateFromContext1,
-				"len":              len(stateFromContext1),
-			}).Error("gaweegegegwegawagewg 1")
+			// Make sure the historical member event we passed in via
+			// `state_events_at_start` resolves in the state of the historical message
+			// must.MatchResponse(t, contextRes0, match.HTTPResponse{
+			// 	JSON: []match.JSON{
+			// 		match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs0), func(r gjson.Result) interface{} {
+			// 			return r.Get("event_id").Str
+			// 		}, nil),
+			// 	},
+			// })
 
-			if len(stateFromContext1) == 0 {
-				t.Fatalf("Expected some state events in the context response for historical event in second batch but saw %d: %s", len(stateFromContext1), stateFromContext1)
-			}
+			messagesRes0 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":    []string{"b"},
+				"limit":  []string{"100"},
+				"filter": []string{"{\"lazy_load_members\":true,\"include_redundant_members\":true}"},
+			}))
+			must.MatchResponse(t, messagesRes0, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs0), func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+					match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs0), func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
+
+			// // Insert another older batch of backfilled history from the same user.
+			// // Make sure the meta data and joins still work on the subsequent batch
+			// insertTime1 := timeAfterEventBefore
+			// batchSendRes1 := batchSendHistoricalMessages(
+			// 	t,
+			// 	as,
+			// 	roomID,
+			// 	eventIdBefore,
+			// 	nextBatchID0,
+			// 	createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime1),
+			// 	createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime1, 3),
+			// 	// Status
+			// 	200,
+			// )
+			// batchSendResBody1 := client.ParseJSON(t, batchSendRes1)
+			// historicalEventIDs1 := client.GetJSONFieldStringArray(t, batchSendResBody1, "event_ids")
+			// stateEventIDs1 := client.GetJSONFieldStringArray(t, batchSendResBody1, "state_event_ids")
+
+			// contextRes1 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", historicalEventIDs1[1]}, client.WithContentType("application/json"))
+			// // contextResBody1 := client.ParseJSON(t, contextRes1)
+			// // stateJsonResult1 := gjson.GetBytes(contextResBody1, "state")
+			// // stateFromContext1 := stateJsonResult1.Array()
+
+			// // logrus.WithFields(logrus.Fields{
+			// // 	"stateFromContext": stateFromContext1,
+			// // 	"len":              len(stateFromContext1),
+			// // }).Error("gaweegegegwegawagewg 1")
+
+			// // if len(stateFromContext1) == 0 {
+			// // 	t.Fatalf("Expected some state events in the context response for historical event in second batch but saw %d: %s", len(stateFromContext1), stateFromContext1)
+			// // }
+
+			// // Make sure the historical member event we passed in via
+			// // `state_events_at_start` resolves in the state of the historical message
+			// must.MatchResponse(t, contextRes1, match.HTTPResponse{
+			// 	JSON: []match.JSON{
+			// 		match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs1), func(r gjson.Result) interface{} {
+			// 			return r.Get("event_id").Str
+			// 		}, nil),
+			// 	},
+			// })
 		})
 
 		t.Run("TODO: What happens when you point multiple batches at the same insertion event?", func(t *testing.T) {
@@ -1135,7 +1177,8 @@ func createJoinStateEventsForBackfillRequest(
 			"sender":           virtualUserID,
 			"origin_server_ts": insertOriginServerTs,
 			"content": map[string]interface{}{
-				"membership": "join",
+				"membership":  "join",
+				"displayname": fmt.Sprintf("some-display-name-for-%s", virtualUserID),
 			},
 			"state_key": virtualUserID,
 		}
