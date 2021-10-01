@@ -199,7 +199,8 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		AuthEvents: ev.AuthEvents,
 	}
 	if eb.AuthEvents == nil {
-		stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
+		var stateNeeded gomatrixserverlib.StateNeeded
+		stateNeeded, err = gomatrixserverlib.StateNeededForEventBuilder(&eb)
 		if err != nil {
 			t.Fatalf("MustCreateEvent: failed to work out auth_events : %s", err)
 		}
