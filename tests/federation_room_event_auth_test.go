@@ -60,6 +60,9 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 		// accept incoming presence transactions, etc
 		federation.HandleTransactionRequests(nil, nil),
+
+		// accept incoming /event requests (dendrite asks for the outlier via /event; synapse calls /event_auth instead)
+		federation.HandleEventRequests(),
 	)
 	cancel := srv.Listen()
 	defer cancel()
@@ -130,6 +133,9 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 			charlieMembershipEvent.EventID(),
 		},
 	})
+	// add it to room.Timeline so that HandleEventRequests() can find it, but
+	// don't use room.AddEvent(), because we don't want it to be a forward extremity.
+	room.Timeline = append(room.Timeline, outlierEvent)
 	t.Logf("Created outlier event %s", outlierEvent.EventID())
 
 	// create a regular event which refers to the outlier event in its auth events,
