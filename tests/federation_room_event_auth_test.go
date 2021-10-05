@@ -34,7 +34,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	 *     / | \
 	 *    /  R  \
 	 *   |   ^   \
-	 *   |    .. O
+	 *   |   ... O
 	 *   |       ^
 	 *   X .......
 	 *   |
