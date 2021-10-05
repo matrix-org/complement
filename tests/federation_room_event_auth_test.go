@@ -41,6 +41,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	 *   S
 	 *
 	 * Where:
+	 *    |  represents a "prev_event" link (older events are at the top)
 	 *    .... represents an "auth_event" link
 	 *    C is the room creation series
 	 *    R is a rejected event
