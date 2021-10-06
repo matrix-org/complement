@@ -1,3 +1,6 @@
+// These tests currently fail on Dendrite, due to Dendrite bugs.
+// +build !dendrite_blacklist
+
 package tests
 
 import (
@@ -19,6 +22,8 @@ import (
 func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	/* These tests check that events which refer to rejected events in auth_events
 	 * are themselves rejected.
+	 *
+	 * They are regression tests for https://github.com/matrix-org/synapse/issues/9595.
 	 *
 	 * In order to inject an outlier, we include it as an extra auth_event in a
 	 * regular event. Doing so means that the regular event should itself be
