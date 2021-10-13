@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -207,33 +206,29 @@ func TestBackfillingHistory(t *testing.T) {
 			}
 		})
 
-		t.Run("Many batches work", func(t *testing.T) {
+		t.Run("Many batches are able to be imported and recalled from /messages", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			// Create some normal messages in the timeline. We're creating them in
-			// two batches so we can create some time in between where we are going
-			// to backfill.
-			//
-			// Create the first batch including the "live" event we are going to
-			// insert our backfilled events next to.
+			// Create some normal messages in the timeline
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2)
 			eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
 			timeAfterEventBefore := time.Now()
 
 			// wait X number of ms to ensure that the timestamp changes enough for
-			// each of the messages we try to backfill later
-			numHistoricalMessages := 1100
-			time.Sleep(time.Duration(numHistoricalMessages) * timeBetweenMessages)
+			// each of the historical messages we try to import later
+			numBatches := 11
+			numHistoricalMessagesPerBatch := 100
+			time.Sleep(time.Duration(numBatches*numHistoricalMessagesPerBatch) * timeBetweenMessages)
 
 			// eventIDsAfter
 			createMessagesInRoom(t, alice, roomID, 2)
 
 			nextBatchID := ""
-			for i := 0; i < 7; i++ {
-				insertTime := timeAfterEventBefore.Add(timeBetweenMessages * time.Duration(numHistoricalMessages-100*i))
+			for i := 0; i < numBatches; i++ {
+				insertTime := timeAfterEventBefore.Add(timeBetweenMessages * time.Duration(numBatches-numHistoricalMessagesPerBatch*i))
 				batchSendRes := batchSendHistoricalMessages(
 					t,
 					as,
@@ -241,7 +236,7 @@ func TestBackfillingHistory(t *testing.T) {
 					eventIdBefore,
 					nextBatchID,
 					createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime),
-					createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime, 100),
+					createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime, numHistoricalMessagesPerBatch),
 					// Status
 					200,
 				)
@@ -249,16 +244,11 @@ func TestBackfillingHistory(t *testing.T) {
 				nextBatchID = client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
 			}
 
-			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			// Ensure the /message response gives a 200
+			alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			}))
-			messagesResBody := client.ParseJSON(t, messagesRes)
-
-			logrus.WithFields(logrus.Fields{
-				"messagesResBody": messagesResBody,
-			}).Error("see messages")
-
 		})
 
 		t.Run("Backfilled historical events from multiple users in the same batch", func(t *testing.T) {
