@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -204,6 +205,60 @@ func TestBackfillingHistory(t *testing.T) {
 			if len(workingExpectedEventIDOrder) != 0 {
 				t.Fatalf("Expected all events to be matched in message response but there were some left-over events: %s", workingExpectedEventIDOrder)
 			}
+		})
+
+		t.Run("Many batches work", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create some normal messages in the timeline. We're creating them in
+			// two batches so we can create some time in between where we are going
+			// to backfill.
+			//
+			// Create the first batch including the "live" event we are going to
+			// insert our backfilled events next to.
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2)
+			eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
+			timeAfterEventBefore := time.Now()
+
+			// wait X number of ms to ensure that the timestamp changes enough for
+			// each of the messages we try to backfill later
+			numHistoricalMessages := 1100
+			time.Sleep(time.Duration(numHistoricalMessages) * timeBetweenMessages)
+
+			// eventIDsAfter
+			createMessagesInRoom(t, alice, roomID, 2)
+
+			nextBatchID := ""
+			for i := 0; i < 7; i++ {
+				insertTime := timeAfterEventBefore.Add(timeBetweenMessages * time.Duration(numHistoricalMessages-100*i))
+				batchSendRes := batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					nextBatchID,
+					createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime),
+					createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime, 100),
+					// Status
+					200,
+				)
+				batchSendResBody := client.ParseJSON(t, batchSendRes)
+				nextBatchID = client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
+			}
+
+			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+			messagesResBody := client.ParseJSON(t, messagesRes)
+
+			logrus.WithFields(logrus.Fields{
+				"messagesResBody": messagesResBody,
+			}).Error("see messages")
+
 		})
 
 		t.Run("Backfilled historical events from multiple users in the same batch", func(t *testing.T) {
