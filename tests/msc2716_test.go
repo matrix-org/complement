@@ -226,6 +226,9 @@ func TestBackfillingHistory(t *testing.T) {
 			// eventIDsAfter
 			createMessagesInRoom(t, alice, roomID, 2)
 
+			// Import a long chain of batches connected to each other.
+			// We want to make sure Synapse doesn't blow up after we import
+			// many messages.
 			nextBatchID := ""
 			for i := 0; i < numBatches; i++ {
 				insertTime := timeAfterEventBefore.Add(timeBetweenMessages * time.Duration(numBatches-numHistoricalMessagesPerBatch*i))
