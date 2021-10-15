@@ -58,11 +58,11 @@ var createPrivateRoomOpts = map[string]interface{}{
 	"room_version": "org.matrix.msc2716v3",
 }
 
-func TestBackfillingHistory(t *testing.T) {
+func TestImportHistoricalMessages(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
-	// Create the application service bridge user that is able to backfill messages
+	// Create the application service bridge user that is able to import historical messages
 	asUserID := "@the-bridge-user:hs1"
 	as := deployment.Client(t, "hs1", asUserID)
 
@@ -80,12 +80,13 @@ func TestBackfillingHistory(t *testing.T) {
 	ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 	t.Run("parallel", func(t *testing.T) {
-		// Test that the message events we insert between A and B come back in the correct order from /messages
+		// Test that the historical message events we import between A and B
+		// come back in the correct order from /messages.
 		//
 		// Final timeline output: ( [n] = historical batch )
 		// (oldest) A, B, [insertion, c, d, e, batch] [insertion, f, g, h, batch, insertion], I, J (newest)
 		//                historical batch 1          historical batch 0
-		t.Run("Backfilled historical events resolve with proper state in correct order", func(t *testing.T) {
+		t.Run("Historical events resolve with proper state in correct order", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -93,16 +94,16 @@ func TestBackfillingHistory(t *testing.T) {
 
 			// Create some normal messages in the timeline. We're creating them in
 			// two batches so we can create some time in between where we are going
-			// to backfill.
+			// to import.
 			//
 			// Create the first batch including the "live" event we are going to
-			// insert our backfilled events next to.
+			// import our historical events next to.
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2)
 			eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
 			timeAfterEventBefore := time.Now()
 
 			// wait X number of ms to ensure that the timestamp changes enough for
-			// each of the messages we try to backfill later
+			// each of the historical messages we try to import later
 			numHistoricalMessages := 6
 			time.Sleep(time.Duration(numHistoricalMessages) * timeBetweenMessages)
 
@@ -111,7 +112,7 @@ func TestBackfillingHistory(t *testing.T) {
 			// inserted history later.
 			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
-			// Insert the most recent batch of backfilled history
+			// Insert the most recent batch of historical messages
 			insertTime0 := timeAfterEventBefore.Add(timeBetweenMessages * 3)
 			batchSendRes := batchSendHistoricalMessages(
 				t,
@@ -119,8 +120,8 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				"",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime0),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime0, 3),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, insertTime0),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, insertTime0, 3),
 				// Status
 				200,
 			)
@@ -131,7 +132,7 @@ func TestBackfillingHistory(t *testing.T) {
 			baseInsertionEventID0 := client.GetJSONFieldStr(t, batchSendResBody0, "base_insertion_event_id")
 			nextBatchID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_batch_id")
 
-			// Insert another older batch of backfilled history from the same user.
+			// Insert another older batch of historical messages from the same user.
 			// Make sure the meta data and joins still work on the subsequent batch
 			insertTime1 := timeAfterEventBefore
 			batchSendRes1 := batchSendHistoricalMessages(
@@ -140,8 +141,8 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				nextBatchID0,
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime1),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime1, 3),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, insertTime1),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, insertTime1, 3),
 				// Status
 				200,
 			)
@@ -206,13 +207,13 @@ func TestBackfillingHistory(t *testing.T) {
 			}
 		})
 
-		t.Run("Backfilled historical events from multiple users in the same batch", func(t *testing.T) {
+		t.Run("Historical events from multiple users in the same batch", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			// Create the "live" event we are going to insert our backfilled events next to
+			// Create the "live" event we are going to insert our historical events next to
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
@@ -225,15 +226,15 @@ func TestBackfillingHistory(t *testing.T) {
 
 			virtualUserList := []string{virtualUserID, virtualUserID2, virtualUserID3}
 
-			// Insert a backfilled event
+			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				roomID,
 				eventIdBefore,
 				"",
-				createJoinStateEventsForBackfillRequest(virtualUserList, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest(virtualUserList, timeAfterEventBefore, 3),
+				createJoinStateEventsForBatchSendRequest(virtualUserList, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest(virtualUserList, timeAfterEventBefore, 3),
 				// Status
 				200,
 			)
@@ -254,13 +255,13 @@ func TestBackfillingHistory(t *testing.T) {
 			})
 		})
 
-		t.Run("Backfilled historical events do not come down in an incremental sync", func(t *testing.T) {
+		t.Run("Historical events from /batch_send do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			// Create the "live" event we are going to insert our backfilled events next to
+			// Create the "live" event we are going to insert our historical events next to
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
@@ -268,35 +269,36 @@ func TestBackfillingHistory(t *testing.T) {
 			// Create some "live" events to saturate and fill up the /sync response
 			createMessagesInRoom(t, alice, roomID, 5)
 
-			// Insert a backfilled event
+			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				roomID,
 				eventIdBefore,
 				"",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 				// Status
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-			backfilledEventId := historicalEventIDs[0]
+			historicalEventId := historicalEventIDs[0]
 
-			// This is just a dummy event we search for after the backfilledEventId
-			eventIDsAfterBackfill := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdAfterBackfill := eventIDsAfterBackfill[0]
+			// This is just a dummy event we search for after the historicalEventId
+			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDAfterHistoricalImport := eventIDsAfterHistoricalImport[0]
 
-			// Sync until we find the eventIdAfterBackfill. If we're able to see the eventIdAfterBackfill
-			// that occurs after the backfilledEventId without seeing eventIdAfterBackfill in between,
-			// we're probably safe to assume it won't sync
+			// Sync until we find the eventIDAfterHistoricalImport.
+			// If we're able to see the eventIDAfterHistoricalImport that occurs after
+			// the historicalEventId without seeing eventIDAfterHistoricalImport in
+			// between, we're probably safe to assume it won't sync
 			alice.SyncUntil(t, "", `{ "room": { "timeline": { "limit": 3 } } }`, "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
-				if r.Get("event_id").Str == backfilledEventId {
-					t.Fatalf("We should not see the %s backfilled event in /sync response but it was present", backfilledEventId)
+				if r.Get("event_id").Str == historicalEventId {
+					t.Fatalf("We should not see the %s historical event in /sync response but it was present", historicalEventId)
 				}
 
-				return r.Get("event_id").Str == eventIdAfterBackfill
+				return r.Get("event_id").Str == eventIDAfterHistoricalImport
 			})
 		})
 
@@ -306,20 +308,20 @@ func TestBackfillingHistory(t *testing.T) {
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			// Create the "live" event we are going to insert our backfilled events next to
+			// Create the "live" event we are going to import our historical events next to
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			// Insert a backfilled event
+			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				roomID,
 				eventIdBefore,
 				"",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 				// Status
 				200,
 			)
@@ -345,8 +347,8 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				"$some-non-existant-event-id",
 				"",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime, 1),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, insertTime),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, insertTime, 1),
 				// Status
 				// TODO: Seems like this makes more sense as a 404
 				// But the current Synapse code around unknown prev events will throw ->
@@ -371,14 +373,14 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				"XXX_DOES_NOT_EXIST_BATCH_ID",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 				// Status
 				400,
 			)
 		})
 
-		t.Run("Normal users aren't allowed to backfill messages", func(t *testing.T) {
+		t.Run("Normal users aren't allowed to batch send historical messages", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -394,10 +396,10 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				"",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 				// Status
-				// Normal user alice should not be able to backfill messages
+				// Normal user alice should not be able to batch send historical messages
 				403,
 			)
 		})
@@ -407,23 +409,23 @@ func TestBackfillingHistory(t *testing.T) {
 			// (room_id, next_batch_id) should be unique
 		})
 
-		t.Run("Should be able to backfill into private room", func(t *testing.T) {
+		t.Run("Should be able to batch send historical messages into private room", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPrivateRoomOpts)
 			as.InviteRoom(t, roomID, alice.UserID)
 			alice.JoinRoom(t, roomID, nil)
 
-			// Create the "live" event we are going to insert our backfilled events next to
+			// Create the "live" event we are going to import our historical events next to
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
 			var stateEvents []map[string]interface{}
-			stateEvents = append(stateEvents, createInviteStateEventsForBackfillRequest(as.UserID, []string{virtualUserID}, timeAfterEventBefore)...)
-			stateEvents = append(stateEvents, createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore)...)
+			stateEvents = append(stateEvents, createInviteStateEventsForBacthSendRequest(as.UserID, []string{virtualUserID}, timeAfterEventBefore)...)
+			stateEvents = append(stateEvents, createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore)...)
 
-			// Insert a backfilled event
+			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
@@ -431,7 +433,7 @@ func TestBackfillingHistory(t *testing.T) {
 				eventIdBefore,
 				"",
 				stateEvents,
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 3),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 3),
 				// Status
 				200,
 			)
@@ -480,15 +482,15 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				"",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
 				// Status
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 
-			// Join the room from a remote homeserver after the backfilled messages were sent
+			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
 			// Make sure all of the events have been backfilled
@@ -552,15 +554,15 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				batchID,
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
 				// Status
 				200,
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 
-			// Join the room from a remote homeserver after the backfilled messages were sent
+			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
 			// Make sure all of the events have been backfilled
@@ -592,7 +594,7 @@ func TestBackfillingHistory(t *testing.T) {
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			// Join the room from a remote homeserver before any backfilled messages are sent
+			// Join the room from a remote homeserver before any historical messages are sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -616,8 +618,8 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				"",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
 				// Status
 				200,
 			)
@@ -680,7 +682,7 @@ func TestBackfillingHistory(t *testing.T) {
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			// Join the room from a remote homeserver before any backfilled messages are sent
+			// Join the room from a remote homeserver before any historical messages are sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
 			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
@@ -705,8 +707,8 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				"",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
 				// Status
 				200,
 			)
@@ -775,7 +777,7 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID := as.CreateRoom(t, createUnsupportedMSC2716RoomOpts)
 				alice.JoinRoom(t, roomID, nil)
 
-				// Create the "live" event we are going to insert our backfilled events next to
+				// Create the "live" event we are going to import our historical events next to
 				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
@@ -783,15 +785,15 @@ func TestBackfillingHistory(t *testing.T) {
 				// Create eventIDsAfter to avoid the "No forward extremities left!" 500 error from Synapse
 				createMessagesInRoom(t, alice, roomID, 2)
 
-				// Insert a backfilled event
+				// Import a historical event
 				batchSendRes := batchSendHistoricalMessages(
 					t,
 					as,
 					roomID,
 					eventIdBefore,
 					"",
-					createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-					createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 					// Status
 					200,
 				)
@@ -833,20 +835,20 @@ func TestBackfillingHistory(t *testing.T) {
 				roomID := as.CreateRoom(t, createUnsupportedMSC2716RoomOpts)
 				alice.JoinRoom(t, roomID, nil)
 
-				// Create the "live" event we are going to insert our backfilled events next to
+				// Create the "live" event we are going to import our historical events next to
 				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
-				// Insert a backfilled event
+				// Import a historical event
 				batchSendRes := batchSendHistoricalMessages(
 					t,
 					as,
 					roomID,
 					eventIdBefore,
 					"",
-					createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-					createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 					// Status
 					200,
 				)
@@ -1036,7 +1038,7 @@ func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count in
 	return eventIDs
 }
 
-func createInviteStateEventsForBackfillRequest(
+func createInviteStateEventsForBacthSendRequest(
 	invitedByUserID string,
 	virtualUserIDs []string,
 	insertTime time.Time,
@@ -1062,7 +1064,7 @@ func createInviteStateEventsForBackfillRequest(
 	return stateEvents
 }
 
-func createJoinStateEventsForBackfillRequest(
+func createJoinStateEventsForBatchSendRequest(
 	virtualUserIDs []string,
 	insertTime time.Time,
 ) []map[string]interface{} {
@@ -1087,7 +1089,7 @@ func createJoinStateEventsForBackfillRequest(
 	return stateEvents
 }
 
-func createMessageEventsForBackfillRequest(
+func createMessageEventsForBatchSendRequest(
 	virtualUserIDs []string,
 	insertTime time.Time,
 	count int,
