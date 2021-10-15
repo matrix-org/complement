@@ -822,8 +822,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 					roomID,
 					eventIdBefore,
 					nextBatchID,
-					createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-					createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 					// Status
 					200,
 				)
