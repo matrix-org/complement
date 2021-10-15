@@ -167,3 +167,19 @@ func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []
 		},
 	}
 }
+
+// EventIDsOrReferences converts a list of events into a list of EventIDs or EventReferences,
+// depending on the room version
+func (r *ServerRoom) EventIDsOrReferences(events []*gomatrixserverlib.Event) (refs []interface{}) {
+	refs = make([]interface{}, len(events))
+	eventFormat, _ := r.Version.EventFormat()
+	for i, ev := range events {
+		switch eventFormat {
+		case gomatrixserverlib.EventFormatV1:
+			refs[i] = ev.EventReference()
+		default:
+			refs[i] = ev.EventID()
+		}
+	}
+	return
+}
