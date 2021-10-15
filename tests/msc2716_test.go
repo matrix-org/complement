@@ -80,7 +80,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 	ensureVirtualUserRegistered(t, as, virtualUserLocalpart)
 
 	t.Run("parallel", func(t *testing.T) {
-		// Test that the message events we insert between A and B come back in the correct order from /messages
+		// Test that the historical message events we import between A and B
+		// come back in the correct order from /messages.
 		//
 		// Final timeline output: ( [n] = historical batch )
 		// (oldest) A, B, [insertion, c, d, e, batch] [insertion, f, g, h, batch, insertion], I, J (newest)
