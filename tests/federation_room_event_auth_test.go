@@ -181,7 +181,8 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 		AuthEvents: room.EventIDsOrReferences(sentEventAuthEvents),
 	})
 	room.AddEvent(sentEvent2)
-	// eventAuthMap[sentEvent2.EventID()] = []*gomatrixserverlib.Event{}
+	// we deliberately add nothing to eventAuthMap for this event, to make /event_auth
+	// return a 404.
 	t.Logf("Created sent event 2 %s", sentEvent2.EventID())
 
 	// finally, a genuine regular event.
