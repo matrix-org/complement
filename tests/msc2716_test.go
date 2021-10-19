@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -253,6 +254,67 @@ func TestImportHistoricalMessages(t *testing.T) {
 					}, nil),
 				},
 			})
+		})
+
+		t.Run("Backfill still works after many batches are imported", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create some normal messages in the timeline
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2)
+			eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
+			timeAfterEventBefore := time.Now()
+
+			// wait X number of ms to ensure that the timestamp changes enough for
+			// each of the historical messages we try to import later
+			//numBatches := 11
+			numBatches := 1
+			numHistoricalMessagesPerBatch := 100
+			time.Sleep(time.Duration(numBatches*numHistoricalMessagesPerBatch) * timeBetweenMessages)
+
+			// eventIDsAfter
+			createMessagesInRoom(t, alice, roomID, 2)
+
+			// Import a long chain of batches connected to each other.
+			// We want to make sure Synapse doesn't blow up after we import
+			// many messages.
+			var expectedEventIDs []string
+			nextBatchID := ""
+			for i := 0; i < numBatches; i++ {
+				insertTime := timeAfterEventBefore.Add(timeBetweenMessages * time.Duration(numBatches-numHistoricalMessagesPerBatch*i))
+				batchSendRes := batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					nextBatchID,
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, insertTime),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, insertTime, numHistoricalMessagesPerBatch),
+					// Status
+					200,
+				)
+				batchSendResBody := client.ParseJSON(t, batchSendRes)
+				// Make sure we see all of the historical messages
+				expectedEventIDs = append(expectedEventIDs, client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")...)
+				nextBatchID = client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
+			}
+
+			// Make sure we see the event at the very start of the message history
+			expectedEventIDs = append(expectedEventIDs, eventIdBefore)
+
+			// Join the room from a remote homeserver after the historical messages were sent
+			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+			// eventIDsFromRemote := createMessagesInRoom(t, remoteCharlie, roomID, 1)
+			// eventIDFromRemote := eventIDsFromRemote[0]
+
+			// logrus.WithFields(logrus.Fields{
+			// 	"eventIDFromRemote": string(eventIDFromRemote),
+			// }).Error("gewgewaewagewagagew")
+
+			// Make sure events can be backfilled from the remote homeserver
+			paginateUntilMessageCheckOff(t, remoteCharlie, roomID, expectedEventIDs)
 		})
 
 		t.Run("Historical events from /batch_send do not come down in an incremental sync", func(t *testing.T) {
@@ -903,6 +965,95 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 		events := keyRes.Array()
 		for _, ev := range events {
 			if check(ev) {
+				return
+			}
+		}
+
+		checkCounter++
+		// Add a slight delay so we don't hammmer the messages endpoint
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, expectedEventIDs []string) {
+	t.Helper()
+	start := time.Now()
+
+	workingExpectedEventIDMap := make(map[string]string)
+	for _, expectedEventID := range expectedEventIDs {
+		workingExpectedEventIDMap[expectedEventID] = expectedEventID
+	}
+
+	var actualEventIDList []string
+	checkCounter := 0
+	messageResEnd := ""
+	generateErrorMesssageInfo := func() string {
+		i := 0
+		leftoverEventIDs := make([]string, len(workingExpectedEventIDMap))
+		for eventID := range workingExpectedEventIDMap {
+			leftoverEventIDs[i] = eventID
+			i++
+		}
+
+		return fmt.Sprintf("Called /messages %d times but only found %d/%d expected messages. Leftover messages we expected (%d): %s. We saw %d events over all of the API calls: %s",
+			checkCounter,
+			len(expectedEventIDs)-len(leftoverEventIDs),
+			len(expectedEventIDs),
+			len(leftoverEventIDs),
+			leftoverEventIDs,
+			len(actualEventIDList),
+			actualEventIDList,
+		)
+	}
+
+	for {
+		if time.Since(start) > 10*c.SyncUntilTimeout {
+			t.Fatalf(
+				"paginateUntilMessageCheckOff timed out. %s",
+				generateErrorMesssageInfo(),
+			)
+		}
+
+		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			"dir":   []string{"b"},
+			"limit": []string{"100"},
+			"from":  []string{messageResEnd},
+		}))
+		messsageResBody := client.ParseJSON(t, messagesRes)
+
+		messageResEnd = client.GetJSONFieldStr(t, messsageResBody, "end")
+
+		wantKey := "chunk"
+		keyRes := gjson.GetBytes(messsageResBody, wantKey)
+		if !keyRes.Exists() {
+			t.Fatalf("missing key '%s'", wantKey)
+		}
+		if !keyRes.IsArray() {
+			t.Fatalf("key '%s' is not an array (was %s)", wantKey, keyRes.Type)
+		}
+
+		events := keyRes.Array()
+
+		if len(events) == 0 {
+			t.Fatalf(
+				"paginateUntilMessageCheckOff reached the end of the messages without finding all expected events. %s",
+				generateErrorMesssageInfo(),
+			)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"events":        events,
+			"messageResEnd": messageResEnd,
+		}).Error("paginateUntilMessageCheckOff chunk")
+		for _, ev := range events {
+			eventID := ev.Get("event_id").Str
+			actualEventIDList = append(actualEventIDList, eventID)
+
+			if _, keyExists := workingExpectedEventIDMap[eventID]; keyExists {
+				delete(workingExpectedEventIDMap, eventID)
+			}
+
+			if len(workingExpectedEventIDMap) == 0 {
 				return
 			}
 		}
