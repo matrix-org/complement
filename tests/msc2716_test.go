@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -62,6 +61,7 @@ var createPrivateRoomOpts = map[string]interface{}{
 func TestImportHistoricalMessages(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
+	//defer time.Sleep(2 * time.Hour)
 
 	// Create the application service bridge user that is able to import historical messages
 	asUserID := "@the-bridge-user:hs1"
@@ -99,7 +99,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			//
 			// Create the first batch including the "live" event we are going to
 			// import our historical events next to.
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
 			timeAfterEventBefore := time.Now()
 
@@ -111,7 +111,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// Create the second batch of events.
 			// This will also fill up the buffer so we have to scrollback to the
 			// inserted history later.
-			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
+			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2, "eventIDsAfter")
 
 			// Insert the most recent batch of historical messages
 			insertTime0 := timeAfterEventBefore.Add(timeBetweenMessages * 3)
@@ -215,7 +215,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -263,19 +263,19 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create some normal messages in the timeline
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
 			timeAfterEventBefore := time.Now()
 
 			// wait X number of ms to ensure that the timestamp changes enough for
 			// each of the historical messages we try to import later
 			//numBatches := 11
-			numBatches := 1
+			numBatches := 2
 			numHistoricalMessagesPerBatch := 100
 			time.Sleep(time.Duration(numBatches*numHistoricalMessagesPerBatch) * timeBetweenMessages)
 
 			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 2)
+			createMessagesInRoom(t, alice, roomID, 2, "eventIDsAfter")
 
 			// Import a long chain of batches connected to each other.
 			// We want to make sure Synapse doesn't blow up after we import
@@ -306,12 +306,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
-			// eventIDsFromRemote := createMessagesInRoom(t, remoteCharlie, roomID, 1)
-			// eventIDFromRemote := eventIDsFromRemote[0]
-
-			// logrus.WithFields(logrus.Fields{
-			// 	"eventIDFromRemote": string(eventIDFromRemote),
-			// }).Error("gewgewaewagewagagew")
 
 			// Make sure events can be backfilled from the remote homeserver
 			paginateUntilMessageCheckOff(t, remoteCharlie, roomID, expectedEventIDs)
@@ -324,12 +318,12 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
 			// Create some "live" events to saturate and fill up the /sync response
-			createMessagesInRoom(t, alice, roomID, 5)
+			createMessagesInRoom(t, alice, roomID, 5, "live")
 
 			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
@@ -348,7 +342,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			historicalEventId := historicalEventIDs[0]
 
 			// This is just a dummy event we search for after the historicalEventId
-			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1, "eventIDsAfterHistoricalImport")
 			eventIDAfterHistoricalImport := eventIDsAfterHistoricalImport[0]
 
 			// Sync until we find the eventIDAfterHistoricalImport.
@@ -371,7 +365,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to import our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -425,7 +419,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -448,7 +442,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -479,7 +473,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to import our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -531,12 +525,12 @@ func TestImportHistoricalMessages(t *testing.T) {
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
 			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 3)
+			createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
 
 			batchSendRes := batchSendHistoricalMessages(
 				t,
@@ -584,7 +578,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -608,7 +602,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			})
 
 			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 3)
+			createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
 
 			batchSendRes := batchSendHistoricalMessages(
 				t,
@@ -659,12 +653,12 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// Join the room from a remote homeserver before any historical messages are sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
 			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 10)
+			createMessagesInRoom(t, alice, roomID, 10, "eventIDsAfter")
 
 			// Mimic scrollback just through the latest messages
 			remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -747,12 +741,12 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// Join the room from a remote homeserver before any historical messages are sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
 			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 3)
+			createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
 
 			// Mimic scrollback to all of the messages
 			// scrollbackMessagesRes
@@ -840,7 +834,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				alice.JoinRoom(t, roomID, nil)
 
 				// Create the "live" event we are going to import our historical events next to
-				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
@@ -880,7 +874,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				alice.JoinRoom(t, roomID, nil)
 
 				// Create the "live" event we are going to import our historical events next to
-				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
@@ -1007,7 +1001,7 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 	}
 
 	for {
-		if time.Since(start) > 10*c.SyncUntilTimeout {
+		if time.Since(start) > 200*c.SyncUntilTimeout {
 			t.Fatalf(
 				"paginateUntilMessageCheckOff timed out. %s",
 				generateErrorMesssageInfo(),
@@ -1015,7 +1009,8 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		}
 
 		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-			"dir":   []string{"b"},
+			"dir": []string{"b"},
+			// TODO: Can we do it with 100?
 			"limit": []string{"100"},
 			"from":  []string{messageResEnd},
 		}))
@@ -1041,10 +1036,10 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 			)
 		}
 
-		logrus.WithFields(logrus.Fields{
-			"events":        events,
-			"messageResEnd": messageResEnd,
-		}).Error("paginateUntilMessageCheckOff chunk")
+		// logrus.WithFields(logrus.Fields{
+		// 	"events":        events,
+		// 	"messageResEnd": messageResEnd,
+		// }).Error("paginateUntilMessageCheckOff chunk")
 		for _, ev := range events {
 			eventID := ev.Get("event_id").Str
 			actualEventIDList = append(actualEventIDList, eventID)
@@ -1154,14 +1149,14 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 	return markerEventID
 }
 
-func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count int) (eventIDs []string) {
+func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count int, messageSuffix string) (eventIDs []string) {
 	eventIDs = make([]string, count)
 	for i := 0; i < len(eventIDs); i++ {
 		newEvent := b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
-				"body":    fmt.Sprintf("Message %d", i),
+				"body":    fmt.Sprintf("Message %d (%s)", i, messageSuffix),
 			},
 		}
 		newEventId := c.SendEventSynced(t, roomID, newEvent)
