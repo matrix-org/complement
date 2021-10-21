@@ -474,15 +474,15 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// eventIDsAfter
 			createMessagesInRoom(t, alice, roomID, 2)
 
-			// Insert a backfilled event
+			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
 				roomID,
 				eventIdBefore,
 				"",
-				createJoinStateEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBackfillRequest([]string{virtualUserID}, timeAfterEventBefore, 3),
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 3),
 				// Status
 				200,
 			)
@@ -535,7 +535,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				},
 			})
 
-			// // Insert another older batch of backfilled history from the same user.
+			// // Import another older batch of history from the same user.
 			// // Make sure the meta data and joins still work on the subsequent batch
 			// insertTime1 := timeAfterEventBefore
 			// batchSendRes1 := batchSendHistoricalMessages(
@@ -544,8 +544,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// 	roomID,
 			// 	eventIdBefore,
 			// 	nextBatchID0,
-			// 	createJoinStateEventsForBackfillRequest([]string{virtualUserID}, insertTime1),
-			// 	createMessageEventsForBackfillRequest([]string{virtualUserID}, insertTime1, 3),
+			// 	createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, insertTime1),
+			// 	createMessageEventsForBatchSendRequest([]string{virtualUserID}, insertTime1, 3),
 			// 	// Status
 			// 	200,
 			// )
