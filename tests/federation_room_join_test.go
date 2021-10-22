@@ -88,7 +88,6 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 // - Events with missing signatures
 // - Events with bad signatures
 // - Events with correct signatures but the keys cannot be obtained
-// - State events whose auth events cannot be verified
 //
 // None of these events will be critical to the integrity of the room: that
 // is to say these events are not used as auth_events for the actual join -
@@ -164,7 +163,6 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
-
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
 		alice.JoinRoom(t, roomAlias, nil)
 	})
