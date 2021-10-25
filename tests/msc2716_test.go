@@ -380,6 +380,37 @@ func TestImportHistoricalMessages(t *testing.T) {
 			)
 		})
 
+		t.Run("Duplicate next_batch_id on insertion event will be rejected", func(t *testing.T) {
+			t.Parallel()
+
+			// Alice created the room and is the room creator/admin to be able to
+			// send historical events.
+			//
+			// We're using Alice over the application service so we can easily use
+			// SendEventSynced since application services can't use /sync.
+			roomID := alice.CreateRoom(t, createPublicRoomOpts)
+
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type: insertionEventType,
+				Content: map[string]interface{}{
+					nextBatchIDContentField: "same",
+					historicalContentField:  true,
+				},
+			})
+
+			txnId := getTxnID("duplicateinsertion-txn")
+			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEventType, txnId}, map[string]interface{}{
+				nextBatchIDContentField: "same",
+				historicalContentField:  true,
+			})
+
+			// We expect the send request for the duplicate insertion event to fail
+			expectedStatus := 400
+			if res.StatusCode != expectedStatus {
+				t.Fatalf("Expected HTTP Status to be %s but received %s", expectedStatus, res.StatusCode)
+			}
+		})
+
 		t.Run("Normal users aren't allowed to batch send historical messages", func(t *testing.T) {
 			t.Parallel()
 
