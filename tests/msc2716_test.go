@@ -503,8 +503,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				"",
-				// This is the key thing we're testing,
-				// no `?state_events_at_start` given
+				// The key thing we're testing here is that we can still batch send
+				// messages when no `state_events_at_start` are given
 				make([]map[string]interface{}, 0),
 				createMessageEventsForBatchSendRequest([]string{alice.UserID}, timeAfterEventBefore, 3),
 				// Status
