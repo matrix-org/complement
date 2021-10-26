@@ -381,6 +381,37 @@ func TestImportHistoricalMessages(t *testing.T) {
 			)
 		})
 
+		t.Run("Duplicate next_batch_id on insertion event will be rejected", func(t *testing.T) {
+			t.Parallel()
+
+			// Alice created the room and is the room creator/admin to be able to
+			// send historical events.
+			//
+			// We're using Alice over the application service so we can easily use
+			// SendEventSynced since application services can't use /sync.
+			roomID := alice.CreateRoom(t, createPublicRoomOpts)
+
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type: insertionEventType,
+				Content: map[string]interface{}{
+					nextBatchIDContentField: "same",
+					historicalContentField:  true,
+				},
+			})
+
+			txnId := getTxnID("duplicateinsertion-txn")
+			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEventType, txnId}, client.WithJSONBody(t, map[string]interface{}{
+				nextBatchIDContentField: "same",
+				historicalContentField:  true,
+			}))
+
+			// We expect the send request for the duplicate insertion event to fail
+			expectedStatus := 400
+			if res.StatusCode != expectedStatus {
+				t.Fatalf("Expected HTTP Status to be %d but received %d", expectedStatus, res.StatusCode)
+			}
+		})
+
 		t.Run("Normal users aren't allowed to batch send historical messages", func(t *testing.T) {
 			t.Parallel()
 
@@ -901,6 +932,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
+				// Create eventIDsAfter to avoid the "No forward extremities left!" 500 error from Synapse
+				createMessagesInRoom(t, alice, roomID, 2)
+
 				// Import a historical event
 				batchSendRes := batchSendHistoricalMessages(
 					t,
@@ -915,6 +949,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				)
 				batchSendResBody := client.ParseJSON(t, batchSendRes)
 				historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+				nextBatchID := client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
 
 				messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
@@ -928,6 +963,20 @@ func TestImportHistoricalMessages(t *testing.T) {
 						}, nil),
 					},
 				})
+
+				// Now try to do a subsequent batch send. This will make sure
+				// that insertion events are stored/tracked and can be matched up in the next batch
+				batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					nextBatchID,
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+					// Status
+					200,
+				)
 			})
 
 			t.Run("Not allowed to redact MSC2716 insertion, batch, marker events", func(t *testing.T) {
