@@ -813,6 +813,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
+				// Create eventIDsAfter to avoid the "No forward extremities left!" 500 error from Synapse
+				createMessagesInRoom(t, alice, roomID, 2)
+
 				// Import a historical event
 				batchSendRes := batchSendHistoricalMessages(
 					t,
@@ -827,6 +830,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				)
 				batchSendResBody := client.ParseJSON(t, batchSendRes)
 				historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+				nextBatchID := client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
 
 				messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
@@ -840,6 +844,20 @@ func TestImportHistoricalMessages(t *testing.T) {
 						}, nil),
 					},
 				})
+
+				// Now try to do a subsequent batch send. This will make sure
+				// that insertion events are stored/tracked and can be matched up in the next batch
+				batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					nextBatchID,
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
+					// Status
+					200,
+				)
 			})
 
 			t.Run("Not allowed to redact MSC2716 insertion, batch, marker events", func(t *testing.T) {
