@@ -399,15 +399,15 @@ func TestImportHistoricalMessages(t *testing.T) {
 			})
 
 			txnId := getTxnID("duplicateinsertion-txn")
-			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEventType, txnId}, map[string]interface{}{
+			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEventType, txnId}, client.WithJSONBody(t, map[string]interface{}{
 				nextBatchIDContentField: "same",
 				historicalContentField:  true,
-			})
+			}))
 
 			// We expect the send request for the duplicate insertion event to fail
 			expectedStatus := 400
 			if res.StatusCode != expectedStatus {
-				t.Fatalf("Expected HTTP Status to be %s but received %s", expectedStatus, res.StatusCode)
+				t.Fatalf("Expected HTTP Status to be %d but received %d", expectedStatus, res.StatusCode)
 			}
 		})
 
