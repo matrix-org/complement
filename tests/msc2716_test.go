@@ -502,10 +502,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 2)
+			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
 
-			// Import a historical event
+			// Import a batch of historical events
 			batchSendRes := batchSendHistoricalMessages(
 				t,
 				as,
@@ -513,53 +512,60 @@ func TestImportHistoricalMessages(t *testing.T) {
 				eventIdBefore,
 				"",
 				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 3),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 4),
 				// Status
 				200,
 			)
 			batchSendResBody0 := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs0 := client.GetJSONFieldStringArray(t, batchSendResBody0, "event_ids")
 			stateEventIDs0 := client.GetJSONFieldStringArray(t, batchSendResBody0, "state_event_ids")
+			baseInsertionEventID0 := client.GetJSONFieldStr(t, batchSendResBody0, "base_insertion_event_id")
+			batchEventID0 := client.GetJSONFieldStr(t, batchSendResBody0, "batch_event_id")
+			insertionEventID0 := client.GetJSONFieldStr(t, batchSendResBody0, "insertion_event_id")
 			//nextBatchID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_batch_id")
 			logrus.WithFields(logrus.Fields{
 				"historicalEventIDs0": historicalEventIDs0,
 				"stateEventIDs0":      stateEventIDs0,
 			}).Error("batchResponse0")
 
-			//contextRes0 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", historicalEventIDs0[1]}, client.WithContentType("application/json"))
-			// contextResBody0 := client.ParseJSON(t, contextRes0)
-			// stateJsonResult0 := gjson.GetBytes(contextResBody0, "state")
-			// stateFromContext0 := stateJsonResult0.Array()
+			var expectedEventIDOrder0 []string
+			expectedEventIDOrder0 = append(expectedEventIDOrder0, baseInsertionEventID0)
+			expectedEventIDOrder0 = append(expectedEventIDOrder0, batchEventID0)
+			expectedEventIDOrder0 = append(expectedEventIDOrder0, historicalEventIDs0...)
+			expectedEventIDOrder0 = append(expectedEventIDOrder0, insertionEventID0)
 
-			// logrus.WithFields(logrus.Fields{
-			// 	"stateFromContext": stateFromContext0,
-			// 	"len":              len(stateFromContext0),
-			// }).Error("gaweegegegwegawagewg 0")
-
-			// if len(stateFromContext0) == 0 {
-			// 	t.Fatalf("Expected some state events in the context response for historical event in first batch but saw %d: %s", len(stateFromContext0), stateFromContext0)
-			// }
-
-			// Make sure the historical member event we passed in via
-			// `state_events_at_start` resolves in the state of the historical message
-			// must.MatchResponse(t, contextRes0, match.HTTPResponse{
-			// 	JSON: []match.JSON{
-			// 		match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs0), func(r gjson.Result) interface{} {
-			// 			return r.Get("event_id").Str
-			// 		}, nil),
-			// 	},
-			// })
+			messagesScrollbackIntoHistoricalRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir": []string{"b"},
+				// We are aiming to scrollback to the start of the historical messages
+				// so we can use the `end` pagination token to paginate from
+				"limit": []string{fmt.Sprintf("%d", len(eventIDsAfter))},
+			}))
+			messagesScrollbackIntoHistoricalBody := client.ParseJSON(t, messagesScrollbackIntoHistoricalRes)
+			historicalMessagesBeginningPaginationToken := client.GetJSONFieldStr(t, messagesScrollbackIntoHistoricalBody, "end")
 
 			messagesRes0 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":    []string{"b"},
-				"limit":  []string{"100"},
+				"dir": []string{"b"},
+				// From the beginning of the historical messages
+				"from": []string{historicalMessagesBeginningPaginationToken},
+				// We are aiming to scrollback to the start of the existing historical
+				// messages
+				"limit":  []string{fmt.Sprintf("%d", len(expectedEventIDOrder0))},
 				"filter": []string{"{\"lazy_load_members\":true,\"include_redundant_members\":true}"},
 			}))
+
 			must.MatchResponse(t, messagesRes0, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs0), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
+					// Double-check that we're in the right place of scrollback
+					match.JSONCheckOff("chunk",
+						makeInterfaceSlice(expectedEventIDOrder0),
+						func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						},
+						nil,
+					),
+					// Make sure the historical m.room.member join state event resolves
+					// for the given chunk of messages in scrollback. The member event
+					// will include the displayname and avatar.
 					match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs0), func(r gjson.Result) interface{} {
 						return r.Get("event_id").Str
 					}, nil),
@@ -568,41 +574,65 @@ func TestImportHistoricalMessages(t *testing.T) {
 
 			// // Import another older batch of history from the same user.
 			// // Make sure the meta data and joins still work on the subsequent batch
-			// insertTime1 := timeAfterEventBefore
 			// batchSendRes1 := batchSendHistoricalMessages(
 			// 	t,
 			// 	as,
 			// 	roomID,
 			// 	eventIdBefore,
-			// 	nextBatchID0,
-			// 	createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, insertTime1),
-			// 	createMessageEventsForBatchSendRequest([]string{virtualUserID}, insertTime1, 3),
+			// 	"",
+			// 	createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+			// 	createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 4),
 			// 	// Status
 			// 	200,
 			// )
 			// batchSendResBody1 := client.ParseJSON(t, batchSendRes1)
 			// historicalEventIDs1 := client.GetJSONFieldStringArray(t, batchSendResBody1, "event_ids")
 			// stateEventIDs1 := client.GetJSONFieldStringArray(t, batchSendResBody1, "state_event_ids")
+			// batchEventID1 := client.GetJSONFieldStr(t, batchSendResBody1, "batch_event_id")
+			// insertionEventID1 := client.GetJSONFieldStr(t, batchSendResBody1, "insertion_event_id")
+			// logrus.WithFields(logrus.Fields{
+			// 	"historicalEventIDs1": historicalEventIDs1,
+			// 	"stateEventIDs1":      stateEventIDs1,
+			// }).Error("batchResponse1")
 
-			// contextRes1 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", historicalEventIDs1[1]}, client.WithContentType("application/json"))
-			// // contextResBody1 := client.ParseJSON(t, contextRes1)
-			// // stateJsonResult1 := gjson.GetBytes(contextResBody1, "state")
-			// // stateFromContext1 := stateJsonResult1.Array()
+			// var expectedEventIDOrder1 []string
+			// expectedEventIDOrder1 = append(expectedEventIDOrder1, batchEventID1)
+			// expectedEventIDOrder1 = append(expectedEventIDOrder1, historicalEventIDs1...)
+			// expectedEventIDOrder1 = append(expectedEventIDOrder1, insertionEventID1)
 
-			// // logrus.WithFields(logrus.Fields{
-			// // 	"stateFromContext": stateFromContext1,
-			// // 	"len":              len(stateFromContext1),
-			// // }).Error("gaweegegegwegawagewg 1")
+			// messagesScrollbackIntoHistoricalRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			// 	"dir": []string{"b"},
+			// 	// We are aiming to scrollback to the start of the historical messages
+			// 	// so we can use the `end` pagination token to paginate from
+			// 	"limit": []string{fmt.Sprintf("%d", len(eventIDsAfter))},
+			// }))
+			// messagesScrollbackIntoHistoricalBody := client.ParseJSON(t, messagesScrollbackIntoHistoricalRes)
+			// historicalMessagesBeginningPaginationToken := client.GetJSONFieldStr(t, messagesScrollbackIntoHistoricalBody, "end")
 
-			// // if len(stateFromContext1) == 0 {
-			// // 	t.Fatalf("Expected some state events in the context response for historical event in second batch but saw %d: %s", len(stateFromContext1), stateFromContext1)
-			// // }
+			// messagesRes0 := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			// 	"dir": []string{"b"},
+			// 	// From the beginning of the historical messages
+			// 	"from": []string{historicalMessagesBeginningPaginationToken},
+			// 	// We are aiming to scrollback to the start of the existing historical
+			// 	// messages
+			// 	"limit":  []string{fmt.Sprintf("%d", len(expectedEventIDOrder0))},
+			// 	"filter": []string{"{\"lazy_load_members\":true,\"include_redundant_members\":true}"},
+			// }))
 
-			// // Make sure the historical member event we passed in via
-			// // `state_events_at_start` resolves in the state of the historical message
-			// must.MatchResponse(t, contextRes1, match.HTTPResponse{
+			// must.MatchResponse(t, messagesRes0, match.HTTPResponse{
 			// 	JSON: []match.JSON{
-			// 		match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs1), func(r gjson.Result) interface{} {
+			// 		// Double-check that we're in the right place of scrollback
+			// 		match.JSONCheckOff("chunk",
+			// 			makeInterfaceSlice(expectedEventIDOrder0),
+			// 			func(r gjson.Result) interface{} {
+			// 				return r.Get("event_id").Str
+			// 			},
+			// 			nil,
+			// 		),
+			// 		// Make sure the historical m.room.member join state event resolves
+			// 		// for the given chunk of messages in scrollback. The member event
+			// 		// will include the displayname and avatar.
+			// 		match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs0), func(r gjson.Result) interface{} {
 			// 			return r.Get("event_id").Str
 			// 		}, nil),
 			// 	},
