@@ -85,9 +85,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 		// come back in the correct order from /messages.
 		//
 		// Final timeline output: ( [n] = historical batch )
-		// (oldest) A, B, [insertion, c, d, e, batch] [insertion, f, g, h, batch, insertion], I, J (newest)
+		// (oldest) A, B, [insertion, c, d, e, batch] [insertion, f, g, h, batch], baseInsertion, I, J (newest)
 		//                historical batch 1          historical batch 0
-		t.Run("Historical events resolve with proper state in correct order", func(t *testing.T) {
+		t.Run("Historical events resolve in the correct order", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -175,37 +175,15 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			}))
-			messsageResBody := client.ParseJSON(t, messagesRes)
-			eventDebugStringsFromResponse := getRelevantEventDebugStringsFromMessagesResponse(t, "chunk", messsageResBody, relevantToScrollbackEventFilter)
-			// Since the original body can only be read once, create a new one from the body bytes we just read
-			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
-
-			// Copy the array by slice so we can modify it as we iterate in the foreach loop.
-			// We save the full untouched `expectedEventIDOrder` for use in the log messages
-			workingExpectedEventIDOrder := expectedEventIDOrder
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONArrayEach("chunk", func(r gjson.Result) error {
-						// Find all events in order
-						if relevantToScrollbackEventFilter(r) {
-							// Pop the next message off the expected list
-							nextEventIdInOrder := workingExpectedEventIDOrder[0]
-							workingExpectedEventIDOrder = workingExpectedEventIDOrder[1:]
-
-							if r.Get("event_id").Str != nextEventIdInOrder {
-								return fmt.Errorf("Next event found was %s but expected %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", r.Get("event_id").Str, nextEventIdInOrder, len(eventDebugStringsFromResponse), eventDebugStringsFromResponse, len(expectedEventIDOrder), expectedEventIDOrder)
-							}
-						}
-
-						return nil
-					}),
+					matcherJSONEventIDArrayInOrder("chunk",
+						expectedEventIDOrder,
+						relevantToScrollbackEventFilter,
+					),
 				},
 			})
-
-			if len(workingExpectedEventIDOrder) != 0 {
-				t.Fatalf("Expected all events to be matched in message response but there were some left-over events: %s", workingExpectedEventIDOrder)
-			}
 		})
 
 		t.Run("Historical events from multiple users in the same batch", func(t *testing.T) {
@@ -239,21 +217,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-
-			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
+			validateBatchSendRes(t, as, roomID, batchSendRes, false)
 		})
 
 		t.Run("Historical events from /batch_send do not come down in an incremental sync", func(t *testing.T) {
@@ -555,8 +519,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -570,18 +532,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				return false
 			})
 
-			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
+			validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
 		})
 
 		t.Run("Historical messages are visible when joining on federated server - pre-made insertion event", func(t *testing.T) {
@@ -627,8 +578,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -642,18 +591,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				return false
 			})
 
-			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
+			validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
 		})
 
 		t.Run("Historical messages are visible when already joined on federated server", func(t *testing.T) {
@@ -729,19 +667,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// Send the marker event
 			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
-			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			// Make sure all of the historical messages are visible when we scrollback again
-			must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
+			// Make sure we can see all of the historical messages
+			validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
 		})
 
 		t.Run("When messages have already been scrolled back through, new historical messages are visible in next scroll back on federated server", func(t *testing.T) {
@@ -816,19 +743,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// Send the marker event
 			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
-			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			// Make sure all of the historical messages are visible when we scrollback again
-			must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
+			// Make sure we can see all of the historical messages
+			validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
 		})
 
 		t.Run("Existing room versions", func(t *testing.T) {
@@ -865,26 +781,16 @@ func TestImportHistoricalMessages(t *testing.T) {
 					// Status
 					200,
 				)
+				// Make sure we can see all of the historical messages
+				validateBatchSendRes(t, as, roomID, batchSendRes, false)
+				// Grab the `next_batch_id` for the next batch
 				batchSendResBody := client.ParseJSON(t, batchSendRes)
-				historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 				nextBatchID := client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
 
-				messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"dir":   []string{"b"},
-					"limit": []string{"100"},
-				}))
-
-				must.MatchResponse(t, messagesRes, match.HTTPResponse{
-					JSON: []match.JSON{
-						match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-							return r.Get("event_id").Str
-						}, nil),
-					},
-				})
-
-				// Now try to do a subsequent batch send. This will make sure
-				// that insertion events are stored/tracked and can be matched up in the next batch
-				batchSendHistoricalMessages(
+				// Now try to do a subsequent batch send. This will make sure that
+				// insertion events are stored/tracked and can be matched up in the next
+				// batch
+				batchSendRes1 := batchSendHistoricalMessages(
 					t,
 					as,
 					roomID,
@@ -895,6 +801,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 					// Status
 					200,
 				)
+				// Make sure we can see all of the historical messages
+				validateBatchSendRes(t, as, roomID, batchSendRes1, false)
 			})
 
 			t.Run("Not allowed to redact MSC2716 insertion, batch, marker events", func(t *testing.T) {
@@ -1407,7 +1315,7 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 		})
 
 		if len(workingExpectedEventIDOrder) != 0 {
-			return fmt.Errorf("Expected all events to be matched in message response but there were some left-over events: %s", workingExpectedEventIDOrder)
+			return fmt.Errorf("Expected all events to be matched in message response but there were some left-over events (%d): %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", len(workingExpectedEventIDOrder), workingExpectedEventIDOrder, len(eventDebugStringsFromResponse), eventDebugStringsFromResponse, len(expectedEventIDOrder), expectedEventIDOrder)
 		}
 
 		return err
