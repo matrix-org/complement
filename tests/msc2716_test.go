@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -177,7 +176,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"limit": []string{"100"},
 			}))
 			messsageResBody := client.ParseJSON(t, messagesRes)
-			eventDebugStringsFromResponse := getRelevantEventDebugStringsFromMessagesResponse(t, messsageResBody, relevantToScrollbackEventFilter)
+			eventDebugStringsFromResponse := getRelevantEventDebugStringsFromMessagesResponse(t, "chunk", messsageResBody, relevantToScrollbackEventFilter)
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
@@ -705,7 +704,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"limit": []string{"100"},
 			}))
 			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
-			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
+			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, "chunk", beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
 
@@ -794,7 +793,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"limit": []string{"100"},
 			}))
 			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
-			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
+			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, "chunk", beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
 			// Make sure the history isn't visible before we expect it to be there.
@@ -1010,10 +1009,10 @@ func relevantToScrollbackEventFilter(r gjson.Result) bool {
 	return r.Get("type").Str == "m.room.message" || historicalEventFilter(r)
 }
 
-func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string) {
+func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, wantKey string, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string) {
 	t.Helper()
 
-	debugStrings, err := _getRelevantEventDebugStringsFromMessagesResponse(body, eventFilter)
+	debugStrings, err := _getRelevantEventDebugStringsFromMessagesResponse(wantKey, body, eventFilter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1021,8 +1020,7 @@ func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, body []byte,
 	return debugStrings
 }
 
-func _getRelevantEventDebugStringsFromMessagesResponse(body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string, err error) {
-	wantKey := "chunk"
+func _getRelevantEventDebugStringsFromMessagesResponse(wantKey string, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string, err error) {
 	res := gjson.GetBytes(body, wantKey)
 	if !res.Exists() {
 		return nil, fmt.Errorf("missing key '%s'", wantKey)
@@ -1359,9 +1357,6 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 		// Copy the array by slice so we can modify it as we iterate in the foreach loop.
 		// We save the full untouched `expectedEventIDOrder` for use in the log messages
 		workingExpectedEventIDOrder := expectedEventIDOrder
-		logrus.WithFields(logrus.Fields{
-			"workingExpectedEventIDOrder": workingExpectedEventIDOrder,
-		}).Error("matcherJSONEventIDArrayInOrder")
 
 		var res gjson.Result
 		if wantKey == "" {
@@ -1377,7 +1372,7 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 			return fmt.Errorf("key '%s' is not an array", wantKey)
 		}
 
-		eventDebugStringsFromResponse, err := _getRelevantEventDebugStringsFromMessagesResponse(body, eventFilter)
+		eventDebugStringsFromResponse, err := _getRelevantEventDebugStringsFromMessagesResponse("chunk", body, eventFilter)
 		if err != nil {
 			return err
 		}
@@ -1385,9 +1380,6 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 		foundFirstEvent := false
 		res.ForEach(func(_, r gjson.Result) bool {
 			eventID := r.Get("event_id").Str
-			logrus.WithFields(logrus.Fields{
-				"workingExpectedEventIDOrder": workingExpectedEventIDOrder,
-			}).Error("matcherJSONEventIDArrayInOrderf faewafewafew")
 			nextEventIdInOrder := workingExpectedEventIDOrder[0]
 
 			// We need to find the start of the sliding window inside the overall
