@@ -468,26 +468,16 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-
-			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
-		})
-
-		t.Run("TODO: Test if historical avatar/display name set back in time are picked up on historical messages", func(t *testing.T) {
-			t.Skip("Skipping until implemented")
-			// TODO: Try adding avatar and displayName and see if historical messages get this info
+			validateBatchSendRes(
+				t,
+				as,
+				roomID,
+				batchSendRes,
+				// We can't validate the state in this case because the invite event
+				// won't be resolved in `/messages` state field (i.e. only the member
+				// event is needed to auth those events)
+				false,
+			)
 		})
 
 		t.Run("should resolve member state events for historical events", func(t *testing.T) {
@@ -516,7 +506,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			validateBatchSendRes(t, as, roomID, batchSendRes0)
+			validateBatchSendRes(t, as, roomID, batchSendRes0, true)
 			batchSendResBody0 := client.ParseJSON(t, batchSendRes0)
 			nextBatchID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_batch_id")
 
@@ -533,7 +523,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			validateBatchSendRes(t, as, roomID, batchSendRes1)
+			validateBatchSendRes(t, as, roomID, batchSendRes1, true)
 		})
 
 		t.Run("TODO: What happens when you point multiple batches at the same insertion event?", func(t *testing.T) {
@@ -1265,7 +1255,7 @@ func batchSendHistoricalMessages(
 //
 // Note: the historical state will only resolve correctly if the
 // first message of `/messages` is one of messages in the historical batch.
-func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSendRes *http.Response) {
+func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSendRes *http.Response, validateState bool) {
 	t.Helper()
 
 	batchSendResBody0 := client.ParseJSON(t, batchSendRes)
@@ -1287,36 +1277,58 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 	expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs...)
 	expectedEventIDOrder = append(expectedEventIDOrder, insertionEventID)
 
-	contextRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", expectedEventIDOrder[0]}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-		"limit": []string{"0"},
-	}))
-	contextResBody := client.ParseJSON(t, contextRes)
-	batchStartPaginationToken := client.GetJSONFieldStr(t, contextResBody, "end")
+	if validateState {
+		// Get the pagination token for the end of the historical batch itself
+		contextRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", expectedEventIDOrder[0]}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			"limit": []string{"0"},
+		}))
+		contextResBody := client.ParseJSON(t, contextRes)
+		batchStartPaginationToken := client.GetJSONFieldStr(t, contextResBody, "end")
 
-	messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-		"dir": []string{"b"},
-		// From the beginning of the historical messages
-		"from": []string{batchStartPaginationToken},
-		// We are aiming to scrollback to the start of the existing historical
-		// messages
-		"limit":  []string{fmt.Sprintf("%d", len(expectedEventIDOrder))},
-		"filter": []string{"{\"lazy_load_members\":true,\"include_redundant_members\":true}"},
-	}))
+		// Fetch a chunk of `/messages` which only contains the historical batch. We
+		// want to do this because `/messages` only returns the state for the first
+		// message in the `chunk` and we want to be able assert that the historical
+		// state is able to be resolved.
+		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			"dir": []string{"b"},
+			// From the end of the historical batch (this will be pointing at the )
+			"from": []string{batchStartPaginationToken},
+			// We are aiming to scrollback to the start of the existing historical
+			// messages
+			"limit": []string{fmt.Sprintf("%d", len(expectedEventIDOrder))},
+			// We add these options to the filter so we get member events in the state field
+			"filter": []string{"{\"lazy_load_members\":true,\"include_redundant_members\":true}"},
+		}))
 
-	must.MatchResponse(t, messagesRes, match.HTTPResponse{
-		JSON: []match.JSON{
-			// Double-check that we're in the right place of scrollback
-			match.JSONCheckOff("chunk",
-				makeInterfaceSlice(expectedEventIDOrder),
-				func(r gjson.Result) interface{} {
+		must.MatchResponse(t, messagesRes, match.HTTPResponse{
+			JSON: []match.JSON{
+				// Double-check that we're in the right place of scrollback
+				match.JSONCheckOff("chunk",
+					makeInterfaceSlice(expectedEventIDOrder),
+					func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					},
+					nil,
+				),
+				// Make sure the historical m.room.member join state event resolves
+				// for the given chunk of messages in scrollback. The member event
+				// will include the displayname and avatar.
+				match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs), func(r gjson.Result) interface{} {
 					return r.Get("event_id").Str
-				},
-				nil,
-			),
-			// Make sure the historical m.room.member join state event resolves
-			// for the given chunk of messages in scrollback. The member event
-			// will include the displayname and avatar.
-			match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs), func(r gjson.Result) interface{} {
+				}, nil),
+			},
+		})
+	}
+
+	// Make sure the historical events appear in scrollback without jumping back
+	// in time specifically.
+	fullMessagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		"dir":   []string{"b"},
+		"limit": []string{"100"},
+	}))
+	must.MatchResponse(t, fullMessagesRes, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
 			}, nil),
 		},
