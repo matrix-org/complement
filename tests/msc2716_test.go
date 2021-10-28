@@ -471,7 +471,14 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			validateBatchSendRes(t, as, roomID, batchSendRes0, true)
+			validateBatchSendRes(
+				t,
+				as,
+				roomID,
+				batchSendRes0,
+				// Validate the state
+				true,
+			)
 			batchSendResBody0 := client.ParseJSON(t, batchSendRes0)
 			nextBatchID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_batch_id")
 
@@ -488,7 +495,14 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			validateBatchSendRes(t, as, roomID, batchSendRes1, true)
+			validateBatchSendRes(
+				t,
+				as,
+				roomID,
+				batchSendRes1,
+				// Validate the state
+				true,
+			)
 		})
 
 		t.Run("TODO: What happens when you point multiple batches at the same insertion event?", func(t *testing.T) {
@@ -1169,12 +1183,12 @@ func batchSendHistoricalMessages(
 	return res
 }
 
-// Verify that the batch of historical messages looks correct in the message
-// scrollback. We also check that the historical state resolves for that chunk
-// of messages.
+// Verify that the batch of historical messages looks correct and in order in
+// the message scrollback. We can also optionally check that the historical
+// state resolves for that chunk of messages.
 //
-// Note: the historical state will only resolve correctly if the
-// first message of `/messages` is one of messages in the historical batch.
+// Note: the historical state will only resolve correctly if the first message
+// of `/messages` is one of messages in the historical batch.
 func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSendRes *http.Response, validateState bool) {
 	t.Helper()
 
@@ -1285,6 +1299,7 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 			return err
 		}
 
+		// Loop through the overall event list
 		foundFirstEvent := false
 		res.ForEach(func(_, r gjson.Result) bool {
 			eventID := r.Get("event_id").Str
@@ -1314,6 +1329,8 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 			return err == nil
 		})
 
+		// There was some left-over events in the list but we should have found all
+		// of them
 		if len(workingExpectedEventIDOrder) != 0 {
 			return fmt.Errorf("Expected all events to be matched in message response but there were some left-over events (%d): %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", len(workingExpectedEventIDOrder), workingExpectedEventIDOrder, len(eventDebugStringsFromResponse), eventDebugStringsFromResponse, len(expectedEventIDOrder), expectedEventIDOrder)
 		}
