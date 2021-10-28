@@ -12,9 +12,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -175,7 +177,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"limit": []string{"100"},
 			}))
 			messsageResBody := client.ParseJSON(t, messagesRes)
-			eventDebugStringsFromResponse := getRelevantEventDebugStringsFromMessagesResponse(t, messsageResBody)
+			eventDebugStringsFromResponse := getRelevantEventDebugStringsFromMessagesResponse(t, messsageResBody, relevantToScrollbackEventFilter)
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
@@ -187,7 +189,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONArrayEach("chunk", func(r gjson.Result) error {
 						// Find all events in order
-						if isRelevantEvent(r) {
+						if relevantToScrollbackEventFilter(r) {
 							// Pop the next message off the expected list
 							nextEventIdInOrder := workingExpectedEventIDOrder[0]
 							workingExpectedEventIDOrder = workingExpectedEventIDOrder[1:]
@@ -703,7 +705,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"limit": []string{"100"},
 			}))
 			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
-			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody)
+			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
 
@@ -792,7 +794,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"limit": []string{"100"},
 			}))
 			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
-			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody)
+			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
 			// Make sure the history isn't visible before we expect it to be there.
@@ -998,33 +1000,45 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 	}
 }
 
-func isRelevantEvent(r gjson.Result) bool {
-	return len(r.Get("content").Get("body").Str) > 0 ||
-		r.Get("type").Str == insertionEventType ||
-		r.Get("type").Str == batchEventType ||
-		r.Get("type").Str == markerEventType
+func historicalEventFilter(r gjson.Result) bool {
+	// This includes messages, insertion, batch, and marker events because we
+	// include the historical field on all of them.
+	return r.Get("content").Get(strings.ReplaceAll(historicalContentField, ".", "\\.")).Exists()
 }
 
-func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, body []byte) (eventIDsFromResponse []string) {
+func relevantToScrollbackEventFilter(r gjson.Result) bool {
+	return r.Get("type").Str == "m.room.message" || historicalEventFilter(r)
+}
+
+func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string) {
 	t.Helper()
 
+	debugStrings, err := _getRelevantEventDebugStringsFromMessagesResponse(body, eventFilter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return debugStrings
+}
+
+func _getRelevantEventDebugStringsFromMessagesResponse(body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string, err error) {
 	wantKey := "chunk"
 	res := gjson.GetBytes(body, wantKey)
 	if !res.Exists() {
-		t.Fatalf("missing key '%s'", wantKey)
+		return nil, fmt.Errorf("missing key '%s'", wantKey)
 	}
 	if !res.IsArray() {
-		t.Fatalf("key '%s' is not an array (was %s)", wantKey, res.Type)
+		return nil, fmt.Errorf("key '%s' is not an array (was %s)", wantKey, res.Type)
 	}
 
 	res.ForEach(func(key, r gjson.Result) bool {
-		if isRelevantEvent(r) {
+		if eventFilter(r) {
 			eventIDsFromResponse = append(eventIDsFromResponse, r.Get("event_id").Str+" ("+r.Get("content").Get("body").Str+")")
 		}
 		return true
 	})
 
-	return eventIDsFromResponse
+	return eventIDsFromResponse, nil
 }
 
 // ensureVirtualUserRegistered makes sure the user is registered for the homeserver regardless
@@ -1274,7 +1288,7 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 		expectedEventIDOrder = append(expectedEventIDOrder, baseInsertionEventID)
 	}
 	expectedEventIDOrder = append(expectedEventIDOrder, batchEventID)
-	expectedEventIDOrder = append(expectedEventIDOrder, historicalEventIDs...)
+	expectedEventIDOrder = append(expectedEventIDOrder, reversed(historicalEventIDs)...)
 	expectedEventIDOrder = append(expectedEventIDOrder, insertionEventID)
 
 	if validateState {
@@ -1303,12 +1317,9 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 		must.MatchResponse(t, messagesRes, match.HTTPResponse{
 			JSON: []match.JSON{
 				// Double-check that we're in the right place of scrollback
-				match.JSONCheckOff("chunk",
-					makeInterfaceSlice(expectedEventIDOrder),
-					func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					},
-					nil,
+				matcherJSONEventIDArrayInOrder("chunk",
+					expectedEventIDOrder,
+					historicalEventFilter,
 				),
 				// Make sure the historical m.room.member join state event resolves
 				// for the given chunk of messages in scrollback. The member event
@@ -1328,9 +1339,85 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 	}))
 	must.MatchResponse(t, fullMessagesRes, match.HTTPResponse{
 		JSON: []match.JSON{
-			match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-				return r.Get("event_id").Str
-			}, nil),
+			matcherJSONEventIDArrayInOrder("chunk",
+				expectedEventIDOrder,
+				historicalEventFilter,
+			),
 		},
 	})
+}
+
+// Looks through a list of events to find the sliding window of expected event
+// ID's somewhere in the list in order. The expected list can start anywhere in
+// the overall list.
+func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []string, eventFilter func(gjson.Result) bool) match.JSON {
+	return func(body []byte) error {
+		if len(expectedEventIDOrder) == 0 {
+			return fmt.Errorf("expectedEventIDOrder can not be an empty list")
+		}
+
+		// Copy the array by slice so we can modify it as we iterate in the foreach loop.
+		// We save the full untouched `expectedEventIDOrder` for use in the log messages
+		workingExpectedEventIDOrder := expectedEventIDOrder
+		logrus.WithFields(logrus.Fields{
+			"workingExpectedEventIDOrder": workingExpectedEventIDOrder,
+		}).Error("matcherJSONEventIDArrayInOrder")
+
+		var res gjson.Result
+		if wantKey == "" {
+			res = gjson.ParseBytes(body)
+		} else {
+			res = gjson.GetBytes(body, wantKey)
+		}
+
+		if !res.Exists() {
+			return fmt.Errorf("missing key '%s'", wantKey)
+		}
+		if !res.IsArray() {
+			return fmt.Errorf("key '%s' is not an array", wantKey)
+		}
+
+		eventDebugStringsFromResponse, err := _getRelevantEventDebugStringsFromMessagesResponse(body, eventFilter)
+		if err != nil {
+			return err
+		}
+
+		foundFirstEvent := false
+		res.ForEach(func(_, r gjson.Result) bool {
+			eventID := r.Get("event_id").Str
+			logrus.WithFields(logrus.Fields{
+				"workingExpectedEventIDOrder": workingExpectedEventIDOrder,
+			}).Error("matcherJSONEventIDArrayInOrderf faewafewafew")
+			nextEventIdInOrder := workingExpectedEventIDOrder[0]
+
+			// We need to find the start of the sliding window inside the overall
+			// event list
+			if !foundFirstEvent && eventID == nextEventIdInOrder {
+				foundFirstEvent = true
+			}
+
+			// Once we found the first event, find all events in order
+			if foundFirstEvent && eventFilter(r) {
+				if r.Get("event_id").Str != nextEventIdInOrder {
+					err = fmt.Errorf("Next event found was %s but expected %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", r.Get("event_id").Str, nextEventIdInOrder, len(eventDebugStringsFromResponse), eventDebugStringsFromResponse, len(expectedEventIDOrder), expectedEventIDOrder)
+				}
+
+				// Now that we found it, pop the message off the expected list
+				workingExpectedEventIDOrder = workingExpectedEventIDOrder[1:]
+			}
+
+			// Found all of the expected events, stop iterating
+			if len(workingExpectedEventIDOrder) == 0 {
+				return false
+			}
+
+			return err == nil
+		})
+
+		if len(workingExpectedEventIDOrder) != 0 {
+			return fmt.Errorf("Expected all events to be matched in message response but there were some left-over events: %s", workingExpectedEventIDOrder)
+		}
+
+		return err
+	}
 }
