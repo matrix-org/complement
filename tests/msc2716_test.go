@@ -49,13 +49,13 @@ var (
 var createPublicRoomOpts = map[string]interface{}{
 	"preset":       "public_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v3",
+	"room_version": "org.matrix.msc2716v4",
 }
 
 var createPrivateRoomOpts = map[string]interface{}{
 	"preset":       "private_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v3",
+	"room_version": "org.matrix.msc2716v4",
 }
 
 func TestImportHistoricalMessages(t *testing.T) {
@@ -301,8 +301,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				nextBatchID = client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
 			}
 
-			// Make sure we see the event at the very start of the message history
-			expectedEventIDs = append(expectedEventIDs, eventIdBefore)
+			// Make sure we see the events at the very start of the message history
+			expectedEventIDs = append(expectedEventIDs, eventIDsBefore...)
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
