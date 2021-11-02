@@ -1,5 +1,3 @@
-// +build msc2946,!dendrite_blacklist
-
 // Tests MSC3083, joining restricted rooms based on membership in another room.
 
 package tests
