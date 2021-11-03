@@ -266,11 +266,15 @@ func TestImportHistoricalMessages(t *testing.T) {
 			eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
 			timeAfterEventBefore := time.Now()
 
-			// wait X number of ms to ensure that the timestamp changes enough for
-			// each of the historical messages we try to import later
+			// We chose the magic number 11 because Synapse currently limits the
+			// backfill extremities to 5. 10 also seemed like a round number someone
+			// could pick for other homeserver implementations so I just did 10+1 to
+			// make sure it also worked in that case.
 			//numBatches := 11
 			numBatches := 2
 			numHistoricalMessagesPerBatch := 100
+			// wait X number of ms to ensure that the timestamp changes enough for
+			// each of the historical messages we try to import later
 			time.Sleep(time.Duration(numBatches*numHistoricalMessagesPerBatch) * timeBetweenMessages)
 
 			// eventIDsAfter
@@ -1024,8 +1028,7 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		}
 
 		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-			"dir": []string{"b"},
-			// TODO: Can we do it with 100?
+			"dir":   []string{"b"},
 			"limit": []string{"100"},
 			"from":  []string{messageResEnd},
 		}))
