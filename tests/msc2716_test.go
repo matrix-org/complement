@@ -281,6 +281,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// We want to make sure Synapse doesn't blow up after we import
 			// many messages.
 			var expectedEventIDs []string
+			var baseInsertionEventID string
 			nextBatchID := ""
 			for i := 0; i < numBatches; i++ {
 				insertTime := timeAfterEventBefore.Add(timeBetweenMessages * time.Duration(numBatches-numHistoricalMessagesPerBatch*i))
@@ -299,6 +300,11 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Make sure we see all of the historical messages
 				expectedEventIDs = append(expectedEventIDs, client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")...)
 				nextBatchID = client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
+
+				// Grab the base insertione event ID to reference later in the marker event
+				if i == 0 {
+					baseInsertionEventID = client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
+				}
 			}
 
 			// Make sure we see the events at the very start of the message history
@@ -306,6 +312,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+			// Send the marker event
+			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
 			// Make sure events can be backfilled from the remote homeserver
 			paginateUntilMessageCheckOff(t, remoteCharlie, roomID, expectedEventIDs)
@@ -545,6 +554,10 @@ func TestImportHistoricalMessages(t *testing.T) {
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+			baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
+
+			// Send the marker event
+			sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -617,6 +630,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+
+			// Send the marker event
+			sendMarkerAndEnsureBackfilled(t, as, alice, roomID, insertionEventID)
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
