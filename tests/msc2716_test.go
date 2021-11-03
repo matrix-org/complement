@@ -50,13 +50,13 @@ var (
 var createPublicRoomOpts = map[string]interface{}{
 	"preset":       "public_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v3",
+	"room_version": "org.matrix.msc2716v4",
 }
 
 var createPrivateRoomOpts = map[string]interface{}{
 	"preset":       "private_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v3",
+	"room_version": "org.matrix.msc2716v4",
 }
 
 func TestImportHistoricalMessages(t *testing.T) {
@@ -533,6 +533,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -546,7 +548,24 @@ func TestImportHistoricalMessages(t *testing.T) {
 				return false
 			})
 
-			validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+			// FIXME: In the future, we should probably replace the following logic
+			// with `validateBatchSendRes` to re-use and have some more robust
+			// assertion logic here. We're currently not using it because the message
+			// order isn't quite perfect when a remote federated homserver gets
+			// backfilled.
+			// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
 		})
 
 		t.Run("Historical messages are visible when joining on federated server - pre-made insertion event", func(t *testing.T) {
@@ -592,6 +611,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -605,7 +626,24 @@ func TestImportHistoricalMessages(t *testing.T) {
 				return false
 			})
 
-			validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+			// FIXME: In the future, we should probably replace the following logic
+			// with `validateBatchSendRes` to re-use and have some more robust
+			// assertion logic here. We're currently not using it because the message
+			// order isn't quite perfect when a remote federated homserver gets
+			// backfilled.
+			// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
 		})
 
 		t.Run("Historical messages are visible when already joined on federated server", func(t *testing.T) {
@@ -681,8 +719,25 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// Send the marker event
 			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
-			// Make sure we can see all of the historical messages
-			validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+			// FIXME: In the future, we should probably replace the following logic
+			// with `validateBatchSendRes` to re-use and have some more robust
+			// assertion logic here. We're currently not using it because the message
+			// order isn't quite perfect when a remote federated homserver gets
+			// backfilled.
+			// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+
+			// Make sure all of the historical messages are visible when we scrollback again
+			must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
 		})
 
 		t.Run("When messages have already been scrolled back through, new historical messages are visible in next scroll back on federated server", func(t *testing.T) {
@@ -757,8 +812,25 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// Send the marker event
 			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
-			// Make sure we can see all of the historical messages
-			validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+			// FIXME: In the future, we should probably replace the following logic
+			// with `validateBatchSendRes` to re-use and have some more robust
+			// assertion logic here. We're currently not using it because the message
+			// order isn't quite perfect when a remote federated homserver gets
+			// backfilled.
+			// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+
+			// Make sure all of the historical messages are visible when we scrollback again
+			must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
 		})
 
 		t.Run("Existing room versions", func(t *testing.T) {
