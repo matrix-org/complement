@@ -61,7 +61,6 @@ var createPrivateRoomOpts = map[string]interface{}{
 func TestImportHistoricalMessages(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
-	//defer time.Sleep(2 * time.Hour)
 
 	// Create the application service bridge user that is able to import historical messages
 	asUserID := "@the-bridge-user:hs1"
@@ -1052,10 +1051,6 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 			)
 		}
 
-		// logrus.WithFields(logrus.Fields{
-		// 	"events":        events,
-		// 	"messageResEnd": messageResEnd,
-		// }).Error("paginateUntilMessageCheckOff chunk")
 		for _, ev := range events {
 			eventID := ev.Get("event_id").Str
 			actualEventIDList = append(actualEventIDList, eventID)
