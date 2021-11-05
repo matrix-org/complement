@@ -931,6 +931,7 @@ func reversed(in []string) []string {
 	return out
 }
 
+// Find a given "needle" string in a list of strings, the haystack
 func includes(needle string, haystack []string) bool {
 	for _, item := range haystack {
 		if needle == item {
