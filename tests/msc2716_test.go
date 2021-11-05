@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -270,8 +269,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// Create some "live" events to saturate and fill up the /sync response
 			createMessagesInRoom(t, alice, roomID, 5)
 
-			// Get a /sync since token we can try paginating from after
-			// we batch send
+			// Get a /sync `since` pagination token we can try paginating from later
+			// on
 			since := doInitialSync(t, alice)
 
 			// Import a historical event
@@ -294,24 +293,12 @@ func TestImportHistoricalMessages(t *testing.T) {
 			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1)
 			eventIDAfterHistoricalImport := eventIDsAfterHistoricalImport[0]
 
-			logrus.WithFields(logrus.Fields{
-				"eventIDAfterHistoricalImport": eventIDAfterHistoricalImport,
-				"historicalEventIDs":           historicalEventIDs,
-				"historicalStateEventIDs":      historicalStateEventIDs,
-			}).Error("afewfeew")
-
 			// Sync from before we did any batch sending until we find the
 			// eventIDAfterHistoricalImport. If we're able to see
 			// eventIDAfterHistoricalImport without any the
 			// historicalEventIDs/historicalStateEventIDs in between, we're probably
 			// safe to assume it won't sync.
 			alice.SyncUntil(t, since, "", "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
-				logrus.WithFields(logrus.Fields{
-					"event_id":  r.Get("event_id").Str,
-					"type":      r.Get("type").Str,
-					"state_key": r.Get("state_key").Str,
-				}).Error("event from sync")
-
 				if includes(r.Get("event_id").Str, historicalEventIDs) || includes(r.Get("event_id").Str, historicalStateEventIDs) {
 					t.Fatalf("We should not see the %s historical event in /sync response but it was present", r.Get("event_id").Str)
 				}
