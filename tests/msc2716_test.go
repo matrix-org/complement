@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
 	"testing"
 	"time"
 
@@ -59,6 +60,9 @@ var createPrivateRoomOpts = map[string]interface{}{
 	"name":         "the hangout spot",
 	"room_version": "org.matrix.msc2716v3",
 }
+
+// Find the URL and port of the application service in some registration yaml text
+var asURLRegexp = regexp.MustCompile(`url: '(.+):(\d+)'`)
 
 func TestImportHistoricalMessages(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
@@ -312,6 +316,13 @@ func TestImportHistoricalMessages(t *testing.T) {
 		t.Run("Historical events from batch_send do not get pushed out as application service transactions", func(t *testing.T) {
 			t.Parallel()
 
+			asRegistration := deployment.HS["hs1"].ApplicationServices["my_as_id"]
+			asURLMatches := asURLRegexp.FindStringSubmatch(asRegistration)
+			if asURLMatches == nil {
+				t.Fatalf("Unable to find application service `url` in registration=%s", asRegistration)
+			}
+			asPort := asURLMatches[2]
+
 			// Create a listener and handler to stub an application service listening
 			// for transactions from a homeserver.
 			handler := mux.NewRouter()
@@ -343,13 +354,22 @@ func TestImportHistoricalMessages(t *testing.T) {
 			}).Methods("PUT")
 
 			srv := &http.Server{
-				Addr:    ":9111",
+				Addr:    fmt.Sprintf(":%s", asPort),
 				Handler: handler,
 			}
 			go func() {
-				srv.ListenAndServe()
+				if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+					// Note that running s.t.FailNow is not allowed in a separate goroutine
+					// Tests will likely fail if the server is not listening anyways
+					t.Logf("Failed to listen and serve our fake application service: %s", err)
+				}
 			}()
-			defer srv.Shutdown(context.Background())
+			defer func() {
+				err := srv.Shutdown(context.Background())
+				if err != nil {
+					t.Fatalf("Failed to shutdown our fake application service: %s", err)
+				}
+			}()
 			// ----------------------------------------------------------
 
 			// Create the room all of the action is going to happen in

@@ -18,8 +18,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
+)
+
+var (
+	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
+	HostnameRunningComplement = "host.docker.internal"
 )
 
 // KnownBlueprints lists static blueprints
@@ -190,6 +196,22 @@ func normaliseUser(u string, hsName string) (string, error) {
 	return u, nil
 }
 
+// Asks the kernel for a free open port that is ready to use.
+// via https://github.com/phayes/freeport/blob/95f893ade6f232a5f1511d61735d89b1ae2df543/freeport.go#L7-L20
+func getFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
 func normalizeApplicationService(as ApplicationService) (ApplicationService, error) {
 	hsToken := make([]byte, 32)
 	_, err := rand.Read(hsToken)
@@ -205,6 +227,18 @@ func normalizeApplicationService(as ApplicationService) (ApplicationService, err
 
 	as.HSToken = hex.EncodeToString(hsToken)
 	as.ASToken = hex.EncodeToString(asToken)
+
+	if as.URL == "" {
+		// Since, we're just checking and not reserving the port, we could
+		// potentially run into an issue where the port is no longer available when
+		// we actually try to bind to it later on
+		port, err := getFreePort()
+		if err != nil {
+			return as, err
+		}
+
+		as.URL = fmt.Sprintf("http://%s:%d", HostnameRunningComplement, port)
+	}
 
 	return as, err
 }
