@@ -316,6 +316,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 		t.Run("Historical events from batch_send do not get pushed out as application service transactions", func(t *testing.T) {
 			t.Parallel()
 
+			// Find the application service port defined in the registration file
 			asRegistration := deployment.HS["hs1"].ApplicationServices["my_as_id"]
 			asURLMatches := asURLRegexp.FindStringSubmatch(asRegistration)
 			if asURLMatches == nil {
