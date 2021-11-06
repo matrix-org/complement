@@ -232,7 +232,8 @@ func normalizeApplicationService(as ApplicationService) (ApplicationService, err
 		// Since, we're just checking and not reserving the port, we could
 		// potentially run into an issue where the port is no longer available when
 		// we actually try to bind to it later on
-		port, err := getFreePort()
+		var port int
+		port, err = getFreePort()
 		if err != nil {
 			return as, err
 		}
