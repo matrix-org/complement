@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -44,14 +45,18 @@ func main() {
 		testNameToFilename[name] = strings.TrimSpace(filename)
 	}
 	total := len(testNameToFilename)
-	files, err := ioutil.ReadDir("./tests")
-	if err != nil {
-		panic(err)
-	}
+
 	convertedTests := make(map[string]bool)
-	for _, file := range files {
+
+	// Walk all files defined under ./tests
+	// we already panic inside Walk, so we can ignore the error
+	_ = filepath.Walk("./tests", func(path string, info os.FileInfo, err error) error {
+		// we don't care about directories or files not named "_test.go"
+		if info.IsDir() || !strings.HasSuffix(info.Name(), "_test.go") {
+			return nil
+		}
 		fset := token.NewFileSet()
-		astFile, err := parser.ParseFile(fset, "./tests/"+file.Name(), nil, parser.ParseComments)
+		astFile, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
 			panic(err)
 		}
@@ -66,7 +71,9 @@ func main() {
 				convertedTests[line] = true
 			}
 		}
-	}
+		return nil
+	})
+
 	numComplementTests := len(convertedTests)
 	for _, fname := range sorted(filenameToTestName) {
 		testNames := filenameToTestName[fname]

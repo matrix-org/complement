@@ -163,7 +163,13 @@ func JSONCheckOff(wantKey string, wantItems []interface{}, mapper func(gjson.Res
 // item calling `fn`. If `fn` returns an error, iterating stops and an error is returned.
 func JSONArrayEach(wantKey string, fn func(gjson.Result) error) JSON {
 	return func(body []byte) error {
-		res := gjson.GetBytes(body, wantKey)
+		var res gjson.Result
+		if wantKey == "" {
+			res = gjson.ParseBytes(body)
+		} else {
+			res = gjson.GetBytes(body, wantKey)
+		}
+
 		if !res.Exists() {
 			return fmt.Errorf("missing key '%s'", wantKey)
 		}

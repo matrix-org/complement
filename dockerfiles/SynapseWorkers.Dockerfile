@@ -17,13 +17,13 @@ RUN apt-get update
 RUN apt-get install -y postgresql
 
 # Configure a user and create a database for Synapse
-RUN pg_ctlcluster 11 main start &&  su postgres -c "echo \
+RUN pg_ctlcluster 13 main start &&  su postgres -c "echo \
  \"ALTER USER postgres PASSWORD 'somesecret'; \
  CREATE DATABASE synapse \
   ENCODING 'UTF8' \
   LC_COLLATE='C' \
   LC_CTYPE='C' \
-  template=template0;\" | psql" && pg_ctlcluster 11 main stop
+  template=template0;\" | psql" && pg_ctlcluster 13 main stop
 
 # Modify the shared homeserver config with postgres support, certificate setup
 # and the disabling of rate-limiting
@@ -41,7 +41,7 @@ ENTRYPOINT \
   # Replace the server name in the caddy config
   sed -i "s/{{ server_name }}/${SERVER_NAME}/g" /root/caddy.json && \
   # Start postgres
-  pg_ctlcluster 11 main start 2>&1 && \
+  pg_ctlcluster 13 main start 2>&1 && \
   # Start caddy
   /root/caddy start --config /root/caddy.json 2>&1 && \
   # Set the server name of the homeserver

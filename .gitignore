@@ -1,3 +1,5 @@
 sync_snapshot.json
 complement
 .idea
+.bin
+.DS_Store

@@ -266,7 +266,9 @@ func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...
 	t.Helper()
 	res := c.DoFunc(t, method, paths, opts...)
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		t.Fatalf("CSAPI.MustDoFunc response return non-2xx code: %s", res.Status)
+		defer res.Body.Close()
+		body, _ := ioutil.ReadAll(res.Body)
+		t.Fatalf("CSAPI.MustDoFunc response return non-2xx code: %s - body: %s", res.Status, string(body))
 	}
 	return res
 }
