@@ -485,6 +485,48 @@ func TestImportHistoricalMessages(t *testing.T) {
 			})
 		})
 
+		t.Run("Should be able to send a batch without any state_events_at_start - user already joined in the current room state", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create the "live" event we are going to import our historical events next to
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIdBefore := eventIDsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// Import a historical event
+			batchSendRes := batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				"",
+				// The key thing we're testing here is that we can still batch send
+				// messages when no `state_events_at_start` are given
+				make([]map[string]interface{}, 0),
+				createMessageEventsForBatchSendRequest([]string{alice.UserID}, timeAfterEventBefore, 3),
+				// Status
+				200,
+			)
+			batchSendResBody := client.ParseJSON(t, batchSendRes)
+			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+
+			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"dir":   []string{"b"},
+				"limit": []string{"100"},
+			}))
+
+			must.MatchResponse(t, messagesRes, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+						return r.Get("event_id").Str
+					}, nil),
+				},
+			})
+		})
+
 		t.Run("TODO: Test if historical avatar/display name set back in time are picked up on historical messages", func(t *testing.T) {
 			t.Skip("Skipping until implemented")
 			// TODO: Try adding avatar and displayName and see if historical messages get this info
