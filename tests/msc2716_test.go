@@ -530,21 +530,14 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 
-			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
+			validateBatchSendRes(
+				t,
+				as,
+				roomID,
+				batchSendRes,
+				false,
+			)
 		})
 
 		t.Run("TODO: What happens when you point multiple batches at the same insertion event?", func(t *testing.T) {
