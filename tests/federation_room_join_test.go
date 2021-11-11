@@ -88,9 +88,10 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 // - Events with missing signatures
 // - Events with bad signatures
 // - Events with correct signatures but the keys cannot be obtained
+//
 // None of these events will be critical to the integrity of the room: that
-// is to say these events are never pointed to as auth_events - therefore the
-// room should still be joinable.
+// is to say these events are not used as auth_events for the actual join -
+// therefore the room should still be joinable.
 //
 // This test works by creating several federated rooms on Complement which have
 // the properties listed above, then asking HS1 to join them and make sure that
