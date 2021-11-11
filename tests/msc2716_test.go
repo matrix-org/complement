@@ -736,7 +736,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"limit": []string{"100"},
 			}))
 			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
-			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, "chunk", beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
+			eventDebugStringsFromBeforeMarkerResponse := mustGetRelevantEventDebugStringsFromMessagesResponse(t, "chunk", beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
 
@@ -831,7 +831,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"limit": []string{"100"},
 			}))
 			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
-			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, "chunk", beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
+			eventDebugStringsFromBeforeMarkerResponse := mustGetRelevantEventDebugStringsFromMessagesResponse(t, "chunk", beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
 			// Since the original body can only be read once, create a new one from the body bytes we just read
 			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
 			// Make sure the history isn't visible before we expect it to be there.
@@ -1045,10 +1045,10 @@ func relevantToScrollbackEventFilter(r gjson.Result) bool {
 	return r.Get("type").Str == "m.room.message" || historicalEventFilter(r)
 }
 
-func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, wantKey string, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string) {
+func mustGetRelevantEventDebugStringsFromMessagesResponse(t *testing.T, wantKey string, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string) {
 	t.Helper()
 
-	debugStrings, err := _getRelevantEventDebugStringsFromMessagesResponse(wantKey, body, eventFilter)
+	debugStrings, err := getRelevantEventDebugStringsFromMessagesResponse(wantKey, body, eventFilter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1056,7 +1056,7 @@ func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, wantKey stri
 	return debugStrings
 }
 
-func _getRelevantEventDebugStringsFromMessagesResponse(wantKey string, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string, err error) {
+func getRelevantEventDebugStringsFromMessagesResponse(wantKey string, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string, err error) {
 	res := gjson.GetBytes(body, wantKey)
 	if !res.Exists() {
 		return nil, fmt.Errorf("missing key '%s'", wantKey)
@@ -1408,7 +1408,7 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 			return fmt.Errorf("key '%s' is not an array", wantKey)
 		}
 
-		eventDebugStringsFromResponse, err := _getRelevantEventDebugStringsFromMessagesResponse("chunk", body, eventFilter)
+		eventDebugStringsFromResponse, err := getRelevantEventDebugStringsFromMessagesResponse("chunk", body, eventFilter)
 		if err != nil {
 			return err
 		}
