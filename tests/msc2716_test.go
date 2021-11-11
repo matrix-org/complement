@@ -304,7 +304,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				expectedEventIDs = append(expectedEventIDs, client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")...)
 				nextBatchID = client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
 
-				// Grab the base insertione event ID to reference later in the marker event
+				// Grab the base insertion event ID to reference later in the marker event
 				if i == 0 {
 					baseInsertionEventID = client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
 				}
