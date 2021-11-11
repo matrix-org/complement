@@ -520,12 +520,12 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our backfilled events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
 			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 2)
+			createMessagesInRoom(t, alice, roomID, 2, "eventIDsAfter")
 
 			// Import a batch of historical events
 			batchSendRes0 := batchSendHistoricalMessages(
@@ -580,7 +580,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to import our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -963,7 +963,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				timeAfterEventBefore := time.Now()
 
 				// Create eventIDsAfter to avoid the "No forward extremities left!" 500 error from Synapse
-				createMessagesInRoom(t, alice, roomID, 2)
+				createMessagesInRoom(t, alice, roomID, 2, "eventIDsAfter")
 
 				// Import a historical event
 				batchSendRes := batchSendHistoricalMessages(
