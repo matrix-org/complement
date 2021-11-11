@@ -1383,10 +1383,11 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 	})
 }
 
-// Looks through a list of events to find the sliding window of expected event
-// ID's somewhere in the list in order. The expected list can start anywhere in
-// the overall list.
-func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []string, eventFilter func(gjson.Result) bool) match.JSON {
+// matcherJSONEventIDArrayInOrder loops through `jsonArrayKey` in the response
+// to find the sliding window of expected event ID's(`expectedEventIDOrder`)
+// somewhere in the array in order. The expected list can start anywhere in the
+// overall list filtered by `eventFilter`.
+func matcherJSONEventIDArrayInOrder(jsonArrayKey string, expectedEventIDOrder []string, eventFilter func(gjson.Result) bool) match.JSON {
 	return func(body []byte) error {
 		if len(expectedEventIDOrder) == 0 {
 			return fmt.Errorf("expectedEventIDOrder can not be an empty list")
@@ -1397,17 +1398,17 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 		workingExpectedEventIDOrder := expectedEventIDOrder
 
 		var res gjson.Result
-		if wantKey == "" {
+		if jsonArrayKey == "" {
 			res = gjson.ParseBytes(body)
 		} else {
-			res = gjson.GetBytes(body, wantKey)
+			res = gjson.GetBytes(body, jsonArrayKey)
 		}
 
 		if !res.Exists() {
-			return fmt.Errorf("missing key '%s'", wantKey)
+			return fmt.Errorf("missing key '%s'", jsonArrayKey)
 		}
 		if !res.IsArray() {
-			return fmt.Errorf("key '%s' is not an array", wantKey)
+			return fmt.Errorf("key '%s' is not an array", jsonArrayKey)
 		}
 
 		eventDebugStringsFromResponse, err := getRelevantEventDebugStringsFromMessagesResponse("chunk", body, eventFilter)
