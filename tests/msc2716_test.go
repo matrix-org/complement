@@ -1431,6 +1431,7 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 			if foundFirstEvent && eventFilter(r) {
 				if r.Get("event_id").Str != nextEventIdInOrder {
 					err = fmt.Errorf("Next event found was %s but expected %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", r.Get("event_id").Str, nextEventIdInOrder, len(eventDebugStringsFromResponse), eventDebugStringsFromResponse, len(expectedEventIDOrder), expectedEventIDOrder)
+					return false
 				}
 
 				// Now that we found it, pop the message off the expected list
@@ -1442,7 +1443,7 @@ func matcherJSONEventIDArrayInOrder(wantKey string, expectedEventIDOrder []strin
 				return false
 			}
 
-			return err == nil
+			return true
 		})
 
 		// There was some left-over events in the list but we should have found all
