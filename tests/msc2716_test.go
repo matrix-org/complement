@@ -983,8 +983,6 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 		}
 
 		checkCounter++
-		// Add a slight delay so we don't hammmer the messages endpoint
-		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -1068,8 +1066,6 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		}
 
 		checkCounter++
-		// Add a slight delay so we don't hammmer the messages endpoint
-		time.Sleep(500 * time.Millisecond)
 	}
 }
 
