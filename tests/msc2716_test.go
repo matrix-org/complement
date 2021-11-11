@@ -593,7 +593,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// FIXME: In the future, we should probably replace the following logic
 			// with `validateBatchSendRes` to re-use and have some more robust
 			// assertion logic here. We're currently not using it because the message
-			// order isn't quite perfect when a remote federated homserver gets
+			// order isn't quite perfect when a remote federated homeserver gets
 			// backfilled.
 			// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -671,7 +671,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// FIXME: In the future, we should probably replace the following logic
 			// with `validateBatchSendRes` to re-use and have some more robust
 			// assertion logic here. We're currently not using it because the message
-			// order isn't quite perfect when a remote federated homserver gets
+			// order isn't quite perfect when a remote federated homeserver gets
 			// backfilled.
 			// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -764,7 +764,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// FIXME: In the future, we should probably replace the following logic
 			// with `validateBatchSendRes` to re-use and have some more robust
 			// assertion logic here. We're currently not using it because the message
-			// order isn't quite perfect when a remote federated homserver gets
+			// order isn't quite perfect when a remote federated homeserver gets
 			// backfilled.
 			// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
 			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -857,7 +857,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// FIXME: In the future, we should probably replace the following logic
 			// with `validateBatchSendRes` to re-use and have some more robust
 			// assertion logic here. We're currently not using it because the message
-			// order isn't quite perfect when a remote federated homserver gets
+			// order isn't quite perfect when a remote federated homeserver gets
 			// backfilled.
 			// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
 			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
