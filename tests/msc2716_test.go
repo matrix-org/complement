@@ -1297,9 +1297,9 @@ func batchSendHistoricalMessages(
 	return res
 }
 
-// Verify that the batch of historical messages looks correct and in order in
-// the message scrollback. We can also optionally check that the historical
-// state resolves for that chunk of messages.
+// Verify that the batch of historical messages looks correct and in order
+// (newest -> oldest) from /messages?dir=b. We can also optionally check that
+// the historical state resolves for that chunk of messages.
 //
 // Note: the historical state will only resolve correctly if the first message
 // of `/messages` is one of messages in the historical batch.
@@ -1317,6 +1317,7 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 	insertionEventID := client.GetJSONFieldStr(t, batchSendResBody0, "insertion_event_id")
 	baseInsertionEventID := gjson.GetBytes(batchSendResBody0, "base_insertion_event_id").Str
 
+	// Expected list is ordered from newest -> oldest event time
 	var expectedEventIDOrder []string
 	if baseInsertionEventID != "" {
 		expectedEventIDOrder = append(expectedEventIDOrder, baseInsertionEventID)
@@ -1326,7 +1327,7 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 	expectedEventIDOrder = append(expectedEventIDOrder, insertionEventID)
 
 	if validateState {
-		// Get the pagination token for the end of the historical batch itself
+		// Get a pagination token for the newest-in-time event in the historical batch itself
 		contextRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", expectedEventIDOrder[0]}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 			"limit": []string{"0"},
 		}))
@@ -1338,11 +1339,12 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 		// message in the `chunk` and we want to be able assert that the historical
 		// state is able to be resolved.
 		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			// Go backwards (newest -> oldest) (same direction as if you were using scrollback)
 			"dir": []string{"b"},
-			// From the end of the historical batch (this will be pointing at the )
+			// From the newest-in-time event in the historical batch
 			"from": []string{batchStartPaginationToken},
-			// We are aiming to scrollback to the start of the existing historical
-			// messages
+			// We are aiming to scrollback to the oldest-in-time event from the
+			// historical batch
 			"limit": []string{fmt.Sprintf("%d", len(expectedEventIDOrder))},
 			// We add these options to the filter so we get member events in the state field
 			"filter": []string{"{\"lazy_load_members\":true,\"include_redundant_members\":true}"},
