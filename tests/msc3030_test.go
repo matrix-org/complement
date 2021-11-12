@@ -48,16 +48,16 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("should find event after given timestmap", func(t *testing.T) {
-			checkEventisReturnedForTime(t, alice, roomID, timeBeforeEventA, eventAID)
+			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeEventA, eventAID)
 		})
 
 		t.Run("should find event before given timestmap", func(t *testing.T) {
-			checkEventisReturnedForTime(t, alice, roomID, timeAfterEventB, eventBID)
+			mustCheckEventisReturnedForTime(t, alice, roomID, timeAfterEventB, eventBID)
 		})
 	})
 }
 
-func checkEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID string, givenTime time.Time, expectedEventId string) {
+func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID string, givenTime time.Time, expectedEventId string) {
 	t.Helper()
 
 	givenTimestamp := makeTimestampFromTime(givenTime)
@@ -86,32 +86,43 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 	t.Helper()
 
 	messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		// The events returned will be from the newest -> oldest since we're going backwards
 		"dir":   []string{"b"},
 		"limit": []string{"100"},
 	}))
 	messsageResBody := client.ParseJSON(t, messagesRes)
 
 	wantKey := "chunk"
-	res := gjson.GetBytes(messsageResBody, wantKey)
-	if !res.Exists() {
+	keyRes := gjson.GetBytes(messsageResBody, wantKey)
+	if !keyRes.Exists() {
 		t.Fatalf("missing key '%s'", wantKey)
 	}
-	if !res.IsArray() {
-		t.Fatalf("key '%s' is not an array (was %s)", wantKey, res.Type)
+	if !keyRes.IsArray() {
+		t.Fatalf("key '%s' is not an array (was %s)", wantKey, keyRes.Type)
+	}
+
+	events := keyRes.Array()
+	if len(events) == 0 {
+		t.Fatalf(
+			"getDebugMessageListFromMessagesResponse found no messages in the room(%s).",
+			roomID,
+		)
 	}
 
 	givenTimestampMarker := decorateStringWithAnsiColor(fmt.Sprintf("-- givenTimestamp=%s --\n", strconv.FormatInt(givenTimestamp, 10)), AnsiColorYellow)
 
-	resultantString := ""
+	resultantString := "(newest)\n"
 	givenTimestampAlreadyInserted := false
-	res.ForEach(func(key, r gjson.Result) bool {
-		// The timestmap could be after-in-time of any of the events
-		if r.Get("origin_server_ts").Int() < givenTimestamp && !givenTimestampAlreadyInserted {
+	// Given the `/messages?dir=b` request above, we're iterating over the events
+	// from newest-in-time to oldest-in-time.
+	for _, ev := range events {
+		// Check whether the givenTimestamp is newer(after-in-time) than the current event
+		if givenTimestamp > ev.Get("origin_server_ts").Int() && !givenTimestampAlreadyInserted {
 			resultantString += givenTimestampMarker
 			givenTimestampAlreadyInserted = true
 		}
 
-		event_id := r.Get("event_id").String()
+		event_id := ev.Get("event_id").String()
 		event_id_string := event_id
 		if event_id == expectedEventId {
 			event_id_string = decorateStringWithAnsiColor(event_id, AnsiColorGreen)
@@ -119,17 +130,16 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 			event_id_string = decorateStringWithAnsiColor(event_id, AnsiColorRed)
 		}
 
-		resultantString += fmt.Sprintf("%s (%s) - %s\n", event_id_string, strconv.FormatInt(r.Get("origin_server_ts").Int(), 10), r.Get("type").String())
+		resultantString += fmt.Sprintf("%s (%s) - %s\n", event_id_string, strconv.FormatInt(ev.Get("origin_server_ts").Int(), 10), ev.Get("type").String())
+	}
 
-		// The timestmap could be before-in-time of any of the events
-		if r.Get("origin_server_ts").Int() > givenTimestamp && !givenTimestampAlreadyInserted {
-			resultantString += givenTimestampMarker
-			givenTimestampAlreadyInserted = true
-		}
+	// The givenTimestamp could be older(before-in-time) than any of the other events
+	if givenTimestamp < events[len(events)-1].Get("origin_server_ts").Int() && !givenTimestampAlreadyInserted {
+		resultantString += givenTimestampMarker
+		givenTimestampAlreadyInserted = true
+	}
 
-		// keep iterating
-		return true
-	})
+	resultantString += "(oldest)\n"
 
 	return resultantString
 }
