@@ -26,6 +26,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
 
+	timeBeforeRoomCreation := time.Now()
 	roomID := alice.CreateRoom(t, map[string]interface{}{})
 	alice.JoinRoom(t, roomID, nil)
 
@@ -54,6 +55,14 @@ func TestJumpToDateEndpoint(t *testing.T) {
 		t.Run("should find event before given timestmap", func(t *testing.T) {
 			mustCheckEventisReturnedForTime(t, alice, roomID, timeAfterEventB, "b", eventBID)
 		})
+
+		t.Run("should find nothing before the earliest timestmap", func(t *testing.T) {
+			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeRoomCreation, "b", "")
+		})
+
+		t.Run("should find nothing after the latest timestmap", func(t *testing.T) {
+			mustCheckEventisReturnedForTime(t, alice, roomID, timeAfterEventB, "f", "")
+		})
 	})
 }
 
@@ -62,14 +71,18 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 
 	givenTimestamp := makeTimestampFromTime(givenTime)
 	timestampString := strconv.FormatInt(givenTimestamp, 10)
-	timestampToEventRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+	timestampToEventRes := c.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		"ts":  []string{timestampString},
 		"dir": []string{direction},
 	}))
 	timestampToEventResBody := client.ParseJSON(t, timestampToEventRes)
 
-	actualEventIdRes := gjson.GetBytes(timestampToEventResBody, "event_id")
-	actualEventId := actualEventIdRes.String()
+	actualEventId := ""
+	if timestampToEventRes.StatusCode == 200 {
+		actualEventId = client.GetJSONFieldStr(t, timestampToEventResBody, "event_id")
+	} else if timestampToEventRes.StatusCode != 404 {
+		t.Fatalf("mustCheckEventisReturnedForTime: /timestamp_to_event request failed with status=%d", timestampToEventRes.StatusCode)
+	}
 
 	if actualEventId != expectedEventId {
 		debugMessageList := getDebugMessageListFromMessagesResponse(t, c, roomID, expectedEventId, actualEventId, givenTimestamp)
