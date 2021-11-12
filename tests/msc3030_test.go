@@ -48,22 +48,23 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("should find event after given timestmap", func(t *testing.T) {
-			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeEventA, eventAID)
+			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeEventA, "f", eventAID)
 		})
 
 		t.Run("should find event before given timestmap", func(t *testing.T) {
-			mustCheckEventisReturnedForTime(t, alice, roomID, timeAfterEventB, eventBID)
+			mustCheckEventisReturnedForTime(t, alice, roomID, timeAfterEventB, "b", eventBID)
 		})
 	})
 }
 
-func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID string, givenTime time.Time, expectedEventId string) {
+func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID string, givenTime time.Time, direction string, expectedEventId string) {
 	t.Helper()
 
 	givenTimestamp := makeTimestampFromTime(givenTime)
 	timestampString := strconv.FormatInt(givenTimestamp, 10)
 	timestampToEventRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-		"ts": []string{timestampString},
+		"ts":  []string{timestampString},
+		"dir": []string{direction},
 	}))
 	timestampToEventResBody := client.ParseJSON(t, timestampToEventRes)
 
@@ -115,7 +116,9 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 
 	// We're iterating over the events from oldest-in-time -> newest-in-time
 	for _, ev := range events {
-		// Check whether the givenTimestamp is older(before-in-time) than the current event
+		// As we go, keep checking whether the givenTimestamp is
+		// older(before-in-time) than the current event and insert a timestamp
+		// marker as soon as we find the spot
 		if givenTimestamp < ev.Get("origin_server_ts").Int() && !givenTimestampAlreadyInserted {
 			resultantString += givenTimestampMarker
 			givenTimestampAlreadyInserted = true
