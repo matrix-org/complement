@@ -71,11 +71,11 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, allowed_room string, room string) {
 	t.Helper()
 
-	t.Run("JoinShouldFailInitially", func(t *testing.T) {
+	t.Run("Join should fail initially", func(t *testing.T) {
 		failJoinRoom(t, bob, room, "hs1")
 	})
 
-	t.Run("JoinShouldSucceedWhenJoinedToAllowedRoom", func(t *testing.T) {
+	t.Run("Join should succeed when joined to allowed room", func(t *testing.T) {
 		// Join the allowed room, attempt to join the room again, which now should succeed.
 		bob.JoinRoom(t, allowed_room, []string{"hs1"})
 		bob.JoinRoom(t, room, []string{"hs1"})
@@ -98,7 +98,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 		)
 	})
 
-	t.Run("JoinShouldFailWhenLeftAllowedRoom", func(t *testing.T) {
+	t.Run("Join should fail when left allowed room", func(t *testing.T) {
 		// Leaving the room works and the user is unable to re-join.
 		bob.LeaveRoom(t, room)
 		bob.LeaveRoom(t, allowed_room)
@@ -117,7 +117,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 		failJoinRoom(t, bob, room, "hs1")
 	})
 
-	t.Run("JoinShouldSucceedWhenInvited", func(t *testing.T) {
+	t.Run("Join should succeed when invited", func(t *testing.T) {
 		// Invite the user and joining should work.
 		alice.InviteRoom(t, room, bob.UserID)
 		bob.JoinRoom(t, room, []string{"hs1"})
@@ -127,7 +127,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 		bob.JoinRoom(t, allowed_room, []string{"hs1"})
 	})
 
-	t.Run("JoinShouldFailWithMangledJoinRules", func(t *testing.T) {
+	t.Run("Join should fail with mangled join rules", func(t *testing.T) {
 		// Update the room to have bad values in the "allow" field, which should stop
 		// joining from working properly.
 		emptyStateKey := ""
