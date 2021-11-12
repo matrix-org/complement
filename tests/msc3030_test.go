@@ -66,6 +66,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 	})
 }
 
+// Fetch event from /timestamp_to_event and ensure it matches the expectedEventId
 func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID string, givenTime time.Time, direction string, expectedEventId string) {
 	t.Helper()
 
@@ -77,6 +78,8 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 	}))
 	timestampToEventResBody := client.ParseJSON(t, timestampToEventRes)
 
+	// Only allow a 200 response meaning we found an event or a 404 meaning we didn't.
+	// Other status codes will throw and assumed to be application errors.
 	actualEventId := ""
 	if timestampToEventRes.StatusCode == 200 {
 		actualEventId = client.GetJSONFieldStr(t, timestampToEventResBody, "event_id")
