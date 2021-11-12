@@ -15,7 +15,7 @@ import (
 	"github.com/matrix-org/complement/internal/must"
 )
 
-func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverName string, expectedErrorCode int) {
+func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverName string, _ int) {
 	t.Helper()
 
 	// This is copied from Client.JoinRoom to test a join failure.
@@ -27,9 +27,7 @@ func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverNam
 		[]string{"_matrix", "client", "r0", "join", roomIDOrAlias},
 		client.WithQueries(query),
 	)
-	must.MatchResponse(t, res, match.HTTPResponse{
-		StatusCode: expectedErrorCode,
-	})
+	must.MatchFailure(t, res)
 }
 
 // Creates two rooms on room version 8 and sets the second room to have
@@ -73,88 +71,98 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, allowed_room string, room string) {
 	t.Helper()
 
-	failJoinRoom(t, bob, room, "hs1", 403)
-
-	// Join the allowed room, attempt to join the room again, which now should succeed.
-	bob.JoinRoom(t, allowed_room, []string{"hs1"})
-	bob.JoinRoom(t, room, []string{"hs1"})
-
-	// Joining the same room again should work fine (e.g. to change your display name).
-	bob.SendEventSynced(
-		t,
-		room,
-		b.Event{
-			Type:     "m.room.member",
-			Sender:   bob.UserID,
-			StateKey: &bob.UserID,
-			Content: map[string]interface{}{
-				"membership":  "join",
-				"displayname": "Bobby",
-				// This should be ignored since this is a join -> join transition.
-				"join_authorised_via_users_server": "unused",
-			},
-		},
-	)
-
-	// Leaving the room works and the user is unable to re-join.
-	bob.LeaveRoom(t, room)
-	bob.LeaveRoom(t, allowed_room)
-
-	// Wait until Alice sees Bob leave the allowed room. This ensures that Alice's HS
-	// has processed the leave before Bob tries rejoining, so that it rejects his
-	// attempt to join the room.
-	alice.SyncUntilTimelineHas(t, allowed_room, func(ev gjson.Result) bool {
-		if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
-			return false
-		}
-
-		return ev.Get("content").Get("membership").Str == "leave"
+	t.Run("JoinShouldFailInitially", func(t *testing.T) {
+		failJoinRoom(t, bob, room, "hs1", 403)
 	})
 
-	failJoinRoom(t, bob, room, "hs1", 403)
+	t.Run("JoinShouldSucceedWhenJoinedToAllowedRoom", func(t *testing.T) {
+		// Join the allowed room, attempt to join the room again, which now should succeed.
+		bob.JoinRoom(t, allowed_room, []string{"hs1"})
+		bob.JoinRoom(t, room, []string{"hs1"})
 
-	// Invite the user and joining should work.
-	alice.InviteRoom(t, room, bob.UserID)
-	bob.JoinRoom(t, room, []string{"hs1"})
-
-	// Leave the room again, and join the allowed room.
-	bob.LeaveRoom(t, room)
-	bob.JoinRoom(t, allowed_room, []string{"hs1"})
-
-	// Update the room to have bad values in the "allow" field, which should stop
-	// joining from working properly.
-	emptyStateKey := ""
-	alice.SendEventSynced(
-		t,
-		room,
-		b.Event{
-			Type:     "m.room.join_rules",
-			Sender:   alice.UserID,
-			StateKey: &emptyStateKey,
-			Content: map[string]interface{}{
-				"join_rule": "restricted",
-				"allow":     []string{"invalid"},
+		// Joining the same room again should work fine (e.g. to change your display name).
+		bob.SendEventSynced(
+			t,
+			room,
+			b.Event{
+				Type:     "m.room.member",
+				Sender:   bob.UserID,
+				StateKey: &bob.UserID,
+				Content: map[string]interface{}{
+					"membership":  "join",
+					"displayname": "Bobby",
+					// This should be ignored since this is a join -> join transition.
+					"join_authorised_via_users_server": "unused",
+				},
 			},
-		},
-	)
-	// Fails since invalid values get filtered out of allow.
-	failJoinRoom(t, bob, room, "hs1", 403)
+		)
+	})
 
-	alice.SendEventSynced(
-		t,
-		room,
-		b.Event{
-			Type:     "m.room.join_rules",
-			Sender:   alice.UserID,
-			StateKey: &emptyStateKey,
-			Content: map[string]interface{}{
-				"join_rule": "restricted",
-				"allow":     "invalid",
+	t.Run("JoinShouldFailWhenLeftAllowedRoom", func(t *testing.T) {
+		// Leaving the room works and the user is unable to re-join.
+		bob.LeaveRoom(t, room)
+		bob.LeaveRoom(t, allowed_room)
+
+		// Wait until Alice sees Bob leave the allowed room. This ensures that Alice's HS
+		// has processed the leave before Bob tries rejoining, so that it rejects his
+		// attempt to join the room.
+		alice.SyncUntilTimelineHas(t, allowed_room, func(ev gjson.Result) bool {
+			if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
+				return false
+			}
+
+			return ev.Get("content").Get("membership").Str == "leave"
+		})
+
+		failJoinRoom(t, bob, room, "hs1", 403)
+	})
+
+	t.Run("JoinShouldSucceedWhenInvited", func(t *testing.T) {
+		// Invite the user and joining should work.
+		alice.InviteRoom(t, room, bob.UserID)
+		bob.JoinRoom(t, room, []string{"hs1"})
+
+		// Leave the room again, and join the allowed room.
+		bob.LeaveRoom(t, room)
+		bob.JoinRoom(t, allowed_room, []string{"hs1"})
+	})
+
+	t.Run("JoinShouldFailWithMangledJoinRules", func(t *testing.T) {
+		// Update the room to have bad values in the "allow" field, which should stop
+		// joining from working properly.
+		emptyStateKey := ""
+		alice.SendEventSynced(
+			t,
+			room,
+			b.Event{
+				Type:     "m.room.join_rules",
+				Sender:   alice.UserID,
+				StateKey: &emptyStateKey,
+				Content: map[string]interface{}{
+					"join_rule": "restricted",
+					"allow":     []string{"invalid"},
+				},
 			},
-		},
-	)
-	// Fails since a fully invalid allow key requires an invite.
-	failJoinRoom(t, bob, room, "hs1", 403)
+		)
+		// Fails since invalid values get filtered out of allow.
+		failJoinRoom(t, bob, room, "hs1", 403)
+
+		alice.SendEventSynced(
+			t,
+			room,
+			b.Event{
+				Type:     "m.room.join_rules",
+				Sender:   alice.UserID,
+				StateKey: &emptyStateKey,
+				Content: map[string]interface{}{
+					"join_rule": "restricted",
+					"allow":     "invalid",
+				},
+			},
+		)
+		// Fails since a fully invalid allow key requires an invite.
+		failJoinRoom(t, bob, room, "hs1", 403)
+	})
 }
 
 // Test joining a room with join rules restricted to membership in another room.
