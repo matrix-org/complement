@@ -101,23 +101,22 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 		t.Fatalf("key '%s' is not an array (was %s)", wantKey, keyRes.Type)
 	}
 
-	events := keyRes.Array()
+	// Make the events go from oldest-in-time -> newest-in-time
+	events := reverseGjsonArray(keyRes.Array())
 	if len(events) == 0 {
 		t.Fatalf(
 			"getDebugMessageListFromMessagesResponse found no messages in the room(%s).",
 			roomID,
 		)
 	}
-
+	resultantString := "(oldest)\n"
+	givenTimestampAlreadyInserted := false
 	givenTimestampMarker := decorateStringWithAnsiColor(fmt.Sprintf("-- givenTimestamp=%s --\n", strconv.FormatInt(givenTimestamp, 10)), AnsiColorYellow)
 
-	resultantString := "(newest)\n"
-	givenTimestampAlreadyInserted := false
-	// Given the `/messages?dir=b` request above, we're iterating over the events
-	// from newest-in-time to oldest-in-time.
+	// We're iterating over the events from oldest-in-time -> newest-in-time
 	for _, ev := range events {
-		// Check whether the givenTimestamp is newer(after-in-time) than the current event
-		if givenTimestamp > ev.Get("origin_server_ts").Int() && !givenTimestampAlreadyInserted {
+		// Check whether the givenTimestamp is older(before-in-time) than the current event
+		if givenTimestamp < ev.Get("origin_server_ts").Int() && !givenTimestampAlreadyInserted {
 			resultantString += givenTimestampMarker
 			givenTimestampAlreadyInserted = true
 		}
@@ -133,13 +132,13 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 		resultantString += fmt.Sprintf("%s (%s) - %s\n", event_id_string, strconv.FormatInt(ev.Get("origin_server_ts").Int(), 10), ev.Get("type").String())
 	}
 
-	// The givenTimestamp could be older(before-in-time) than any of the other events
-	if givenTimestamp < events[len(events)-1].Get("origin_server_ts").Int() && !givenTimestampAlreadyInserted {
+	// The givenTimestamp could be newer(after-in-time) than any of the other events
+	if givenTimestamp > events[len(events)-1].Get("origin_server_ts").Int() && !givenTimestampAlreadyInserted {
 		resultantString += givenTimestampMarker
 		givenTimestampAlreadyInserted = true
 	}
 
-	resultantString += "(oldest)\n"
+	resultantString += "(newest)\n"
 
 	return resultantString
 }
@@ -154,4 +153,12 @@ const AnsiColorYellow string = "33"
 
 func decorateStringWithAnsiColor(inputString, decorationColor string) string {
 	return fmt.Sprintf("\033[%sm%s\033[0m", decorationColor, inputString)
+}
+
+func reverseGjsonArray(in []gjson.Result) []gjson.Result {
+	out := make([]gjson.Result, len(in))
+	for i := 0; i < len(in); i++ {
+		out[i] = in[len(in)-i-1]
+	}
+	return out
 }
