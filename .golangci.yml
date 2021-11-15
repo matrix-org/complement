@@ -438,6 +438,11 @@ issues:
     - G107
     # gosec: Error on TLS InsecureSkipVerify set to true.
     - G402
+    # staticcheck: Using a deprecated function, variable, constant or field
+    # Tried to make this a warning rather than error in the severity section.
+    # I failed. But it's nice to have goland know that certain things are deprecated
+    # so it can strike them through.
+    - SA1019
 
   # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:
