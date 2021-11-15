@@ -81,6 +81,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 		bob.JoinRoom(t, room, []string{"hs1"})
 
 		// Joining the same room again should work fine (e.g. to change your display name).
+		// There is no "join_authorised_via_users_server" because this is a join -> join.
 		bob.SendEventSynced(
 			t,
 			room,
@@ -91,8 +92,6 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 				Content: map[string]interface{}{
 					"membership":  "join",
 					"displayname": "Bobby",
-					// This should be ignored since this is a join -> join transition.
-					"join_authorised_via_users_server": "unused",
 				},
 			},
 		)
