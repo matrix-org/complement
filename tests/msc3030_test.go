@@ -26,19 +26,77 @@ func TestJumpToDateEndpoint(t *testing.T) {
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
 
-	timeBeforeRoomCreation := time.Now()
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
-	alice.JoinRoom(t, roomID, nil)
+	// Create the federated user which will fetch the messages from a remote homeserver
+	remoteUserID := "@charlie:hs2"
+	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+
+	t.Run("parallel", func(t *testing.T) {
+		t.Run("should find event after given timestmap", func(t *testing.T) {
+			t.Parallel()
+			roomID, eventA, _ := createTestRoom(t, alice)
+			mustCheckEventisReturnedForTime(t, alice, roomID, eventA.BeforeTimestamp, "f", eventA.EventID)
+		})
+
+		t.Run("should find event before given timestmap", func(t *testing.T) {
+			t.Parallel()
+			roomID, _, eventB := createTestRoom(t, alice)
+			mustCheckEventisReturnedForTime(t, alice, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
+		})
+
+		t.Run("should find nothing before the earliest timestmap", func(t *testing.T) {
+			t.Parallel()
+			timeBeforeRoomCreation := time.Now()
+			roomID, _, _ := createTestRoom(t, alice)
+			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeRoomCreation, "b", "")
+		})
+
+		t.Run("should find nothing after the latest timestmap", func(t *testing.T) {
+			t.Parallel()
+			roomID, _, eventB := createTestRoom(t, alice)
+			mustCheckEventisReturnedForTime(t, alice, roomID, eventB.AfterTimestamp, "f", "")
+		})
+
+		t.Run("federation", func(t *testing.T) {
+			t.Run("looking forwards, should be able to find event that was sent before we joined", func(t *testing.T) {
+				t.Parallel()
+				roomID, eventA, _ := createTestRoom(t, alice)
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventA.BeforeTimestamp, "f", eventA.EventID)
+			})
+
+			t.Run("looking backwards, should be able to find event that was sent before we joined", func(t *testing.T) {
+				t.Parallel()
+				roomID, _, eventB := createTestRoom(t, alice)
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
+			})
+		})
+	})
+}
+
+type eventTime struct {
+	EventID         string
+	BeforeTimestamp time.Time
+	AfterTimestamp  time.Time
+}
+
+func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
+	t.Helper()
+
+	roomID = c.CreateRoom(t, map[string]interface{}{})
+	//c.JoinRoom(t, roomID, nil)
 
 	timeBeforeEventA := time.Now()
-	eventAID := alice.SendEventSynced(t, roomID, b.Event{
+	eventAID := c.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Message A",
 		},
 	})
-	eventBID := alice.SendEventSynced(t, roomID, b.Event{
+	timeAfterEventA := time.Now()
+
+	eventBID := c.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
@@ -47,23 +105,10 @@ func TestJumpToDateEndpoint(t *testing.T) {
 	})
 	timeAfterEventB := time.Now()
 
-	t.Run("parallel", func(t *testing.T) {
-		t.Run("should find event after given timestmap", func(t *testing.T) {
-			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeEventA, "f", eventAID)
-		})
+	eventA = &eventTime{EventID: eventAID, BeforeTimestamp: timeBeforeEventA, AfterTimestamp: timeAfterEventA}
+	eventB = &eventTime{EventID: eventBID, BeforeTimestamp: timeAfterEventA, AfterTimestamp: timeAfterEventB}
 
-		t.Run("should find event before given timestmap", func(t *testing.T) {
-			mustCheckEventisReturnedForTime(t, alice, roomID, timeAfterEventB, "b", eventBID)
-		})
-
-		t.Run("should find nothing before the earliest timestmap", func(t *testing.T) {
-			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeRoomCreation, "b", "")
-		})
-
-		t.Run("should find nothing after the latest timestmap", func(t *testing.T) {
-			mustCheckEventisReturnedForTime(t, alice, roomID, timeAfterEventB, "f", "")
-		})
-	})
+	return roomID, eventA, eventB
 }
 
 // Fetch event from /timestamp_to_event and ensure it matches the expectedEventId
