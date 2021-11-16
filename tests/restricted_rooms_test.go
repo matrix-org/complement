@@ -1,4 +1,6 @@
 // Tests MSC3083, joining restricted rooms based on membership in another room.
+//go:build !dendrite_blacklist
+// +build !dendrite_blacklist
 
 package tests
 
