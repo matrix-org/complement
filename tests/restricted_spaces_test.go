@@ -1,5 +1,4 @@
-//go:build msc2946
-// +build msc2946
+// +build !dendrite_blacklist
 
 // Tests MSC3083, joining restricted spaces based on membership in another room.
 

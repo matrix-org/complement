@@ -1,4 +1,4 @@
-// +build msc2946
+// +build !dendrite_blacklist
 
 // This file includes tests for MSC2946, the spaces summary API.
 //
