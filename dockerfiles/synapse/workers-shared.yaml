@@ -68,3 +68,5 @@ experimental_features:
   msc2716_enabled: true
   # Enable spaces support
   spaces_enabled: true
+  # Enable jump to date endpoint
+  msc3030_enabled: true
