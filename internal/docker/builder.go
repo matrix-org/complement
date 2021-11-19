@@ -383,7 +383,7 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	return deployImage(
 		d.Docker, d.Config.BaseImageURI, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
-		networkID, d.Config.VersionCheckIterations,
+		networkID, d.Config.SpawnHSTimeout,
 	)
 }
 
@@ -491,7 +491,8 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 }
 
 func deployImage(
-	docker *client.Client, imageID string, csPort int, containerName, pkgNamespace, blueprintName, hsName string, asIDToRegistrationMap map[string]string, contextStr, networkID string, versionCheckIterations int,
+	docker *client.Client, imageID string, csPort int, containerName, pkgNamespace, blueprintName, hsName string,
+	asIDToRegistrationMap map[string]string, contextStr, networkID string, spawnHSTimeout time.Duration,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -595,7 +596,12 @@ func deployImage(
 	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
 	// hit /versions to check it is up
 	var lastErr error
-	for i := 0; i < versionCheckIterations; i++ {
+	stopTime := time.Now().Add(spawnHSTimeout)
+	for {
+		if time.Now().After(stopTime) {
+			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
+			break
+		}
 		res, err := http.Get(versionsURL)
 		if err != nil {
 			lastErr = fmt.Errorf("GET %s => error: %s", versionsURL, err)

@@ -37,11 +37,11 @@ func (r *Runtime) CreateDeployment(imageURI string, blueprint *b.Blueprint) (*do
 	}
 	namespace := "homerunner_" + blueprint.Name
 	cfg := &config.Complement{
-		BaseImageURI:           imageURI,
-		DebugLoggingEnabled:    true,
-		VersionCheckIterations: r.Config.VersionCheckIterations,
-		BestEffort:             true,
-		PackageNamespace:       Pkg,
+		BaseImageURI:        imageURI,
+		DebugLoggingEnabled: true,
+		SpawnHSTimeout:      r.Config.SpawnHSTimeout,
+		BestEffort:          true,
+		PackageNamespace:    Pkg,
 	}
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
