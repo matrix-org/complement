@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -52,32 +51,11 @@ func TestFederationRejectInvite(t *testing.T) {
 	waiter = NewWaiter()
 	alice.InviteRoom(t, roomID, charlie.UserID)
 	waiter.Wait(t, 5*time.Second)
-	if err := checkMembershipForUser(room, charlie.UserID, "invite"); err != nil {
-		t.Errorf("Membership state for charlie after invite: %v", err)
-	}
+	room.MustHaveMembershipForUser(t, charlie.UserID, "invite")
 
 	// Charlie rejects the invite; Delia should see the rejection.
 	waiter = NewWaiter()
 	charlie.LeaveRoom(t, roomID)
 	waiter.Wait(t, 5*time.Second)
-	if err := checkMembershipForUser(room, charlie.UserID, "leave"); err != nil {
-		t.Errorf("Membership state for charlie after reject: %v", err)
-	}
-}
-
-func checkMembershipForUser(room *federation.ServerRoom, userID, wantMembership string) (err error) {
-	state := room.CurrentState("m.room.member", userID)
-	if state == nil {
-		err = fmt.Errorf("no membership state for %s", userID)
-		return
-	}
-	m, err := state.Membership()
-	if err != nil {
-		return
-	}
-	if m != wantMembership {
-		err = fmt.Errorf("incorrect membership state: got %s, want %s", m, wantMembership)
-		return
-	}
-	return
+	room.MustHaveMembershipForUser(t, charlie.UserID, "leave")
 }

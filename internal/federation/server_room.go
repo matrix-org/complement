@@ -3,6 +3,7 @@ package federation
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
 
 	"github.com/matrix-org/gomatrixserverlib"
 
@@ -110,6 +111,21 @@ func (r *ServerRoom) AuthChain() (chain []*gomatrixserverlib.Event) {
 		}
 	}
 	return
+}
+
+func (r *ServerRoom) MustHaveMembershipForUser(t *testing.T, userID, wantMembership string) {
+	t.Helper()
+	state := r.CurrentState("m.room.member", userID)
+	if state == nil {
+		t.Fatalf("no membership state for %s", userID)
+	}
+	m, err := state.Membership()
+	if err != nil {
+		t.Fatalf("m.room.member event exists for %s but cannot read membership field: %s", userID, err)
+	}
+	if m != wantMembership {
+		t.Fatalf("incorrect membership state for %s: got %s, want %s", userID, m, wantMembership)
+	}
 }
 
 func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLevelContent) {
