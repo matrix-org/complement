@@ -113,6 +113,7 @@ func (r *ServerRoom) AuthChain() (chain []*gomatrixserverlib.Event) {
 	return
 }
 
+// Check that the user currently has the membership provided in this room. Fails the test if not.
 func (r *ServerRoom) MustHaveMembershipForUser(t *testing.T, userID, wantMembership string) {
 	t.Helper()
 	state := r.CurrentState("m.room.member", userID)
