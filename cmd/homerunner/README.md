@@ -4,9 +4,9 @@ An HTTP server which can spin up homeservers and execute blueprints on them. Pow
 
 Environment variables (all are optional):
 ```
-HOMERUNNER_LIFETIME_MINS=30                                       # how long networks can exist for before being destroyed
+HOMERUNNER_LIFETIME_MINS=30                                       # how long networks can exist for before being destroyed
 HOMERUNNER_PORT=54321                                             # port to listen on
-HOMERUNNER_VER_CHECK_ITERATIONS=100                               # how long to wait for the base image to spin up
+HOMERUNNER_SPAWN_HS_TIMEOUT_SECS=5                                # how long to wait for the base image to spin up
 HOMERUNNER_KEEP_BLUEPRINTS='clean_hs federation_one_to_one_room'  # space delimited blueprint names to keep images for
 HOMERUNNER_SNAPSHOT_BLUEPRINT=/some/file.json                     # single shot execute this blueprint then commit the image, does not run the server
 ```

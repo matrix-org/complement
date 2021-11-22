@@ -20,7 +20,7 @@ const Pkg = "homerunner"
 type Config struct {
 	HomeserverLifetimeMins int
 	Port                   int
-	VersionCheckIterations int
+	SpawnHSTimeout         time.Duration
 	KeepBlueprints         []string
 	Snapshot               string
 }
@@ -29,7 +29,7 @@ func NewConfig() *Config {
 	cfg := &Config{
 		HomeserverLifetimeMins: 30,
 		Port:                   54321,
-		VersionCheckIterations: 100,
+		SpawnHSTimeout:         5 * time.Second,
 		KeepBlueprints:         strings.Split(os.Getenv("HOMERUNNER_KEEP_BLUEPRINTS"), " "),
 		Snapshot:               os.Getenv("HOMERUNNER_SNAPSHOT_BLUEPRINT"),
 	}
@@ -39,20 +39,20 @@ func NewConfig() *Config {
 	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_PORT")); val != 0 {
 		cfg.Port = val
 	}
-	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_VER_CHECK_ITERATIONS")); val != 0 {
-		cfg.VersionCheckIterations = val
+	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_SPAWN_HS_TIMEOUT_SECS")); val != 0 {
+		cfg.SpawnHSTimeout = time.Duration(val) * time.Second
 	}
 	return cfg
 }
 
 func cleanup(c *Config) {
 	cfg := &config.Complement{
-		PackageNamespace:       Pkg,
-		BaseImageURI:           "nothing",
-		DebugLoggingEnabled:    true,
-		VersionCheckIterations: c.VersionCheckIterations,
-		KeepBlueprints:         c.KeepBlueprints,
-		BestEffort:             true,
+		PackageNamespace:    Pkg,
+		BaseImageURI:        "nothing",
+		DebugLoggingEnabled: true,
+		SpawnHSTimeout:      c.SpawnHSTimeout,
+		KeepBlueprints:      c.KeepBlueprints,
+		BestEffort:          true,
 	}
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
