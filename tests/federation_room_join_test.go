@@ -20,6 +20,7 @@ import (
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 // This tests that joining a room with ?server_name= works correctly.
@@ -193,6 +194,60 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice.JoinRoom(t, roomAlias, nil)
+	})
+	t.Run("/send_join response with state with unverifiable auth events shouldn't block room join", func(t *testing.T) {
+		runtime.SkipIf(t, runtime.Dendrite) // https://github.com/matrix-org/dendrite/issues/2028
+		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
+		roomAlias := srv.MakeAliasMapping("UnverifiableAuthEvents", room.RoomID)
+
+		// create a normal event then modify the signatures
+		rawEvent := srv.MustCreateEvent(t, room, b.Event{
+			Sender:   charlie,
+			StateKey: &charlie,
+			Type:     "m.room.member",
+			Content: map[string]interface{}{
+				"membership": "join",
+				"name":       "This event has a bad signature",
+			},
+		}).JSON()
+		rawSig, err := json.Marshal(map[string]interface{}{
+			docker.HostnameRunningComplement: map[string]string{
+				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
+			},
+		})
+		must.NotError(t, "failed to marshal bad signature block", err)
+		rawEvent, err = sjson.SetRawBytes(rawEvent, "signatures", rawSig)
+		must.NotError(t, "failed to modify signatures key from event", err)
+		badlySignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(rawEvent, false, ver)
+		must.NotError(t, "failed to make Event from badly signed event JSON", err)
+		room.AddEvent(badlySignedEvent)
+		t.Logf("Created badly signed auth event %s", badlySignedEvent.EventID())
+
+		// and now add another event which will use it as an auth event.
+		goodEvent := srv.MustCreateEvent(t, room, b.Event{
+			Sender:   charlie,
+			StateKey: &charlie,
+			Type:     "m.room.member",
+			Content: map[string]interface{}{
+				"membership": "leave",
+			},
+		})
+		// double-check that the bad event is in its auth events
+		containsEvent := false
+		for _, authEventID := range goodEvent.AuthEventIDs() {
+			if authEventID == badlySignedEvent.EventID() {
+				containsEvent = true
+				break
+			}
+		}
+		if !containsEvent {
+			t.Fatalf("Bad event didn't appear in auth events of state event")
+		}
+		room.AddEvent(goodEvent)
+		t.Logf("Created state event %s", goodEvent.EventID())
+
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
 		alice.JoinRoom(t, roomAlias, nil)
 	})
