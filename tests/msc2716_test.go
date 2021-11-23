@@ -220,7 +220,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			validateBatchSendRes(t, as, roomID, batchSendRes, false)
 		})
 
-		t.Run("Historical events from /batch_send do not come down in an incremental sync", func(t *testing.T) {
+		t.Run("Historical events from batch_send do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -233,6 +233,10 @@ func TestImportHistoricalMessages(t *testing.T) {
 
 			// Create some "live" events to saturate and fill up the /sync response
 			createMessagesInRoom(t, alice, roomID, 5)
+
+			// Get a /sync `since` pagination token we can try paginating from later
+			// on
+			since := doInitialSync(t, alice)
 
 			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
@@ -248,19 +252,20 @@ func TestImportHistoricalMessages(t *testing.T) {
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-			historicalEventId := historicalEventIDs[0]
+			historicalStateEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "state_event_ids")
 
-			// This is just a dummy event we search for after the historicalEventId
+			// This is just a dummy event we search for after the historicalEventIDs/historicalStateEventIDs
 			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1)
 			eventIDAfterHistoricalImport := eventIDsAfterHistoricalImport[0]
 
-			// Sync until we find the eventIDAfterHistoricalImport.
-			// If we're able to see the eventIDAfterHistoricalImport that occurs after
-			// the historicalEventId without seeing eventIDAfterHistoricalImport in
-			// between, we're probably safe to assume it won't sync
-			alice.SyncUntil(t, "", `{ "room": { "timeline": { "limit": 3 } } }`, "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
-				if r.Get("event_id").Str == historicalEventId {
-					t.Fatalf("We should not see the %s historical event in /sync response but it was present", historicalEventId)
+			// Sync from before we did any batch sending until we find the
+			// eventIDAfterHistoricalImport. If we're able to see
+			// eventIDAfterHistoricalImport without any the
+			// historicalEventIDs/historicalStateEventIDs in between, we're probably
+			// safe to assume it won't sync.
+			alice.SyncUntil(t, since, "", "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
+				if includes(r.Get("event_id").Str, historicalEventIDs) || includes(r.Get("event_id").Str, historicalStateEventIDs) {
+					t.Fatalf("We should not see the %s historical event in /sync response but it was present", r.Get("event_id").Str)
 				}
 
 				return r.Get("event_id").Str == eventIDAfterHistoricalImport
@@ -990,6 +995,17 @@ func reversed(in []string) []string {
 		out[i] = in[len(in)-i-1]
 	}
 	return out
+}
+
+// Find a given "needle" string in a list of strings, the haystack
+func includes(needle string, haystack []string) bool {
+	for _, item := range haystack {
+		if needle == item {
+			return true
+		}
+	}
+
+	return false
 }
 
 func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string, check func(gjson.Result) bool) {
