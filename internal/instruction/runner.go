@@ -289,6 +289,9 @@ func calculateUserInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 			instrs = append(instrs, instructionLogin(hs, user))
 		} else {
 			instrs = append(instrs, instructionRegister(hs, user))
+			if user.DisplayName != "" {
+				instrs = append(instrs, instructionDisplayName(hs, user))
+			}
 		}
 		createdUsers[user.Localpart] = true
 
@@ -437,6 +440,21 @@ func instructionRegister(hs b.Homeserver, user b.User) instruction {
 		storeResponse: map[string]string{
 			"user_@" + user.Localpart + ":" + hs.Name: ".access_token",
 		},
+	}
+}
+
+func instructionDisplayName(hs b.Homeserver, user b.User) instruction {
+	body := map[string]interface{}{
+		"displayname": user.DisplayName,
+	}
+	return instruction{
+		method: "PUT",
+		path: fmt.Sprintf(
+			"/_matrix/client/r0/profile/@%s:%s/displayname",
+			user.Localpart, hs.Name,
+		),
+		accessToken: fmt.Sprintf("user_@%s:%s", user.Localpart, hs.Name),
+		body:        body,
 	}
 }
 

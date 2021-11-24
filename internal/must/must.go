@@ -66,6 +66,20 @@ func MatchRequest(t *testing.T, req *http.Request, m match.HTTPRequest) []byte {
 	return body
 }
 
+// MatchSuccess consumes the HTTP response and fails if the response is non-2xx.
+func MatchSuccess(t *testing.T, res *http.Response) {
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		t.Fatalf("MatchSuccess got status %d instead of a success code", res.StatusCode)
+	}
+}
+
+// MatchFailure consumes the HTTP response and fails if the response is 2xx.
+func MatchFailure(t *testing.T, res *http.Response) {
+	if res.StatusCode >= 200 && res.StatusCode <= 299 {
+		t.Fatalf("MatchFailure got status %d instead of a failure code", res.StatusCode)
+	}
+}
+
 // MatchResponse consumes the HTTP response and performs HTTP-level assertions on it. Returns the raw response body.
 func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byte {
 	t.Helper()

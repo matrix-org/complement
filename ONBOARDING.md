@@ -189,7 +189,19 @@ Normally, server logs are only printed when one of the tests fail. To override t
 
 ### How do I skip a test?
 
-Use one of `t.Skipf(...)` or `t.SkipNow()`.
+To conditionally skip a *single* test based on the homeserver being run, add a single line at the start of the test:
+```go
+runtime.SkipIf(t, runtime.Dendrite)
+```
+To conditionally skip an entire *file* based on the homeserver being run, add a [build tag](https://pkg.go.dev/cmd/go#hdr-Build_constraints) at the top of the file which will skip execution of all the tests in this file if Complement is run with this flag:
+```go
+// +build !dendrite_blacklist
+```
+You can also do this based on features for MSC tests (which means you must run Complement *with* this tag for these tests *to run*):
+```go
+// +build msc_2836
+```
+See [GH Actions](https://github.com/matrix-org/complement/blob/master/.github/workflows/ci.yaml) for an example of how this is used for different homeservers in practice.
 
 ### Why do we use `t.Errorf` sometimes and `t.Fatalf` other times?
 
