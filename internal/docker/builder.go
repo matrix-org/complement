@@ -585,7 +585,7 @@ func deployImage(
 	if err != nil {
 		return nil, err
 	}
-	var inspect
+	var inspect types.ContainerJSON
 	inspect, err = docker.ContainerInspect(ctx, containerID)
 	if err != nil {
 		return nil, err
