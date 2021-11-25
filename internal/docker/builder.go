@@ -593,10 +593,38 @@ func deployImage(
 	if err != nil {
 		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
 	}
-	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
-	// hit /versions to check it is up
+
 	var lastErr error
+
+	// Inspect health status of container to check it is up
 	stopTime := time.Now().Add(spawnHSTimeout)
+	if inspect.State.Health != nil {
+		// If the container has a healthcheck, wait for it first
+		for {
+			if time.Now().After(stopTime) {
+				lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
+				break
+			}
+			inspect, err := docker.ContainerInspect(ctx, containerID)
+			if err != nil {
+				lastErr = fmt.Errorf("Inspect container %s => error: %s", containerID, err)
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			if inspect.State.Health.Status != "healthy" {
+				lastErr = fmt.Errorf("Inspect container %s => health: %s", containerID, inspect.State.Health.Status)
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			lastErr = nil
+			break
+
+		}
+	}
+
+	// Having optionally waited for container to self-report healthy
+	// hit /versions to check it is actually responding
+	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
 	for {
 		if time.Now().After(stopTime) {
 			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
