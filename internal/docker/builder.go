@@ -585,7 +585,7 @@ func deployImage(
 	if err != nil {
 		return nil, err
 	}
-	inspect, err := docker.ContainerInspect(ctx, containerID)
+	inspect, err = docker.ContainerInspect(ctx, containerID)
 	if err != nil {
 		return nil, err
 	}
@@ -598,6 +598,7 @@ func deployImage(
 
 	// Inspect health status of container to check it is up
 	stopTime := time.Now().Add(spawnHSTimeout)
+        log.Println(fmt.Errorf("Testing inspection health %s", inspect.State.Health))
 	if inspect.State.Health != nil {
 		// If the container has a healthcheck, wait for it first
 		for {
@@ -605,7 +606,8 @@ func deployImage(
 				lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
 				break
 			}
-			inspect, err := docker.ContainerInspect(ctx, containerID)
+			inspect, err = docker.ContainerInspect(ctx, containerID)
+                        log.Println(fmt.Errorf("Testing inspection health %s", inspect.State.Health))
 			if err != nil {
 				lastErr = fmt.Errorf("Inspect container %s => error: %s", containerID, err)
 				time.Sleep(50 * time.Millisecond)
