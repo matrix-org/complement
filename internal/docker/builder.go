@@ -609,12 +609,12 @@ func deployImage(
 			inspect, err = docker.ContainerInspect(ctx, containerID)
 			if err != nil {
 				lastErr = fmt.Errorf("Inspect container %s => error: %s", containerID, err)
-				time.Sleep(50 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				continue
 			}
 			if inspect.State.Health.Status != "healthy" {
 				lastErr = fmt.Errorf("Inspect container %s => health: %s", containerID, inspect.State.Health.Status)
-				time.Sleep(50 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				continue
 			}
 			lastErr = nil
