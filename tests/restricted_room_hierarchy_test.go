@@ -1,5 +1,4 @@
-//go:build msc2946
-// +build msc2946
+// +build !dendrite_blacklist
 
 // Tests MSC3083, joining restricted spaces based on membership in another room.
 
@@ -20,7 +19,7 @@ import (
 func requestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, expected_rooms []interface{}) {
 	t.Helper()
 
-	res := user.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", space, "spaces"}, map[string]interface{}{})
+	res := user.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", space, "hierarchy"}, map[string]interface{}{})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", expected_rooms, func(r gjson.Result) interface{} {
@@ -37,7 +36,7 @@ func requestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, exp
 //
 // The user should be unable to see the room in the spaces summary unless they
 // are a member of the space.
-func TestRestrictedRoomsSpacesSummary(t *testing.T) {
+func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
