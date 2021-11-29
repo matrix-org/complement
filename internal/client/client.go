@@ -133,22 +133,28 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 // - we see an event in the room for which the `check` function returns True
 // If the `check` function fails the test, the failing event will be automatically logged.
 // Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
+//
+// Returns the `next_batch` token from the last /sync response. This can be passed as
+// `since` to sync from this point forward only.
+func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) string {
 	t.Helper()
-	c.SyncUntil(t, "", "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
+	return c.SyncUntil(t, "", "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
 }
 
 // SyncUntilInvitedTo is a wrapper around SyncUntil.
 // It blocks and continually calls `/sync` until we've been invited to the given room.
 // Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
+//
+// Returns the `next_batch` token from the last /sync response. This can be passed as
+// `since` to sync from this point forward only.
+func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) string {
 	t.Helper()
 	check := func(event gjson.Result) bool {
 		return event.Get("type").Str == "m.room.member" &&
 			event.Get("content.membership").Str == "invite" &&
 			event.Get("state_key").Str == c.UserID
 	}
-	c.SyncUntil(t, "", "", "rooms.invite."+GjsonEscape(roomID)+".invite_state.events", check)
+	return c.SyncUntil(t, "", "", "rooms.invite."+GjsonEscape(roomID)+".invite_state.events", check)
 }
 
 // SyncUntil blocks and continually calls /sync until
@@ -157,7 +163,10 @@ func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
 // - some element in that array makes the `check` function return true.
 // If the `check` function fails the test, the failing event will be automatically logged.
 // Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
+//
+// Returns the `next_batch` token from the last /sync response. This can be passed as
+// `since` to sync from this point forward only.
+func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) string {
 	t.Helper()
 	start := time.Now()
 	checkCounter := 0
@@ -199,7 +208,7 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gj
 			for i, ev := range events {
 				lastEvent = &events[i]
 				if check(ev) {
-					return
+					return since
 				}
 				wasFailed = t.Failed()
 				checkCounter++
