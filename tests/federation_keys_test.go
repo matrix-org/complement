@@ -38,8 +38,8 @@ func TestInboundFederationKeys(t *testing.T) {
 	res, err := fedClient.Get("https://hs1/_matrix/key/v2/server")
 	must.NotError(t, "failed to GET /keys", err)
 
-	var keys map[string]ed25519.PublicKey
-	var oldKeys map[string]ed25519.PublicKey
+	var keys = map[string]ed25519.PublicKey{}
+	var oldKeys = map[string]ed25519.PublicKey{}
 
 	body := must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
@@ -183,7 +183,7 @@ func TestInboundFederationKeys(t *testing.T) {
 		old       bool
 	}
 
-	var signatures map[string]sigWithKey
+	var signatures = map[string]sigWithKey{}
 
 	// Test signatures for all verify_keys, these *have* to exist.
 	for keyName, keyBytes := range keys {
