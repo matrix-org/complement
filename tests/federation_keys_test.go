@@ -119,11 +119,11 @@ func TestInboundFederationKeys(t *testing.T) {
 				for key, v := range v.Map() {
 					// Check for ed25519 prefix
 					if !strings.HasPrefix(key, "ed25519:") {
-						return fmt.Errorf("signatures: Key '%s' for server '%s' has no 'ed25519:' prefix", key, k)
+						return fmt.Errorf("signatures: Key '%s' for server '%s' has no 'ed25519:' prefix", key, k.Str)
 					}
 
 					if v.Type != gjson.String {
-						return fmt.Errorf("signatures: Key '%s' for server '%s' has unexpected type, expected String, got '%s'", k.Str, v.Type.String())
+						return fmt.Errorf("signatures: Key '%s' for server '%s' has unexpected type, expected String, got '%s'", key, k.Str, v.Type.String())
 					}
 
 					_, err = base64.RawStdEncoding.DecodeString(v.Str)
@@ -195,7 +195,9 @@ func TestInboundFederationKeys(t *testing.T) {
 		if sigBase64.Type != gjson.String {
 			t.Fatalf("signatures: Signature for Key '%s' has unexpected type, expected String, got '%s'", keyName, sigBase64.Type.String())
 		}
-		sigBytes, err := base64.RawStdEncoding.DecodeString(sigBase64.Str)
+
+		var sigBytes []byte
+		sigBytes, err = base64.RawStdEncoding.DecodeString(sigBase64.Str)
 		if err != nil {
 			t.Fatalf("signatures: Signature for key '%s' failed to decode as ed25519 base64: %s", keyName, err)
 		}
@@ -218,7 +220,9 @@ func TestInboundFederationKeys(t *testing.T) {
 		if sig.Type != gjson.String {
 			t.Fatalf("signatures: Signature for Old Key '%s' has unexpected type, expected String, got '%s'", keyName, sig.Type.String())
 		}
-		sigBytes, err := base64.RawStdEncoding.DecodeString(sig.Str)
+
+		var sigBytes []byte
+		sigBytes, err = base64.RawStdEncoding.DecodeString(sig.Str)
 		if err != nil {
 			t.Fatalf("signatures: Signature for Old key '%s' failed to decode as ed25519 base64: %s", keyName, err)
 		}
@@ -226,7 +230,8 @@ func TestInboundFederationKeys(t *testing.T) {
 		signatures[keyName] = sigWithKey{key: keyBytes, signature: sigBytes, old: true}
 	}
 
-	bodyWithoutSig, err := sjson.DeleteBytes(body, "signatures")
+	var bodyWithoutSig []byte
+	bodyWithoutSig, err = sjson.DeleteBytes(body, "signatures")
 	if err != nil {
 		t.Fatalf("failed to delete 'signatures' key: %s", err)
 	}
