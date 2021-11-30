@@ -220,6 +220,15 @@ For Goland:
  * Under "Run"->"Edit Configurations..."->"Templates"->"Go Test", add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest`
  * Then you can right-click on any test file or test case and "Run <test name>".
 
+	
+### How do I make the linter checks pass?
+
+Use [`goimports`](https://pkg.go.dev/golang.org/x/tools/cmd/goimports) to sort imports and format in the style of `gofmt`.
+	
+Set this up to run on save in VSCode as follows:
+- File -> Preferences -> Settings.
+  - Search for "Format On Save" and enable it.
+  - Search for `go: format tool` and choose `goimports`.
 
 ### How do I hook up a Matrix client like Element to the homeservers spun up by Complement after a test runs?
 
