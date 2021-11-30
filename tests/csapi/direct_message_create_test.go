@@ -4,9 +4,10 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/tidwall/gjson"
 )
 
 // Synapse has a long-standing bug
