@@ -22,7 +22,7 @@ func TestDirectMessageCreate(t *testing.T) {
 	})
 
 	// Bob receives the invite and joins.
-	next_batch := bob.SyncUntilInvitedTo(t, roomID)
+	nextBatch := bob.SyncUntilInvitedTo(t, roomID)
 	bob.JoinRoom(t, roomID, []string{"hs1"})
 
 	// Wait until Bob sees that he's joined.
@@ -34,7 +34,7 @@ func TestDirectMessageCreate(t *testing.T) {
 	// Repeat the sync, but in a form where we can inspect the output.
 	query := url.Values{
 		"timeout": []string{"1000"},
-		"since":   []string{next_batch},
+		"since":   []string{nextBatch},
 	}
 
 	res := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(query))
