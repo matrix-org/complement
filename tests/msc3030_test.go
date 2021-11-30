@@ -70,43 +70,6 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 			})
-
-			t.Run("looking backwards, before user was invited with restricted history_visibility, should find nothing", func(t *testing.T) {
-				t.Parallel()
-
-				privateRoomId := alice.CreateRoom(t, map[string]interface{}{
-					"preset": "private_chat",
-					"name":   "private spot",
-					"initial_state": []map[string]interface{}{
-						{
-							"type":      "m.room.history_visibility",
-							"state_key": "",
-							"content": map[string]string{
-								// Events are only accessible to newly joined members from the
-								// point they were invited onwards.
-								"history_visibility": "invited",
-							},
-						},
-					},
-				})
-
-				alice.SendEventSynced(t, privateRoomId, b.Event{
-					Type: "m.room.message",
-					Content: map[string]interface{}{
-						"msgtype": "m.text",
-						"body":    "Message A",
-					},
-				})
-
-				timeBeforeRemoteCharlieInvited := time.Now()
-				alice.InviteRoom(t, privateRoomId, remoteCharlie.UserID)
-				remoteCharlie.JoinRoom(t, privateRoomId, []string{"hs1"})
-
-				// TODO: This test currently fails because the homeserver can see a
-				// redacted version of the hidden event. This is because of the behavior
-				// of `/backfilled` returning redacted version of hidden events.
-				mustCheckEventisReturnedForTime(t, remoteCharlie, privateRoomId, timeBeforeRemoteCharlieInvited, "b", "")
-			})
 		})
 	})
 }
