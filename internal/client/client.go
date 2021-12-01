@@ -216,11 +216,11 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gj
 func (c *CSAPI) syncUntilInternal(t *testing.T, since, filter, key string, wasFailed, timedOut *bool, checkCounter *int, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
-	*checkCounter = 0
 
 	// Initialize values
 	*wasFailed = t.Failed()
 	*timedOut = false
+	*checkCounter = 0
 
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
