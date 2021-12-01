@@ -144,6 +144,12 @@ func TestInboundFederationKeys(t *testing.T) {
 		t.Errorf("valid_until_ts: timestamp is in the past: %s < %s", gotTime, wantTime)
 	}
 
+	checkKeysAndSignatures(t, body, jsonObj, keys, oldKeys)
+}
+
+func checkKeysAndSignatures(t *testing.T, body []byte, jsonObj gjson.Result, keys, oldKeys map[string]ed25519.PublicKey) {
+	var err error
+
 	if len(keys) == 0 {
 		t.Fatalf("verify_keys: missing any ed25519: key")
 	}
