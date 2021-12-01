@@ -209,6 +209,8 @@ Error will fail the test but continue execution, where Fatal will fail the test 
 
 ### How do I run tests inside my IDE?
 
+Make sure you have first built a compatible complement image, such as `complement-dendrite:latest` (see [Readme.MD "Running against Dendrite"](README/md#running-against-dendrite)), which will be used in this section. (If you're using a different server, replace any instance of `complement-dendrite:latest` with your own tag)
+
 For VSCode, add to `settings.json`:
 ```
 "go.testEnvVars": {
@@ -217,7 +219,7 @@ For VSCode, add to `settings.json`:
 ```
 
 For Goland:
- * Under "Run"->"Edit Configurations..."->"Templates"->"Go Test", add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest`
+ * Under "Run"->"Edit Configurations..."->"Edit Configuration Templates..."->"Go Test", and add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest` to "Environment"
  * Then you can right-click on any test file or test case and "Run <test name>".
 
 	
