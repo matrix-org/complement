@@ -107,5 +107,74 @@ func TestRoomMembers(t *testing.T) {
 				},
 			)
 		})
+		// sytest: Test that we can be reinvited to a room we created
+		t.Run("Test that we can be reinvited to a room we created", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"preset": "private_chat",
+			})
+
+			alice.InviteRoom(t, roomID, bob.UserID)
+
+			bob.JoinRoom(t, roomID, nil)
+
+			// Sync to make sure bob has joined
+			bob.SyncUntilTimelineHas(
+				t,
+				roomID,
+				func(ev gjson.Result) bool {
+					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
+						return false
+					}
+					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
+					return true
+				},
+			)
+
+			stateKey := ""
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type:     "m.room.power_levels",
+				StateKey: &stateKey,
+				Content: map[string]interface{}{
+					"invite": 100,
+					"users": map[string]interface{}{
+						alice.UserID: 100,
+						bob.UserID:   100,
+					},
+				},
+			})
+
+			alice.LeaveRoom(t, roomID)
+
+			bob.SyncUntilTimelineHas(
+				t,
+				roomID,
+				func(ev gjson.Result) bool {
+					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != alice.UserID {
+						return false
+					}
+					must.EqualStr(t, ev.Get("content").Get("membership").Str, "leave", "Alice failed to leave the room")
+					return true
+				},
+			)
+
+			bob.InviteRoom(t, roomID, alice.UserID)
+
+			alice.SyncUntilInvitedTo(t, roomID)
+
+			alice.JoinRoom(t, roomID, nil)
+
+			alice.SyncUntilTimelineHas(
+				t,
+				roomID,
+				func(ev gjson.Result) bool {
+					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != alice.UserID {
+						return false
+					}
+					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Alice failed to join the room")
+					return true
+				},
+			)
+		})
 	})
 }
