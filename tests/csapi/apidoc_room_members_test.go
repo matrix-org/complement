@@ -116,20 +116,12 @@ func TestRoomMembers(t *testing.T) {
 
 			alice.InviteRoom(t, roomID, bob.UserID)
 
+			bob.SyncUntilInvitedTo(t, roomID)
+
 			bob.JoinRoom(t, roomID, nil)
 
 			// Sync to make sure bob has joined
-			bob.SyncUntilTimelineHas(
-				t,
-				roomID,
-				func(ev gjson.Result) bool {
-					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
-						return false
-					}
-					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
-					return true
-				},
-			)
+			bob.SyncUntilJoined(t, roomID)
 
 			stateKey := ""
 			alice.SendEventSynced(t, roomID, b.Event{
@@ -153,7 +145,6 @@ func TestRoomMembers(t *testing.T) {
 					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != alice.UserID {
 						return false
 					}
-					must.EqualStr(t, ev.Get("content").Get("membership").Str, "leave", "Alice failed to leave the room")
 					return true
 				},
 			)
@@ -164,17 +155,7 @@ func TestRoomMembers(t *testing.T) {
 
 			alice.JoinRoom(t, roomID, nil)
 
-			alice.SyncUntilTimelineHas(
-				t,
-				roomID,
-				func(ev gjson.Result) bool {
-					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != alice.UserID {
-						return false
-					}
-					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Alice failed to join the room")
-					return true
-				},
-			)
+			alice.SyncUntilJoined(t, roomID)
 		})
 	})
 }
