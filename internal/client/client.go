@@ -158,9 +158,14 @@ func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
 // If the `check` function fails the test, the failing value will be automatically logged.
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilArray(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
-	var wasFailed *bool
-	var timedOut *bool
-	var checkCounter *int
+	var wasFailedBacking = false
+	var timedOutBacking = false
+	var checkCounterBacking = 0
+
+	var wasFailed = &wasFailedBacking
+	var timedOut = &timedOutBacking
+	var checkCounter = &checkCounterBacking
+
 	var lastElement *gjson.Result
 
 	// Print failing events in a defer() so we handle t.Fatalf in the same way as t.Errorf
@@ -205,22 +210,19 @@ func (c *CSAPI) SyncUntilArray(t *testing.T, since, filter, key string, check fu
 // - the corresponding value makes the `check` function return true.
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
-	var wasFailed *bool
-	var timedOut *bool
-	var checkCounter *int
+	var wasFailedBacking = false
+	var timedOutBacking = false
+	var checkCounterBacking = 0
 
-	c.syncUntilInternal(t, since, filter, key, wasFailed, timedOut, checkCounter, check)
+	c.syncUntilInternal(t, since, filter, key, &wasFailedBacking, &timedOutBacking, &checkCounterBacking, check)
 }
 
-// Internal function helping both SyncUntil and SyncUntilArray with some logging coordination upon failure
+// Internal function helping both SyncUntil and SyncUntilArray with some logging coordination upon failure.
 func (c *CSAPI) syncUntilInternal(t *testing.T, since, filter, key string, wasFailed, timedOut *bool, checkCounter *int, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
 
-	// Initialize values
 	*wasFailed = t.Failed()
-	*timedOut = false
-	*checkCounter = 0
 
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
