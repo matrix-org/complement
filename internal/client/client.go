@@ -182,7 +182,7 @@ func (c *CSAPI) SyncUntilArray(t *testing.T, since, filter, key string, check fu
 			elements := result.Array()
 
 			for i, el := range elements {
-				lastElement = &el
+				lastElement = &elements[i]
 				if check(el) {
 					return true
 				}
