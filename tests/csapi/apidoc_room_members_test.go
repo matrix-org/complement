@@ -138,14 +138,14 @@ func TestRoomMembers(t *testing.T) {
 
 			alice.LeaveRoom(t, roomID)
 
+			// Wait until alice has left the room
 			bob.SyncUntilTimelineHas(
 				t,
 				roomID,
 				func(ev gjson.Result) bool {
-					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != alice.UserID {
-						return false
-					}
-					return true
+					return ev.Get("type").Str == "m.room.member" &&
+						ev.Get("content.membership").Str == "leave" &&
+						ev.Get("state_key").Str == alice.UserID
 				},
 			)
 

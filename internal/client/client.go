@@ -156,12 +156,11 @@ func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilJoined(t *testing.T, roomID string) {
 	t.Helper()
-	check := func(event gjson.Result) bool {
+	c.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
 		return event.Get("type").Str == "m.room.member" &&
 			event.Get("content.membership").Str == "join" &&
 			event.Get("state_key").Str == c.UserID
-	}
-	c.SyncUntil(t, "", "", "rooms.invite."+GjsonEscape(roomID)+".invite_state.events", check)
+	})
 }
 
 // SyncUntil blocks and continually calls /sync until
