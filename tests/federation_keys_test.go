@@ -58,10 +58,10 @@ func TestInboundFederationKeys(t *testing.T) {
 
 				// Test key existence and string type
 				if !key.Exists() {
-					return fmt.Errorf("verify_keys: Key '%s' has no expired_ts in value", k.Str)
+					return fmt.Errorf("verify_keys: Key '%s' has no 'key' field", k.Str)
 				}
 				if key.Type != gjson.String {
-					return fmt.Errorf("verify_keys: Key '%s' has expired_ts with unexpected type, expected String, got '%s'", k.Str, key.Type.String())
+					return fmt.Errorf("verify_keys: Key '%s' has 'key' with unexpected type, expected String, got '%s'", k.Str, key.Type.String())
 				}
 
 				var keyBytes []byte
@@ -93,10 +93,10 @@ func TestInboundFederationKeys(t *testing.T) {
 
 				// Test key existence and string type
 				if !key.Exists() {
-					return fmt.Errorf("old_verify_keys: Key '%s' has no expired_ts in value", k.Str)
+					return fmt.Errorf("old_verify_keys: Key '%s' has no 'key' field", k.Str)
 				}
 				if key.Type != gjson.String {
-					return fmt.Errorf("old_verify_keys: Key '%s' has expired_ts with unexpected type, expected String, got '%s'", k.Str, key.Type.String())
+					return fmt.Errorf("old_verify_keys: Key '%s' has 'key' with unexpected type, expected String, got '%s'", k.Str, key.Type.String())
 				}
 
 				var keyBytes []byte
