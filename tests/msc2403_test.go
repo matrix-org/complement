@@ -179,7 +179,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 
 			// Use our sync token from earlier to carry out an incremental sync. Initial syncs may not contain room
 			// leave information for obvious reasons
-			knockingUser.SyncUntil(
+			knockingUser.SyncUntilArray(
 				t,
 				since,
 				"",
@@ -311,7 +311,7 @@ func knockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, ser
 	knockOnRoomWithStatus(t, c, roomID, reason, serverNames, 200)
 
 	// The knock should have succeeded. Block until we see the knock appear down sync
-	c.SyncUntil(
+	c.SyncUntilArray(
 		t,
 		"",
 		"",

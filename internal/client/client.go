@@ -26,7 +26,7 @@ type CSAPI struct {
 	AccessToken string
 	BaseURL     string
 	Client      *http.Client
-	// how long are we willing to wait for SyncUntil.... calls
+	// how long are we willing to wait for SyncUntil*.... calls
 	SyncUntilTimeout time.Duration
 	// True to enable verbose logging
 	Debug bool
@@ -127,7 +127,7 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	return eventID
 }
 
-// SyncUntilTimelineHas is a wrapper around `SyncUntil`.
+// SyncUntilTimelineHas is a wrapper around `SyncUntilArray`.
 // It blocks and continually calls `/sync` until
 // - we have joined the given room
 // - we see an event in the room for which the `check` function returns True
@@ -135,10 +135,10 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
 	t.Helper()
-	c.SyncUntil(t, "", "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
+	c.SyncUntilArray(t, "", "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
 }
 
-// SyncUntilInvitedTo is a wrapper around SyncUntil.
+// SyncUntilInvitedTo is a wrapper around SyncUntilArray.
 // It blocks and continually calls `/sync` until we've been invited to the given room.
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
@@ -148,38 +148,84 @@ func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
 			event.Get("content.membership").Str == "invite" &&
 			event.Get("state_key").Str == c.UserID
 	}
-	c.SyncUntil(t, "", "", "rooms.invite."+GjsonEscape(roomID)+".invite_state.events", check)
+	c.SyncUntilArray(t, "", "", "rooms.invite."+GjsonEscape(roomID)+".invite_state.events", check)
+}
+
+// SyncUntilArray blocks and continually calls /sync until
+// - the response contains a particular `key`, and
+// - its corresponding value is an array
+// - some element in that array makes the `check` function return true.
+// If the `check` function fails the test, the failing value will be automatically logged.
+// Will time out after CSAPI.SyncUntilTimeout.
+func (c *CSAPI) SyncUntilArray(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
+	var wasFailed *bool
+	var timedOut *bool
+	var checkCounter *int
+	var lastElement *gjson.Result
+
+	// Print failing events in a defer() so we handle t.Fatalf in the same way as t.Errorf
+	defer func() {
+		// When failing on a fatal error
+		if !*wasFailed && t.Failed() {
+			raw := ""
+			if lastElement != nil {
+				raw = lastElement.Raw
+			}
+			if !*timedOut {
+				t.Logf("SyncUntilArray: failing element %s", raw)
+			}
+		}
+	}()
+
+	arrayCheck := func(result gjson.Result) bool {
+		if result.IsArray() {
+			elements := result.Array()
+
+			for i, el := range elements {
+				lastElement = &el
+				if check(el) {
+					return true
+				}
+				*wasFailed = t.Failed()
+				// Increment counter artificially for every sub-check call
+				// Makes syncUntilInternal report "correctly" how many checks were made
+				if i != 0 {
+					*checkCounter++
+				}
+			}
+		}
+		return false
+	}
+
+	c.syncUntilInternal(t, since, filter, key, wasFailed, timedOut, checkCounter, arrayCheck)
 }
 
 // SyncUntil blocks and continually calls /sync until
 // - the response contains a particular `key`, and
-// - its corresponding value is an array
-// - some element in that array makes the `check` function return true.
-// If the `check` function fails the test, the failing event will be automatically logged.
+// - the corresponding value makes the `check` function return true.
 // Will time out after CSAPI.SyncUntilTimeout.
 func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
+	var wasFailed *bool
+	var timedOut *bool
+	var checkCounter *int
+
+	c.syncUntilInternal(t, since, filter, key, wasFailed, timedOut, checkCounter, check)
+}
+
+// Internal function helping both SyncUntil and SyncUntilArray with some logging coordination upon failure
+func (c *CSAPI) syncUntilInternal(t *testing.T, since, filter, key string, wasFailed, timedOut *bool, checkCounter *int, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
-	checkCounter := 0
-	// Print failing events in a defer() so we handle t.Fatalf in the same way as t.Errorf
-	var wasFailed = t.Failed()
-	var lastEvent *gjson.Result
-	timedOut := false
-	defer func() {
-		if !wasFailed && t.Failed() {
-			raw := ""
-			if lastEvent != nil {
-				raw = lastEvent.Raw
-			}
-			if !timedOut {
-				t.Logf("SyncUntil: failing event %s", raw)
-			}
-		}
-	}()
+	*checkCounter = 0
+
+	// Initialize values
+	*wasFailed = t.Failed()
+	*timedOut = false
+
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
-			timedOut = true
-			t.Fatalf("SyncUntil: timed out. Called check function %d times", checkCounter)
+			*timedOut = true
+			t.Fatalf("Sync: timed out. Called check function %d times", *checkCounter)
 		}
 		query := url.Values{
 			"timeout": []string{"1000"},
@@ -193,17 +239,13 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gj
 		res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, WithQueries(query))
 		body := ParseJSON(t, res)
 		since = GetJSONFieldStr(t, body, "next_batch")
-		keyRes := gjson.GetBytes(body, key)
-		if keyRes.IsArray() {
-			events := keyRes.Array()
-			for i, ev := range events {
-				lastEvent = &events[i]
-				if check(ev) {
-					return
-				}
-				wasFailed = t.Failed()
-				checkCounter++
+		value := gjson.GetBytes(body, key)
+		if value.Exists() {
+			if check(value) {
+				return
 			}
+			*wasFailed = t.Failed()
+			*checkCounter++
 		}
 	}
 }

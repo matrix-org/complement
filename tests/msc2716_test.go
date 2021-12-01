@@ -263,7 +263,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// eventIDAfterHistoricalImport without any the
 			// historicalEventIDs/historicalStateEventIDs in between, we're probably
 			// safe to assume it won't sync.
-			alice.SyncUntil(t, since, "", "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
+			alice.SyncUntilArray(t, since, "", "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
 				if includes(r.Get("event_id").Str, historicalEventIDs) || includes(r.Get("event_id").Str, historicalStateEventIDs) {
 					t.Fatalf("We should not see the %s historical event in /sync response but it was present", r.Get("event_id").Str)
 				}
