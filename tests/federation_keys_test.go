@@ -83,7 +83,7 @@ func TestInboundFederationKeys(t *testing.T) {
 
 				// Test expired_ts existence and number type
 				if !expiredTs.Exists() {
-					return fmt.Errorf("old_verify_keys: Key '%s' has no expired_ts in value", k.Str)
+					return fmt.Errorf("old_verify_keys: Key '%s' has no 'expired_ts' field", k.Str)
 				}
 				if expiredTs.Type != gjson.Number {
 					return fmt.Errorf("old_verify_keys: Key '%s' has expired_ts with unexpected type, expected Number, got '%s'", k.Str, expiredTs.Type.String())
@@ -193,17 +193,10 @@ func checkKeysAndSignatures(t *testing.T, body []byte, jsonObj gjson.Result, key
 
 	// Test signatures for all verify_keys, these *have* to exist.
 	for keyName, keyBytes := range keys {
-		sigBase64 := jsonObj.Get(fmt.Sprintf("signatures.hs1.%s", keyName))
-		if !sigBase64.Exists() {
-			t.Fatalf("signatures: missing signature for Key '%s'", keyName)
-		}
-
-		if sigBase64.Type != gjson.String {
-			t.Fatalf("signatures: Signature for Key '%s' has unexpected type, expected String, got '%s'", keyName, sigBase64.Type.String())
-		}
+		sigBase64 := must.GetJSONFieldStr(t, body, fmt.Sprintf("signatures.hs1.%s", keyName))
 
 		var sigBytes []byte
-		sigBytes, err = base64.RawStdEncoding.DecodeString(sigBase64.Str)
+		sigBytes, err = base64.RawStdEncoding.DecodeString(sigBase64)
 		if err != nil {
 			t.Fatalf("signatures: Signature for key '%s' failed to decode as ed25519 base64: %s", keyName, err)
 		}
