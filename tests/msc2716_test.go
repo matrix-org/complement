@@ -575,6 +575,11 @@ func TestImportHistoricalMessages(t *testing.T) {
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+			baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
+
+			// Send the marker event which lets remote homeservers know there are
+			// some historical messages back at the given insertion event.
+			sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -653,6 +658,10 @@ func TestImportHistoricalMessages(t *testing.T) {
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+
+			// Send the marker event which lets remote homeservers know there are
+			// some historical messages back at the given insertion event.
+			sendMarkerAndEnsureBackfilled(t, as, alice, roomID, insertionEventID)
 
 			// Join the room from a remote homeserver after the historical messages were sent
 			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
@@ -756,7 +765,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				},
 			})
 
-			// Send the marker event
+			// Send the marker event which lets remote homeservers know there are
+			// some historical messages back at the given insertion event.
 			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
 			// FIXME: In the future, we should probably replace the following logic
@@ -849,7 +859,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				},
 			})
 
-			// Send the marker event
+			// Send the marker event which lets remote homeservers know there are
+			// some historical messages back at the given insertion event.
 			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
 			// FIXME: In the future, we should probably replace the following logic
@@ -959,7 +970,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				batchEventID := client.GetJSONFieldStr(t, batchSendResBody, "batch_event_id")
 				baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
 
-				// Send the marker event
+				// Send the marker event which lets remote homeservers know there are
+				// some historical messages back at the given insertion event.
 				markerEventID := sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
 
 				redactEventID(t, alice, roomID, insertionEventID, 403)
@@ -1110,11 +1122,11 @@ func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocal
 	}
 }
 
+// Send the marker event which lets remote homeservers know there are
+// some historical messages back at the given insertion event.
 func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSAPI, roomID, insertionEventID string) (markerEventID string) {
 	t.Helper()
 
-	// Send a marker event to let all of the homeservers know about the
-	// insertion point where all of the historical messages are at
 	markerEvent := b.Event{
 		Type: markerEventType,
 		Content: map[string]interface{}{
