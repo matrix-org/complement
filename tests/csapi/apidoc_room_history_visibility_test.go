@@ -1,7 +1,6 @@
 package csapi_tests
 
 import (
-	"github.com/matrix-org/complement/runtime"
 	"net/http"
 	"testing"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 // TODO most of this can be refactored into data-driven tests
