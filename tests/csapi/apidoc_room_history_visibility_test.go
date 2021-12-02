@@ -56,7 +56,8 @@ func TestFetchEvent(t *testing.T) {
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
-			"body": "Hello world",
+			"msgtype": "m.text",
+			"body":    "Hello world",
 		},
 	})
 
@@ -96,7 +97,8 @@ func TestFetchHistoricalJoinedEventDenied(t *testing.T) {
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
-			"body": "Hello world",
+			"msgtype": "m.text",
+			"body":    "Hello world",
 		},
 	})
 
@@ -132,7 +134,8 @@ func TestFetchHistoricalSharedEvent(t *testing.T) {
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
-			"body": "Hello world",
+			"msgtype": "m.text",
+			"body":    "Hello world",
 		},
 	})
 
@@ -186,7 +189,8 @@ func TestFetchHistoricalInvitedEventFromBetweenInvite(t *testing.T) {
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
-			"body": "Hello world",
+			"msgtype": "m.text",
+			"body":    "Hello world",
 		},
 	})
 
@@ -234,7 +238,8 @@ func TestFetchHistoricalInvitedEventFromBeforeInvite(t *testing.T) {
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
-			"body": "Hello world",
+			"msgtype": "m.text",
+			"body":    "Hello world",
 		},
 	})
 
@@ -273,7 +278,8 @@ func TestFetchEventNonWorldReadable(t *testing.T) {
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
-			"body": "Hello world",
+			"msgtype": "m.text",
+			"body":    "Hello world",
 		},
 	})
 
@@ -300,7 +306,8 @@ func TestFetchEventWorldReadable(t *testing.T) {
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
-			"body": "Hello world",
+			"msgtype": "m.text",
+			"body":    "Hello world",
 		},
 	})
 
