@@ -8,6 +8,7 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 func TestJson(t *testing.T) {
@@ -167,6 +168,8 @@ func getFilters() []map[string]interface{} {
 
 // sytest: Check creating invalid filters returns 4xx
 func TestFilter(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // TODO remove if https://github.com/matrix-org/dendrite/issues/2067 is fixed
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
