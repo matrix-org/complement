@@ -1073,10 +1073,10 @@ func reversed(in []string) []string {
 func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string, check func(gjson.Result) bool) {
 	t.Helper()
 	start := time.Now()
-	checkCounter := 0
+	callCounter := 0
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
-			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", checkCounter)
+			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", callCounter)
 		}
 
 		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
@@ -1100,7 +1100,7 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 			}
 		}
 
-		checkCounter++
+		callCounter++
 	}
 }
 
@@ -1122,7 +1122,7 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 	}
 
 	var actualEventIDList []string
-	checkCounter := 0
+	callCounter := 0
 	messageResEnd := ""
 	generateErrorMesssageInfo := func() string {
 		i := 0
@@ -1133,7 +1133,7 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		}
 
 		return fmt.Sprintf("Called /messages %d times but only found %d/%d expected messages. Leftover messages we expected (%d): %s. We saw %d events over all of the API calls: %s",
-			checkCounter,
+			callCounter,
 			len(expectedEventIDs)-len(leftoverEventIDs),
 			len(expectedEventIDs),
 			len(leftoverEventIDs),
@@ -1156,50 +1156,48 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 			"limit": []string{"100"},
 			"from":  []string{messageResEnd},
 		}))
+		callCounter++
 		messsageResBody := client.ParseJSON(t, messagesRes)
-
 		messageResEnd = client.GetJSONFieldStr(t, messsageResBody, "end")
+		// Since the original body can only be read once, create a new one from the body bytes we just read
+		messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
-		wantKey := "chunk"
-		keyRes := gjson.GetBytes(messsageResBody, wantKey)
-		if !keyRes.Exists() {
-			t.Fatalf("missing key '%s'", wantKey)
-		}
-		if !keyRes.IsArray() {
-			t.Fatalf("key '%s' is not an array (was %s)", wantKey, keyRes.Type)
-		}
+		foundEventInMessageResponse := false
+		must.MatchResponse(t, messagesRes, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONArrayEach("chunk", func(ev gjson.Result) error {
+					foundEventInMessageResponse = true
+					eventID := ev.Get("event_id").Str
+					actualEventIDList = append(actualEventIDList, eventID)
 
-		events := keyRes.Array()
+					if _, keyExists := denyEventIDMap[eventID]; keyExists {
+						return fmt.Errorf(
+							"paginateUntilMessageCheckOff found unexpected message=%s in deny list while paginating. %s",
+							eventID,
+							generateErrorMesssageInfo(),
+						)
+					}
 
-		if len(events) == 0 {
+					if _, keyExists := workingExpectedEventIDMap[eventID]; keyExists {
+						delete(workingExpectedEventIDMap, eventID)
+					}
+
+					return nil
+				}),
+			},
+		})
+
+		if !foundEventInMessageResponse {
 			t.Fatalf(
 				"paginateUntilMessageCheckOff reached the end of the messages without finding all expected events. %s",
 				generateErrorMesssageInfo(),
 			)
 		}
 
-		for _, ev := range events {
-			eventID := ev.Get("event_id").Str
-			actualEventIDList = append(actualEventIDList, eventID)
-
-			if _, keyExists := denyEventIDMap[eventID]; keyExists {
-				t.Fatalf(
-					"paginateUntilMessageCheckOff found unexpected message=%s in deny list while paginating. %s",
-					eventID,
-					generateErrorMesssageInfo(),
-				)
-			}
-
-			if _, keyExists := workingExpectedEventIDMap[eventID]; keyExists {
-				delete(workingExpectedEventIDMap, eventID)
-			}
-
-			if len(workingExpectedEventIDMap) == 0 {
-				return
-			}
+		// We were able to find all of the expected events!
+		if len(workingExpectedEventIDMap) == 0 {
+			return
 		}
-
-		checkCounter++
 	}
 }
 
