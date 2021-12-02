@@ -146,3 +146,23 @@ func TestRoomCreate(t *testing.T) {
 		})
 	})
 }
+
+// sytest: Rooms can be created with an initial invite list (SYN-205)
+func TestRoomCreateWithInvites(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+
+	roomID := alice.CreateRoom(t, map[string]interface{}{
+		"invite": []string{bob.UserID},
+	})
+
+	bob.SyncUntil(t, "", "", "rooms.invite."+client.GjsonEscape(roomID)+".invite_state.events", func(event gjson.Result) bool {
+		return event.Get("type").Str == "m.room.member" &&
+			event.Get("content.membership").Str == "invite" &&
+			event.Get("state_key").Str == bob.UserID &&
+			event.Get("sender").Str == alice.UserID
+	})
+}
