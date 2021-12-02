@@ -178,7 +178,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 					event.Get("state_key").Str == bob.UserID
 			})
 
-			roomAlias := "#no_ops_delete:hs1"
+			roomAlias := "#no_ops_delete_canonical:hs1"
 
 			res := setRoomAliasResp(t, bob, roomID, roomAlias)
 			must.MatchResponse(t, res, match.HTTPResponse{
@@ -217,7 +217,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 
 			res := deleteRoomAliasResp(t, bob, roomAlias)
 			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 400,
+				StatusCode: 404,
 				JSON: []match.JSON{
 					match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
 				},
