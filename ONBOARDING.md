@@ -209,7 +209,7 @@ Error will fail the test but continue execution, where Fatal will fail the test 
 
 ### How do I run tests inside my IDE?
 
-Make sure you have first built a compatible complement image, such as `complement-dendrite:latest` (see [Readme.MD "Running against Dendrite"](README/md#running-against-dendrite)), which will be used in this section. (If you're using a different server, replace any instance of `complement-dendrite:latest` with your own tag)
+Make sure you have first built a compatible complement image, such as `complement-dendrite:latest` (see [README.md "Running against Dendrite"](README.md#running-against-dendrite)), which will be used in this section. (If you're using a different server, replace any instance of `complement-dendrite:latest` with your own tag)
 
 For VSCode, add to `settings.json`:
 ```
