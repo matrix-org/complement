@@ -68,7 +68,8 @@ func TestFetchEvent(t *testing.T) {
 		JSON: []match.JSON{
 			// No harm in checking if the event data is also as expected
 			match.JSONKeyEqual("content", map[string]interface{}{
-				"body": "Hello world",
+				"msgtype": "m.text",
+				"body":    "Hello world",
 			}),
 			match.JSONKeyEqual("type", "m.room.message"),
 
@@ -155,7 +156,8 @@ func TestFetchHistoricalSharedEvent(t *testing.T) {
 		JSON: []match.JSON{
 			// No harm in checking if the event data is also as expected
 			match.JSONKeyEqual("content", map[string]interface{}{
-				"body": "Hello world",
+				"msgtype": "m.text",
+				"body":    "Hello world",
 			}),
 			match.JSONKeyEqual("type", "m.room.message"),
 
@@ -210,7 +212,8 @@ func TestFetchHistoricalInvitedEventFromBetweenInvite(t *testing.T) {
 		JSON: []match.JSON{
 			// No harm in checking if the event data is also as expected
 			match.JSONKeyEqual("content", map[string]interface{}{
-				"body": "Hello world",
+				"msgtype": "m.text",
+				"body":    "Hello world",
 			}),
 			match.JSONKeyEqual("type", "m.room.message"),
 
@@ -318,7 +321,8 @@ func TestFetchEventWorldReadable(t *testing.T) {
 		JSON: []match.JSON{
 			// No harm in checking if the event data is also as expected
 			match.JSONKeyEqual("content", map[string]interface{}{
-				"body": "Hello world",
+				"msgtype": "m.text",
+				"body":    "Hello world",
 			}),
 			match.JSONKeyEqual("type", "m.room.message"),
 
