@@ -15,7 +15,7 @@ import (
 // sytest: Non-present room members cannot ban others
 func TestNotPresentUserCannotBanOthers(t *testing.T) {
 	deployment := Deploy(t, b.MustValidate(b.Blueprint{
-		Name: "one_to_one_room",
+		Name: "abc",
 		Homeservers: []b.Homeserver{
 			{
 				Name: "hs1",
