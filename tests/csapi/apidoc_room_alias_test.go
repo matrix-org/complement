@@ -133,7 +133,9 @@ func TestRoomDeleteAlias(t *testing.T) {
 		// sytest: Alias creators can delete alias with no ops
 		t.Run("Alias creators can delete alias with no ops", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{})
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+			})
 
 			bob.JoinRoom(t, roomID, nil)
 			// todo: replace with `SyncUntilJoined`
@@ -168,7 +170,9 @@ func TestRoomDeleteAlias(t *testing.T) {
 		// sytest: Alias creators can delete canonical alias with no ops
 		t.Run("Alias creators can delete canonical alias with no ops", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{})
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+			})
 
 			bob.JoinRoom(t, roomID, nil)
 			// todo: replace with `SyncUntilJoined`
