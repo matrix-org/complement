@@ -249,6 +249,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// We want to make sure Synapse doesn't blow up after we import
 			// many messages.
 			var expectedEventIDs []string
+			var denyListEventIDs []string
 			var baseInsertionEventID string
 			nextBatchID := ""
 			for i := 0; i < numBatches; i++ {
@@ -267,6 +268,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				batchSendResBody := client.ParseJSON(t, batchSendRes)
 				// Make sure we see all of the historical messages
 				expectedEventIDs = append(expectedEventIDs, client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")...)
+				// We should not find any historical state between the batches of messages
+				denyListEventIDs = append(denyListEventIDs, client.GetJSONFieldStringArray(t, batchSendResBody, "state_event_ids")...)
 				nextBatchID = client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
 
 				// Grab the base insertion event ID to reference later in the marker event
@@ -285,7 +288,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
 			// Make sure events can be backfilled from the remote homeserver
-			paginateUntilMessageCheckOff(t, remoteCharlie, roomID, expectedEventIDs)
+			paginateUntilMessageCheckOff(t, remoteCharlie, roomID, expectedEventIDs, denyListEventIDs)
 		})
 
 		t.Run("Historical events from /batch_send do not come down in an incremental sync", func(t *testing.T) {
@@ -1101,13 +1104,21 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 	}
 }
 
-func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, expectedEventIDs []string) {
+// Paginate the /messages endpoint until we find all of the expectedEventIds
+// (order does not matter). If any event in denyListEventIDs is found, an error
+// will be thrown.
+func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, expectedEventIDs []string, denyListEventIDs []string) {
 	t.Helper()
 	start := time.Now()
 
 	workingExpectedEventIDMap := make(map[string]string)
 	for _, expectedEventID := range expectedEventIDs {
 		workingExpectedEventIDMap[expectedEventID] = expectedEventID
+	}
+
+	denyEventIDMap := make(map[string]string)
+	for _, denyEventID := range denyListEventIDs {
+		denyEventIDMap[denyEventID] = denyEventID
 	}
 
 	var actualEventIDList []string
@@ -1170,6 +1181,14 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		for _, ev := range events {
 			eventID := ev.Get("event_id").Str
 			actualEventIDList = append(actualEventIDList, eventID)
+
+			if _, keyExists := denyEventIDMap[eventID]; keyExists {
+				t.Fatalf(
+					"paginateUntilMessageCheckOff found unexpected message=%s in deny list while paginating. %s",
+					eventID,
+					generateErrorMesssageInfo(),
+				)
+			}
 
 			if _, keyExists := workingExpectedEventIDMap[eventID]; keyExists {
 				delete(workingExpectedEventIDMap, eventID)
