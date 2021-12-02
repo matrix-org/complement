@@ -332,7 +332,7 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 	}
 	// debug log the request
 	if c.Debug {
-		t.Logf("Making %s request to %s", method, reqURL)
+		t.Logf("Making %s request to %s", method, req.URL)
 		contentType := req.Header.Get("Content-Type")
 		if contentType == "application/json" || strings.HasPrefix(contentType, "text/") {
 			if req.Body != nil {
