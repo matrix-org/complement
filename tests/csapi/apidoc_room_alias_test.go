@@ -46,6 +46,7 @@ func TestRoomAlias(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: PUT /directory/room/:room_alias creates alias
@@ -90,6 +91,33 @@ func TestRoomAlias(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONKeyEqual("aliases", []interface{}{roomAlias}),
 				},
+			})
+		})
+
+		// sytest: Only room members can list aliases of a room
+		t.Run("Only room members can list aliases of a room", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.CreateRoom(t, map[string]interface{}{})
+
+			roomAlias := "#room_members_list:hs1"
+
+			res := setRoomAliasResp(t, alice, roomID, roomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+
+			// An extra check to make sure we're not being racy rn
+			res = getRoomAliasResp(t, alice, roomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("room_id", roomID),
+				},
+			})
+
+			res = listRoomAliasesResp(t, bob, roomID)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 403,
 			})
 		})
 	})
@@ -193,33 +221,6 @@ func TestRoomDeleteAlias(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
 				},
-			})
-		})
-
-		// sytest: Only room members can list aliases of a room
-		t.Run("Only room members can list aliases of a room", func(t *testing.T) {
-			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{})
-
-			roomAlias := "#room_members_list:hs1"
-
-			res := setRoomAliasResp(t, alice, roomID, roomAlias)
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 200,
-			})
-
-			// An extra check to make sure we're not being racy rn
-			res = getRoomAliasResp(t, alice, roomAlias)
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 200,
-				JSON: []match.JSON{
-					match.JSONKeyEqual("room_id", roomID),
-				},
-			})
-
-			res = listRoomAliasesResp(t, bob, roomID)
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 403,
 			})
 		})
 	})
