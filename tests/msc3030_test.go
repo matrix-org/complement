@@ -171,9 +171,15 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 			roomID,
 		)
 	}
-	resultantString := "(oldest)\n"
+
+	// We need some padding for some lines to make them all align with the label.
+	// Pad this out so it equals whatever the longest label is.
+	paddingString := "           "
+
+	resultantString := fmt.Sprintf("%s-- oldest events --\n", paddingString)
+
 	givenTimestampAlreadyInserted := false
-	givenTimestampMarker := decorateStringWithAnsiColor(fmt.Sprintf("-- givenTimestamp=%s --\n", strconv.FormatInt(givenTimestamp, 10)), AnsiColorYellow)
+	givenTimestampMarker := decorateStringWithAnsiColor(fmt.Sprintf("%s-- givenTimestamp=%s --\n", paddingString, strconv.FormatInt(givenTimestamp, 10)), AnsiColorYellow)
 
 	// We're iterating over the events from oldest-in-time -> newest-in-time
 	for _, ev := range events {
@@ -185,15 +191,24 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 			givenTimestampAlreadyInserted = true
 		}
 
-		event_id := ev.Get("event_id").String()
-		event_id_string := event_id
-		if event_id == expectedEventId {
-			event_id_string = decorateStringWithAnsiColor(event_id, AnsiColorGreen)
-		} else if event_id == actualEventId {
-			event_id_string = decorateStringWithAnsiColor(event_id, AnsiColorRed)
+		eventID := ev.Get("event_id").String()
+		eventIDString := eventID
+		labelString := paddingString
+		if eventID == expectedEventId {
+			eventIDString = decorateStringWithAnsiColor(eventID, AnsiColorGreen)
+			labelString = "(expected) "
+		} else if eventID == actualEventId {
+			eventIDString = decorateStringWithAnsiColor(eventID, AnsiColorRed)
+			labelString = "  (actual) "
 		}
 
-		resultantString += fmt.Sprintf("%s (%s) - %s\n", event_id_string, strconv.FormatInt(ev.Get("origin_server_ts").Int(), 10), ev.Get("type").String())
+		resultantString += fmt.Sprintf(
+			"%s%s (%s) - %s\n",
+			labelString,
+			eventIDString,
+			strconv.FormatInt(ev.Get("origin_server_ts").Int(), 10),
+			ev.Get("type").String(),
+		)
 	}
 
 	// The givenTimestamp could be newer(after-in-time) than any of the other events
@@ -202,7 +217,7 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 		givenTimestampAlreadyInserted = true
 	}
 
-	resultantString += "(newest)\n"
+	resultantString += fmt.Sprintf("%s-- newest events --\n", paddingString)
 
 	return resultantString
 }
