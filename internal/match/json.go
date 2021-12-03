@@ -41,6 +41,18 @@ func JSONKeyPresent(wantKey string) JSON {
 	}
 }
 
+// JSONKeyMissing returns a matcher which will check that `forbiddenKey` is not present in the JSON object.
+// `forbiddenKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
+func JSONKeyMissing(forbiddenKey string) JSON {
+	return func(body []byte) error {
+		res := gjson.GetBytes(body, forbiddenKey)
+		if res.Exists() {
+			return fmt.Errorf("key '%s' present", forbiddenKey)
+		}
+		return nil
+	}
+}
+
 // JSONKeyTypeEqual returns a matcher which will check that `wantKey` is present and its value is of the type `wantType`.
 // `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
 func JSONKeyTypeEqual(wantKey string, wantType gjson.Type) JSON {
