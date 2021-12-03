@@ -84,7 +84,6 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 	t.Helper()
 
 	roomID = c.CreateRoom(t, map[string]interface{}{})
-	//c.JoinRoom(t, roomID, nil)
 
 	timeBeforeEventA := time.Now()
 	eventAID := c.SendEventSynced(t, roomID, b.Event{
