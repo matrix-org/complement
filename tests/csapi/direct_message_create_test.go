@@ -20,10 +20,10 @@ import (
 // This test reproduces the duplicated membership event for
 // Bob after Alice invites him to a 1-1 room.
 func TestMembershipNotDuplicatedWhenJoiningDirectMessage(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob := deployment.RegisterUser(t, "hs1", "bob", "complement_meets_min_password_req_bob")
 
 	// Alice invites Bob to a room for direct messaging.
 	roomID := alice.CreateRoom(t, map[string]interface{}{
