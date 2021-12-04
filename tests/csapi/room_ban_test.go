@@ -1,13 +1,14 @@
 package csapi_tests
 
 import (
-	"io/ioutil"
 	"testing"
 
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
 )
 
 // This is technically a tad different from the sytest, in that it doesnt try to ban a @random_dude:test,
@@ -70,9 +71,7 @@ func TestNotPresentUserCannotBanOthers(t *testing.T) {
 		"reason":  "testing",
 	}))
 
-	if res.StatusCode != 403 {
-		defer res.Body.Close()
-		body, _ := ioutil.ReadAll(res.Body)
-		t.Fatalf("Banning a user succeeded where it shouldn't: (%d) %s", res.StatusCode, string(body))
-	}
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: 403,
+	})
 }
