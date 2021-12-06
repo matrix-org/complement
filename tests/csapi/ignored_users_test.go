@@ -47,10 +47,8 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 		"PUT",
 		[]string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", "m.ignored_user_list"},
 		client.WithJSONBody(t, map[string]interface{}{
-			"content": map[string]interface{}{
-				"ignored_users": map[string]interface{}{
-					bob.UserID: map[string]interface{}{},
-				},
+			"ignored_users": map[string]interface{}{
+				bob.UserID: map[string]interface{}{},
 			},
 		}),
 	)
