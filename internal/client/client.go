@@ -153,6 +153,7 @@ func (c *CSAPI) SyncUntilGlobalAccountDataHas(t *testing.T, check func(gjson.Res
 	t.Helper()
 	return c.SyncUntil(t, "", "", "account_data.events", check)
 }
+
 // SyncUntilInvitedTo is a wrapper around SyncUntil.
 // It blocks and continually calls `/sync` until we've been invited to the given room.
 // Will time out after CSAPI.SyncUntilTimeout.
