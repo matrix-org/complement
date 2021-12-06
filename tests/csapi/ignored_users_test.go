@@ -32,6 +32,15 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 		"preset": "public_chat",
 	})
 
+	// Alice waits to see the join event.
+	alice.SyncUntilTimelineHas(
+		t, public_room, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" &&
+				ev.Get("state_key").Str == alice.UserID &&
+				ev.Get("content.membership").Str == "join"
+		},
+	)
+
 	// Alice ignores Bob.
 	alice.MustDoFunc(
 		t,
@@ -46,11 +55,13 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 		}),
 	)
 
-	start := alice.SyncUntilTimelineHas(
-		t, public_room, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == "m.room.member" &&
-				ev.Get("state_key").Str == alice.UserID &&
-				ev.Get("content.membership").Str == "join"
+	// Alice waits to see that the ignore was successful.
+	sinceJoinedAndIgnored := alice.SyncUntilGlobalAccountDataHas(
+		t,
+		func(ev gjson.Result) bool {
+			t.Logf(ev.Raw + "\n")
+			return ev.Get("type").Str == "m.ignored_user_list" &&
+				ev.Get("content.ignored_users."+client.GjsonEscape(bob.UserID)).Exists()
 		},
 	)
 
@@ -71,7 +82,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 
 	// We re-request the sync with a `since` token. We should see Chris's invite, but not Bob's.
 	queryParams := url.Values{
-		"since":   {start},
+		"since":   {sinceJoinedAndIgnored},
 		"timeout": {"0"},
 	}
 	// Note: SyncUntil only runs its callback on array elements. I want to investigate an object.
