@@ -151,6 +151,18 @@ func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
 	c.SyncUntil(t, "", "", "rooms.invite."+GjsonEscape(roomID)+".invite_state.events", check)
 }
 
+// SyncUntilJoined is a wrapper around SyncUntil.
+// It blocks and continually calls `/sync` until we've joined the given room.
+// Will time out after CSAPI.SyncUntilTimeout.
+func (c *CSAPI) SyncUntilJoined(t *testing.T, roomID string) {
+	t.Helper()
+	c.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
+		return event.Get("type").Str == "m.room.member" &&
+			event.Get("content.membership").Str == "join" &&
+			event.Get("state_key").Str == c.UserID
+	})
+}
+
 // SyncUntil blocks and continually calls /sync until
 // - the response contains a particular `key`, and
 // - its corresponding value is an array

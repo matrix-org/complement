@@ -107,5 +107,55 @@ func TestRoomMembers(t *testing.T) {
 				},
 			)
 		})
+		// sytest: Test that we can be reinvited to a room we created
+		t.Run("Test that we can be reinvited to a room we created", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"preset": "private_chat",
+			})
+
+			alice.InviteRoom(t, roomID, bob.UserID)
+
+			bob.SyncUntilInvitedTo(t, roomID)
+
+			bob.JoinRoom(t, roomID, nil)
+
+			// Sync to make sure bob has joined
+			bob.SyncUntilJoined(t, roomID)
+
+			stateKey := ""
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type:     "m.room.power_levels",
+				StateKey: &stateKey,
+				Content: map[string]interface{}{
+					"invite": 100,
+					"users": map[string]interface{}{
+						alice.UserID: 100,
+						bob.UserID:   100,
+					},
+				},
+			})
+
+			alice.LeaveRoom(t, roomID)
+
+			// Wait until alice has left the room
+			bob.SyncUntilTimelineHas(
+				t,
+				roomID,
+				func(ev gjson.Result) bool {
+					return ev.Get("type").Str == "m.room.member" &&
+						ev.Get("content.membership").Str == "leave" &&
+						ev.Get("state_key").Str == alice.UserID
+				},
+			)
+
+			bob.InviteRoom(t, roomID, alice.UserID)
+
+			alice.SyncUntilInvitedTo(t, roomID)
+
+			alice.JoinRoom(t, roomID, nil)
+
+			alice.SyncUntilJoined(t, roomID)
+		})
 	})
 }
