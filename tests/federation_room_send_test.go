@@ -22,6 +22,8 @@ func TestOutboundFederationSend(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+
 	waiter := NewWaiter()
 	wantEventType := "m.room.message"
 
@@ -45,13 +47,12 @@ func TestOutboundFederationSend(t *testing.T) {
 	defer cancel()
 
 	// the remote homeserver creates a public room
-	ver := gomatrixserverlib.RoomVersionV5
+	ver := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	alice.JoinRoom(t, roomAlias, []string{docker.HostnameRunningComplement})
 
 	// the local homeserver sends an event into the room
