@@ -198,7 +198,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	defer cancel()
 
 	// create a room on Complement, add some events to walk.
-	ver := alice.GetDefaultRoomVersion(t)
+	roomVer := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 	room := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, charlie))
 	eventA := srv.MustCreateEvent(t, room, b.Event{
