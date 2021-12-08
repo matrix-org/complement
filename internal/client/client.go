@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -229,6 +230,30 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 	userID = gjson.GetBytes(body, "user_id").Str
 	accessToken = gjson.GetBytes(body, "access_token").Str
 	return userID, accessToken
+}
+
+// GetCapbabilities queries the server's capabilities
+func (c *CSAPI) GetCapabilities(t *testing.T) []byte {
+	t.Helper()
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "capabilities"})
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+	return body
+}
+
+// GetDefaultRoomVersion returns the server's default room version
+func (c *CSAPI) GetDefaultRoomVersion(t *testing.T) gomatrixserverlib.RoomVersion {
+	t.Helper()
+	capabilities := c.GetCapabilities(t)
+	defaultVersion := gjson.GetBytes(capabilities, `capabilities.m\.room_versions.default`)
+	if !defaultVersion.Exists() {
+		// spec says use RoomV1 in this case
+		return gomatrixserverlib.RoomVersionV1
+	}
+
+	return gomatrixserverlib.RoomVersion(defaultVersion.Str)
 }
 
 // MustDo will do the HTTP request and fail the test if the response is not 2xx

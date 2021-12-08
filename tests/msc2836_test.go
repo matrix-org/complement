@@ -187,6 +187,9 @@ func TestEventRelationships(t *testing.T) {
 func TestFederatedEventRelationships(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
@@ -195,7 +198,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	defer cancel()
 
 	// create a room on Complement, add some events to walk.
-	roomVer := gomatrixserverlib.RoomVersionV6
+	ver := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 	room := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, charlie))
 	eventA := srv.MustCreateEvent(t, room, b.Event{
@@ -293,7 +296,6 @@ func TestFederatedEventRelationships(t *testing.T) {
 
 	// join the room on HS1
 	// HS1 will not have any of these messages, only the room state.
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	alice.JoinRoom(t, room.RoomID, []string{srv.ServerName})
 
 	// send a new child in the thread (child of D) so the HS has something to latch on to.
