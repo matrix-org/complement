@@ -151,11 +151,8 @@ func TestRoomMembers(t *testing.T) {
 			)
 
 			bob.InviteRoom(t, roomID, alice.UserID)
-
 			since := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
-
 			alice.JoinRoom(t, roomID, nil)
-
 			alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncJoinedTo(alice.UserID, roomID))
 		})
 	})

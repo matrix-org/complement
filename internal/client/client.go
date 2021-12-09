@@ -201,17 +201,38 @@ func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
 }
 
 // MustSyncUntil blocks and continually calls /sync (advancing the since token) until all the
-// checks options return no error. Check options don't *all* need to return no error on a single
-// /sync request, they are cumulative. For example, this will repeatedly call /sync until the client
-// sees the join event and the message in the same room:
-//   alice.MustSyncUntil(
-//       t, SyncReq{},
-//       client.SyncJoinedTo(alice.UserID, "!foo:bar"),
-//       client.SyncTimelineHas("!foo:bar", (ev gjson.Result) bool { return ev.Type.Str == "m.room.message" }),
-//   )
-// Once a check option returns true it is removed from the list of checks and won't be called again.
-// There is no ordering on the checkers. If you need ordering, call MustSyncUntil multiple times with
-// a single checker, and reuse the returned since token.
+// check functions return no error. Returns the final/latest since token.
+//
+// Initial /sync example: (no since token)
+//   bob.InviteRoom(t, roomID, alice.UserID)
+//   alice.JoinRoom(t, roomID, nil)
+//   alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+//
+// Incremental /sync example: (test controls since token)
+//    since := alice.MustSyncUntil(t, client.SyncReq{TimeoutMillis: "0"}) // get a since token
+//    bob.InviteRoom(t, roomID, alice.UserID)
+//    since = alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncInvitedTo(alice.UserID, roomID))
+//    alice.JoinRoom(t, roomID, nil)
+//    alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncJoinedTo(alice.UserID, roomID))
+//
+// Checking multiple parts of /sync:
+//    alice.MustSyncUntil(
+//        t, client.SyncReq{},
+//        client.SyncJoinedTo(alice.UserID, roomID),
+//        client.SyncJoinedTo(alice.UserID, roomID2),
+//        client.SyncJoinedTo(alice.UserID, roomID3),
+//    )
+//
+// Check functions are unordered and independent. Once a check function returns true it is removed
+// from the list of checks and won't be called again.
+//
+// In the unlikely event that you want all the checkers to pass *explicitly* in a single /sync
+// response (e.g to assert some form of atomic update which updates multiple parts of the /sync
+// response at once) then make your own checker function which does this.
+//
+// In the unlikely event that you need ordering on your checks, call MustSyncUntil multiple times
+// with a single checker, and reuse the returned since token, as in the "Incremental sync" example.
+//
 // Will time out after CSAPI.SyncUntilTimeout. Returns the latest since token used.
 func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheckOpt) string {
 	t.Helper()
@@ -227,7 +248,7 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 		checkers[i] = c
 	}
 	printErrors := func() string {
-		err := "Checkers: "
+		err := "Checkers:\n"
 		for _, c := range checkers {
 			err += strings.Join(c.errs, "\n")
 			err += ", "
@@ -236,7 +257,7 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 	}
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
-			t.Fatalf("MustSyncUntil: timed out. Seen %d /sync responses. %s", numResponsesReturned, printErrors())
+			t.Fatalf("%s MustSyncUntil: timed out after %v. Seen %d /sync responses. %s", c.UserID, time.Since(start), numResponsesReturned, printErrors())
 		}
 		response, nextBatch := c.MustSync(t, syncReq)
 		syncReq.Since = nextBatch
@@ -250,7 +271,7 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 				i--
 			} else {
 				c := checkers[i]
-				c.errs = append(c.errs, fmt.Sprintf("Response #%d: %s", numResponsesReturned, err))
+				c.errs = append(c.errs, fmt.Sprintf("[t=%v] Response #%d: %s", time.Since(start), numResponsesReturned, err))
 				checkers[i] = c
 			}
 		}
@@ -641,9 +662,16 @@ func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 
 // Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event.
 func SyncJoinedTo(userID, roomID string) SyncCheckOpt {
-	return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-		return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join"
-	})
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		// awkward wrapping to get the error message correct at the start :/
+		err := SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join"
+		})(clientUserID, topLevelSyncJSON)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncJoinedTo(%s,%s): %s", userID, roomID, err)
+	}
 }
 
 // Calls the `check` function for each global account data event, and returns with success if the
