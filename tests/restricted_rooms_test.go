@@ -108,13 +108,14 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 		// Wait until Alice sees Bob leave the allowed room. This ensures that Alice's HS
 		// has processed the leave before Bob tries rejoining, so that it rejects his
 		// attempt to join the room.
-		alice.SyncUntilTimelineHas(t, allowed_room, func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
-				return false
-			}
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
+			allowed_room, func(ev gjson.Result) bool {
+				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
+					return false
+				}
 
-			return ev.Get("content").Get("membership").Str == "leave"
-		})
+				return ev.Get("content").Get("membership").Str == "leave"
+			}))
 
 		failJoinRoom(t, bob, room, "hs1")
 	})
@@ -266,8 +267,7 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 
 	// Ensure that the join comes down sync on hs2. Note that we want to ensure hs2
 	// accepted the event.
-	charlie.SyncUntilTimelineHas(
-		t,
+	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room,
 		func(ev gjson.Result) bool {
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
@@ -278,7 +278,7 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 
 			return true
 		},
-	)
+	))
 
 	// Raise the power level so that users on hs1 can invite people and then leave
 	// the room.
@@ -296,8 +296,7 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 	charlie.LeaveRoom(t, room)
 
 	// Ensure the events have synced to hs1.
-	alice.SyncUntilTimelineHas(
-		t,
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room,
 		func(ev gjson.Result) bool {
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
@@ -307,7 +306,7 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 
 			return true
 		},
-	)
+	))
 
 	// Have bob leave and rejoin. This should still work even though hs2 isn't in
 	// the room anymore!
@@ -391,8 +390,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 	charlie.JoinRoom(t, room, []string{"hs2", "hs1"})
 
 	// Double check that the join was authorised via hs1.
-	bob.SyncUntilTimelineHas(
-		t,
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room,
 		func(ev gjson.Result) bool {
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
@@ -403,7 +401,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 
 			return true
 		},
-	)
+	))
 
 	// Bump the power-level of bob.
 	alice.SendEventSynced(t, room, b.Event{
@@ -422,8 +420,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 	charlie.LeaveRoom(t, room)
 
 	// Ensure the events have synced to hs2.
-	bob.SyncUntilTimelineHas(
-		t,
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room,
 		func(ev gjson.Result) bool {
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
@@ -431,7 +428,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 			}
 			return ev.Get("content").Get("membership").Str == "leave"
 		},
-	)
+	))
 
 	// Bob leaves the allowed room so that hs2 doesn't know if Charlie is in the
 	// allowed room or not.
@@ -445,8 +442,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 	charlie.JoinRoom(t, room, []string{"hs2", "hs1"})
 
 	// Double check that the join was authorised via hs1.
-	bob.SyncUntilTimelineHas(
-		t,
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room,
 		func(ev gjson.Result) bool {
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
@@ -457,5 +453,5 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 
 			return true
 		},
-	)
+	))
 }
