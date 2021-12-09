@@ -31,13 +31,13 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	chris := deployment.RegisterUser(t, "hs1", "chris", "sufficiently_long_password_chris")
 
 	// Alice creates a room for herself.
-	public_room := alice.CreateRoom(t, map[string]interface{}{
+	publicRoom := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
 	// Alice waits to see the join event.
 	alice.SyncUntilTimelineHas(
-		t, public_room, func(ev gjson.Result) bool {
+		t, publicRoom, func(ev gjson.Result) bool {
 			return ev.Get("type").Str == "m.room.member" &&
 				ev.Get("state_key").Str == alice.UserID &&
 				ev.Get("content.membership").Str == "join"
