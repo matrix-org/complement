@@ -23,7 +23,7 @@ import (
 // See functions starting with `With...` in this package for more info.
 type RequestOpt func(req *http.Request)
 
-// SyncCheckOpt is a functional option for use with SyncUntil which should return <nil> if
+// SyncCheckOpt is a functional option for use with MustSyncUntil which should return <nil> if
 // the response satisfies the check, else return a human friendly error.
 // The result object is the entire /sync response from this request.
 type SyncCheckOpt func(clientUserID string, topLevelSyncJSON gjson.Result) error
@@ -66,7 +66,7 @@ type CSAPI struct {
 	AccessToken string
 	BaseURL     string
 	Client      *http.Client
-	// how long are we willing to wait for SyncUntil.... calls
+	// how long are we willing to wait for MustSyncUntil.... calls
 	SyncUntilTimeout time.Duration
 	// True to enable verbose logging
 	Debug bool
@@ -168,7 +168,7 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 }
 
 // Perform a single /sync request with the given request options. To sync until something happens,
-// see `SyncUntil`.
+// see `MustSyncUntil`.
 //
 // Fails the test if the /sync request does not return 200 OK.
 // Returns the top-level parsed /sync response JSON as well as the next_batch token from the response.
@@ -278,66 +278,6 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 		if len(checkers) == 0 {
 			// every checker has passed!
 			return syncReq.Since
-		}
-	}
-}
-
-// SyncUntil blocks and continually calls /sync until
-// - the response contains a particular `key`, and
-// - its corresponding value is an array
-// - some element in that array makes the `check` function return true.
-// If the `check` function fails the test, the failing event will be automatically logged.
-// Will time out after CSAPI.SyncUntilTimeout.
-//
-// Returns the `next_batch` token from the last /sync response. This can be passed as
-// `since` to sync from this point forward only.
-func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) string {
-	t.Helper()
-	start := time.Now()
-	checkCounter := 0
-	// Print failing events in a defer() so we handle t.Fatalf in the same way as t.Errorf
-	var wasFailed = t.Failed()
-	var lastEvent *gjson.Result
-	timedOut := false
-	defer func() {
-		if !wasFailed && t.Failed() {
-			raw := ""
-			if lastEvent != nil {
-				raw = lastEvent.Raw
-			}
-			if !timedOut {
-				t.Logf("SyncUntil: failing event %s", raw)
-			}
-		}
-	}()
-	for {
-		if time.Since(start) > c.SyncUntilTimeout {
-			timedOut = true
-			t.Fatalf("SyncUntil: timed out. Called check function %d times", checkCounter)
-		}
-		query := url.Values{
-			"timeout": []string{"1000"},
-		}
-		if since != "" {
-			query["since"] = []string{since}
-		}
-		if filter != "" {
-			query["filter"] = []string{filter}
-		}
-		res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, WithQueries(query))
-		body := ParseJSON(t, res)
-		since = GetJSONFieldStr(t, body, "next_batch")
-		keyRes := gjson.GetBytes(body, key)
-		if keyRes.IsArray() {
-			events := keyRes.Array()
-			for i, ev := range events {
-				lastEvent = &events[i]
-				if check(ev) {
-					return since
-				}
-				wasFailed = t.Failed()
-				checkCounter++
-			}
 		}
 	}
 }
