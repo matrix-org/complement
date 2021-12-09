@@ -36,13 +36,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	})
 
 	// Alice waits to see the join event.
-	alice.SyncUntilTimelineHas(
-		t, publicRoom, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == "m.room.member" &&
-				ev.Get("state_key").Str == alice.UserID &&
-				ev.Get("content.membership").Str == "join"
-		},
-	)
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, publicRoom))
 
 	// Alice ignores Bob.
 	alice.MustDoFunc(
@@ -57,14 +51,13 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	)
 
 	// Alice waits to see that the ignore was successful.
-	sinceJoinedAndIgnored := alice.SyncUntilGlobalAccountDataHas(
-		t,
+	sinceJoinedAndIgnored := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncGlobalAccountDataHas(
 		func(ev gjson.Result) bool {
 			t.Logf(ev.Raw + "\n")
 			return ev.Get("type").Str == "m.ignored_user_list" &&
 				ev.Get("content.ignored_users."+client.GjsonEscape(bob.UserID)).Exists()
 		},
-	)
+	))
 
 	// Bob invites Alice to a private room.
 	bobRoom := bob.CreateRoom(t, map[string]interface{}{
@@ -79,7 +72,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	})
 
 	// Alice waits until she's seen Chris's invite.
-	alice.SyncUntilInvitedTo(t, chrisRoom)
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, chrisRoom))
 
 	// We re-request the sync with a `since` token. We should see Chris's invite, but not Bob's.
 	queryParams := url.Values{
