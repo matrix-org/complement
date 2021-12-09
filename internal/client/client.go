@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
@@ -21,6 +22,44 @@ import (
 // RequestOpt is a functional option which will modify an outgoing HTTP request.
 // See functions starting with `With...` in this package for more info.
 type RequestOpt func(req *http.Request)
+
+// SyncCheckOpt is a functional option for use with SyncUntil which should return <nil> if
+// the response satisfies the check, else return a human friendly error.
+// The result object is the entire /sync response from this request.
+type SyncCheckOpt func(clientUserID string, topLevelSyncJSON gjson.Result) error
+
+// SyncReq contains all the /sync request configuration options. The empty struct `SyncReq{}` is valid
+// which will do a full /sync due to lack of a since token.
+type SyncReq struct {
+	// A point in time to continue a sync from. This should be the next_batch token returned by an
+	// earlier call to this endpoint.
+	Since string
+	// The ID of a filter created using the filter API or a filter JSON object encoded as a string.
+	// The server will detect whether it is an ID or a JSON object by whether the first character is
+	// a "{" open brace. Passing the JSON inline is best suited to one off requests. Creating a
+	// filter using the filter API is recommended for clients that reuse the same filter multiple
+	// times, for example in long poll requests.
+	Filter string
+	// Controls whether to include the full state for all rooms the user is a member of.
+	// If this is set to true, then all state events will be returned, even if since is non-empty.
+	// The timeline will still be limited by the since parameter. In this case, the timeout parameter
+	// will be ignored and the query will return immediately, possibly with an empty timeline.
+	// If false, and since is non-empty, only state which has changed since the point indicated by
+	// since will be returned.
+	// By default, this is false.
+	FullState bool
+	// Controls whether the client is automatically marked as online by polling this API. If this
+	// parameter is omitted then the client is automatically marked as online when it uses this API.
+	// Otherwise if the parameter is set to “offline” then the client is not marked as being online
+	// when it uses this API. When set to “unavailable”, the client is marked as being idle.
+	// One of: [offline online unavailable].
+	SetPresence string
+	// The maximum time to wait, in milliseconds, before returning this request. If no events
+	// (or other data) become available before this time elapses, the server will return a response
+	// with empty fields.
+	// By default, this is 1000 for Complement testing.
+	TimeoutMillis string // string for easier conversion to query params
+}
 
 type CSAPI struct {
 	UserID      string
@@ -126,6 +165,101 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 		return r.Get("event_id").Str == eventID
 	})
 	return eventID
+}
+
+// Perform a single /sync request with the given request options. To sync until something happens,
+// see `SyncUntil`.
+//
+// Fails the test if the /sync request does not return 200 OK.
+// Returns the top-level parsed /sync response JSON as well as the next_batch token from the response.
+func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
+	t.Helper()
+	query := url.Values{
+		"timeout": []string{"1000"},
+	}
+	// configure the HTTP request based on SyncReq
+	if syncReq.TimeoutMillis != "" {
+		query["timeout"] = []string{syncReq.TimeoutMillis}
+	}
+	if syncReq.Since != "" {
+		query["since"] = []string{syncReq.Since}
+	}
+	if syncReq.Filter != "" {
+		query["filter"] = []string{syncReq.Filter}
+	}
+	if syncReq.FullState {
+		query["full_state"] = []string{"true"}
+	}
+	if syncReq.SetPresence != "" {
+		query["set_presence"] = []string{syncReq.SetPresence}
+	}
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, WithQueries(query))
+	body := ParseJSON(t, res)
+	result := gjson.ParseBytes(body)
+	nextBatch := GetJSONFieldStr(t, body, "next_batch")
+	return result, nextBatch
+}
+
+// MustSyncUntil blocks and continually calls /sync (advancing the since token) until all the
+// checks options return true. Check options don't all need to return true on a single
+// /sync request, they are cumulative. For example, this will repeatedly call /sync until the client
+// sees the join event and the message in the same room:
+//   client.MustSyncUntil(
+//       t, SyncReq{}, client.SyncJoinedTo("!foo:bar"), client.SyncTimelineHas("!foo:bar", ...),
+//   )
+// Once a check option returns true it is removed from the list of checks and won't be called again.
+// Will time out after CSAPI.SyncUntilTimeout.
+func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheckOpt) {
+	t.Helper()
+	start := time.Now()
+	numResponsesReturned := 0
+	// Print failing events in a defer() so we handle t.Fatalf in the same way as t.Errorf
+	var wasFailed = t.Failed()
+	var lastEvent *gjson.Result
+	timedOut := false
+	defer func() {
+		if !wasFailed && t.Failed() {
+			raw := ""
+			if lastEvent != nil {
+				raw = lastEvent.Raw
+			}
+			if !timedOut {
+				t.Logf("MustSyncUntil: failing event %s", raw)
+			}
+		}
+	}()
+	checkers := make([]struct {
+		check   SyncCheckOpt
+		lastErr error
+	}, len(checks))
+	for i := range checks {
+		c := checkers[i]
+		c.check = checks[i]
+		c.lastErr = fmt.Errorf("not run")
+		checkers[i] = c
+	}
+	for {
+		if time.Since(start) > c.SyncUntilTimeout {
+			timedOut = true
+			t.Fatalf("MustSyncUntil: timed out. Seen %d /sync responses", numResponsesReturned)
+		}
+		response, nextBatch := c.MustSync(t, syncReq)
+		syncReq.Since = nextBatch
+		numResponsesReturned += 1
+
+		for i := 0; i < len(checkers); i++ {
+			err := checkers[i].check(c.UserID, response)
+			if err == nil {
+				// check passed, removed from checkers
+				checkers = append(checkers[:i], checkers[i+1:]...)
+				i--
+			} else {
+				c := checkers[i]
+				c.lastErr = err
+				checkers[i] = c
+			}
+		}
+	}
 }
 
 // SyncUntilTimelineHas is a wrapper around `SyncUntil`.
@@ -486,4 +620,67 @@ func GjsonEscape(in string) string {
 	in = strings.ReplaceAll(in, ".", `\.`)
 	in = strings.ReplaceAll(in, "*", `\*`)
 	return in
+}
+
+func SyncTimelineHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncTimelineHas(%s): %s", roomID, err)
+	}
+}
+func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		// two forms which depend on what the client user is:
+		// - passively viewing an invite for a room you're joined to (timeline events)
+		// - actively being invited to a room.
+		if clientUserID == userID {
+			// active
+			err := loopArray(
+				topLevelSyncJSON, "rooms.invite."+GjsonEscape(roomID)+".invite_state.events",
+				func(ev gjson.Result) bool {
+					return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("SyncInvitedTo(%s): %s", roomID, err)
+			}
+			return nil
+		}
+		// passive
+		return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
+		})(clientUserID, topLevelSyncJSON)
+	}
+}
+func SyncJoinedTo(userID, roomID string) SyncCheckOpt {
+	return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+		return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join"
+	})
+}
+func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		return loopArray(topLevelSyncJSON, "account_data.events", check)
+	}
+}
+
+func loopArray(object gjson.Result, key string, check func(gjson.Result) bool) error {
+	array := object.Get(key)
+	if !array.Exists() {
+		return fmt.Errorf("Key %s does not exist", key)
+	}
+	if !array.IsArray() {
+		return fmt.Errorf("Key %s exists but it isn't an array", key)
+	}
+	goArray := array.Array()
+	for _, ev := range goArray {
+		if check(ev) {
+			return nil
+		}
+	}
+	return fmt.Errorf("check function did not pass for %d elements", len(goArray))
 }
