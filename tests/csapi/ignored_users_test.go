@@ -20,9 +20,9 @@ import (
 // that
 // > Servers must not send room invites from ignored users to clients.
 //
-// Synapse does not have this property, as detailed in
-// https://github.com/matrix-org/synapse/issues/11506.
-// This reproduces that bug.
+// This is a regression test for
+// https://github.com/matrix-org/synapse/issues/11506
+// to ensure that Synapse complies with this part of the spec.
 func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
