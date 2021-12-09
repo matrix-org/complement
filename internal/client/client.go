@@ -607,7 +607,7 @@ func SyncJoinedTo(userID, roomID string) SyncCheckOpt {
 }
 
 // Calls the `check` function for each global account data event, and returns with success if the
-// check function returns true.
+// `check` function returns true for at least one event.
 func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		return loopArray(topLevelSyncJSON, "account_data.events", check)
