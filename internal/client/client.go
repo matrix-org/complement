@@ -201,47 +201,42 @@ func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
 }
 
 // MustSyncUntil blocks and continually calls /sync (advancing the since token) until all the
-// checks options return true. Check options don't all need to return true on a single
+// checks options return no error. Check options don't *all* need to return no error on a single
 // /sync request, they are cumulative. For example, this will repeatedly call /sync until the client
 // sees the join event and the message in the same room:
-//   client.MustSyncUntil(
-//       t, SyncReq{}, client.SyncJoinedTo("!foo:bar"), client.SyncTimelineHas("!foo:bar", ...),
+//   alice.MustSyncUntil(
+//       t, SyncReq{},
+//       client.SyncJoinedTo(alice.UserID, "!foo:bar"),
+//       client.SyncTimelineHas("!foo:bar", (ev gjson.Result) bool { return ev.Type.Str == "m.room.message" }),
 //   )
 // Once a check option returns true it is removed from the list of checks and won't be called again.
-// Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheckOpt) {
+// There is no ordering on the checkers. If you need ordering, call MustSyncUntil multiple times with
+// a single checker, and reuse the returned since token.
+// Will time out after CSAPI.SyncUntilTimeout. Returns the latest since token used.
+func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheckOpt) string {
 	t.Helper()
 	start := time.Now()
 	numResponsesReturned := 0
-	// Print failing events in a defer() so we handle t.Fatalf in the same way as t.Errorf
-	var wasFailed = t.Failed()
-	var lastEvent *gjson.Result
-	timedOut := false
-	defer func() {
-		if !wasFailed && t.Failed() {
-			raw := ""
-			if lastEvent != nil {
-				raw = lastEvent.Raw
-			}
-			if !timedOut {
-				t.Logf("MustSyncUntil: failing event %s", raw)
-			}
-		}
-	}()
 	checkers := make([]struct {
-		check   SyncCheckOpt
-		lastErr error
+		check SyncCheckOpt
+		errs  []string
 	}, len(checks))
 	for i := range checks {
 		c := checkers[i]
 		c.check = checks[i]
-		c.lastErr = fmt.Errorf("not run")
 		checkers[i] = c
+	}
+	printErrors := func() string {
+		err := "Checkers: "
+		for _, c := range checkers {
+			err += strings.Join(c.errs, "\n")
+			err += ", "
+		}
+		return err
 	}
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
-			timedOut = true
-			t.Fatalf("MustSyncUntil: timed out. Seen %d /sync responses", numResponsesReturned)
+			t.Fatalf("MustSyncUntil: timed out. Seen %d /sync responses. %s", numResponsesReturned, printErrors())
 		}
 		response, nextBatch := c.MustSync(t, syncReq)
 		syncReq.Since = nextBatch
@@ -255,9 +250,13 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 				i--
 			} else {
 				c := checkers[i]
-				c.lastErr = err
+				c.errs = append(c.errs, fmt.Sprintf("Response #%d: %s", numResponsesReturned, err))
 				checkers[i] = c
 			}
+		}
+		if len(checkers) == 0 {
+			// every checker has passed!
+			return syncReq.Since
 		}
 	}
 }
@@ -271,31 +270,6 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
 	t.Helper()
 	c.SyncUntil(t, "", "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
-}
-
-// SyncUntilInvitedTo is a wrapper around SyncUntil.
-// It blocks and continually calls `/sync` until we've been invited to the given room.
-// Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
-	t.Helper()
-	check := func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "invite" &&
-			event.Get("state_key").Str == c.UserID
-	}
-	c.SyncUntil(t, "", "", "rooms.invite."+GjsonEscape(roomID)+".invite_state.events", check)
-}
-
-// SyncUntilJoined is a wrapper around SyncUntil.
-// It blocks and continually calls `/sync` until we've joined the given room.
-// Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntilJoined(t *testing.T, roomID string) {
-	t.Helper()
-	c.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "join" &&
-			event.Get("state_key").Str == c.UserID
-	})
 }
 
 // SyncUntil blocks and continually calls /sync until
@@ -622,6 +596,7 @@ func GjsonEscape(in string) string {
 	return in
 }
 
+// Check that the timeline for `roomID` has an event which passes the check function.
 func SyncTimelineHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		err := loopArray(
@@ -633,6 +608,12 @@ func SyncTimelineHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt 
 		return fmt.Errorf("SyncTimelineHas(%s): %s", roomID, err)
 	}
 }
+
+// Checks that `userID` gets invited to `roomID`.
+//
+// This checks different parts of the /sync response depending on the client making the request.
+// If the client is also the person being invited to the room then the 'invite' block will be inspected.
+// If the client is different to the person being invited then the 'join' block will be inspected.
 func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		// two forms which depend on what the client user is:
@@ -657,11 +638,16 @@ func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 		})(clientUserID, topLevelSyncJSON)
 	}
 }
+
+// Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event.
 func SyncJoinedTo(userID, roomID string) SyncCheckOpt {
 	return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 		return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join"
 	})
 }
+
+// Calls the `check` function for each global account data event, and returns with success if the
+// check function returns true.
 func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		return loopArray(topLevelSyncJSON, "account_data.events", check)

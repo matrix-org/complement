@@ -140,7 +140,7 @@ func TestRoomSpecificUsernameChange(t *testing.T) {
 	})
 
 	// Alice waits until she sees the invite, then accepts.
-	alice.SyncUntilInvitedTo(t, privateRoom)
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, privateRoom))
 	alice.JoinRoom(t, privateRoom, nil)
 
 	// Alice reveals her private name to Bob
@@ -169,7 +169,7 @@ func TestRoomSpecificUsernameAtJoin(t *testing.T) {
 
 	// Alice waits until she sees the invite, then accepts.
 	// When she accepts, she does so with a specific displayname.
-	alice.SyncUntilInvitedTo(t, privateRoom)
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, privateRoom))
 	alice.JoinRoom(t, privateRoom, nil)
 
 	// Alice reveals her private name to Bob

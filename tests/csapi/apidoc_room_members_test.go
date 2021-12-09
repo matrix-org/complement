@@ -6,6 +6,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -116,12 +117,12 @@ func TestRoomMembers(t *testing.T) {
 
 			alice.InviteRoom(t, roomID, bob.UserID)
 
-			bob.SyncUntilInvitedTo(t, roomID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 			bob.JoinRoom(t, roomID, nil)
 
 			// Sync to make sure bob has joined
-			bob.SyncUntilJoined(t, roomID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			stateKey := ""
 			alice.SendEventSynced(t, roomID, b.Event{
@@ -151,11 +152,11 @@ func TestRoomMembers(t *testing.T) {
 
 			bob.InviteRoom(t, roomID, alice.UserID)
 
-			alice.SyncUntilInvitedTo(t, roomID)
+			since := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
 
 			alice.JoinRoom(t, roomID, nil)
 
-			alice.SyncUntilJoined(t, roomID)
+			alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncJoinedTo(alice.UserID, roomID))
 		})
 	})
 }
