@@ -288,7 +288,10 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 // - some element in that array makes the `check` function return true.
 // If the `check` function fails the test, the failing event will be automatically logged.
 // Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
+//
+// Returns the `next_batch` token from the last /sync response. This can be passed as
+// `since` to sync from this point forward only.
+func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) string {
 	t.Helper()
 	start := time.Now()
 	checkCounter := 0
@@ -330,7 +333,7 @@ func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gj
 			for i, ev := range events {
 				lastEvent = &events[i]
 				if check(ev) {
-					return
+					return since
 				}
 				wasFailed = t.Failed()
 				checkCounter++
