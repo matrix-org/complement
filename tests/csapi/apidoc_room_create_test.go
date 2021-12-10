@@ -159,10 +159,5 @@ func TestRoomCreateWithInvites(t *testing.T) {
 		"invite": []string{bob.UserID},
 	})
 
-	bob.SyncUntil(t, "", "", "rooms.invite."+client.GjsonEscape(roomID)+".invite_state.events", func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "invite" &&
-			event.Get("state_key").Str == bob.UserID &&
-			event.Get("sender").Str == alice.UserID
-	})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 }

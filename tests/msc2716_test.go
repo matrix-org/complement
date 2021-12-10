@@ -236,7 +236,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 
 			// Get a /sync `since` pagination token we can try paginating from later
 			// on
-			since := doInitialSync(t, alice)
+			_, since := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
@@ -263,13 +263,13 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// eventIDAfterHistoricalImport without any the
 			// historicalEventIDs/historicalStateEventIDs in between, we're probably
 			// safe to assume it won't sync.
-			alice.SyncUntil(t, since, "", "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
+			alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 				if includes(r.Get("event_id").Str, historicalEventIDs) || includes(r.Get("event_id").Str, historicalStateEventIDs) {
 					t.Fatalf("We should not see the %s historical event in /sync response but it was present", r.Get("event_id").Str)
 				}
 
 				return r.Get("event_id").Str == eventIDAfterHistoricalImport
-			})
+			}))
 		})
 
 		t.Run("Batch send endpoint only returns state events that we passed in via state_events_at_start", func(t *testing.T) {
@@ -633,9 +633,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 			insertionSendBody := client.ParseJSON(t, insertionSendRes)
 			insertionEventID := client.GetJSONFieldStr(t, insertionSendBody, "event_id")
 			// Make sure the insertion event has reached the homeserver
-			alice.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 				return ev.Get("event_id").Str == insertionEventID
-			})
+			}))
 
 			// eventIDsAfter
 			createMessagesInRoom(t, alice, roomID, 3)
@@ -1128,9 +1128,9 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 	markerEventID = client.GetJSONFieldStr(t, markerSendBody, "event_id")
 
 	// Make sure the marker event has reached the remote homeserver
-	c.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+	c.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 		return ev.Get("event_id").Str == markerEventID
-	})
+	}))
 
 	// Make sure all of the base insertion event has been backfilled
 	// after the marker was received

@@ -3,8 +3,6 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/tidwall/gjson"
-
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
@@ -59,12 +57,7 @@ func TestNotPresentUserCannotBanOthers(t *testing.T) {
 		},
 	})
 
-	// todo: replace with `SyncUntilJoined`
-	bob.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "join" &&
-			event.Get("state_key").Str == bob.UserID
-	})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := charlie.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
 		"user_id": bob.UserID,

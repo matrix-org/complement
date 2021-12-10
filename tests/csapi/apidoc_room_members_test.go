@@ -6,6 +6,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -34,17 +35,7 @@ func TestRoomMembers(t *testing.T) {
 				},
 			})
 
-			bob.SyncUntilTimelineHas(
-				t,
-				roomID,
-				func(ev gjson.Result) bool {
-					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
-						return false
-					}
-					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
-					return true
-				},
-			)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 		})
 		// sytest: POST /join/:room_alias can join a room
 		t.Run("POST /join/:room_alias can join a room", func(t *testing.T) {
@@ -65,17 +56,7 @@ func TestRoomMembers(t *testing.T) {
 				},
 			})
 
-			bob.SyncUntilTimelineHas(
-				t,
-				roomID,
-				func(ev gjson.Result) bool {
-					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
-						return false
-					}
-					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
-					return true
-				},
-			)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 		})
 		// sytest: POST /join/:room_id can join a room
 		t.Run("POST /join/:room_id can join a room", func(t *testing.T) {
@@ -95,8 +76,7 @@ func TestRoomMembers(t *testing.T) {
 				},
 			})
 
-			bob.SyncUntilTimelineHas(
-				t,
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 				roomID,
 				func(ev gjson.Result) bool {
 					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
@@ -105,7 +85,7 @@ func TestRoomMembers(t *testing.T) {
 					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
 					return true
 				},
-			)
+			))
 		})
 		// sytest: Test that we can be reinvited to a room we created
 		t.Run("Test that we can be reinvited to a room we created", func(t *testing.T) {
@@ -116,12 +96,12 @@ func TestRoomMembers(t *testing.T) {
 
 			alice.InviteRoom(t, roomID, bob.UserID)
 
-			bob.SyncUntilInvitedTo(t, roomID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 			bob.JoinRoom(t, roomID, nil)
 
 			// Sync to make sure bob has joined
-			bob.SyncUntilJoined(t, roomID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			stateKey := ""
 			alice.SendEventSynced(t, roomID, b.Event{
@@ -139,23 +119,19 @@ func TestRoomMembers(t *testing.T) {
 			alice.LeaveRoom(t, roomID)
 
 			// Wait until alice has left the room
-			bob.SyncUntilTimelineHas(
-				t,
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 				roomID,
 				func(ev gjson.Result) bool {
 					return ev.Get("type").Str == "m.room.member" &&
 						ev.Get("content.membership").Str == "leave" &&
 						ev.Get("state_key").Str == alice.UserID
 				},
-			)
+			))
 
 			bob.InviteRoom(t, roomID, alice.UserID)
-
-			alice.SyncUntilInvitedTo(t, roomID)
-
+			since := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
 			alice.JoinRoom(t, roomID, nil)
-
-			alice.SyncUntilJoined(t, roomID)
+			alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncJoinedTo(alice.UserID, roomID))
 		})
 	})
 }
