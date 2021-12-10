@@ -628,5 +628,5 @@ func loopArray(object gjson.Result, key string, check func(gjson.Result) bool) e
 			return nil
 		}
 	}
-	return fmt.Errorf("check function did not pass for %d elements: %v", len(goArray), array.Raw)
+	return fmt.Errorf("check function did not pass while iterating over %d elements: %v", len(goArray), array.Raw)
 }
