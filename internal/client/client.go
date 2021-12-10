@@ -251,7 +251,7 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 		err := "Checkers:\n"
 		for _, c := range checkers {
 			err += strings.Join(c.errs, "\n")
-			err += ", "
+			err += ", \n"
 		}
 		return err
 	}
