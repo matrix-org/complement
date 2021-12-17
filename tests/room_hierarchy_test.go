@@ -1,4 +1,4 @@
-// +build msc2946
+// +build !dendrite_blacklist
 
 // This file includes tests for MSC2946, the spaces summary API.
 //
@@ -204,40 +204,7 @@ func TestClientSpacesSummary(t *testing.T) {
 	// - Rooms are returned correctly along with the custom fields `room_type`.
 	// - Events are returned correctly.
 	t.Run("query whole graph", func(t *testing.T) {
-		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
-		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONCheckOff("rooms", []interface{}{
-					root, r1, r2, r3, r4, ss1, ss2,
-				}, func(r gjson.Result) interface{} {
-					return r.Get("room_id").Str
-				}, func(roomInt interface{}, data gjson.Result) error {
-					roomID := roomInt.(string)
-					// check fields
-					if name, ok := roomNames[roomID]; ok {
-						if data.Get("name").Str != name {
-							return fmt.Errorf("room %s got name %s want %s", roomID, data.Get("name").Str, name)
-						}
-					}
-					if roomID == ss1 {
-						wantType := "m.space"
-						if data.Get("room_type").Str != wantType {
-							return fmt.Errorf("room %s got type %s want %s", roomID, data.Get("room_type").Str, wantType)
-						}
-					}
-					return nil
-				}),
-				// Check that the links from Root down to other rooms and spaces exist.
-				match.JSONCheckOff("events", []interface{}{
-					rootToR1, rootToR2, rootToSS1,
-					ss1ToSS2, ss2ToR3, ss2ToR4,
-				}, func(r gjson.Result) interface{} {
-					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
-				}, nil),
-			},
-		})
-
-		res = alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"}, nil)
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -271,35 +238,6 @@ func TestClientSpacesSummary(t *testing.T) {
 		})
 	})
 
-	// - Setting max_rooms_per_space works correctly
-	t.Run("max_rooms_per_space", func(t *testing.T) {
-		// should omit either R3 or R4 if we start from SS1 because we only return 1 link per room which will be:
-		// SS1 -> SS2
-		// SS2 -> R3,R4 (but only 1 is allowed)
-		query := make(url.Values, 1)
-		query.Set("max_rooms_per_space", "1")
-		res := alice.MustDoFunc(
-			t,
-			"GET",
-			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", ss1, "spaces"},
-			client.WithQueries(query),
-		)
-		wantItems := []interface{}{
-			ss1ToSS2,
-			ss2ToR3, ss2ToR4, // one of these
-		}
-		body := must.ParseJSON(t, res.Body)
-		gjson.GetBytes(body, "events").ForEach(func(_, val gjson.Result) bool {
-			wantItems = must.CheckOff(t, wantItems, eventKey(val.Get("room_id").Str, val.Get("state_key").Str, val.Get("type").Str))
-			return true
-		})
-		if len(wantItems) != 1 {
-			if wantItems[0] != ss2ToR3 && wantItems[0] != ss2ToR4 {
-				t.Errorf("expected fewer events to be returned: %s", string(body))
-			}
-		}
-	})
-
 	// - Setting max_depth works correctly
 	t.Run("max_depth", func(t *testing.T) {
 		// Should only include R1, SS1, and R2.
@@ -308,7 +246,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		res := alice.MustDoFunc(
 			t,
 			"GET",
-			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"},
+			[]string{"_matrix", "client", "v1", "rooms", root, "hierarchy"},
 			client.WithQueries(query),
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -336,7 +274,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		res := alice.MustDoFunc(
 			t,
 			"GET",
-			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"},
+			[]string{"_matrix", "client", "v1", "rooms", root, "hierarchy"},
 			client.WithQueries(query),
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -364,7 +302,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		res := alice.MustDoFunc(
 			t,
 			"GET",
-			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"},
+			[]string{"_matrix", "client", "v1", "rooms", root, "hierarchy"},
 			client.WithQueries(query),
 		)
 		body := must.MatchResponse(t, res, match.HTTPResponse{
@@ -383,7 +321,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		res = alice.MustDoFunc(
 			t,
 			"GET",
-			[]string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"},
+			[]string{"_matrix", "client", "v1", "rooms", root, "hierarchy"},
 			client.WithQueries(query),
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -404,23 +342,7 @@ func TestClientSpacesSummary(t *testing.T) {
 			StateKey: &ss1,
 			Content:  map[string]interface{}{},
 		})
-		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
-		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONCheckOff("rooms", []interface{}{
-					root, r1, r2,
-				}, func(r gjson.Result) interface{} {
-					return r.Get("room_id").Str
-				}, nil),
-				match.JSONCheckOff("events", []interface{}{
-					rootToR1, rootToR2,
-				}, func(r gjson.Result) interface{} {
-					return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
-				}, nil),
-			},
-		})
-
-		res = alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"}, nil)
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -534,22 +456,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	bob.JoinRoom(t, root, []string{"hs1"})
 
-	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				root,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-			match.JSONCheckOff("events", []interface{}{
-				rootToR1, rootToSS1,
-			}, func(r gjson.Result) interface{} {
-				return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
-			}, nil),
-		},
-	})
-	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"}, nil)
+	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
@@ -569,22 +476,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	alice.InviteRoom(t, r1, bob.UserID)
 	alice.InviteRoom(t, r3, bob.UserID)
 
-	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				root, r1,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-			match.JSONCheckOff("events", []interface{}{
-				rootToR1, rootToSS1,
-			}, func(r gjson.Result) interface{} {
-				return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
-			}, nil),
-		},
-	})
-	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"}, nil)
+	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
@@ -603,22 +495,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	// Invite to SS1 and it now appears, as well as the rooms under it.
 	alice.InviteRoom(t, ss1, bob.UserID)
 
-	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				root, r1, ss1, r2, r3,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-			match.JSONCheckOff("events", []interface{}{
-				rootToR1, rootToSS1, ss1ToR2, ss1ToR3,
-			}, func(r gjson.Result) interface{} {
-				return eventKey(r.Get("room_id").Str, r.Get("state_key").Str, r.Get("type").Str)
-			}, nil),
-		},
-	})
-	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"}, nil)
+	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
@@ -748,17 +625,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 	}
 	t.Logf("rooms: %v", allEvents)
 
-	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "spaces"}, nil)
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
-				root, r1, r2, r3, r4, ss1, ss2,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("room_id").Str
-			}, nil),
-		},
-	})
-	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc2946", "rooms", root, "hierarchy"}, nil)
+	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{

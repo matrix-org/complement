@@ -189,13 +189,27 @@ Normally, server logs are only printed when one of the tests fail. To override t
 
 ### How do I skip a test?
 
-Use one of `t.Skipf(...)` or `t.SkipNow()`.
+To conditionally skip a *single* test based on the homeserver being run, add a single line at the start of the test:
+```go
+runtime.SkipIf(t, runtime.Dendrite)
+```
+To conditionally skip an entire *file* based on the homeserver being run, add a [build tag](https://pkg.go.dev/cmd/go#hdr-Build_constraints) at the top of the file which will skip execution of all the tests in this file if Complement is run with this flag:
+```go
+// +build !dendrite_blacklist
+```
+You can also do this based on features for MSC tests (which means you must run Complement *with* this tag for these tests *to run*):
+```go
+// +build msc_2836
+```
+See [GH Actions](https://github.com/matrix-org/complement/blob/master/.github/workflows/ci.yaml) for an example of how this is used for different homeservers in practice.
 
 ### Why do we use `t.Errorf` sometimes and `t.Fatalf` other times?
 
 Error will fail the test but continue execution, where Fatal will fail the test and quit. Use Fatal when continuing to run the test will result in programming errors (e.g nil exceptions).
 
 ### How do I run tests inside my IDE?
+
+Make sure you have first built a compatible complement image, such as `complement-dendrite:latest` (see [README.md "Running against Dendrite"](README.md#running-against-dendrite)), which will be used in this section. (If you're using a different server, replace any instance of `complement-dendrite:latest` with your own tag)
 
 For VSCode, add to `settings.json`:
 ```
@@ -205,9 +219,18 @@ For VSCode, add to `settings.json`:
 ```
 
 For Goland:
- * Under "Run"->"Edit Configurations..."->"Templates"->"Go Test", add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest`
+ * Under "Run"->"Edit Configurations..."->"Edit Configuration Templates..."->"Go Test", and add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest` to "Environment"
  * Then you can right-click on any test file or test case and "Run <test name>".
 
+	
+### How do I make the linter checks pass?
+
+Use [`goimports`](https://pkg.go.dev/golang.org/x/tools/cmd/goimports) to sort imports and format in the style of `gofmt`.
+	
+Set this up to run on save in VSCode as follows:
+- File -> Preferences -> Settings.
+  - Search for "Format On Save" and enable it.
+  - Search for `go: format tool` and choose `goimports`.
 
 ### How do I hook up a Matrix client like Element to the homeservers spun up by Complement after a test runs?
 

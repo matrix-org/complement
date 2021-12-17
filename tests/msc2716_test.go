@@ -291,7 +291,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			paginateUntilMessageCheckOff(t, remoteCharlie, roomID, expectedEventIDs, denyListEventIDs)
 		})
 
-		t.Run("Historical events from /batch_send do not come down in an incremental sync", func(t *testing.T) {
+		t.Run("Historical events from batch_send do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -304,6 +304,10 @@ func TestImportHistoricalMessages(t *testing.T) {
 
 			// Create some "live" events to saturate and fill up the /sync response
 			createMessagesInRoom(t, alice, roomID, 5, "live")
+
+			// Get a /sync `since` pagination token we can try paginating from later
+			// on
+			_, since := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
@@ -319,23 +323,24 @@ func TestImportHistoricalMessages(t *testing.T) {
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-			historicalEventId := historicalEventIDs[0]
+			historicalStateEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "state_event_ids")
 
-			// This is just a dummy event we search for after the historicalEventId
+			// This is just a dummy event we search for after the historicalEventIDs/historicalStateEventIDs
 			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1, "eventIDsAfterHistoricalImport")
 			eventIDAfterHistoricalImport := eventIDsAfterHistoricalImport[0]
 
-			// Sync until we find the eventIDAfterHistoricalImport.
-			// If we're able to see the eventIDAfterHistoricalImport that occurs after
-			// the historicalEventId without seeing eventIDAfterHistoricalImport in
-			// between, we're probably safe to assume it won't sync
-			alice.SyncUntil(t, "", `{ "room": { "timeline": { "limit": 3 } } }`, "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
-				if r.Get("event_id").Str == historicalEventId {
-					t.Fatalf("We should not see the %s historical event in /sync response but it was present", historicalEventId)
+			// Sync from before we did any batch sending until we find the
+			// eventIDAfterHistoricalImport. If we're able to see
+			// eventIDAfterHistoricalImport without any the
+			// historicalEventIDs/historicalStateEventIDs in between, we're probably
+			// safe to assume it won't sync.
+			alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+				if includes(r.Get("event_id").Str, historicalEventIDs) || includes(r.Get("event_id").Str, historicalStateEventIDs) {
+					t.Fatalf("We should not see the %s historical event in /sync response but it was present", r.Get("event_id").Str)
 				}
 
 				return r.Get("event_id").Str == eventIDAfterHistoricalImport
-			})
+			}))
 		})
 
 		t.Run("Batch send endpoint only returns state events that we passed in via state_events_at_start", func(t *testing.T) {
@@ -643,7 +648,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 			baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
 
-			// Send the marker event
+			// Send the marker event which lets remote homeservers know there are
+			// some historical messages back at the given insertion event.
 			sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
 
 			// Join the room from a remote homeserver after the historical messages were sent
@@ -703,9 +709,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 			insertionSendBody := client.ParseJSON(t, insertionSendRes)
 			insertionEventID := client.GetJSONFieldStr(t, insertionSendBody, "event_id")
 			// Make sure the insertion event has reached the homeserver
-			alice.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 				return ev.Get("event_id").Str == insertionEventID
-			})
+			}))
 
 			// eventIDsAfter
 			createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
@@ -724,7 +730,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 
-			// Send the marker event
+			// Send the marker event which lets remote homeservers know there are
+			// some historical messages back at the given insertion event.
 			sendMarkerAndEnsureBackfilled(t, as, alice, roomID, insertionEventID)
 
 			// Join the room from a remote homeserver after the historical messages were sent
@@ -829,7 +836,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				},
 			})
 
-			// Send the marker event
+			// Send the marker event which lets remote homeservers know there are
+			// some historical messages back at the given insertion event.
 			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
 			// FIXME: In the future, we should probably replace the following logic
@@ -922,7 +930,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				},
 			})
 
-			// Send the marker event
+			// Send the marker event which lets remote homeservers know there are
+			// some historical messages back at the given insertion event.
 			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
 			// FIXME: In the future, we should probably replace the following logic
@@ -1032,7 +1041,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				batchEventID := client.GetJSONFieldStr(t, batchSendResBody, "batch_event_id")
 				baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
 
-				// Send the marker event
+				// Send the marker event which lets remote homeservers know there are
+				// some historical messages back at the given insertion event.
 				markerEventID := sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
 
 				redactEventID(t, alice, roomID, insertionEventID, 403)
@@ -1068,6 +1078,17 @@ func reversed(in []string) []string {
 		out[i] = in[len(in)-i-1]
 	}
 	return out
+}
+
+// Find a given "needle" string in a list of strings, the haystack
+func includes(needle string, haystack []string) bool {
+	for _, item := range haystack {
+		if needle == item {
+			return true
+		}
+	}
+
+	return false
 }
 
 func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string, check func(gjson.Result) bool) {
@@ -1267,11 +1288,11 @@ func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocal
 	}
 }
 
+// Send the marker event which lets remote homeservers know there are
+// some historical messages back at the given insertion event.
 func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSAPI, roomID, insertionEventID string) (markerEventID string) {
 	t.Helper()
 
-	// Send a marker event to let all of the homeservers know about the
-	// insertion point where all of the historical messages are at
 	markerEvent := b.Event{
 		Type: markerEventType,
 		Content: map[string]interface{}{
@@ -1285,9 +1306,9 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 	markerEventID = client.GetJSONFieldStr(t, markerSendBody, "event_id")
 
 	// Make sure the marker event has reached the remote homeserver
-	c.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+	c.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 		return ev.Get("event_id").Str == markerEventID
-	})
+	}))
 
 	// Make sure all of the base insertion event has been backfilled
 	// after the marker was received

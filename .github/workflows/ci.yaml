@@ -24,7 +24,7 @@ jobs:
       matrix:
         include:
           - homeserver: Synapse
-            tags: synapse_blacklist,msc2403,msc2946,msc3083
+            tags: synapse_blacklist,msc2403,msc3083
             default_branch: develop
 
           - homeserver: Dendrite

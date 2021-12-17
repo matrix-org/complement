@@ -3,6 +3,7 @@ package match
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/tidwall/gjson"
 )
@@ -17,7 +18,7 @@ type JSON func(body []byte) error
 func JSONKeyEqual(wantKey string, wantValue interface{}) JSON {
 	return func(body []byte) error {
 		res := gjson.GetBytes(body, wantKey)
-		if res.Index == 0 {
+		if !res.Exists() {
 			return fmt.Errorf("key '%s' missing", wantKey)
 		}
 		gotValue := res.Value()
@@ -40,6 +41,18 @@ func JSONKeyPresent(wantKey string) JSON {
 	}
 }
 
+// JSONKeyMissing returns a matcher which will check that `forbiddenKey` is not present in the JSON object.
+// `forbiddenKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
+func JSONKeyMissing(forbiddenKey string) JSON {
+	return func(body []byte) error {
+		res := gjson.GetBytes(body, forbiddenKey)
+		if res.Exists() {
+			return fmt.Errorf("key '%s' present", forbiddenKey)
+		}
+		return nil
+	}
+}
+
 // JSONKeyTypeEqual returns a matcher which will check that `wantKey` is present and its value is of the type `wantType`.
 // `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
 func JSONKeyTypeEqual(wantKey string, wantType gjson.Type) JSON {
@@ -50,6 +63,26 @@ func JSONKeyTypeEqual(wantKey string, wantType gjson.Type) JSON {
 		}
 		if res.Type != wantType {
 			return fmt.Errorf("key '%s' is of the wrong type, got %s want %s", wantKey, res.Type, wantType)
+		}
+		return nil
+	}
+}
+
+// JSONKeyArrayOfSize returns a matcher which will check that `wantKey` is present and
+// its value is an array with the given size.
+// `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
+func JSONKeyArrayOfSize(wantKey string, wantSize int) JSON {
+	return func(body []byte) error {
+		res := gjson.GetBytes(body, wantKey)
+		if !res.Exists() {
+			return fmt.Errorf("key '%s' missing", wantKey)
+		}
+		if !res.IsArray() {
+			return fmt.Errorf("key '%s' is not an array", wantKey)
+		}
+		entries := res.Array()
+		if len(entries) != wantSize {
+			return fmt.Errorf("key '%s' is an array of the wrong size, got %v want %v", wantKey, len(entries), wantSize)
 		}
 		return nil
 	}
@@ -202,5 +235,31 @@ func JSONMapEach(wantKey string, fn func(k, v gjson.Result) error) JSON {
 			return err == nil
 		})
 		return err
+	}
+}
+
+// AnyOf takes 1 or more `checkers`, and builds a new checker which accepts a given
+// json body iff it's accepted by at least one of the original `checkers`.
+func AnyOf(checkers ...JSON) JSON {
+	return func(body []byte) error {
+		if len(checkers) == 0 {
+			return fmt.Errorf("must provide at least one checker to AnyOf")
+		}
+
+		errors := make([]error, len(checkers))
+		for i, check := range checkers {
+			errors[i] = check(body)
+			if errors[i] == nil {
+				return nil
+			}
+		}
+
+		builder := strings.Builder{}
+		builder.WriteString("all checks failed:")
+		for _, err := range errors {
+			builder.WriteString("\n    ")
+			builder.WriteString(err.Error())
+		}
+		return fmt.Errorf(builder.String())
 	}
 }
