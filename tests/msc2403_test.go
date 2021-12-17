@@ -148,14 +148,14 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			}
 		}
 
-		inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+		inRoomUser.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 			if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
 				return false
 			}
 			must.EqualStr(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
 			must.EqualStr(t, ev.Get("content").Get("membership").Str, "knock", "incorrect membership for knocking user")
 			return true
-		})
+		}))
 	})
 
 	if !testFederation {
@@ -163,7 +163,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		t.Run("A user that has knocked on a local room can rescind their knock and then knock again", func(t *testing.T) {
 			// We need to carry out an incremental sync after knocking in order to get leave information
 			// Carry out an initial sync here and save the since token
-			since := doInitialSync(t, knockingUser)
+			_, since := knockingUser.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 			// Rescind knock
 			knockingUser.MustDo(
@@ -179,19 +179,20 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 
 			// Use our sync token from earlier to carry out an incremental sync. Initial syncs may not contain room
 			// leave information for obvious reasons
-			knockingUser.SyncUntil(
-				t,
-				since,
-				"",
-				"rooms.leave."+client.GjsonEscape(roomID)+".timeline.events",
-				func(ev gjson.Result) bool {
+			knockingUser.MustSyncUntil(t, client.SyncReq{Since: since}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+				events := topLevelSyncJSON.Get("rooms.leave." + client.GjsonEscape(roomID) + ".timeline.events")
+				if !events.Exists() {
+					return fmt.Errorf("no leave section for room %s", roomID)
+				}
+				for _, ev := range events.Array() {
 					if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
-						return false
+						continue
 					}
 					must.EqualStr(t, ev.Get("content").Get("membership").Str, "leave", "expected leave membership after rescinding a knock")
-					return true
-				},
-			)
+					return nil
+				}
+				return fmt.Errorf("leave timeline for %s doesn't have leave event for %s", roomID, knockingUser.UserID)
+			})
 
 			// Knock again to return us to the knocked state
 			knockOnRoomSynced(t, knockingUser, roomID, "Let me in... again?", []string{"hs1"})
@@ -218,11 +219,11 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		)
 
 		// Wait until the leave membership event has come down sync
-		inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+		inRoomUser.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 			return ev.Get("type").Str != "m.room.member" ||
 				ev.Get("state_key").Str != knockingUser.UserID ||
 				ev.Get("content").Get("membership").Str != "leave"
-		})
+		}))
 
 		// Knock again
 		knockOnRoomSynced(t, knockingUser, roomID, "Pleeease let me in?", []string{"hs1"})
@@ -262,11 +263,11 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		)
 
 		// Wait until the invite membership event has come down sync
-		inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+		inRoomUser.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 			return ev.Get("type").Str != "m.room.member" ||
 				ev.Get("state_key").Str != knockingUser.UserID ||
 				ev.Get("content").Get("membership").Str != "invite"
-		})
+		}))
 	})
 
 	t.Run("A user cannot knock on a room they are already in", func(t *testing.T) {
@@ -294,11 +295,11 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		)
 
 		// Wait until the ban membership event has come down sync
-		inRoomUser.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+		inRoomUser.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 			return ev.Get("type").Str != "m.room.member" ||
 				ev.Get("state_key").Str != knockingUser.UserID ||
 				ev.Get("content").Get("membership").Str != "ban"
-		})
+		}))
 
 		knockOnRoomWithStatus(t, knockingUser, roomID, "I didn't mean it!", []string{"hs1"}, 403)
 	})
@@ -311,17 +312,15 @@ func knockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, ser
 	knockOnRoomWithStatus(t, c, roomID, reason, serverNames, 200)
 
 	// The knock should have succeeded. Block until we see the knock appear down sync
-	c.SyncUntil(
-		t,
-		"",
-		"",
-		"rooms.knock."+client.GjsonEscape(roomID)+".knock_state.events",
-		func(ev gjson.Result) bool {
+	c.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		events := topLevelSyncJSON.Get("rooms.knock." + client.GjsonEscape(roomID) + ".knock_state.events")
+		if events.Exists() && events.IsArray() {
 			// We don't currently define any required state event types to be sent.
 			// If we've reached this point, then an entry for this room was found
-			return true
-		},
-	)
+			return nil
+		}
+		return fmt.Errorf("no knock section for room %s", roomID)
+	})
 }
 
 // knockOnRoomWithStatus will knock on a given room on the behalf of a user.
@@ -359,17 +358,6 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: expectedStatus,
 	})
-}
-
-// doInitialSync will carry out an initial sync and return the next_batch token
-func doInitialSync(t *testing.T, c *client.CSAPI) string {
-	query := url.Values{
-		"timeout": []string{"1000"},
-	}
-	res := c.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(query))
-	body := client.ParseJSON(t, res)
-	since := client.GetJSONFieldStr(t, body, "next_batch")
-	return since
 }
 
 // TestKnockRoomsInPublicRoomsDirectory will create a knock room, attempt to publish it to the public rooms directory,

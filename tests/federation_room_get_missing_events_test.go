@@ -36,6 +36,9 @@ import (
 func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
@@ -52,12 +55,11 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		onGetMissingEvents(w, req)
 	}).Methods("POST")
 
-	ver := gomatrixserverlib.RoomVersionV6
+	ver := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 	room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 	roomAlias := srv.MakeAliasMapping("flibble", room.RoomID)
 	// join the room
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	alice.JoinRoom(t, roomAlias, nil)
 
 	latestEvent := room.Timeline[len(room.Timeline)-1]

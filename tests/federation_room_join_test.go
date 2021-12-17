@@ -36,6 +36,8 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+
 	acceptMakeSendJoinRequests := true
 
 	srv := federation.NewServer(t, deployment,
@@ -60,12 +62,11 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 		federation.SendJoinRequestsHandler(srv, w, req)
 	})).Methods("PUT")
 
-	ver := gomatrixserverlib.RoomVersionV5
+	ver := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 
 	// join the room by room ID, providing the serverName to join via
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	alice.JoinRoom(t, serverRoom.RoomID, []string{srv.ServerName})
 
 	// remove the make/send join paths from the Complement server to force HS2 to join via HS1
@@ -101,6 +102,8 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
@@ -110,7 +113,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 	cancel := srv.Listen()
 	defer cancel()
 
-	ver := gomatrixserverlib.RoomVersionV6
+	ver := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 
 	// We explicitly do not run these in parallel in order to help debugging when these
@@ -135,7 +138,6 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
 		alice.JoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with bad signatures shouldn't block room join", func(t *testing.T) {
@@ -164,7 +166,6 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
 		alice.JoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with unobtainable keys shouldn't block room join", func(t *testing.T) {
@@ -194,7 +195,6 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
 		alice.JoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with state with unverifiable auth events shouldn't block room join", func(t *testing.T) {
@@ -248,7 +248,6 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		room.AddEvent(goodEvent)
 		t.Logf("Created state event %s", goodEvent.EventID())
 
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
 		alice.JoinRoom(t, roomAlias, nil)
 	})
 }

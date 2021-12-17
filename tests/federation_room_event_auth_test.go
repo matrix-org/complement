@@ -15,6 +15,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -208,13 +209,12 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	t.Logf("Sent transaction; awaiting arrival")
 
 	// wait for alice to receive sentinelEvent
-	alice.SyncUntilTimelineHas(
-		t,
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room.RoomID,
 		func(ev gjson.Result) bool {
 			return ev.Get("event_id").Str == sentinelEvent.EventID()
 		},
-	)
+	))
 
 	// now inspect the results. Each of the rejected events should give a 404 for /event
 	t.Run("Outlier should be rejected", func(t *testing.T) {
