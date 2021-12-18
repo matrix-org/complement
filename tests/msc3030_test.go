@@ -162,7 +162,7 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 	if actualEventId != expectedEventId {
 		debugMessageList := getDebugMessageListFromMessagesResponse(t, c, roomID, expectedEventId, actualEventId, givenTimestamp)
 		t.Fatalf(
-			"Expected to see %s given %s but received %s\n%s",
+			"Want %s given %s but got %s\n%s",
 			decorateStringWithAnsiColor(expectedEventId, AnsiColorGreen),
 			decorateStringWithAnsiColor(timestampString, AnsiColorYellow),
 			decorateStringWithAnsiColor(actualEventId, AnsiColorRed),
@@ -201,7 +201,7 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 
 	// We need some padding for some lines to make them all align with the label.
 	// Pad this out so it equals whatever the longest label is.
-	paddingString := "           "
+	paddingString := "       "
 
 	resultantString := fmt.Sprintf("%s-- oldest events --\n", paddingString)
 
@@ -223,10 +223,10 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 		labelString := paddingString
 		if eventID == expectedEventId {
 			eventIDString = decorateStringWithAnsiColor(eventID, AnsiColorGreen)
-			labelString = "(expected) "
+			labelString = "(want) "
 		} else if eventID == actualEventId {
 			eventIDString = decorateStringWithAnsiColor(eventID, AnsiColorRed)
-			labelString = "  (actual) "
+			labelString = " (got) "
 		}
 
 		resultantString += fmt.Sprintf(
