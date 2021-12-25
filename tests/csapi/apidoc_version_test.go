@@ -2,7 +2,6 @@ package csapi_tests
 
 import (
 	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -22,14 +21,6 @@ func TestVersionStructure(t *testing.T) {
 	t.Run("Version responds 200 OK with valid structure", func(t *testing.T) {
 		res := client.MustDoFunc(t, "GET", []string{"_matrix", "client", "versions"})
 
-		// Matches;
-		// - r0.?.?
-		//  where ? is any single digit
-		// - v1^.*
-		//  where 1^ is 1 through 9 for the first digit, then any digit thereafter,
-		//  and * is any single or multiple of digits
-		versionRegex, _ := regexp.Compile(`^(v[1-9]\d*\.\d+|r0\.\d\.\d)$`)
-
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyPresent("versions"),
@@ -37,9 +28,7 @@ func TestVersionStructure(t *testing.T) {
 					if val.Type != gjson.String {
 						return fmt.Errorf("'versions' value is not a string: %s", val.Raw)
 					}
-					if !versionRegex.MatchString(val.Str) {
-						return fmt.Errorf("'versions' value did not match version regex: %s", val.Str)
-					}
+					// versions format is currently relatively undefined, see https://github.com/matrix-org/matrix-doc/issues/3594
 					return nil
 				}),
 				// Check when unstable_features is present if it's an object
