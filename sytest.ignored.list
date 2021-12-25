@@ -1,0 +1,12 @@
+# These list all of the sytests that're ignored, line-by-line
+# Complete with comments as to why particular tests were ignored
+
+# Dummy test in 00prepare.pl
+foo
+
+# Tests deprecated endpoints
+Tags appear in the v1 /initialSync
+GET /events with negative 'limit'
+GET /events with non-numeric 'limit'
+GET /events with non-numeric 'timeout'
+GET /initialSync with non-numeric 'limit'

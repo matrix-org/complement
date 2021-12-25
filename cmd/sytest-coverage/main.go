@@ -28,22 +28,9 @@ var (
 // in all files in ./tests - if there's a match it marks that test as converted.
 func main() {
 	verbose := len(os.Args) == 2 && os.Args[1] == "-v"
-	body, err := ioutil.ReadFile("./sytest.list")
-	if err != nil {
-		panic(err)
-	}
-	testLines := strings.Split(string(body), "\n")
-	filenameToTestName := make(map[string][]string)
-	testNameToFilename := make(map[string]string)
-	for _, line := range testLines {
-		name, filename := extract(line)
-		if name == "" || filename == "" {
-			continue
-		}
-		name = "sytest: " + strings.TrimSpace(name)
-		filenameToTestName[filename] = append(filenameToTestName[filename], name)
-		testNameToFilename[name] = strings.TrimSpace(filename)
-	}
+
+	filenameToTestName, testNameToFilename := getList()
+
 	total := len(testNameToFilename)
 
 	convertedTests := make(map[string]bool)
@@ -100,6 +87,49 @@ func main() {
 	fmt.Printf("\nTOTAL: %d/%d tests converted\n", numComplementTests, total)
 }
 
+// filenameToTestName and testNameToFilename
+// will filter ignored tests
+func getList() (map[string][]string, map[string]string) {
+	var ignoredTests = make(map[string]bool)
+	ignoredBody, err := ioutil.ReadFile("./sytest.ignored.list")
+	if err != nil {
+		// ignore error, set body to nothing
+		ignoredBody = []byte{}
+	}
+	ignoredLines := strings.Split(string(ignoredBody), "\n")
+	for _, ignoredLine := range ignoredLines {
+		ignoredLine = strings.TrimSpace(ignoredLine)
+
+		if len(ignoredLine) == 0 || ignoredLine[0] == '#' {
+			continue
+		}
+
+		ignoredTests[ignoredLine] = true
+	}
+
+	body, err := ioutil.ReadFile("./sytest.list")
+	if err != nil {
+		panic(err)
+	}
+	testLines := strings.Split(string(body), "\n")
+	filenameToTestName := make(map[string][]string)
+	testNameToFilename := make(map[string]string)
+	for _, line := range testLines {
+		name, filename := extract(line)
+		if name == "" || filename == "" {
+			continue
+		}
+		if _, ok := ignoredTests[name]; ok {
+			continue
+		}
+		name = "sytest: " + strings.TrimSpace(name)
+		filenameToTestName[filename] = append(filenameToTestName[filename], name)
+		testNameToFilename[name] = strings.TrimSpace(filename)
+	}
+
+	return filenameToTestName, testNameToFilename
+}
+
 func sorted(in map[string][]string) []string {
 	out := make([]string, len(in))
 	i := 0
@@ -115,7 +145,7 @@ func sorted(in map[string][]string) []string {
 // ./tests/31sync/16room-summary.pl:test "Room summary counts change when membership changes",
 func extract(line string) (string, string) {
 	line = strings.TrimSpace(line)
-	if len(line) == 0 {
+	if len(line) == 0 || line[0] == '#' {
 		return "", ""
 	}
 	nameGroups := testNameRegexp.FindStringSubmatch(line)
