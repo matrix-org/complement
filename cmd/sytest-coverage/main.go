@@ -91,6 +91,7 @@ func main() {
 // will filter ignored tests
 func getList() (map[string][]string, map[string]string) {
 	var ignoredTests = make(map[string]bool)
+	var ignoredPaths []string
 	ignoredBody, err := ioutil.ReadFile("./sytest.ignored.list")
 	if err != nil {
 		// ignore error, set body to nothing
@@ -104,6 +105,10 @@ func getList() (map[string][]string, map[string]string) {
 			continue
 		}
 
+		if ignoredLine[0] == '!' {
+			ignoredPaths = append(ignoredPaths, ignoredLine[1:])
+		}
+
 		ignoredTests[ignoredLine] = true
 	}
 
@@ -114,6 +119,7 @@ func getList() (map[string][]string, map[string]string) {
 	testLines := strings.Split(string(body), "\n")
 	filenameToTestName := make(map[string][]string)
 	testNameToFilename := make(map[string]string)
+lines:
 	for _, line := range testLines {
 		name, filename := extract(line)
 		if name == "" || filename == "" {
@@ -121,6 +127,11 @@ func getList() (map[string][]string, map[string]string) {
 		}
 		if _, ok := ignoredTests[name]; ok {
 			continue
+		}
+		for _, path := range ignoredPaths {
+			if strings.Contains(filename, path) {
+				continue lines
+			}
 		}
 		name = "sytest: " + strings.TrimSpace(name)
 		filenameToTestName[filename] = append(filenameToTestName[filename], name)
