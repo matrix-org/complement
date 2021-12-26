@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/matrix-org/complement/runtime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 const oGraphTitle = "The Rock"

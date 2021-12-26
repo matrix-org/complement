@@ -1,7 +1,6 @@
 package csapi_tests
 
 import (
-	"github.com/matrix-org/complement/runtime"
 	"net/url"
 	"testing"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 // sytest: Can send image in room message
