@@ -4,6 +4,9 @@
 # Dummy test in 00prepare.pl
 foo
 
+# Tests synapse admin API
+Can quarantine media in rooms
+
 # Tests deprecated endpoints
 Tags appear in the v1 /initialSync
 Tags appear in the v1 /events stream
