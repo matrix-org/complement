@@ -62,7 +62,8 @@ func TestUrlPreview(t *testing.T) {
 		w.Write([]byte(oGraphHtml))
 	}).Methods("GET")
 
-	server := &http.Server{Addr: ":8008", Handler: r}
+	// CI will forward 8448 to complement properly
+	server := &http.Server{Addr: ":8448", Handler: r}
 
 	go server.ListenAndServe()
 	defer server.Shutdown(context.Background())
@@ -71,7 +72,7 @@ func TestUrlPreview(t *testing.T) {
 
 	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "media", "r0", "preview_url"},
 		client.WithQueries(url.Values{
-			"url": []string{fmt.Sprintf("http://%s:8008/test.html", docker.HostnameRunningComplement)},
+			"url": []string{fmt.Sprintf("http://%s:8448/test.html", docker.HostnameRunningComplement)},
 		}),
 	)
 

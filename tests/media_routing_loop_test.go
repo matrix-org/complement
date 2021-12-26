@@ -45,7 +45,7 @@ func TestMediaRoutingLoop(t *testing.T) {
 }
 
 func createProxyListener(t *testing.T, remote *net.TCPAddr) (*tcpProxy, func()) {
-	local, err := net.ResolveTCPAddr("tcp", ":0")
+	local, err := net.ResolveTCPAddr("tcp", ":8448") // CI will forward 8448 to complement
 	if err != nil {
 		t.Fatalf("Could not create local listener address: %s", err)
 	}
