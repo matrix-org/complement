@@ -90,6 +90,7 @@ func (p *tcpProxy) Listen() {
 		conn, err := p.listener.AcceptTCP()
 		if err != nil {
 			close(p.pending)
+			return
 		}
 		p.pending <- conn
 	}
