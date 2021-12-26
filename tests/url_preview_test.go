@@ -3,18 +3,20 @@ package tests
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+
 	"github.com/gorilla/mux"
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/gjson"
-	"net/http"
-	"net/url"
-	"strings"
-	"testing"
 )
 
 const oGraphTitle = "The Rock"

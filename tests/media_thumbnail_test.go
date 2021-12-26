@@ -6,11 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/validate"
-
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/data"
+	"github.com/matrix-org/complement/internal/validate"
 )
 
 // TODO: add JPEG testing
