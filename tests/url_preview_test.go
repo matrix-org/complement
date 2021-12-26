@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/matrix-org/complement/runtime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -39,6 +40,8 @@ var oGraphHtml = fmt.Sprintf(`
 
 // sytest: Test URL preview
 func TestUrlPreview(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/621
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -59,7 +62,7 @@ func TestUrlPreview(t *testing.T) {
 		w.Write([]byte(oGraphHtml))
 	}).Methods("GET")
 
-	server := &http.Server{Addr: ":8449", Handler: r}
+	server := &http.Server{Addr: ":8008", Handler: r}
 
 	go server.ListenAndServe()
 	defer server.Shutdown(context.Background())
@@ -68,7 +71,7 @@ func TestUrlPreview(t *testing.T) {
 
 	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "media", "r0", "preview_url"},
 		client.WithQueries(url.Values{
-			"url": []string{fmt.Sprintf("http://%s:8449/test.html", docker.HostnameRunningComplement)},
+			"url": []string{fmt.Sprintf("http://%s:8008/test.html", docker.HostnameRunningComplement)},
 		}),
 	)
 

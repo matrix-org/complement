@@ -1,6 +1,7 @@
 package csapi_tests
 
 import (
+	"github.com/matrix-org/complement/runtime"
 	"net/url"
 	"testing"
 
@@ -16,6 +17,8 @@ import (
 // sytest: Can send image in room message
 // sytest: Can fetch images in room
 func TestRoomImageRoundtrip(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1303
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 

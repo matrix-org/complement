@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/internal/docker"
 )
 
+// sytest: Alternative server names do not cause a routing loop
 func TestMediaRoutingLoop(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
