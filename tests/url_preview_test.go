@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -64,9 +65,14 @@ func TestUrlPreview(t *testing.T) {
 
 	// CI will forward 8448 to complement properly
 	server := &http.Server{Addr: ":8448", Handler: r}
+	ln, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		t.Error(err)
+	}
 
-	go server.ListenAndServe()
+	go server.Serve(ln)
 	defer server.Shutdown(context.Background())
+	defer ln.Close()
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 

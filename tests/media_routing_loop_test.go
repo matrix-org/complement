@@ -61,7 +61,10 @@ func createProxyListener(t *testing.T, remote *net.TCPAddr) (*tcpProxy, func()) 
 
 	go p.Listen()
 
-	return p, cancel
+	return p, func() {
+		cancel()
+		p.listener.Close()
+	}
 }
 
 type tcpProxy struct {
