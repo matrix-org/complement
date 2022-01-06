@@ -58,9 +58,10 @@ func TestEventAuth(t *testing.T) {
 		"preset": "public_chat",
 	})
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
-	/*
-		srv.MustLeaveRoom(t, deployment, "hs1", roomID, charlie)
-		room = srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie) */
+	firstJoinEvent := room.CurrentState("m.room.member", charlie)
+	srv.MustLeaveRoom(t, deployment, "hs1", roomID, charlie)
+	leaveEvent := room.CurrentState("m.room.member", charlie)
+	room = srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
 
 	// now update the auth chain a bit: dendrite had a bug where it returned the auth chain for all
 	// the current state in addition to the event asked for
@@ -73,28 +74,43 @@ func TestEventAuth(t *testing.T) {
 	})
 	waiter.Wait(t, 1*time.Second) // wait for the join rule to make it to the complement server
 
-	// now hit /event_auth
-	resp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), "hs1", room.Version, roomID, joinRuleEvent.EventID())
-	must.NotError(t, "failed to /event_auth", err)
-	if len(resp.AuthEvents) == 0 {
-		t.Fatalf("/event_auth returned 0 auth events")
-	}
-	if len(resp.AuthEvents) != len(joinRuleEvent.AuthEvents()) {
-		msg := "got:\n"
-		for _, e := range resp.AuthEvents {
-			msg += string(e.JSON()) + "\n\n"
+	getEventAuth := func(t *testing.T, eventID string, wantAuthEventIDs []string) {
+		t.Helper()
+		resp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), "hs1", room.Version, roomID, eventID)
+		must.NotError(t, "failed to /event_auth", err)
+		if len(resp.AuthEvents) == 0 {
+			t.Fatalf("/event_auth returned 0 auth events")
 		}
-		t.Fatalf("got %d auth events, wanted %d.\n%s\nwant: %s", len(resp.AuthEvents), len(joinRuleEvent.AuthEvents()), msg, joinRuleEvent.AuthEventIDs())
+		if len(resp.AuthEvents) != len(wantAuthEventIDs) {
+			msg := "got:\n"
+			for _, e := range resp.AuthEvents {
+				msg += string(e.JSON()) + "\n\n"
+			}
+			t.Fatalf("got %d auth events, wanted %d.\n%s\nwant: %s", len(resp.AuthEvents), len(wantAuthEventIDs), msg, wantAuthEventIDs)
+		}
+		// make sure all the events match
+		wantIDs := map[string]bool{}
+		for _, id := range wantAuthEventIDs {
+			wantIDs[id] = true
+		}
+		for _, e := range resp.AuthEvents {
+			delete(wantIDs, e.EventID())
+		}
+		if len(wantIDs) > 0 {
+			t.Errorf("missing events %v", wantIDs)
+		}
 	}
-	// make sure all the events match
-	wantIDs := map[string]bool{}
-	for _, id := range joinRuleEvent.AuthEventIDs() {
-		wantIDs[id] = true
-	}
-	for _, e := range resp.AuthEvents {
-		delete(wantIDs, e.EventID())
-	}
-	if len(wantIDs) > 0 {
-		t.Errorf("missing events %v", wantIDs)
-	}
+
+	t.Run("returns auth events for the requested event", func(t *testing.T) {
+		// now hit /event_auth for the join_rules event. The auth chain == the auth events.
+		getEventAuth(t, joinRuleEvent.EventID(), joinRuleEvent.AuthEventIDs())
+	})
+
+	t.Run("returns the auth chain for the requested event", func(t *testing.T) {
+		latestJoinEvent := room.CurrentState("m.room.member", charlie)
+		// we want all the auth event IDs for the latest join event AND the previous leave and join events
+		wantAuthEvents := latestJoinEvent.AuthEventIDs()
+		wantAuthEvents = append(wantAuthEvents, firstJoinEvent.EventID(), leaveEvent.EventID())
+		getEventAuth(t, latestJoinEvent.EventID(), wantAuthEvents)
+	})
 }

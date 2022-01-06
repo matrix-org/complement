@@ -245,6 +245,7 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 	return room
 }
 
+// Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
 func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string) {
 	t.Helper()
 	fedClient := s.FederationClient(deployment)
@@ -266,6 +267,7 @@ func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remo
 		leaveEvent = s.MustCreateEvent(t, room, b.Event{
 			Type:     "m.room.member",
 			StateKey: &userID,
+			Sender:   userID,
 			Content: map[string]interface{}{
 				"membership": "leave",
 			},
