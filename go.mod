@@ -11,7 +11,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	github.com/matrix-org/gomatrix v0.0.0-20210324163249-be2af5ef2e16
-	github.com/matrix-org/gomatrixserverlib v0.0.0-20220106093527-339f99711f7e
+	github.com/matrix-org/gomatrixserverlib v0.0.0-20220106115324-39c7d37db009
 	github.com/matrix-org/util v0.0.0-20200807132607-55161520e1d4
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

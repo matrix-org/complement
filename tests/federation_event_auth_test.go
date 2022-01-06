@@ -8,12 +8,23 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/must"
+
 	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // Test basic functionality of /_matrix/federation/v1/event_auth/{roomId}/{eventId}
 // and critically ensures that no extraneous events are returned
 // this was a dendrite bug, see https://github.com/matrix-org/dendrite/issues/2084
+//
+// This test works by configuring the following room:
+// - New room over federation between the HS and Complement
+// - Charlie on Complement joins the room over federation, then leaves, then rejoins
+// - Alice updates join rules for the room (test waits until it sees this event over federation)
+// At this point we can then test:
+// - /event_auth for the join rules event just returns the chain for the join rules event, which
+//   just means it returns the auth_events as that is equal to the auth chain for this event.
+// - /event_auth for the latest join event returns the complete auth chain for Charlie (all the
+//   joins and leaves are included), without any extraneous events.
 func TestEventAuth(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
@@ -22,7 +33,6 @@ func TestEventAuth(t *testing.T) {
 
 	// create a remote homeserver which will make the /event_auth request
 	var joinRuleEvent *gomatrixserverlib.Event
-
 	waiter := NewWaiter()
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
@@ -48,6 +58,9 @@ func TestEventAuth(t *testing.T) {
 		"preset": "public_chat",
 	})
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+	/*
+		srv.MustLeaveRoom(t, deployment, "hs1", roomID, charlie)
+		room = srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie) */
 
 	// now update the auth chain a bit: dendrite had a bug where it returned the auth chain for all
 	// the current state in addition to the event asked for
