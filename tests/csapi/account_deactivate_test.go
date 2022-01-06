@@ -20,7 +20,7 @@ func TestDeactivateAccount(t *testing.T) {
 	t.Run("Can't deactivate account with wrong password", func(t *testing.T) {
 		res := deactivateAccount(t, authedClient, "wrong_password")
 		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 402,
+			StatusCode: 401,
 			JSON: []match.JSON{
 				match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
 			},
