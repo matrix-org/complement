@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/tidwall/gjson"
-
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
@@ -138,12 +136,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 			})
 
 			bob.JoinRoom(t, roomID, nil)
-			// todo: replace with `SyncUntilJoined`
-			bob.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
-				return event.Get("type").Str == "m.room.member" &&
-					event.Get("content.membership").Str == "join" &&
-					event.Get("state_key").Str == bob.UserID
-			})
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			roomAlias := "#no_ops_delete:hs1"
 
@@ -175,12 +168,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 			})
 
 			bob.JoinRoom(t, roomID, nil)
-			// todo: replace with `SyncUntilJoined`
-			bob.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
-				return event.Get("type").Str == "m.room.member" &&
-					event.Get("content.membership").Str == "join" &&
-					event.Get("state_key").Str == bob.UserID
-			})
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			roomAlias := "#no_ops_delete_canonical:hs1"
 
