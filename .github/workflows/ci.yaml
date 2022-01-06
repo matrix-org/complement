@@ -82,6 +82,6 @@ jobs:
         working-directory: homeserver
 
       - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
-      - run: go test -p 2 -v -tags "${{ matrix.tags }}" ./tests/...
+      - run: go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... | gotestfmt
         env:
           COMPLEMENT_BASE_IMAGE: homeserver
