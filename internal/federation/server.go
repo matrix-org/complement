@@ -245,6 +245,44 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 	return room
 }
 
+// Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
+func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string) {
+	t.Helper()
+	fedClient := s.FederationClient(deployment)
+	var leaveEvent *gomatrixserverlib.Event
+	room := s.rooms[roomID]
+	if room == nil {
+		// e.g rejecting an invite
+		makeLeaveResp, err := fedClient.MakeLeave(context.Background(), remoteServer, roomID, userID)
+		if err != nil {
+			t.Fatalf("MustLeaveRoom: (rejecting invite) make_leave failed: %v", err)
+		}
+		roomVer := makeLeaveResp.RoomVersion
+		leaveEvent, err = makeLeaveResp.LeaveEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, roomVer)
+		if err != nil {
+			t.Fatalf("MustLeaveRoom: (rejecting invite) failed to sign event: %v", err)
+		}
+	} else {
+		// make the leave event
+		leaveEvent = s.MustCreateEvent(t, room, b.Event{
+			Type:     "m.room.member",
+			StateKey: &userID,
+			Sender:   userID,
+			Content: map[string]interface{}{
+				"membership": "leave",
+			},
+		})
+	}
+	err := fedClient.SendLeave(context.Background(), gomatrixserverlib.ServerName(remoteServer), leaveEvent)
+	if err != nil {
+		t.Fatalf("MustLeaveRoom: send_leave failed: %v", err)
+	}
+	room.AddEvent(leaveEvent)
+	s.rooms[roomID] = room
+
+	t.Logf("Server.MustLeaveRoom left room ID %s", roomID)
+}
+
 // Mux returns this server's router so you can attach additional paths
 func (s *Server) Mux() *mux.Router {
 	return s.mux
