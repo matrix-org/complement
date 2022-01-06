@@ -76,6 +76,7 @@ func TestEventAuth(t *testing.T) {
 
 	getEventAuth := func(t *testing.T, eventID string, wantAuthEventIDs []string) {
 		t.Helper()
+		t.Logf("/event_auth for %s - want %v", eventID, wantAuthEventIDs)
 		resp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), "hs1", room.Version, roomID, eventID)
 		must.NotError(t, "failed to /event_auth", err)
 		if len(resp.AuthEvents) == 0 {
@@ -84,7 +85,7 @@ func TestEventAuth(t *testing.T) {
 		if len(resp.AuthEvents) != len(wantAuthEventIDs) {
 			msg := "got:\n"
 			for _, e := range resp.AuthEvents {
-				msg += string(e.JSON()) + "\n\n"
+				msg += e.EventID() + " : " + string(e.JSON()) + "\n\n"
 			}
 			t.Fatalf("got %d auth events, wanted %d.\n%s\nwant: %s", len(resp.AuthEvents), len(wantAuthEventIDs), msg, wantAuthEventIDs)
 		}
