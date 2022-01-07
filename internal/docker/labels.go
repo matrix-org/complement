@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types/filters"
+
 	"github.com/matrix-org/complement/internal/b"
 )
 
