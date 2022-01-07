@@ -592,7 +592,7 @@ func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 	}
 }
 
-// Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event.
+// Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event
 func SyncJoinedTo(userID, roomID string) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		// awkward wrapping to get the error message correct at the start :/
@@ -603,6 +603,29 @@ func SyncJoinedTo(userID, roomID string) SyncCheckOpt {
 			return nil
 		}
 		return fmt.Errorf("SyncJoinedTo(%s,%s): %s", userID, roomID, err)
+	}
+}
+
+// Check that `userID` is leaving `roomID` by inspecting the timeline for a membership event, or witnessing `roomID` in `rooms.leave`
+// Note: This will not work properly with initial syncs, see https://github.com/matrix-org/matrix-doc/issues/3537
+func SyncLeftFrom(userID, roomID string) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		// two forms which depend on what the client user is:
+		// - passively viewing a membership for a room you're joined in
+		// - actively leaving the room
+		if clientUserID == userID {
+			// active
+			events := topLevelSyncJSON.Get("rooms.leave." + GjsonEscape(roomID))
+			if !events.Exists() {
+				return fmt.Errorf("no leave section for room %s", roomID)
+			} else {
+				return nil
+			}
+		}
+		// passive
+		return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "leave"
+		})(clientUserID, topLevelSyncJSON)
 	}
 }
 

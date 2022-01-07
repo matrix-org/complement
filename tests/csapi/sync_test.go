@@ -3,7 +3,6 @@ package csapi_tests
 import (
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -34,20 +33,18 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 
 	alice.JoinRoom(t, roomID, nil)
 
-	// We can't SyncUntil or else "pollute" the sync internal state, we must do as-if we're a slow client.
-	// Thus, two-second delays.
-	// WARNING: If you're wondering why this test is failing in a flaky fashion, and are looking at this test,
-	// this may the reason why, sorry :(
-	time.Sleep(2 * time.Second)
+	// This assumes that sync does not have side-effects in servers.
+	//
+	// The alternative would be to sleep, but that is not acceptable here.
+	sinceJoin := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 	alice.LeaveRoom(t, roomID)
 
-	time.Sleep(2 * time.Second)
+	sinceLeave := alice.MustSyncUntil(t, client.SyncReq{Since: sinceJoin}, client.SyncLeftFrom(alice.UserID, roomID))
 
 	alice.JoinRoom(t, roomID, nil)
 
-	// Final sleep to propagate server-internal state
-	time.Sleep(2 * time.Second)
+	alice.MustSyncUntil(t, client.SyncReq{Since: sinceLeave}, client.SyncJoinedTo(alice.UserID, roomID))
 
 	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(url.Values{
 		"timeout": []string{"0"},
@@ -83,34 +80,21 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 
 	alice.InviteRoom(t, roomID, bob.UserID)
 
-	bob.SyncUntilInvitedTo(t, roomID)
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 	// This rejects the invite
 	bob.LeaveRoom(t, roomID)
 
 	// Full sync
-	res = bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(url.Values{
-		"timeout":    []string{"0"},
-		"full_state": []string{"true"},
-		"since":      []string{since},
-	}))
-	body = client.ParseJSON(t, res)
-	jsonRes := gjson.GetBytes(body, "rooms.leave."+client.GjsonEscape(roomID))
-	if !jsonRes.Exists() {
+	jsonRes, since := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0", FullState: true, Since: since})
+	if !jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
 		t.Errorf("Bob just rejected an invite, it should show up under 'leave' in a full sync")
 	}
-	since = client.GetJSONFieldStr(t, body, "next_batch")
 
 	bob.JoinRoom(t, roomID, nil)
 
-	res = bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(url.Values{
-		"timeout":    []string{"0"},
-		"full_state": []string{"true"},
-		"since":      []string{since},
-	}))
-	body = client.ParseJSON(t, res)
-	jsonRes = gjson.GetBytes(body, "rooms.leave."+client.GjsonEscape(roomID))
-	if jsonRes.Exists() {
+	jsonRes, since = bob.MustSync(t, client.SyncReq{TimeoutMillis: "0", FullState: true, Since: since})
+	if jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
 		t.Errorf("Bob has rejected an invite, but then just joined the public room anyways, it should not show up under 'leave' in a full sync %s", since)
 	}
 }
