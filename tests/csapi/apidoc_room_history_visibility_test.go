@@ -169,8 +169,7 @@ func TestFetchHistoricalInvitedEventFromBetweenInvite(t *testing.T) {
 	roomID := createRoomWithVisibility(t, alice, "invited")
 
 	alice.InviteRoom(t, roomID, bob.UserID)
-
-	bob.SyncUntilInvitedTo(t, roomID)
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
@@ -225,8 +224,7 @@ func TestFetchHistoricalInvitedEventFromBeforeInvite(t *testing.T) {
 	})
 
 	alice.InviteRoom(t, roomID, bob.UserID)
-
-	bob.SyncUntilInvitedTo(t, roomID)
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 	bob.JoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
