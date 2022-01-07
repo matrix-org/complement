@@ -14,27 +14,15 @@
 package docker
 
 import (
-	"archive/tar"
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
-	"net/url"
 	"os"
-	"path"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/volume"
 	client "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -387,94 +375,6 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	)
 }
 
-// getCaVolume returns the correct volume mount for providing a CA to homeserver containers.
-// If running CI, returns an error if it's unable to find a volume that has /ca
-// Otherwise, returns an error if we're unable to find the <cwd>/ca directory on the local host
-func getCaVolume(ctx context.Context, docker *client.Client) (caMount mount.Mount, err error) {
-	// TODO: wrap in a lockfile
-	if os.Getenv("CI") == "true" {
-		// When in CI, Complement itself is a container with the CA volume mounted at /ca.
-		// We need to mount this volume to all homeserver containers to synchronize the CA cert.
-		// This is needed to establish trust among all containers.
-
-		// Get volume mounted at /ca. First we get the container ID
-		// /proc/1/cpuset should be /docker/<containerID>
-		cpuset, err := ioutil.ReadFile("/proc/1/cpuset")
-		if err != nil {
-			return caMount, err
-		}
-		if !strings.Contains(string(cpuset), "docker") {
-			return caMount, errors.New("Could not identify container ID using /proc/1/cpuset")
-		}
-		cpusetList := strings.Split(strings.TrimSpace(string(cpuset)), "/")
-		containerID := cpusetList[len(cpusetList)-1]
-		container, err := docker.ContainerInspect(ctx, containerID)
-		if err != nil {
-			return caMount, err
-		}
-		// Get the volume that matches the destination in our complement container
-		var volumeName string
-		for i := range container.Mounts {
-			if container.Mounts[i].Destination == "/ca" {
-				volumeName = container.Mounts[i].Name
-			}
-		}
-		if volumeName == "" {
-			// We did not find a volume. This container might be created without a volume,
-			// or CI=true is passed but we are not running in a container.
-			// todo: log that we do not provide a CA volume mount?
-			return caMount, nil
-		}
-
-		caMount = mount.Mount{
-			Type:   mount.TypeVolume,
-			Source: volumeName,
-			Target: "/ca",
-		}
-	} else {
-		// When not in CI, our CA cert is placed in the current working dir.
-		// We bind mount this directory to all homeserver containers.
-		cwd, err := os.Getwd()
-		if err != nil {
-			return caMount, err
-		}
-		caCertificateDirHost := path.Join(cwd, "ca")
-		if _, err := os.Stat(caCertificateDirHost); os.IsNotExist(err) {
-			err = os.Mkdir(caCertificateDirHost, 0770)
-			if err != nil {
-				return caMount, err
-			}
-		}
-
-		caMount = mount.Mount{
-			Type:   mount.TypeBind,
-			Source: path.Join(cwd, "ca"),
-			Target: "/ca",
-		}
-	}
-	return caMount, nil
-}
-
-// getAppServiceVolume returns a volume mount for providing the `/appservice` directory to homeserver containers.
-// This directory will contain application service registration config files.
-// Returns an error if the volume failed to create
-func getAppServiceVolume(ctx context.Context, docker *client.Client) (asMount mount.Mount, err error) {
-	asVolume, err := docker.VolumeCreate(context.Background(), volume.VolumesCreateBody{
-		Name: "appservices",
-	})
-	if err != nil {
-		return asMount, err
-	}
-
-	asMount = mount.Mount{
-		Type:   mount.TypeVolume,
-		Source: asVolume.Name,
-		Target: "/appservices",
-	}
-
-	return asMount, err
-}
-
 func generateASRegistrationYaml(as b.ApplicationService) string {
 	return fmt.Sprintf("id: %s\n", as.ID) +
 		fmt.Sprintf("hs_token: %s\n", as.HSToken) +
@@ -488,146 +388,6 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 		"      regex: .*\n" +
 		"  rooms: []\n" +
 		"  aliases: []\n"
-}
-
-func deployImage(
-	docker *client.Client, imageID string, csPort int, containerName, pkgNamespace, blueprintName, hsName string,
-	asIDToRegistrationMap map[string]string, contextStr, networkID string, spawnHSTimeout time.Duration,
-) (*HomeserverDeployment, error) {
-	ctx := context.Background()
-	var extraHosts []string
-	var mounts []mount.Mount
-	var err error
-
-	if runtime.GOOS == "linux" {
-		// By default docker for linux does not expose this, so do it now.
-		// When https://github.com/moby/moby/pull/40007 lands in Docker 20, we should
-		// change this to be  `host.docker.internal:host-gateway`
-		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
-	}
-
-	if os.Getenv("COMPLEMENT_CA") == "true" {
-		var caMount mount.Mount
-		caMount, err = getCaVolume(ctx, docker)
-		if err != nil {
-			return nil, err
-		}
-
-		mounts = append(mounts, caMount)
-	}
-
-	asMount, err := getAppServiceVolume(ctx, docker)
-	if err != nil {
-		return nil, err
-	}
-	mounts = append(mounts, asMount)
-
-	env := []string{
-		"SERVER_NAME=" + hsName,
-		"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
-	}
-
-	body, err := docker.ContainerCreate(ctx, &container.Config{
-		Image: imageID,
-		Env:   env,
-		//Cmd:   d.ImageArgs,
-		Labels: map[string]string{
-			complementLabel:        contextStr,
-			"complement_blueprint": blueprintName,
-			"complement_pkg":       pkgNamespace,
-			"complement_hs_name":   hsName,
-		},
-	}, &container.HostConfig{
-		PublishAllPorts: true,
-		ExtraHosts:      extraHosts,
-		Mounts:          mounts,
-	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{
-			hsName: {
-				NetworkID: networkID,
-				Aliases:   []string{hsName},
-			},
-		},
-	}, containerName)
-	if err != nil {
-		return nil, err
-	}
-
-	containerID := body.ID
-
-	// Create the application service files
-	for asID, registration := range asIDToRegistrationMap {
-		// Create a fake/virtual file in memory that we can copy to the container
-		// via https://stackoverflow.com/a/52131297/796832
-		var buf bytes.Buffer
-		tw := tar.NewWriter(&buf)
-		err = tw.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("/appservices/%s.yaml", url.PathEscape(asID)),
-			Mode: 0777,
-			Size: int64(len(registration)),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("Failed to copy regstration to container: %v", err)
-		}
-		tw.Write([]byte(registration))
-		tw.Close()
-
-		// Put our new fake file in the container volume
-		err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
-			AllowOverwriteDirWithFile: false,
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
-	if err != nil {
-		return nil, err
-	}
-	inspect, err := docker.ContainerInspect(ctx, containerID)
-	if err != nil {
-		return nil, err
-	}
-	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
-	if err != nil {
-		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
-	}
-	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
-	// hit /versions to check it is up
-	var lastErr error
-	stopTime := time.Now().Add(spawnHSTimeout)
-	for {
-		if time.Now().After(stopTime) {
-			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
-			break
-		}
-		res, err := http.Get(versionsURL)
-		if err != nil {
-			lastErr = fmt.Errorf("GET %s => error: %s", versionsURL, err)
-			time.Sleep(50 * time.Millisecond)
-			continue
-		}
-		if res.StatusCode != 200 {
-			lastErr = fmt.Errorf("GET %s => HTTP %s", versionsURL, res.Status)
-			time.Sleep(50 * time.Millisecond)
-			continue
-		}
-		lastErr = nil
-		break
-	}
-
-	d := &HomeserverDeployment{
-		BaseURL:             baseURL,
-		FedBaseURL:          fedBaseURL,
-		ContainerID:         containerID,
-		AccessTokens:        tokensFromLabels(inspect.Config.Labels),
-		ApplicationServices: asIDToRegistrationFromLabels(inspect.Config.Labels),
-	}
-	if lastErr != nil {
-		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
-	}
-	return d, nil
 }
 
 // createNetworkIfNotExists creates a docker network and returns its id.
@@ -684,49 +444,6 @@ func printLogs(docker *client.Client, containerID, contextStr string) {
 	log.Printf("%s : Server logs:\n", contextStr)
 	stdcopy.StdCopy(log.Writer(), log.Writer(), reader)
 	log.Printf("============== %s : END LOGS ==============\n\n\n", contextStr)
-}
-
-// label returns a filter for the presence of certain labels ("complement_context") or a match of
-// labels ("complement_blueprint=foo").
-func label(labelFilters ...string) filters.Args {
-	f := filters.NewArgs()
-	// label=<key> or label=<key>=<value>
-	for _, in := range labelFilters {
-		f.Add("label", in)
-	}
-	return f
-}
-
-func tokensFromLabels(labels map[string]string) map[string]string {
-	userIDToToken := make(map[string]string)
-	for k, v := range labels {
-		if strings.HasPrefix(k, "access_token_") {
-			userIDToToken[strings.TrimPrefix(k, "access_token_")] = v
-		}
-	}
-	return userIDToToken
-}
-
-func asIDToRegistrationFromLabels(labels map[string]string) map[string]string {
-	asMap := make(map[string]string)
-	for k, v := range labels {
-		if strings.HasPrefix(k, "application_service_") {
-			asMap[strings.TrimPrefix(k, "application_service_")] = v
-		}
-	}
-	return asMap
-}
-
-func labelsForApplicationServices(hs b.Homeserver) map[string]string {
-	labels := make(map[string]string)
-	// collect and store app service registrations as labels 'application_service_$as_id: $registration'
-	// collect and store app service access tokens as labels 'access_token_$sender_localpart: $as_token'
-	for _, as := range hs.ApplicationServices {
-		labels["application_service_"+as.ID] = generateASRegistrationYaml(as)
-
-		labels["access_token_@"+as.SenderLocalpart+":"+hs.Name] = as.ASToken
-	}
-	return labels
 }
 
 func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {

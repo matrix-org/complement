@@ -14,17 +14,25 @@
 package docker
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"runtime"
 	"sync"
+	"time"
 
 	"github.com/docker/docker/client"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
 
 	"github.com/matrix-org/complement/internal/config"
 )
@@ -146,6 +154,142 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 			log.Printf("Destroy: Failed to remove container %s : %s\n", hsDep.ContainerID, err)
 		}
 	}
+}
+
+func deployImage(
+	docker *client.Client, imageID string, csPort int, containerName, pkgNamespace, blueprintName, hsName string,
+	asIDToRegistrationMap map[string]string, contextStr, networkID string, spawnHSTimeout time.Duration,
+) (*HomeserverDeployment, error) {
+	ctx := context.Background()
+	var extraHosts []string
+	var mounts []mount.Mount
+	var err error
+
+	if runtime.GOOS == "linux" {
+		// By default docker for linux does not expose this, so do it now.
+		// When https://github.com/moby/moby/pull/40007 lands in Docker 20, we should
+		// change this to be  `host.docker.internal:host-gateway`
+		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
+	}
+
+	toMount := []Volume{
+		&VolumeCA{}, &VolumeAppService{},
+	}
+	for _, m := range toMount {
+		err = m.Prepare(ctx, docker, contextStr)
+		if err != nil {
+			return nil, err
+		}
+		mounts = append(mounts, m.Mount())
+	}
+
+	env := []string{
+		"SERVER_NAME=" + hsName,
+		// TODO: Remove once HS images don't rely on this anymore
+		"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
+	}
+
+	body, err := docker.ContainerCreate(ctx, &container.Config{
+		Image: imageID,
+		Env:   env,
+		//Cmd:   d.ImageArgs,
+		Labels: map[string]string{
+			complementLabel:        contextStr,
+			"complement_blueprint": blueprintName,
+			"complement_pkg":       pkgNamespace,
+			"complement_hs_name":   hsName,
+		},
+	}, &container.HostConfig{
+		PublishAllPorts: true,
+		ExtraHosts:      extraHosts,
+		Mounts:          mounts,
+	}, &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{
+			hsName: {
+				NetworkID: networkID,
+				Aliases:   []string{hsName},
+			},
+		},
+	}, containerName)
+	if err != nil {
+		return nil, err
+	}
+
+	containerID := body.ID
+
+	// Create the application service files
+	for asID, registration := range asIDToRegistrationMap {
+		// Create a fake/virtual file in memory that we can copy to the container
+		// via https://stackoverflow.com/a/52131297/796832
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		err = tw.WriteHeader(&tar.Header{
+			Name: fmt.Sprintf("/appservices/%s.yaml", url.PathEscape(asID)),
+			Mode: 0777,
+			Size: int64(len(registration)),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to copy regstration to container: %v", err)
+		}
+		tw.Write([]byte(registration))
+		tw.Close()
+
+		// Put our new fake file in the container volume
+		err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
+			AllowOverwriteDirWithFile: false,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
+	if err != nil {
+		return nil, err
+	}
+	inspect, err := docker.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return nil, err
+	}
+	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
+	if err != nil {
+		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
+	}
+	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
+	// hit /versions to check it is up
+	var lastErr error
+	stopTime := time.Now().Add(spawnHSTimeout)
+	for {
+		if time.Now().After(stopTime) {
+			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
+			break
+		}
+		res, err := http.Get(versionsURL)
+		if err != nil {
+			lastErr = fmt.Errorf("GET %s => error: %s", versionsURL, err)
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		if res.StatusCode != 200 {
+			lastErr = fmt.Errorf("GET %s => HTTP %s", versionsURL, res.Status)
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		lastErr = nil
+		break
+	}
+
+	d := &HomeserverDeployment{
+		BaseURL:             baseURL,
+		FedBaseURL:          fedBaseURL,
+		ContainerID:         containerID,
+		AccessTokens:        tokensFromLabels(inspect.Config.Labels),
+		ApplicationServices: asIDToRegistrationFromLabels(inspect.Config.Labels),
+	}
+	if lastErr != nil {
+		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
+	}
+	return d, nil
 }
 
 // RoundTripper is a round tripper that maps https://hs1 to the federation port of the container
