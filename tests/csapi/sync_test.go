@@ -1,10 +1,7 @@
 package csapi_tests
 
 import (
-	"net/url"
 	"testing"
-
-	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
@@ -25,11 +22,7 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 	var since string
 
 	// Get floating next_batch from before joining at all
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(url.Values{
-		"timeout": []string{"0"},
-	}))
-	body := client.ParseJSON(t, res)
-	since = client.GetJSONFieldStr(t, body, "next_batch")
+	_, since = alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 	alice.JoinRoom(t, roomID, nil)
 
@@ -46,13 +39,8 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 
 	alice.MustSyncUntil(t, client.SyncReq{Since: sinceLeave}, client.SyncJoinedTo(alice.UserID, roomID))
 
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(url.Values{
-		"timeout": []string{"0"},
-		"since":   []string{since},
-	}))
-	body = client.ParseJSON(t, res)
-	jsonRes := gjson.GetBytes(body, "rooms.leave."+client.GjsonEscape(roomID))
-	if jsonRes.Exists() {
+	jsonRes, since := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0", Since: since})
+	if jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
 		t.Errorf("Incremental sync has joined-left-joined room showing up in leave section, this shouldnt be the case.")
 	}
 }
@@ -72,11 +60,7 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 	var since string
 
 	// Get floating current next_batch
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, client.WithQueries(url.Values{
-		"timeout": []string{"0"},
-	}))
-	body := client.ParseJSON(t, res)
-	since = client.GetJSONFieldStr(t, body, "next_batch")
+	_, since = alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 	alice.InviteRoom(t, roomID, bob.UserID)
 
