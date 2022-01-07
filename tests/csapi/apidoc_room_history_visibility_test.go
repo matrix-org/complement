@@ -27,6 +27,7 @@ func createRoomWithVisibility(t *testing.T, c *client.CSAPI, visibility string) 
 					"history_visibility": visibility,
 				},
 				"type": "m.room.history_visibility",
+				"state_key": "",
 			},
 		},
 		"preset": "public_chat",
