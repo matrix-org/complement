@@ -39,7 +39,7 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 
 	alice.MustSyncUntil(t, client.SyncReq{Since: sinceLeave}, client.SyncJoinedTo(alice.UserID, roomID))
 
-	jsonRes, since := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0", Since: since})
+	jsonRes, _ := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0", Since: since})
 	if jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
 		t.Errorf("Incremental sync has joined-left-joined room showing up in leave section, this shouldnt be the case.")
 	}
