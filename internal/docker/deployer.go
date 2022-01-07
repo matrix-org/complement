@@ -20,6 +20,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/docker/docker/client"
 
@@ -80,27 +81,52 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		return nil, fmt.Errorf("Deploy: %w", err)
 	}
 	d.networkID = networkID
-	for _, img := range images {
+
+	// deploy images in parallel
+	var mu sync.Mutex // protects mutable values like the counter and errors
+	var wg sync.WaitGroup
+	wg.Add(len(images)) // ensure we wait until all images have deployed
+	deployImg := func(img types.ImageSummary) error {
+		defer wg.Done()
+		mu.Lock()
 		d.Counter++
+		counter := d.Counter
+		mu.Unlock()
 		contextStr := img.Labels["complement_context"]
 		hsName := img.Labels["complement_hs_name"]
 		asIDToRegistrationMap := asIDToRegistrationFromLabels(img.Labels)
 
 		// TODO: Make CSAPI port configurable
 		deployment, err := deployImage(
-			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, d.Counter),
+			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
 			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config.SpawnHSTimeout)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
 				// print logs to help debug
 				printLogs(d.Docker, deployment.ContainerID, contextStr)
 			}
-			return nil, fmt.Errorf("Deploy: Failed to deploy image %+v : %w", img, err)
+			return fmt.Errorf("Deploy: Failed to deploy image %+v : %w", img, err)
 		}
+		mu.Lock()
 		d.log("%s -> %s (%s)\n", contextStr, deployment.BaseURL, deployment.ContainerID)
 		dep.HS[hsName] = *deployment
+		mu.Unlock()
+		return nil
 	}
-	return dep, nil
+
+	var lastErr error
+	for _, img := range images {
+		go func(i types.ImageSummary) {
+			err := deployImg(i)
+			if err != nil {
+				mu.Lock()
+				lastErr = err
+				mu.Unlock()
+			}
+		}(img)
+	}
+	wg.Wait()
+	return dep, lastErr
 }
 
 // Destroy a deployment. This will kill all running containers.
