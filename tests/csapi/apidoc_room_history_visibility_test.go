@@ -26,7 +26,7 @@ func createRoomWithVisibility(t *testing.T, c *client.CSAPI, visibility string) 
 				"content": map[string]interface{}{
 					"history_visibility": visibility,
 				},
-				"type": "m.room.history_visibility",
+				"type":      "m.room.history_visibility",
 				"state_key": "",
 			},
 		},
@@ -47,12 +47,7 @@ func TestFetchEvent(t *testing.T) {
 
 	bob.JoinRoom(t, roomID, nil)
 
-	// todo: replace with `SyncUntilJoined`
-	bob.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "join" &&
-			event.Get("state_key").Str == bob.UserID
-	})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
@@ -105,13 +100,7 @@ func TestFetchHistoricalJoinedEventDenied(t *testing.T) {
 	})
 
 	bob.JoinRoom(t, roomID, nil)
-
-	// todo: replace with `SyncUntilJoined`
-	bob.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "join" &&
-			event.Get("state_key").Str == bob.UserID
-	})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
 
@@ -142,13 +131,7 @@ func TestFetchHistoricalSharedEvent(t *testing.T) {
 	})
 
 	bob.JoinRoom(t, roomID, nil)
-
-	// todo: replace with `SyncUntilJoined`
-	bob.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "join" &&
-			event.Get("state_key").Str == bob.UserID
-	})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
 
@@ -198,13 +181,7 @@ func TestFetchHistoricalInvitedEventFromBetweenInvite(t *testing.T) {
 	})
 
 	bob.JoinRoom(t, roomID, nil)
-
-	// todo: replace with `SyncUntilJoined`
-	bob.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "join" &&
-			event.Get("state_key").Str == bob.UserID
-	})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
 
@@ -252,13 +229,7 @@ func TestFetchHistoricalInvitedEventFromBeforeInvite(t *testing.T) {
 	bob.SyncUntilInvitedTo(t, roomID)
 
 	bob.JoinRoom(t, roomID, nil)
-
-	// todo: replace with `SyncUntilJoined`
-	bob.SyncUntilTimelineHas(t, roomID, func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "join" &&
-			event.Get("state_key").Str == bob.UserID
-	})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
 
