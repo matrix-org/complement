@@ -1,0 +1,41 @@
+# These list all of the sytests that're ignored, line-by-line
+# Complete with comments as to why particular tests were ignored
+
+# Dummy test in 00prepare.pl
+foo
+
+# Tests synapse admin API
+Can quarantine media in rooms
+
+# Tests deprecated endpoints
+Tags appear in the v1 /initialSync
+Tags appear in the v1 /events stream
+Tags appear in the v1 room initial sync
+Account data appears in v1 /events stream
+Latest account data comes down in /initialSync
+Latest account data comes down in room initialSync
+Room account data appears in v1 /events stream
+GET /events with negative 'limit'
+GET /events with non-numeric 'limit'
+GET /events with non-numeric 'timeout'
+GET /initialSync with non-numeric 'limit'
+GET /events initially
+GET /initialSync initially
+GET /rooms/:room_id/initialSync fetches initial sync state
+All room members see all room members' presence in global initialSync
+New room members see existing users' presence in room initialSync
+New room members see existing members' presence in room initialSync
+New room members see first user's profile information in global initialSync
+New room members see first user's profile information in per-room initialSync
+A departed room is still included in /initialSync (SPEC-216)
+Can get rooms/{roomId}/initialSync for a departed room (SPEC-216)
+initialSync sees my presence status
+Global initialSyncGlobal initialSync with limit=0 gives no messages
+Room initialSync
+Room initialSync with limit=0 gives no messages
+Read receipts are visible to /initialSync
+Newly created users see their own presence in /initialSync (SYT-34)
+Push rules come down in an initial /sync
+Guest user calling /events doesn't tightloop
+Guest user cannot call /events globally
+!53groups
