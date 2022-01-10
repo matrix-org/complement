@@ -637,6 +637,18 @@ func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
 	}
 }
 
+// Sync until the device_lists part of the sync response includes the given
+// `user`'s name at least once.
+func SyncUserHasChangedDevices(user string) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		return loopArray(
+			topLevelSyncJSON,
+			"device_lists.changed",
+			func(entry gjson.Result) bool { return entry.Str == user },
+		)
+	}
+}
+
 func loopArray(object gjson.Result, key string, check func(gjson.Result) bool) error {
 	array := object.Get(key)
 	if !array.Exists() {
