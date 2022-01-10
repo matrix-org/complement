@@ -34,6 +34,11 @@ func (v *VolumeCA) Prepare(ctx context.Context, docker *client.Client, x string)
 		// When in CI, Complement itself is a container with the CA volume mounted at /ca.
 		// We need to mount this volume to all homeserver containers to synchronize the CA cert.
 		// This is needed to establish trust among all containers.
+		c, err := ioutil.ReadFile("/proc/self/cgroup")
+		if err != nil {
+			return err
+		}
+		fmt.Println("cgroup", string(c))
 
 		// Get volume mounted at /ca. First we get the container ID
 		// /proc/1/cpuset should be /docker/<containerID>
