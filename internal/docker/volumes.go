@@ -114,7 +114,7 @@ func getContainerID() string {
 	}
 	fmt.Printf("failed to get container ID via cpuset, trying alternatives: %s\n", err)
 
-	cid, err = getContainerIDViaCPUSet()
+	cid, err = getContainerIDViaCGroups()
 	if err == nil {
 		return cid
 	}
