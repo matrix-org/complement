@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -34,23 +35,11 @@ func (v *VolumeCA) Prepare(ctx context.Context, docker *client.Client, x string)
 		// When in CI, Complement itself is a container with the CA volume mounted at /ca.
 		// We need to mount this volume to all homeserver containers to synchronize the CA cert.
 		// This is needed to establish trust among all containers.
-		c, err := ioutil.ReadFile("/proc/self/cgroup")
-		if err != nil {
-			return err
-		}
-		fmt.Println("cgroup", string(c))
 
-		// Get volume mounted at /ca. First we get the container ID
-		// /proc/1/cpuset should be /docker/<containerID>
-		cpuset, err := ioutil.ReadFile("/proc/1/cpuset")
-		if err != nil {
-			return err
+		containerID := getContainerID()
+		if containerID == "" {
+			return fmt.Errorf("failed to get container ID")
 		}
-		if !strings.Contains(string(cpuset), "docker") {
-			return fmt.Errorf("could not identify container ID using /proc/1/cpuset - cpuset=%s", string(cpuset))
-		}
-		cpusetList := strings.Split(strings.TrimSpace(string(cpuset)), "/")
-		containerID := cpusetList[len(cpusetList)-1]
 		container, err := docker.ContainerInspect(ctx, containerID)
 		if err != nil {
 			return err
@@ -116,4 +105,61 @@ func (v *VolumeAppService) Mount() mount.Mount {
 		Source: v.source,
 		Target: "/appservices",
 	}
+}
+
+func getContainerID() string {
+	cid, err := getContainerIDViaCPUSet()
+	if err == nil {
+		return cid
+	}
+	fmt.Printf("failed to get container ID via cpuset, trying alternatives: %s\n", err)
+
+	cid, err = getContainerIDViaCPUSet()
+	if err == nil {
+		return cid
+	}
+
+	fmt.Printf("failed to get container ID via cgroups, out of options: %s\n", err)
+	return ""
+}
+
+func getContainerIDViaCGroups() (string, error) {
+	file, err := os.Open("/proc/self/cgroup")
+	if err != nil {
+		return "", err
+	}
+
+	scanner := bufio.NewScanner(file)
+	defer file.Close()
+
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		// Returns entries like this on github actions
+		// 9:memory:/actions_job/c8d555525bad6cd896c5aa985ef68010be47b1fb321c95547761c8f1a053b86e
+		line := scanner.Text()
+		segments := strings.Split(line, "/")
+		containerID := segments[len(segments)-1]
+		if containerID == "" || len(containerID) < 64 {
+			continue
+		}
+		return containerID, nil
+	}
+	return "", fmt.Errorf("faild to find container id in cgroups")
+}
+
+func getContainerIDViaCPUSet() (string, error) {
+	// /proc/1/cpuset should be /docker/<containerID>
+	cpuset, err := ioutil.ReadFile("/proc/1/cpuset")
+	if err != nil {
+		return "", err
+	}
+	if !strings.Contains(string(cpuset), "docker") {
+		return "", fmt.Errorf("could not identify container ID using /proc/1/cpuset - cpuset=%s", string(cpuset))
+	}
+	cpusetList := strings.Split(strings.TrimSpace(string(cpuset)), "/")
+	containerID := cpusetList[len(cpusetList)-1]
+	if len(containerID) == 0 {
+		return "", fmt.Errorf("cpuset missing container ID")
+	}
+	return containerID, nil
 }
