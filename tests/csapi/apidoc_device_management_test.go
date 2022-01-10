@@ -2,7 +2,7 @@ package csapi_tests
 
 import (
 	"fmt"
-	"net/http"
+	"io/ioutil"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -137,14 +137,15 @@ func TestManyDevices(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
-	loginAliceOnNewDevice := func(i int) *http.Response {
+	loginAliceOnNewDevice := func(i int) string {
 		alicePassword := "complement_meets_min_pasword_req_alice"
-		return alice.MustDoFunc(
+		deviceId := fmt.Sprintf("alice_%d", i)
+		response := alice.MustDoFunc(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "login"},
 			client.WithJSONBody(t, map[string]interface{}{
-				"device_id":                   fmt.Sprintf("alice_%d", i),
+				"device_id":                   deviceId,
 				"initial_device_display_name": fmt.Sprintf("Alice device %d", i),
 				"identifier": map[string]interface{}{
 					"type": "m.id.user",
@@ -152,20 +153,73 @@ func TestManyDevices(t *testing.T) {
 				},
 				"password": alicePassword,
 				"type":     "m.login.password",
-			},
-			))
+			}),
+		)
+		body, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		jsonBody := gjson.ParseBytes(body)
+		must.EqualStr(t, jsonBody.Get("device_id").Str, deviceId, "wrong device id")
+		return jsonBody.Get("access_token").Str
 	}
 
+	uploadKeysForDevice := func(i int, accessToken string) {
+		alice.AccessToken = accessToken // urgh
+		alice.MustDoFunc(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "v3", "keys", "upload"},
+			client.WithJSONBody(t, map[string]interface{}{
+				"device_keys": map[string]interface{}{
+					"algorithms": []string{},
+					"device_id":  fmt.Sprintf("alice_%d", i),
+					"keys":       map[string]interface{}{},
+					"signatures": map[string]interface{}{},
+					"user_id":    alice.UserID,
+				},
+			}),
+		)
+	}
+
+	fetchAliceDeviceList := func() map[string]gjson.Result {
+		response := bob.MustDoFunc(
+			t,
+			"POST",
+			[]string{"_matrix", "client", "v3", "keys", "query"},
+			client.WithJSONBody(t, map[string]interface{}{
+				"device_keys": map[string]interface{}{
+					alice.UserID: []string{},
+				},
+			}),
+		)
+		body, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Log(string(body))
+		return gjson.ParseBytes(body).Get("device_keys").Get(alice.UserID).Map()
+	}
+
+	bobSyncConfig := client.SyncReq{}
 	for i := 1; i <= 500; i += 1 {
 		// Alice logs in to make a new device.
-		loginAliceOnNewDevice(i)
+		aliceAccessToken := loginAliceOnNewDevice(i)
+		uploadKeysForDevice(i, aliceAccessToken)
 
 		// We wait for Bob to see that Alice's device list has changed
-		bob.MustSyncUntil(
+		bobSyncConfig.Since = bob.MustSyncUntil(
 			t,
-			client.SyncReq{},
+			bobSyncConfig,
 			client.SyncUserHasChangedDevices(alice.UserID),
 		)
+
 		// Bob fetches Alice's device list
+		devices := fetchAliceDeviceList()
+		if len(devices) != i {
+			t.Errorf("got %d devices; expected %d", len(devices), i)
+			t.Logf("%s", devices)
+			t.FailNow()
+		}
 	}
 }
