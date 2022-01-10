@@ -68,3 +68,7 @@ ENTRYPOINT \
   # Run the script that writes the necessary config files and starts supervisord, which in turn
   # starts everything else
   /configure_workers_and_start.py
+
+HEALTHCHECK --start-period=5s --interval=1s --timeout=1s \
+    CMD /bin/sh /healthcheck.sh
+
