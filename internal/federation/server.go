@@ -482,23 +482,15 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 		template.DNSNames = append(template.DNSNames, host)
 	}
 
-	if os.Getenv("COMPLEMENT_CA") == "true" {
-		// Gate COMPLEMENT_CA
-		var ca *x509.Certificate
-		var caPrivKey *rsa.PrivateKey
-		ca, caPrivKey, err = GetOrCreateCaCert()
-		if err != nil {
-			return nil, "", "", err
-		}
-		derBytes, err = x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
-		if err != nil {
-			return nil, "", "", err
-		}
-	} else {
-		derBytes, err = x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
-		if err != nil {
-			return nil, "", "", err
-		}
+	var ca *x509.Certificate
+	var caPrivKey *rsa.PrivateKey
+	ca, caPrivKey, err = GetOrCreateCaCert()
+	if err != nil {
+		return nil, "", "", err
+	}
+	derBytes, err = x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
+	if err != nil {
+		return nil, "", "", err
 	}
 
 	certOut, err := os.Create(tlsCertPath)
