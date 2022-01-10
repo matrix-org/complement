@@ -178,7 +178,7 @@ func deployImage(
 	for _, m := range toMount {
 		err = m.Prepare(ctx, docker, contextStr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to prepare volume: %s", err)
 		}
 		mounts = append(mounts, m.Mount())
 	}

@@ -25,6 +25,7 @@ type Volume interface {
 
 type VolumeCA struct {
 	source string
+	typ    mount.Type
 }
 
 // Prepare the Certificate Authority volume. This is independent of the homeserver calling Prepare
@@ -45,18 +46,18 @@ func (v *VolumeCA) Prepare(ctx context.Context, docker *client.Client, x string)
 			return err
 		}
 		// Get the volume that matches the destination in our complement container
-		var volumeName string
 		for i := range container.Mounts {
 			if container.Mounts[i].Destination == "/ca" {
-				volumeName = container.Mounts[i].Name
+				v.source = container.Mounts[i].Name
+				v.typ = container.Mounts[i].Type
+				break
 			}
 		}
-		if volumeName == "" {
+		if v.source == "" {
 			// We did not find a volume. This container might be created without a volume,
 			// or CI=true is passed but we are not running in a container.
 			return fmt.Errorf("CI=true but there is no /ca mounted to Complement's container")
 		}
-		v.source = volumeName
 	} else {
 		// When not in CI, our CA cert is placed in the current working dir.
 		// We bind mount this directory to all homeserver containers.
@@ -78,7 +79,7 @@ func (v *VolumeCA) Prepare(ctx context.Context, docker *client.Client, x string)
 
 func (v *VolumeCA) Mount() mount.Mount {
 	return mount.Mount{
-		Type:   mount.TypeBind,
+		Type:   v.typ,
 		Source: v.source,
 		Target: "/ca",
 	}
