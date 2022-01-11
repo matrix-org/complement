@@ -130,7 +130,7 @@ func TestDeviceManagement(t *testing.T) {
 //  - Bob's sync response indicates that Alice's device list has changed.
 //  - If Bob fetches Alice's keys then he sees the entire list.
 // REVIEW: should this be here or in a new file?
-func TestManyDevices(t *testing.T) {
+func TestAddingManyDevices(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -182,11 +182,11 @@ func TestManyDevices(t *testing.T) {
 		)
 	}
 
-	fetchAliceDeviceList := func() map[string]gjson.Result {
+	fetchAliceDeviceList := func(i int) map[string]gjson.Result {
 		response := bob.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "v3", "keys", "query"},
+			[]string{"_matrix", "client", "v3", "keys", fmt.Sprintf("query?i=%d", i)},
 			client.WithJSONBody(t, map[string]interface{}{
 				"device_keys": map[string]interface{}{
 					alice.UserID: []string{},
@@ -207,18 +207,30 @@ func TestManyDevices(t *testing.T) {
 		aliceAccessToken := loginAliceOnNewDevice(i)
 		uploadKeysForDevice(i, aliceAccessToken)
 
-		// We wait for Bob to see that Alice's device list has changed
-		bobSyncConfig.Since = bob.MustSyncUntil(
-			t,
-			bobSyncConfig,
-			client.SyncUserHasChangedDevices(alice.UserID),
-		)
+		success := false
+		for queries := 0; queries < 2; queries += 1 {
+			// We wait for Bob to see that Alice's device list has changed
+			bobSyncConfig.Since = bob.MustSyncUntil(
+				t,
+				bobSyncConfig,
+				client.SyncUserHasChangedDevices(alice.UserID),
+			)
 
-		// Bob fetches Alice's device list
-		devices := fetchAliceDeviceList()
-		if len(devices) != i {
-			t.Errorf("got %d devices; expected %d", len(devices), i)
-			t.Logf("%s", devices)
+			// Check to see that we see the expected number of devices.
+			// We have to check up to twice because the remote HS sends two EDUs:
+			// one for the device display name, and one for the keys. Bob might
+			// query after receiving the first but not the second.
+			devices := fetchAliceDeviceList(i)
+			if len(devices) != i {
+				t.Logf("got %d devices; expected %d", len(devices), i)
+				t.Logf("%s", devices)
+			} else {
+				success = true
+				break
+			}
+		}
+
+		if !success {
 			t.FailNow()
 		}
 	}
