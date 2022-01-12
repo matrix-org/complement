@@ -73,6 +73,7 @@ func (v *VolumeCA) Prepare(ctx context.Context, docker *client.Client, x string)
 			}
 		}
 		v.source = path.Join(cwd, "ca")
+		v.typ = mount.TypeBind
 	}
 	return nil
 }
