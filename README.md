@@ -76,6 +76,15 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 - The homeserver needs to assume dockerfile `CMD` or `ENTRYPOINT` instructions will be run multiple times.
 - The homeserver can use the CA certificate mounted at /ca to create its own TLS cert (see [Complement PKI](README.md#complement-pki)).
 
+### Getting prettier output
+
+The default output isn't particularly nice to read. You can use [gotestfmt](https://github.com/haveyoudebuggedit/gotestfmt)
+to make this very pretty. To do so, ask for JSON output via `go test -json` then pipe the output to `gotestfmt`.
+If you are doing this in CI, make sure to `set -o pipefail` or else test failures will NOT result in a non-zero exit code
+as `gotestfmt`'s exit code (0 as it successfully printed) will replace the previous commands exit code.
+See Complement's [Github Actions](https://github.com/matrix-org/complement/blob/master/.github/workflows/ci.yaml) file
+for an example of how to do this correctly.
+
 ## Writing tests
 
 To get started developing Complement tests, see [the onboarding documentation](ONBOARDING.md).

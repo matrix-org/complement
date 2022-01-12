@@ -133,6 +133,7 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 // The `events` will be added to this room. Returns the created room.
 func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
 	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.ServerName)
+	t.Logf("Creating room %s with version %s", roomID, roomVer)
 	room := newRoom(roomVer, roomID)
 
 	// sign all these events
@@ -242,6 +243,44 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 	t.Logf("Server.MustJoinRoom joined room ID %s", roomID)
 
 	return room
+}
+
+// Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
+func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string) {
+	t.Helper()
+	fedClient := s.FederationClient(deployment)
+	var leaveEvent *gomatrixserverlib.Event
+	room := s.rooms[roomID]
+	if room == nil {
+		// e.g rejecting an invite
+		makeLeaveResp, err := fedClient.MakeLeave(context.Background(), remoteServer, roomID, userID)
+		if err != nil {
+			t.Fatalf("MustLeaveRoom: (rejecting invite) make_leave failed: %v", err)
+		}
+		roomVer := makeLeaveResp.RoomVersion
+		leaveEvent, err = makeLeaveResp.LeaveEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, roomVer)
+		if err != nil {
+			t.Fatalf("MustLeaveRoom: (rejecting invite) failed to sign event: %v", err)
+		}
+	} else {
+		// make the leave event
+		leaveEvent = s.MustCreateEvent(t, room, b.Event{
+			Type:     "m.room.member",
+			StateKey: &userID,
+			Sender:   userID,
+			Content: map[string]interface{}{
+				"membership": "leave",
+			},
+		})
+	}
+	err := fedClient.SendLeave(context.Background(), gomatrixserverlib.ServerName(remoteServer), leaveEvent)
+	if err != nil {
+		t.Fatalf("MustLeaveRoom: send_leave failed: %v", err)
+	}
+	room.AddEvent(leaveEvent)
+	s.rooms[roomID] = room
+
+	t.Logf("Server.MustLeaveRoom left room ID %s", roomID)
 }
 
 // Mux returns this server's router so you can attach additional paths
@@ -443,23 +482,15 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 		template.DNSNames = append(template.DNSNames, host)
 	}
 
-	if os.Getenv("COMPLEMENT_CA") == "true" {
-		// Gate COMPLEMENT_CA
-		var ca *x509.Certificate
-		var caPrivKey *rsa.PrivateKey
-		ca, caPrivKey, err = GetOrCreateCaCert()
-		if err != nil {
-			return nil, "", "", err
-		}
-		derBytes, err = x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
-		if err != nil {
-			return nil, "", "", err
-		}
-	} else {
-		derBytes, err = x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
-		if err != nil {
-			return nil, "", "", err
-		}
+	var ca *x509.Certificate
+	var caPrivKey *rsa.PrivateKey
+	ca, caPrivKey, err = GetOrCreateCaCert()
+	if err != nil {
+		return nil, "", "", err
+	}
+	derBytes, err = x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
+	if err != nil {
+		return nil, "", "", err
 	}
 
 	certOut, err := os.Create(tlsCertPath)
