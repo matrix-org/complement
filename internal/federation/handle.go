@@ -322,7 +322,8 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 }
 
 // HandleTransactionRequests is an option which will process GET /_matrix/federation/v1/send/{transactionID} requests universally when requested.
-// pduCallback and eduCallback are functions that if non-nil will be called and passed each PDU or EDU event received in the transaction
+// pduCallback and eduCallback are functions that if non-nil will be called and passed each PDU or EDU event received in the transaction.
+// Callbacks will be fired AFTER the event has been stored onto the respective ServerRoom.
 func HandleTransactionRequests(pduCallback func(*gomatrixserverlib.Event), eduCallback func(gomatrixserverlib.EDU)) func(*Server) {
 	return func(srv *Server) {
 		srv.mux.Handle("/_matrix/federation/v1/send/{transactionID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

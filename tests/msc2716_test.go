@@ -461,7 +461,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			// eventIDsAfter
 			createMessagesInRoom(t, alice, roomID, 2, "eventIDsAfter")
 
 			// Import a batch of historical events
@@ -560,7 +559,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
-				// eventIDsAfter
 				createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
 
 				batchSendRes := batchSendHistoricalMessages(
@@ -643,7 +641,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 					return ev.Get("event_id").Str == insertionEventID
 				}))
 
-				// eventIDsAfter
 				createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
 
 				batchSendRes := batchSendHistoricalMessages(
@@ -709,7 +706,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
-				// eventIDsAfter
 				createMessagesInRoom(t, alice, roomID, 10, "eventIDsAfter")
 
 				// Mimic scrollback just through the latest messages
@@ -804,7 +800,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
-				// eventIDsAfter
 				createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
 
 				// Mimic scrollback to all of the messages
