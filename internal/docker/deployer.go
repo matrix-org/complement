@@ -173,8 +173,12 @@ func deployImage(
 	}
 
 	toMount := []Volume{
-		&VolumeCA{}, &VolumeAppService{},
+		&VolumeAppService{},
 	}
+	if os.Getenv("COMPLEMENT_CA") == "true" {
+		toMount = append(toMount, &VolumeCA{})
+	}
+
 	for _, m := range toMount {
 		err = m.Prepare(ctx, docker, contextStr)
 		if err != nil {
