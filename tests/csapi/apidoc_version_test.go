@@ -36,7 +36,7 @@ func TestVersionStructure(t *testing.T) {
 		// - v1^.*(-#)
 		//  where 1^ is 1 through 9 for the first digit, then any digit thereafter,
 		//  and * is any single or multiple of digits
-		//  optionally with dash-seperated metadata: (-#)
+		//  optionally with dash-separated metadata: (-#)
 		versionRegex, _ := regexp.Compile("^(" + r0Regex + "|" + GlobalVersionRegex + ")$")
 
 		must.MatchResponse(t, res, match.HTTPResponse{
