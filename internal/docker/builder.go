@@ -253,11 +253,14 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	if !foundImages {
 		return fmt.Errorf("failed to find built images via ImageList: did they all build ok?")
 	}
+	d.log("Constructed all blueprints")
 	return nil
 }
 
 // construct all Homeservers sequentially then commits them
 func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
+	d.log("Constructing blueprint '%s'", bprint.Name)
+
 	networkID, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
 	if err != nil {
 		return []error{err}
@@ -328,7 +331,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			continue
 		}
 		imageID := strings.Replace(commit.ID, "sha256:", "", 1)
-		d.log("%s => %s\n", res.contextStr, imageID)
+		d.log("%s: Created docker image %s\n", res.contextStr, imageID)
 	}
 	return errs
 }
@@ -371,7 +374,7 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	return deployImage(
 		d.Docker, d.Config.BaseImageURI, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
-		networkID, d.Config.SpawnHSTimeout,
+		networkID, d.Config.SpawnHSTimeout, d.Config.DebugLoggingEnabled,
 	)
 }
 
