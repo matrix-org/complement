@@ -316,7 +316,7 @@ func (s *Server) Listen() (cancel func()) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	ln, err := net.Listen("tcp", ":0")
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		s.t.Fatalf("ListenFederationServer: net.Listen failed: %s", err)
 	}
