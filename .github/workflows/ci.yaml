@@ -41,7 +41,12 @@ jobs:
       # servers which listen on random high numbered ports.
       - name: "Install Complement Dependencies"
         run: |
-          sudo apt-get update && sudo apt-get install -y libolm3 golang-go
+          sudo apt-get update && sudo apt-get install -y libolm3
+          sudo apt-get remove golang-go
+          wget https://dl.google.com/go/go1.16.4.linux-amd64.tar.gz 
+          tar -xvf go1.16.4.linux-amd64.tar.gz  
+          mv go /usr/local 
+          export PATH=$PATH:/usr/local/go/bin
           go get github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
 
 
@@ -83,7 +88,7 @@ jobs:
         working-directory: homeserver
 
       - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
-      - run: set -o pipefail && cd complement-master && go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
+      - run: export PATH=$PATH:/usr/local/go/bin && set -o pipefail && cd complement-master && go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         env:
           COMPLEMENT_BASE_IMAGE: homeserver
