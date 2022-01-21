@@ -96,14 +96,19 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		w.WriteHeader(500)
 		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot parse event JSON: " + err.Error()))
 	}
+
+	// build the state list *before* we insert the new event
+	var stateEvents = room.AllCurrentState()
+	var authEvents = room.AuthChain()
+
 	// insert the join event into the room state
 	room.AddEvent(event)
 
-	// return current state and auth chain
+	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
-		AuthEvents:  room.AuthChain(),
-		StateEvents: room.AllCurrentState(),
 		Origin:      gomatrixserverlib.ServerName(s.serverName),
+		AuthEvents:  authEvents,
+		StateEvents: stateEvents,
 	})
 	if err != nil {
 		w.WriteHeader(500)
