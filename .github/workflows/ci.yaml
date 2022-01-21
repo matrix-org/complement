@@ -41,8 +41,7 @@ jobs:
       # servers which listen on random high numbered ports.
       - name: "Install Complement Dependencies"
         run: |
-          echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/complement.list && add-apt-repository ppa:longsleep/golang-backports && apt-get update && apt-get install -y libolm3 golang-go libolm-dev/buster-backports
-          curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
+          sudo echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/complement.list && sudo add-apt-repository ppa:longsleep/golang-backports && sudo apt-get update && sudo apt-get install -y libolm3 golang-go libolm-dev/buster-backports
           go get github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
 
 
