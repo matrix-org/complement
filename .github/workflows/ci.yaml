@@ -42,6 +42,18 @@ jobs:
         - /var/run/docker.sock:/var/run/docker.sock
 
     steps:
+      # TODO: Make a shell script to install all Complement deps and use that here and in the Dockerfile
+      # Exactly the same steps as dockerfiles/ComplementCIBuildkite.Dockerfile but on the host. We need
+      # to do this so we can _be_ the host when running Complement so we can snaffle all the ports. If
+      # we run Complement _in_ Docker then we can't -p all high numbered ports which then breaks federation
+      # servers which listen on random high numbered ports.
+      - run: |
+          echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/complement.list && add-apt-repository ppa:longsleep/golang-backports && apt-get update && apt-get install -y libolm3 golang-go libolm-dev/buster-backports
+          curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
+          wget https://github.com/matrix-org/complement/archive/master.tar.gz
+          tar -xzf master.tar.gz && cd complement-master && go mod download 
+          cd complement-master && go get github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
+
       - uses: actions/checkout@v2
 
       - name: "Checkout corresponding ${{ matrix.homeserver }} branch"
@@ -82,7 +94,7 @@ jobs:
         working-directory: homeserver
 
       - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
-      - run: set -o pipefail && go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
+      - run: set -o pipefail && cd complement-master && go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         env:
           COMPLEMENT_BASE_IMAGE: homeserver
