@@ -107,7 +107,8 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		// TODO: Make CSAPI port configurable
 		deployment, err := deployImage(
 			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
-			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config.SpawnHSTimeout)
+			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config.SpawnHSTimeout, d.config.DebugLoggingEnabled,
+		)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
 				// print logs to help debug
@@ -159,6 +160,7 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 func deployImage(
 	docker *client.Client, imageID string, csPort int, containerName, pkgNamespace, blueprintName, hsName string,
 	asIDToRegistrationMap map[string]string, contextStr, networkID string, spawnHSTimeout time.Duration,
+	debugLoggingEnabled bool,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -220,6 +222,9 @@ func deployImage(
 	}
 
 	containerID := body.ID
+	if debugLoggingEnabled {
+		log.Printf("%s: Created container %s", contextStr, containerID)
+	}
 
 	// Create the application service files
 	for asID, registration := range asIDToRegistrationMap {
@@ -251,6 +256,10 @@ func deployImage(
 	if err != nil {
 		return nil, err
 	}
+	if debugLoggingEnabled {
+		log.Printf("%s: Started container %s", contextStr, containerID)
+	}
+
 	inspect, err := docker.ContainerInspect(ctx, containerID)
 	if err != nil {
 		return nil, err
@@ -263,7 +272,9 @@ func deployImage(
 	// hit /versions to check it is up
 	var lastErr error
 	stopTime := time.Now().Add(spawnHSTimeout)
+	iterCount := 0
 	for {
+		iterCount += 1
 		if time.Now().After(stopTime) {
 			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
 			break
@@ -292,6 +303,10 @@ func deployImage(
 	}
 	if lastErr != nil {
 		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
+	} else {
+		if debugLoggingEnabled {
+			log.Printf("%s: Server is responding after %d iterations", contextStr, iterCount)
+		}
 	}
 	return d, nil
 }
