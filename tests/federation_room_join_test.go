@@ -67,7 +67,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 
 	// join the room by room ID, providing the serverName to join via
-	alice.JoinRoom(t, serverRoom.RoomID, []string{srv.ServerName})
+	alice.JoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
 
 	// remove the make/send join paths from the Complement server to force HS2 to join via HS1
 	acceptMakeSendJoinRequests = false
@@ -290,7 +290,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	// ... and does a switcheroo to turn it into a join for himself
 	makeJoinResp.JoinEvent.Sender = charlie
 	makeJoinResp.JoinEvent.StateKey = &charlie
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName), srv.KeyID, srv.Priv, makeJoinResp.RoomVersion)
+	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName()), srv.KeyID, srv.Priv, makeJoinResp.RoomVersion)
 	must.NotError(t, "JoinEvent.Build", err)
 
 	// SendJoin should return a 403.

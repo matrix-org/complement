@@ -37,7 +37,8 @@ type Server struct {
 
 	Priv       ed25519.PrivateKey
 	KeyID      gomatrixserverlib.KeyID
-	ServerName string
+	serverName string
+	listening  bool
 
 	certPath string
 	keyPath  string
@@ -63,7 +64,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 		Priv:                        priv,
 		KeyID:                       "ed25519:complement",
 		mux:                         mux.NewRouter(),
-		ServerName:                  docker.HostnameRunningComplement,
+		serverName:                  docker.HostnameRunningComplement,
 		rooms:                       make(map[string]*ServerRoom),
 		aliases:                     make(map[string]string),
 		UnexpectedRequestsAreErrors: true,
@@ -114,16 +115,29 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	return srv
 }
 
+func (s *Server) ServerName() string {
+	if !s.listening {
+		s.t.Fatalf("ServerName() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name. Ensure you Listen() first!")
+	}
+	return s.serverName
+}
+
 // UserID returns the complete user ID for the given localpart
 func (s *Server) UserID(localpart string) string {
-	return fmt.Sprintf("@%s:%s", localpart, s.ServerName)
+	if !s.listening {
+		s.t.Fatalf("UserID() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the user ID. Ensure you Listen() first!")
+	}
+	return fmt.Sprintf("@%s:%s", localpart, s.serverName)
 }
 
 // MakeAliasMapping will create a mapping of room alias to room ID on this server. Returns the alias.
 // If this is the first time calling this function, a directory lookup handler will be added to
 // handle alias requests over federation.
 func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
-	alias := fmt.Sprintf("#%s:%s", aliasLocalpart, s.ServerName)
+	if !s.listening {
+		s.t.Fatalf("MakeAliasMapping() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room alias. Ensure you Listen() first!")
+	}
+	alias := fmt.Sprintf("#%s:%s", aliasLocalpart, s.serverName)
 	s.aliases[alias] = roomID
 	HandleDirectoryLookups()(s)
 	return alias
@@ -132,7 +146,10 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 // MustMakeRoom will add a room to this server so it is accessible to other servers when prompted via federation.
 // The `events` will be added to this room. Returns the created room.
 func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
-	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.ServerName)
+	if !s.listening {
+		s.t.Fatalf("MustMakeRoom() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room ID. Ensure you Listen() first!")
+	}
+	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.serverName)
 	t.Logf("Creating room %s with version %s", roomID, roomVer)
 	room := newRoom(roomVer, roomID)
 
@@ -149,8 +166,11 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 //
 // The requests will be routed according to the deployment map in `deployment`.
 func (s *Server) FederationClient(deployment *docker.Deployment) *gomatrixserverlib.FederationClient {
+	if !s.listening {
+		s.t.Fatalf("FederationClient() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the way federation requests are signed. Ensure you Listen() first!")
+	}
 	f := gomatrixserverlib.NewFederationClient(
-		gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv,
+		gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv,
 		gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}),
 	)
 	return f
@@ -160,7 +180,7 @@ func (s *Server) FederationClient(deployment *docker.Deployment) *gomatrixserver
 //
 // The requests will be routed according to the deployment map in `deployment`.
 func (s *Server) SendFederationRequest(deployment *docker.Deployment, req gomatrixserverlib.FederationRequest, resBody interface{}) error {
-	if err := req.Sign(gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv); err != nil {
+	if err := req.Sign(gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
 		return err
 	}
 
@@ -207,7 +227,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		}
 		eb.AuthEvents = room.AuthEvents(stateNeeded)
 	}
-	signedEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, room.Version)
+	signedEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv, room.Version)
 	if err != nil {
 		t.Fatalf("MustCreateEvent: failed to sign event: %s", err)
 	}
@@ -224,7 +244,7 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 		t.Fatalf("MustJoinRoom: make_join failed: %v", err)
 	}
 	roomVer := makeJoinResp.RoomVersion
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, roomVer)
+	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv, roomVer)
 	if err != nil {
 		t.Fatalf("MustJoinRoom: failed to sign event: %v", err)
 	}
@@ -258,7 +278,7 @@ func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remo
 			t.Fatalf("MustLeaveRoom: (rejecting invite) make_leave failed: %v", err)
 		}
 		roomVer := makeLeaveResp.RoomVersion
-		leaveEvent, err = makeLeaveResp.LeaveEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, roomVer)
+		leaveEvent, err = makeLeaveResp.LeaveEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv, roomVer)
 		if err != nil {
 			t.Fatalf("MustLeaveRoom: (rejecting invite) failed to sign event: %v", err)
 		}
@@ -290,13 +310,19 @@ func (s *Server) Mux() *mux.Router {
 
 // Listen for federation server requests - call the returned function to gracefully close the server.
 func (s *Server) Listen() (cancel func()) {
+	if s.listening {
+		return
+	}
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	ln, err := net.Listen("tcp", s.srv.Addr)
+	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
 		s.t.Fatalf("ListenFederationServer: net.Listen failed: %s", err)
 	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	s.serverName += fmt.Sprintf(":%d", port)
+	s.listening = true
 
 	go func() {
 		defer ln.Close()
@@ -548,7 +574,7 @@ func (f *basicKeyFetcher) FetchKeys(
 ) {
 	result := make(map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, len(requests))
 	for req := range requests {
-		if string(req.ServerName) == f.srv.ServerName && req.KeyID == f.srv.KeyID {
+		if string(req.ServerName) == f.srv.serverName && req.KeyID == f.srv.KeyID {
 			publicKey := f.srv.Priv.Public().(ed25519.PublicKey)
 			result[req] = gomatrixserverlib.PublicKeyLookupResult{
 				ValidUntilTS: gomatrixserverlib.AsTimestamp(time.Now().Add(24 * time.Hour)),

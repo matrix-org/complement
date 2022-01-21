@@ -92,7 +92,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	}
 	eb.AuthEvents = room.AuthEvents(stateNeeded)
 	// we have to create this event as a v5 event which doesn't assert floats yet
-	signedBadEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName), srv.KeyID, srv.Priv, gomatrixserverlib.RoomVersionV5)
+	signedBadEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName()), srv.KeyID, srv.Priv, gomatrixserverlib.RoomVersionV5)
 	if err != nil {
 		t.Fatalf("failed to sign event: %s", err)
 	}
