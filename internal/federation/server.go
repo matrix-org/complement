@@ -364,15 +364,15 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 	}
 	tlsCACertPath = path.Join(wd, "ca", "ca.crt")
 	tlsCAKeyPath = path.Join(wd, "ca", "ca.key")
-	if _, err := os.Stat(path.Join(wd, "ca")); os.IsNotExist(err) {
+	if _, err = os.Stat(path.Join(wd, "ca")); os.IsNotExist(err) {
 		err = os.Mkdir(path.Join(wd, "ca"), 0770)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	if _, err := os.Stat(tlsCACertPath); err == nil {
-		if _, err := os.Stat(tlsCAKeyPath); err == nil {
+	if _, err = os.Stat(tlsCACertPath); err == nil {
+		if _, err = os.Stat(tlsCAKeyPath); err == nil {
 			// We already created a CA cert, let's use that.
 			dat, err := ioutil.ReadFile(tlsCACertPath)
 			if err != nil {
