@@ -32,9 +32,9 @@ jobs:
             default_branch: master
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v2 # Checkout complement
 
-      # Env vars are set file a file given by $GITHUB_PATH
+      # Env vars are set file a file given by $GITHUB_PATH. We need both Go 1.17 and GOPATH on env.
       # See https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-system-path
       - name: "Set Go Version"
         run: |
@@ -49,9 +49,8 @@ jobs:
         # We don't need to install Go because it is included on the Ubuntu 20.04 image:
         # See https://github.com/actions/virtual-environments/blob/main/images/linux/Ubuntu2004-Readme.md specifically GOROOT_1_17_X64
         run: |
-          sudo apt-get update && sudo apt-get install -y libolm3
+          sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
           go get -v github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
-
 
       - name: "Checkout corresponding ${{ matrix.homeserver }} branch"
         # This is only done for Synapse since Dendrite's docker file pulls in

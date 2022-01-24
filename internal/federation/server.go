@@ -60,10 +60,12 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	}
 
 	srv := &Server{
-		t:                           t,
-		Priv:                        priv,
-		KeyID:                       "ed25519:complement",
-		mux:                         mux.NewRouter(),
+		t:     t,
+		Priv:  priv,
+		KeyID: "ed25519:complement",
+		mux:   mux.NewRouter(),
+		// The server name will be updated when the caller calls Listen() to include the port number
+		// of the HTTP server e.g "host.docker.internal:56353"
 		serverName:                  docker.HostnameRunningComplement,
 		rooms:                       make(map[string]*ServerRoom),
 		aliases:                     make(map[string]string),
