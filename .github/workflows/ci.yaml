@@ -91,7 +91,9 @@ jobs:
           DOCKER_BUILDKIT: 1
 
       - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
-      - run: export PATH=$PATH:/usr/local/go/bin && set -o pipefail && cd complement-master && go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
+      - run: |
+          set -o pipefail &&
+          go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         env:
           COMPLEMENT_BASE_IMAGE: homeserver
