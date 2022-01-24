@@ -374,7 +374,8 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 	if _, err = os.Stat(tlsCACertPath); err == nil {
 		if _, err = os.Stat(tlsCAKeyPath); err == nil {
 			// We already created a CA cert, let's use that.
-			dat, err := ioutil.ReadFile(tlsCACertPath)
+			var dat []byte
+			dat, err = ioutil.ReadFile(tlsCACertPath)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -382,7 +383,8 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 			if block == nil || block.Type != "CERTIFICATE" {
 				return nil, nil, errors.New("ca.crt is not a valid pem encoded x509 cert")
 			}
-			caCerts, err := x509.ParseCertificates(block.Bytes)
+			var caCerts []*x509.Certificate
+			caCerts, err = x509.ParseCertificates(block.Bytes)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -398,7 +400,8 @@ func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 			if block == nil || block.Type != "RSA PRIVATE KEY" {
 				return nil, nil, errors.New("ca.key is not a valid pem encoded rsa private key")
 			}
-			priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+			var priv *rsa.PrivateKey
+			priv, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 			if err != nil {
 				return nil, nil, err
 			}
