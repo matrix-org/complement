@@ -34,7 +34,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      # TODO: Make a shell script to install all Complement deps and use that here and in the Dockerfile
+      # Env vars are set file a file given by $GITHUB_PATH
+      # See https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-system-path
+      - name: "Set Go Version"
+        run: echo "$GOROOT_1_17_X64/bin" >> $GITHUB_PATH
+
       # Similar steps as dockerfiles/ComplementCIBuildkite.Dockerfile but on the host. We need
       # to do this so we can _be_ the host when running Complement so we can snaffle all the ports. If
       # we run Complement _in_ Docker then we can't -p all high numbered ports which then breaks federation
@@ -44,8 +48,7 @@ jobs:
         # See https://github.com/actions/virtual-environments/blob/main/images/linux/Ubuntu2004-Readme.md specifically GOROOT_1_17_X64
         run: |
           sudo apt-get update && sudo apt-get install -y libolm3
-          echo "$GOROOT_1_17_X64/bin" >> $GITHUB_PATH
-          GOROOT=$GOROOT_1_17_X64 go get github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
+          go get github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
 
 
       - name: "Checkout corresponding ${{ matrix.homeserver }} branch"
