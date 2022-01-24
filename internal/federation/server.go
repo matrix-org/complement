@@ -115,6 +115,12 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	return srv
 }
 
+// Return the server name of this federation server. Only valid AFTER calling Listen() - doing so
+// before will produce an error.
+//
+// It is not supported to call ServerName() before Listen() because Listen() modifies the server name.
+// Listen() will select a random OS-provided high-numbered port to listen on, which then needs to be
+// retrofitted into the server name so containers know how to route to it.
 func (s *Server) ServerName() string {
 	if !s.listening {
 		s.t.Fatalf("ServerName() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name. Ensure you Listen() first!")
