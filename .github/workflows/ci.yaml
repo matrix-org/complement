@@ -96,7 +96,7 @@ jobs:
           set -o pipefail &&
           go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
+        name: Run Complement Tests
         env:
           COMPLEMENT_BASE_IMAGE: homeserver
           DOCKER_BUILDKIT: 1
-          CI: false # hacky hack hack to avoid talking to 172. addresses and assuming /ca/crt exists. We should remove this env var entirely

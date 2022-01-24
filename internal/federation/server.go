@@ -358,24 +358,19 @@ func (s *Server) Listen() (cancel func()) {
 // This basically acts as a test only valid PKI.
 func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
 	var tlsCACertPath, tlsCAKeyPath string
-	if os.Getenv("CI") == "true" {
-		// When in CI we create the cert dir in the root directory instead.
-		tlsCACertPath = path.Join("/ca", "ca.crt")
-		tlsCAKeyPath = path.Join("/ca", "ca.key")
-	} else {
-		wd, err := os.Getwd()
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, nil, err
+	}
+	tlsCACertPath = path.Join(wd, "ca", "ca.crt")
+	tlsCAKeyPath = path.Join(wd, "ca", "ca.key")
+	if _, err := os.Stat(path.Join(wd, "ca")); os.IsNotExist(err) {
+		err = os.Mkdir(path.Join(wd, "ca"), 0770)
 		if err != nil {
 			return nil, nil, err
 		}
-		tlsCACertPath = path.Join(wd, "ca", "ca.crt")
-		tlsCAKeyPath = path.Join(wd, "ca", "ca.key")
-		if _, err := os.Stat(path.Join(wd, "ca")); os.IsNotExist(err) {
-			err = os.Mkdir(path.Join(wd, "ca"), 0770)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
 	}
+
 	if _, err := os.Stat(tlsCACertPath); err == nil {
 		if _, err := os.Stat(tlsCAKeyPath); err == nil {
 			// We already created a CA cert, let's use that.
