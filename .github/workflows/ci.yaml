@@ -45,7 +45,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libolm3
           echo "$GOROOT_1_17_X64/bin" >> $GITHUB_PATH
-          go get github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
+          GOROOT=$GOROOT_1_17_X64 go get github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
 
 
       - name: "Checkout corresponding ${{ matrix.homeserver }} branch"
