@@ -35,18 +35,16 @@ jobs:
       - uses: actions/checkout@v2
 
       # TODO: Make a shell script to install all Complement deps and use that here and in the Dockerfile
-      # Exactly the same steps as dockerfiles/ComplementCIBuildkite.Dockerfile but on the host. We need
+      # Similar steps as dockerfiles/ComplementCIBuildkite.Dockerfile but on the host. We need
       # to do this so we can _be_ the host when running Complement so we can snaffle all the ports. If
       # we run Complement _in_ Docker then we can't -p all high numbered ports which then breaks federation
       # servers which listen on random high numbered ports.
       - name: "Install Complement Dependencies"
+        # We don't need to install Go because it is included on the Ubuntu 20.04 image:
+        # See https://github.com/actions/virtual-environments/blob/main/images/linux/Ubuntu2004-Readme.md specifically GOROOT_1_17_X64
         run: |
           sudo apt-get update && sudo apt-get install -y libolm3
-          sudo apt-get remove golang-go
-          wget https://dl.google.com/go/go1.16.4.linux-amd64.tar.gz 
-          tar -xvf go1.16.4.linux-amd64.tar.gz  
-          mv go /usr/local 
-          export PATH=$PATH:/usr/local/go/bin
+          echo "$GOROOT_1_17_X64/bin" >> $GITHUB_PATH
           go get github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
 
 
