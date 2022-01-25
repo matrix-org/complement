@@ -1,3 +1,4 @@
+//go:build msc2836
 // +build msc2836
 
 package tests
@@ -296,7 +297,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 
 	// join the room on HS1
 	// HS1 will not have any of these messages, only the room state.
-	alice.JoinRoom(t, room.RoomID, []string{srv.ServerName})
+	alice.JoinRoom(t, room.RoomID, []string{srv.ServerName()})
 
 	// send a new child in the thread (child of D) so the HS has something to latch on to.
 	eventE := srv.MustCreateEvent(t, room, b.Event{
@@ -315,7 +316,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	fedClient := srv.FederationClient(deployment)
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName),
+		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:    gomatrixserverlib.ServerName("hs1"),
 		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{

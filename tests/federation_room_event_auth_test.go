@@ -1,4 +1,5 @@
 // These tests currently fail on Dendrite, due to Dendrite bugs.
+//go:build !dendrite_blacklist
 // +build !dendrite_blacklist
 
 package tests
@@ -125,7 +126,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement1",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName),
+		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:    "hs1",
 		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
@@ -196,7 +197,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	_, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement2",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName),
+		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:    "hs1",
 		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{

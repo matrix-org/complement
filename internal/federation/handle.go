@@ -18,7 +18,7 @@ import (
 func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
 	// Check federation signature
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-		req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
+		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 	)
 	if fedReq == nil {
 		w.WriteHeader(errResp.Code)
@@ -74,7 +74,7 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 // HandleMakeSendJoinRequests.
 func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-		req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
+		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 	)
 	if fedReq == nil {
 		w.WriteHeader(errResp.Code)
@@ -106,9 +106,9 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
+		Origin:      gomatrixserverlib.ServerName(s.serverName),
 		AuthEvents:  authEvents,
 		StateEvents: stateEvents,
-		Origin:      gomatrixserverlib.ServerName(s.ServerName),
 	})
 	if err != nil {
 		w.WriteHeader(500)
@@ -141,7 +141,7 @@ func HandleInviteRequests(inviteCallback func(*gomatrixserverlib.Event)) func(*S
 		// https://matrix.org/docs/spec/server_server/r0.1.4#put-matrix-federation-v2-invite-roomid-eventid
 		s.mux.Handle("/_matrix/federation/v2/invite/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 			)
 			if fedReq == nil {
 				w.WriteHeader(errResp.Code)
@@ -169,7 +169,7 @@ func HandleInviteRequests(inviteCallback func(*gomatrixserverlib.Event)) func(*S
 			}
 
 			// Sign the event before we send it back
-			signedEvent := inviteRequest.Event().Sign(s.ServerName, s.KeyID, s.Priv)
+			signedEvent := inviteRequest.Event().Sign(s.serverName, s.KeyID, s.Priv)
 
 			// Send the response
 			res := map[string]interface{}{
@@ -195,7 +195,7 @@ func HandleDirectoryLookups() func(*Server) {
 				b, err := json.Marshal(gomatrixserverlib.RespDirectory{
 					RoomID: roomID,
 					Servers: []gomatrixserverlib.ServerName{
-						gomatrixserverlib.ServerName(s.ServerName),
+						gomatrixserverlib.ServerName(s.serverName),
 					},
 				})
 				if err != nil {
@@ -235,7 +235,7 @@ func HandleEventRequests() func(*Server) {
 			}
 
 			txn := gomatrixserverlib.Transaction{
-				Origin:         gomatrixserverlib.ServerName(srv.ServerName),
+				Origin:         gomatrixserverlib.ServerName(srv.serverName),
 				OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 				PDUs: []json.RawMessage{
 					event.JSON(),
@@ -259,7 +259,7 @@ func HandleKeyRequests() func(*Server) {
 		keymux := srv.mux.PathPrefix("/_matrix/key/v2").Subrouter()
 		keyFn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			k := gomatrixserverlib.ServerKeys{}
-			k.ServerName = gomatrixserverlib.ServerName(srv.ServerName)
+			k.ServerName = gomatrixserverlib.ServerName(srv.serverName)
 			publicKey := srv.Priv.Public().(ed25519.PublicKey)
 			k.VerifyKeys = map[gomatrixserverlib.KeyID]gomatrixserverlib.VerifyKey{
 				srv.KeyID: {
@@ -276,7 +276,7 @@ func HandleKeyRequests() func(*Server) {
 			}
 
 			k.Raw, err = gomatrixserverlib.SignJSON(
-				string(srv.ServerName), srv.KeyID, srv.Priv, toSign,
+				string(srv.serverName), srv.KeyID, srv.Priv, toSign,
 			)
 			if err != nil {
 				w.WriteHeader(500)
@@ -304,9 +304,9 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 			origin := vars["origin"]
 			mediaId := vars["mediaId"]
 
-			if origin != srv.ServerName {
+			if origin != srv.serverName {
 				w.WriteHeader(400)
-				w.Write([]byte("complement: Invalid Origin; Expected " + srv.ServerName))
+				w.Write([]byte("complement: Invalid Origin; Expected " + srv.serverName))
 				return
 			}
 
@@ -338,7 +338,7 @@ func HandleTransactionRequests(pduCallback func(*gomatrixserverlib.Event), eduCa
 
 			// Check federation signature
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(srv.ServerName), srv.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), srv.keyRing,
 			)
 			if fedReq == nil {
 				log.Printf(
