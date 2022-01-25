@@ -337,7 +337,9 @@ func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody int
 	t.Helper()
 	res := c.DoFunc(t, method, paths, WithJSONBody(t, jsonBody))
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+		defer res.Body.Close()
+		body, _ := ioutil.ReadAll(res.Body)
+		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d : %s", method, res.Request.URL.String(), res.StatusCode, string(body))
 	}
 	return res
 }
