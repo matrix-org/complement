@@ -330,6 +330,7 @@ func (s *Server) Listen() (cancel func()) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 	s.serverName += fmt.Sprintf(":%d", port)
+	s.t.Logf("ComplementServer listening on %s", s.serverName)
 	s.listening = true
 
 	go func() {
