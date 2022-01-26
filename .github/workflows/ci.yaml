@@ -34,6 +34,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2 # Checkout complement
 
+      - name: "Docker information"
+        run: |
+          docker version
+          docker info
+
       # Env vars are set file a file given by $GITHUB_PATH. We need both Go 1.17 and GOPATH on env.
       # See https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-system-path
       - name: "Set Go Version"

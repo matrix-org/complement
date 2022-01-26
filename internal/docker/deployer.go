@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -286,10 +287,13 @@ func deployImage(
 			continue
 		}
 		if res.StatusCode != 200 {
-			lastErr = fmt.Errorf("GET %s => HTTP %s", versionsURL, res.Status)
+			body, _ := ioutil.ReadAll(res.Body)
+			lastErr = fmt.Errorf("GET %s => HTTP %s : %s", versionsURL, res.Status, string(body))
+			res.Body.Close()
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
+		res.Body.Close()
 		lastErr = nil
 		break
 	}
