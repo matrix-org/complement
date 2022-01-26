@@ -15,7 +15,6 @@ RUN ./generate-config --ci > dendrite.yaml
 RUN ./generate-keys --private-key matrix_key.pem --tls-cert server.crt --tls-key server.key
 
 ENV SERVER_NAME=localhost
-ENV DENDRITE_TRACE_HTTP=1
 EXPOSE 8008 8448
 
 CMD sed -i "s/server_name: localhost/server_name: ${SERVER_NAME}/g" dendrite.yaml && ./dendrite-monolith-server --tls-cert server.crt --tls-key server.key --config dendrite.yaml
