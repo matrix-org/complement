@@ -70,6 +70,7 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 
 - The Dockerfile must `EXPOSE 8008` and `EXPOSE 8448` for client and federation traffic respectively.
 - The homeserver should run and listen on these ports.
+- The homeserver should become healthy within `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS` if a `HEALTHCHECK` is specified in the Dockerfile.
 - The homeserver needs to `200 OK` requests to `GET /_matrix/client/versions`.
 - The homeserver needs to manage its own storage within the image.
 - The homeserver needs to accept the server name given by the environment variable `SERVER_NAME` at runtime.
