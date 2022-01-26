@@ -52,6 +52,20 @@ func NewDeployer(deployNamespace string, cfg *config.Complement) (*Deployer, err
 	if err != nil {
 		return nil, err
 	}
+	// DEBUG
+	log.Printf(" ==== Debug Docker Images Listing On %s/%s ====", deployNamespace, cfg.PackageNamespace)
+	images, err := cli.ImageList(context.Background(), types.ImageListOptions{
+		Filters: label(
+			"complement_pkg=" + cfg.PackageNamespace,
+		),
+	})
+	if err != nil {
+		panic(err)
+	}
+	for _, img := range images {
+		log.Printf("%s %v %d", img.ID, img.Labels, img.Created)
+	}
+
 	return &Deployer{
 		DeployNamespace: deployNamespace,
 		Docker:          cli,
@@ -172,7 +186,7 @@ func deployImage(
 		// By default docker for linux does not expose this, so do it now.
 		// When https://github.com/moby/moby/pull/40007 lands in Docker 20, we should
 		// change this to be  `host.docker.internal:host-gateway`
-		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
+		extraHosts = []string{HostnameRunningComplementMissingPort + ":172.17.0.1"}
 	}
 
 	toMount := []Volume{

@@ -7,7 +7,6 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 )
 
@@ -53,7 +52,7 @@ func TestOutboundFederationSend(t *testing.T) {
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice.JoinRoom(t, roomAlias, []string{docker.HostnameRunningComplement})
+	alice.JoinRoom(t, roomAlias, []string{srv.ServerName()})
 
 	// the local homeserver sends an event into the room
 	alice.SendEventSynced(t, serverRoom.RoomID, b.Event{

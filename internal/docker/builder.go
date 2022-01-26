@@ -32,8 +32,9 @@ import (
 )
 
 var (
-	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
-	HostnameRunningComplement = "host.docker.internal"
+	// hostnameRunningComplementMissingPort is the hostname of Complement from the perspective of a Homeserver.
+	// It is missing a port number so CANNOT be used to route to the Complement federation server.
+	HostnameRunningComplementMissingPort = "host.docker.internal"
 	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
 	HostnameRunningDocker = "localhost"
 )
