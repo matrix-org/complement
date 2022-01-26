@@ -10,6 +10,7 @@ import (
 	client "github.com/docker/docker/client"
 )
 
+// test
 // A volume is a mounted directory on the homeserver container
 type Volume interface {
 	// Return the mount point
