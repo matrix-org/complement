@@ -81,7 +81,11 @@ func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	if err != nil {
 		t.Fatalf("Deploy: Deploy returned error %s", err)
 	}
-	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy))
+	ports := ""
+	for hsName, d := range dep.HS {
+		ports += fmt.Sprintf("%s=(%s,%s) ", hsName, d.BaseURL, d.FedBaseURL)
+	}
+	t.Logf("Deploy times: %v blueprints, %v containers - endpoints: %s", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy), ports)
 	return dep
 }
 
