@@ -57,7 +57,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-// C
+// D
 // Deploy will deploy the given blueprint or terminate the test.
 // It will construct the blueprint if it doesn't already exist in the docker image cache.
 // This function is the main setup function for all tests as it provides a deployment with
