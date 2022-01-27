@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/match"
@@ -113,6 +114,21 @@ func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byt
 		}
 	}
 	return body
+}
+
+// MatchFederationRequest performs JSON assertions on incoming federation requests.
+func MatchFederationRequest(t *testing.T, fedReq *gomatrixserverlib.FederationRequest, matchers ...match.JSON) {
+	t.Helper()
+	content := fedReq.Content()
+	if !gjson.ValidBytes(content) {
+		t.Fatalf("MatchFederationRequest content is not valid JSON - %s", fedReq.RequestURI())
+	}
+
+	for _, jm := range matchers {
+		if err := jm(content); err != nil {
+			t.Fatalf("MatchFederationRequest %s - %s", err, fedReq.RequestURI())
+		}
+	}
 }
 
 // EqualStr ensures that got==want else logs an error.
