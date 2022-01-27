@@ -193,7 +193,7 @@ func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	resp, err := cli.SendTransaction(ctx, gomatrixserverlib.Transaction{
-		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("%d", time.Now().Nanosecond())),
+		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("complement-%d", time.Now().Nanosecond())),
 		Origin:        gomatrixserverlib.ServerName(s.ServerName()),
 		Destination:   gomatrixserverlib.ServerName(destination),
 		PDUs:          pdus,
