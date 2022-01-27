@@ -3,13 +3,17 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/util"
+	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -19,6 +23,125 @@ import (
 // Outbound federation can request missing events
 // Inbound federation can return missing events for $vis visibility
 // outliers whose auth_events are in a different room are correctly rejected
+
+// /get_missing_events is used to fill in gaps in the room DAG when a server is pushed (via /send)
+// an event with unknown prev_events. A gap can be "filled" if there is an overlap between the events
+// from /get_missing_events and what the server already knows. In the event that a gap is filled,
+// the server should deliver all missed messages to the client and critically, NOT do any further
+// requests like /state or /state_ids. This test exists as a Dendrite regression test where a change to
+// /get_missing_events resulted in gaps never being filled so Dendrite would ALWAYS hit /state_ids
+// even when it knew the earliest events. This test doesn't fork the DAG in any way, it's entirely
+// linear.
+func TestGetMissingEventsGapFilling(t *testing.T) {
+	// 1) Create a room between the HS and Complement.
+	// 2) Inject events into Complement but don't deliver them to the HS.
+	// 3) Inject a final event into Complement and send that alone to the HS.
+	// 4) Respond to /get_missing_events with the missing events if the request is well-formed.
+	// 5) Ensure the HS doesn't do /state_ids or /state
+	// 6) Ensure Alice sees all injected events in the correct order.
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+	)
+	// 5) Ensure the HS doesn't do /state_ids or /state
+	srv.Mux().HandleFunc("/_matrix/federation/v1/state/{roomID}", func(w http.ResponseWriter, req *http.Request) {
+		t.Errorf("Received request to /_matrix/federation/v1/state/{roomID}")
+	}).Methods("GET")
+	srv.Mux().HandleFunc("/_matrix/federation/v1/state_ids/{roomID}", func(w http.ResponseWriter, req *http.Request) {
+		t.Errorf("Received request to /_matrix/federation/v1/state_ids/{roomID}")
+	}).Methods("GET")
+	cancel := srv.Listen()
+	defer cancel()
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := srv.UserID("bob")
+
+	// 1) Create a room between the HS and Complement.
+	roomID := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+	})
+	srvRoom := srv.MustJoinRoom(t, deployment, "hs1", roomID, bob)
+	lastSharedEvent := srvRoom.Timeline[len(srvRoom.Timeline)-1]
+
+	// 2) Inject events into Complement but don't deliver them to the HS.
+	var missingEvents []json.RawMessage
+	var missingEventIDs []string
+	numMissingEvents := 5
+	for i := 0; i < numMissingEvents; i++ {
+		missingEvent := srv.MustCreateEvent(t, srvRoom, b.Event{
+			Sender: bob,
+			Type:   "m.room.message",
+			Content: map[string]interface{}{
+				"body": fmt.Sprintf("Missing event %d/%d", i+1, numMissingEvents),
+			},
+		})
+		srvRoom.AddEvent(missingEvent)
+		missingEvents = append(missingEvents, missingEvent.JSON())
+		missingEventIDs = append(missingEventIDs, missingEvent.EventID())
+	}
+
+	// 3) Inject a final event into Complement
+	mostRecentEvent := srv.MustCreateEvent(t, srvRoom, b.Event{
+		Sender: bob,
+		Type:   "m.room.message",
+		Content: map[string]interface{}{
+			"body": "most recent event",
+		},
+	})
+	srvRoom.AddEvent(mostRecentEvent)
+
+	// 4) Respond to /get_missing_events with the missing events if the request is well-formed.
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/get_missing_events/{roomID}",
+		srv.ValidFederationRequest(t, func(fr *gomatrixserverlib.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			if pathParams["roomID"] != roomID {
+				t.Errorf("Received /get_missing_events for the wrong room: %s", roomID)
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "wrong room",
+				}
+			}
+			must.MatchFederationRequest(t, fr,
+				match.JSONKeyEqual("earliest_events", []interface{}{lastSharedEvent.EventID()}),
+				match.JSONKeyEqual("latest_events", []interface{}{mostRecentEvent.EventID()}),
+			)
+			t.Logf(
+				"/get_missing_events request well-formed, sending back response, earliest_events=%v latest_events=%v",
+				lastSharedEvent.EventID(), mostRecentEvent.EventID(),
+			)
+			return util.JSONResponse{
+				Code: 200,
+				JSON: map[string]interface{}{
+					"events": missingEvents,
+				},
+			}
+		}),
+	).Methods("POST")
+
+	// 3) ...and send that alone to the HS.
+	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{mostRecentEvent.JSON()}, nil)
+
+	// 6) Ensure Alice sees all injected events in the correct order.
+	correctOrderEventIDs := append([]string{lastSharedEvent.EventID()}, missingEventIDs...)
+	correctOrderEventIDs = append(correctOrderEventIDs, mostRecentEvent.EventID())
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+		next := correctOrderEventIDs[0]
+		if r.Get("event_id").Str == next {
+			correctOrderEventIDs = correctOrderEventIDs[1:]
+			if len(correctOrderEventIDs) == 0 {
+				return true
+			}
+		}
+		return false
+	}))
+	if len(correctOrderEventIDs) != 0 {
+		t.Errorf("missed some event IDs : %v", correctOrderEventIDs)
+	}
+}
 
 // A homeserver receiving a response from `get_missing_events` for a version 6
 // room with a bad JSON value (e.g. a float) should discard the bad data.

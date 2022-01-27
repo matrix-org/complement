@@ -23,6 +23,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/util"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
@@ -184,6 +185,30 @@ func (s *Server) FederationClient(deployment *docker.Deployment) *gomatrixserver
 	return f
 }
 
+// MustSendTransaction sends the given PDUs/EDUs to the target destination, returning an error if the /send fails or if the response contains an error
+// for any sent PDUs. Times out after 10 seconds.
+func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment, destination string, pdus []json.RawMessage, edus []gomatrixserverlib.EDU) {
+	t.Helper()
+	cli := s.FederationClient(deployment)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	resp, err := cli.SendTransaction(ctx, gomatrixserverlib.Transaction{
+		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("%d", time.Now().Nanosecond())),
+		Origin:        gomatrixserverlib.ServerName(s.ServerName()),
+		Destination:   gomatrixserverlib.ServerName(destination),
+		PDUs:          pdus,
+		EDUs:          edus,
+	})
+	if err != nil {
+		t.Fatalf("MustSendTransaction: %s", err)
+	}
+	for eventID, e := range resp.PDUs {
+		if e.Error != "" {
+			t.Fatalf("MustSendTransaction: response for %s contained error: %s", eventID, e.Error)
+		}
+	}
+}
+
 // SendFederationRequest signs and sends an arbitrary federation request from this server.
 //
 // The requests will be routed according to the deployment map in `deployment`.
@@ -311,7 +336,41 @@ func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remo
 	t.Logf("Server.MustLeaveRoom left room ID %s", roomID)
 }
 
-// Mux returns this server's router so you can attach additional paths
+// ValidFederationRequest is a wrapper around http.HandlerFunc which automatically validates the incoming
+// federation request and supports sending back JSON. Fails the test if the request is not valid.
+func (s *Server) ValidFederationRequest(t *testing.T, handler func(fr *gomatrixserverlib.FederationRequest, pathParams map[string]string) util.JSONResponse) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		// Check federation signature
+		fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
+			req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+		)
+		if fedReq == nil {
+			t.Errorf(
+				"complement: ValidFederationRequest: HTTP Code %d. Invalid http request: %s",
+				errResp.Code, errResp.JSON,
+			)
+
+			w.WriteHeader(errResp.Code)
+			b, _ := json.Marshal(errResp.JSON)
+			w.Write(b)
+			return
+		}
+		vars := mux.Vars(req)
+
+		// invoke the handler
+		res := handler(fedReq, vars)
+
+		// send back the response
+		for k, v := range res.Headers {
+			w.Header().Set(k, v)
+		}
+		w.WriteHeader(res.Code)
+		b, _ := json.Marshal(res.JSON)
+		w.Write(b)
+	}
+}
+
+// Mux returns this server's router so you can attach additional paths.
 func (s *Server) Mux() *mux.Router {
 	return s.mux
 }
