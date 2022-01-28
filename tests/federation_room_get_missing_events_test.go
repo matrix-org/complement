@@ -128,13 +128,19 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	// 6) Ensure Alice sees all injected events in the correct order.
 	correctOrderEventIDs := append([]string{lastSharedEvent.EventID()}, missingEventIDs...)
 	correctOrderEventIDs = append(correctOrderEventIDs, mostRecentEvent.EventID())
+	startedGettingEvents := false
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		next := correctOrderEventIDs[0]
 		if r.Get("event_id").Str == next {
+			startedGettingEvents = true
 			correctOrderEventIDs = correctOrderEventIDs[1:]
 			if len(correctOrderEventIDs) == 0 {
 				return true
 			}
+		} else if startedGettingEvents {
+			// once we start reading the events we want we should not see any other events to ensure
+			// that the order is correct
+			t.Errorf("Expected timeline event %s but got %s", next, r.Get("event_id").Str)
 		}
 		return false
 	}))
