@@ -19,6 +19,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -324,6 +325,12 @@ func TestFederatedEventRelationships(t *testing.T) {
 		},
 	})
 	must.NotError(t, "failed to SendTransaction", err)
+
+	// wait for it to be processed
+	t.Logf("Waiting to see Event E from /send: %s", eventE.EventID())
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(room.RoomID, func(r gjson.Result) bool {
+		return r.Get("event_id").Str == eventE.EventID()
+	}))
 
 	// Hit /event_relationships to make sure it spiders the whole thing by asking /event_relationships on Complement
 	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
