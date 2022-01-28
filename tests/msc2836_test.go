@@ -19,6 +19,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -90,14 +91,15 @@ func TestEventRelationships(t *testing.T) {
 	// Join the room from another server
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 	_ = bob.JoinRoom(t, roomID, []string{"hs1"})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// Now hit /event_relationships with eventD
-	res := bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
+	res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":       eventD,
 		"room_id":        roomID, // required so the server knows which servers to ask
 		"direction":      "down", // no newer events, so nothing should be added
 		"include_parent": true,   // this should pull in event B
-	})
+	}))
 	var gots []gjson.Result
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
@@ -124,13 +126,13 @@ func TestEventRelationships(t *testing.T) {
 	}, []string{eventC, eventD})
 
 	// now hit /event_relationships again with B, which should return everything (and fetch the missing events A,C)
-	res = bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
+	res = bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":       eventB,
 		"room_id":        roomID, // required so the server knows which servers to ask
 		"direction":      "down", // this pulls in C,D
 		"include_parent": true,   // this pulls in A
 		"recent_first":   false,
-	})
+	}))
 	gots = []gjson.Result{}
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
