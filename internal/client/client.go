@@ -148,6 +148,14 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 	c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
 }
 
+func (c *CSAPI) GetGlobalAccountData(t *testing.T, eventType string) *http.Response {
+	return c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "user", c.UserID, "account_data", eventType})
+}
+
+func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map[string]interface{}) *http.Response {
+	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
+}
+
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
