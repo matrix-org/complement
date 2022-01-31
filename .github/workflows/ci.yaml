@@ -99,4 +99,5 @@ jobs:
         name: Run Complement Tests
         env:
           COMPLEMENT_BASE_IMAGE: homeserver
+          COMPLEMENT_DEBUG: 1
           DOCKER_BUILDKIT: 1
