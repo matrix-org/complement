@@ -1,4 +1,4 @@
-FROM golang:1.15-stretch as build
+FROM golang:1.17-stretch as build
 RUN apt-get update && apt-get install -y postgresql
 WORKDIR /build
 
