@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/config"
 )
 
 // Deployment is the complete instantiation of a Blueprint, with running containers
@@ -15,7 +16,8 @@ type Deployment struct {
 	// The name of the deployed blueprint
 	BlueprintName string
 	// A map of HS name to a HomeserverDeployment
-	HS map[string]HomeserverDeployment
+	HS     map[string]HomeserverDeployment
+	Config *config.Complement
 }
 
 // HomeserverDeployment represents a running homeserver in a container.

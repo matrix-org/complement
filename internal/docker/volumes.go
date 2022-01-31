@@ -2,8 +2,6 @@ package docker
 
 import (
 	"context"
-	"os"
-	"path"
 
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/volume"
@@ -17,40 +15,6 @@ type Volume interface {
 	// Prepare the mount point. `contextStr` is unique to this blueprint+homeserver for homeserver
 	// specific mounts e.g appservices.
 	Prepare(ctx context.Context, docker *client.Client, contextStr string) error
-}
-
-type VolumeCA struct {
-	source string
-	typ    mount.Type
-}
-
-// Prepare the Certificate Authority volume. This is independent of the homeserver calling Prepare
-// hence the contextual string is unused.
-func (v *VolumeCA) Prepare(ctx context.Context, docker *client.Client, x string) error {
-	// Our CA cert is placed in the current working dir.
-	// We bind mount this directory to all homeserver containers.
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	caCertificateDirHost := path.Join(cwd, "ca")
-	if _, err := os.Stat(caCertificateDirHost); os.IsNotExist(err) {
-		err = os.Mkdir(caCertificateDirHost, 0770)
-		if err != nil {
-			return err
-		}
-	}
-	v.source = path.Join(cwd, "ca")
-	v.typ = mount.TypeBind
-	return nil
-}
-
-func (v *VolumeCA) Mount() mount.Mount {
-	return mount.Mount{
-		Type:   v.typ,
-		Source: v.source,
-		Target: "/ca",
-	}
 }
 
 type VolumeAppService struct {

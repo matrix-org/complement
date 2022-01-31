@@ -41,10 +41,8 @@ var (
 const complementLabel = "complement_context"
 
 type Builder struct {
-	Config         *config.Complement
-	CSAPIPort      int
-	FederationPort int
-	Docker         *client.Client
+	Config *config.Complement
+	Docker *client.Client
 }
 
 func NewBuilder(cfg *config.Complement) (*Builder, error) {
@@ -53,10 +51,8 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 		return nil, err
 	}
 	return &Builder{
-		Docker:         cli,
-		Config:         cfg,
-		CSAPIPort:      8008,
-		FederationPort: 8448,
+		Docker: cli,
+		Config: cfg,
 	}, nil
 }
 
@@ -362,9 +358,9 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 
 	return deployImage(
-		d.Docker, d.Config.BaseImageURI, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr),
+		d.Docker, d.Config.BaseImageURI, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
-		networkID, d.Config.SpawnHSTimeout, d.Config.DebugLoggingEnabled,
+		networkID, d.Config,
 	)
 }
 
