@@ -157,6 +157,7 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 	}
 }
 
+// nolint
 func deployImage(
 	docker *client.Client, imageID string, containerName, pkgNamespace, blueprintName, hsName string,
 	asIDToRegistrationMap map[string]string, contextStr, networkID string, cfg *config.Complement,
