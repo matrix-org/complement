@@ -22,7 +22,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -71,6 +70,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		Deployer:      d,
 		BlueprintName: blueprintName,
 		HS:            make(map[string]HomeserverDeployment),
+		Config:        d.config,
 	}
 	images, err := d.Docker.ImageList(ctx, types.ImageListOptions{
 		Filters: label(
@@ -106,8 +106,8 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 
 		// TODO: Make CSAPI port configurable
 		deployment, err := deployImage(
-			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
-			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config.SpawnHSTimeout, d.config.DebugLoggingEnabled,
+			d.Docker, img.ID, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
+			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config,
 		)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
@@ -157,10 +157,10 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 	}
 }
 
+// nolint
 func deployImage(
-	docker *client.Client, imageID string, csPort int, containerName, pkgNamespace, blueprintName, hsName string,
-	asIDToRegistrationMap map[string]string, contextStr, networkID string, spawnHSTimeout time.Duration,
-	debugLoggingEnabled bool,
+	docker *client.Client, imageID string, containerName, pkgNamespace, blueprintName, hsName string,
+	asIDToRegistrationMap map[string]string, contextStr, networkID string, cfg *config.Complement,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -177,9 +177,6 @@ func deployImage(
 	toMount := []Volume{
 		&VolumeAppService{},
 	}
-	if os.Getenv("COMPLEMENT_CA") == "true" {
-		toMount = append(toMount, &VolumeCA{})
-	}
 
 	for _, m := range toMount {
 		err = m.Prepare(ctx, docker, contextStr)
@@ -191,8 +188,8 @@ func deployImage(
 
 	env := []string{
 		"SERVER_NAME=" + hsName,
-		// TODO: Remove once HS images don't rely on this anymore
-		"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
+		// TODO: Remove once Synapse images don't rely on this anymore
+		"COMPLEMENT_CA=1",
 	}
 
 	body, err := docker.ContainerCreate(ctx, &container.Config{
@@ -222,41 +219,41 @@ func deployImage(
 	}
 
 	containerID := body.ID
-	if debugLoggingEnabled {
+	if cfg.DebugLoggingEnabled {
 		log.Printf("%s: Created container %s", contextStr, containerID)
 	}
 
 	// Create the application service files
 	for asID, registration := range asIDToRegistrationMap {
-		// Create a fake/virtual file in memory that we can copy to the container
-		// via https://stackoverflow.com/a/52131297/796832
-		var buf bytes.Buffer
-		tw := tar.NewWriter(&buf)
-		err = tw.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("/appservices/%s.yaml", url.PathEscape(asID)),
-			Mode: 0777,
-			Size: int64(len(registration)),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to copy regstration to container: %v", err)
-		}
-		tw.Write([]byte(registration))
-		tw.Close()
-
-		// Put our new fake file in the container volume
-		err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
-			AllowOverwriteDirWithFile: false,
-		})
+		err = copyToContainer(docker, containerID, fmt.Sprintf("/appservices/%s.yaml", url.PathEscape(asID)), []byte(registration))
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// Copy CA certificate and key
+	certBytes, err := cfg.CACertificateBytes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CA certificate: %s", err)
+	}
+	err = copyToContainer(docker, containerID, "/ca/ca.crt", certBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy CA certificate to container: %s", err)
+	}
+	certKeyBytes, err := cfg.CAPrivateKeyBytes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CA key: %s", err)
+	}
+	err = copyToContainer(docker, containerID, "/ca/ca.key", certKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy CA key to container: %s", err)
 	}
 
 	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
 	if err != nil {
 		return nil, err
 	}
-	if debugLoggingEnabled {
+	if cfg.DebugLoggingEnabled {
 		log.Printf("%s: Started container %s", contextStr, containerID)
 	}
 	var inspect types.ContainerJSON
@@ -271,7 +268,7 @@ func deployImage(
 	var lastErr error
 
 	// Inspect health status of container to check it is up
-	stopTime := time.Now().Add(spawnHSTimeout)
+	stopTime := time.Now().Add(cfg.SpawnHSTimeout)
 	iterCount := 0
 	if inspect.State.Health != nil {
 		// If the container has a healthcheck, wait for it first
@@ -333,11 +330,37 @@ func deployImage(
 	if lastErr != nil {
 		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
 	} else {
-		if debugLoggingEnabled {
+		if cfg.DebugLoggingEnabled {
 			log.Printf("%s: Server is responding after %d iterations", contextStr, iterCount)
 		}
 	}
 	return d, nil
+}
+
+func copyToContainer(docker *client.Client, containerID, path string, data []byte) error {
+	// Create a fake/virtual file in memory that we can copy to the container
+	// via https://stackoverflow.com/a/52131297/796832
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	err := tw.WriteHeader(&tar.Header{
+		Name: path,
+		Mode: 0777,
+		Size: int64(len(data)),
+	})
+	if err != nil {
+		return fmt.Errorf("copyToContainer: failed to write tarball header for %s: %v", path, err)
+	}
+	tw.Write([]byte(data))
+	tw.Close()
+
+	// Put our new fake file in the container volume
+	err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
+		AllowOverwriteDirWithFile: false,
+	})
+	if err != nil {
+		return fmt.Errorf("copyToContainer: failed to copy: %s", err)
+	}
+	return nil
 }
 
 // RoundTripper is a round tripper that maps https://hs1 to the federation port of the container

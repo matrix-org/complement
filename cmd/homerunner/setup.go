@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/sirupsen/logrus"
 )
@@ -36,13 +35,7 @@ func (r *Runtime) CreateDeployment(imageURI string, blueprint *b.Blueprint) (*do
 		return nil, expires, fmt.Errorf("blueprint must be supplied")
 	}
 	namespace := "homerunner_" + blueprint.Name
-	cfg := &config.Complement{
-		BaseImageURI:        imageURI,
-		DebugLoggingEnabled: true,
-		SpawnHSTimeout:      r.Config.SpawnHSTimeout,
-		BestEffort:          true,
-		PackageNamespace:    Pkg,
-	}
+	cfg := r.Config.DeriveComplementConfig(imageURI)
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
 		return nil, expires, err

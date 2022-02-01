@@ -11,7 +11,6 @@ import (
 
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/matrix-org/complement/internal/federation"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,6 +22,19 @@ type Config struct {
 	SpawnHSTimeout         time.Duration
 	KeepBlueprints         []string
 	Snapshot               string
+}
+
+func (c *Config) DeriveComplementConfig(baseImageURI string) *config.Complement {
+	cfg := &config.Complement{
+		BaseImageURI:        baseImageURI,
+		DebugLoggingEnabled: true,
+		SpawnHSTimeout:      c.SpawnHSTimeout,
+		KeepBlueprints:      c.KeepBlueprints,
+		BestEffort:          true,
+		PackageNamespace:    Pkg,
+	}
+	_ = cfg.GenerateCA()
+	return cfg
 }
 
 func NewConfig() *Config {
@@ -46,14 +58,7 @@ func NewConfig() *Config {
 }
 
 func cleanup(c *Config) {
-	cfg := &config.Complement{
-		PackageNamespace:    Pkg,
-		BaseImageURI:        "nothing",
-		DebugLoggingEnabled: true,
-		SpawnHSTimeout:      c.SpawnHSTimeout,
-		KeepBlueprints:      c.KeepBlueprints,
-		BestEffort:          true,
-	}
+	cfg := c.DeriveComplementConfig("nothing")
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
 		logrus.WithError(err).Fatalf("failed to run cleanup")
@@ -68,11 +73,6 @@ func main() {
 		logrus.Fatalf("failed to setup new runtime: %s", err)
 	}
 	cleanup(cfg)
-
-	_, _, err = federation.GetOrCreateCaCert()
-	if err != nil {
-		logrus.Fatalf("failed to make CA certs")
-	}
 
 	if cfg.Snapshot != "" {
 		logrus.Infof("Running in single-shot snapshot mode for request file '%s'", cfg.Snapshot)

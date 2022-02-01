@@ -9,9 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"net/http"
@@ -26,6 +24,7 @@ import (
 	"github.com/matrix-org/util"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 )
 
@@ -104,7 +103,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	})
 
 	// generate certs and an http.Server
-	httpServer, certPath, keyPath, err := federationServer("name", srv.mux)
+	httpServer, certPath, keyPath, err := federationServer(deployment.Config, srv.mux)
 	if err != nil {
 		t.Fatalf("complement: unable to create federation server and certificates: %s", err.Error())
 	}
@@ -411,125 +410,8 @@ func (s *Server) Listen() (cancel func()) {
 	}
 }
 
-// GetOrCreateCaCert is used to create the federation TLS cert.
-// In addition, it is passed to homeserver containers to create TLS certs
-// for the homeservers.
-// This basically acts as a test only valid PKI.
-func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
-	var tlsCACertPath, tlsCAKeyPath string
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, nil, err
-	}
-	tlsCACertPath = path.Join(wd, "ca", "ca.crt")
-	tlsCAKeyPath = path.Join(wd, "ca", "ca.key")
-	if _, err = os.Stat(path.Join(wd, "ca")); os.IsNotExist(err) {
-		err = os.Mkdir(path.Join(wd, "ca"), 0770)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	if _, err = os.Stat(tlsCACertPath); err == nil {
-		if _, err = os.Stat(tlsCAKeyPath); err == nil {
-			// We already created a CA cert, let's use that.
-			var dat []byte
-			dat, err = ioutil.ReadFile(tlsCACertPath)
-			if err != nil {
-				return nil, nil, err
-			}
-			block, _ := pem.Decode([]byte(dat))
-			if block == nil || block.Type != "CERTIFICATE" {
-				return nil, nil, errors.New("ca.crt is not a valid pem encoded x509 cert")
-			}
-			var caCerts []*x509.Certificate
-			caCerts, err = x509.ParseCertificates(block.Bytes)
-			if err != nil {
-				return nil, nil, err
-			}
-			if len(caCerts) != 1 {
-				return nil, nil, errors.New("ca.crt contains none or more than one cert")
-			}
-			caCert := caCerts[0]
-			dat, err = ioutil.ReadFile(tlsCAKeyPath)
-			if err != nil {
-				return nil, nil, err
-			}
-			block, _ = pem.Decode([]byte(dat))
-			if block == nil || block.Type != "RSA PRIVATE KEY" {
-				return nil, nil, errors.New("ca.key is not a valid pem encoded rsa private key")
-			}
-			var priv *rsa.PrivateKey
-			priv, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-			if err != nil {
-				return nil, nil, err
-			}
-			return caCert, priv, nil
-		}
-	}
-
-	// valid for 10 years
-	certificateDuration := time.Hour * 24 * 365 * 10
-	priv, err := rsa.GenerateKey(rand.Reader, 4096)
-	if err != nil {
-		return nil, nil, err
-	}
-	notBefore := time.Now()
-	notAfter := notBefore.Add(certificateDuration)
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-		return nil, nil, err
-	}
-	caCert := x509.Certificate{
-		SerialNumber:          serialNumber,
-		NotBefore:             notBefore,
-		NotAfter:              notAfter,
-		IsCA:                  true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature | x509.KeyUsageCRLSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		Subject: pkix.Name{
-			Organization:  []string{"matrix.org"},
-			Country:       []string{"GB"},
-			Province:      []string{"London"},
-			Locality:      []string{"London"},
-			StreetAddress: []string{"123 Street"},
-			PostalCode:    []string{"12345"},
-		},
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, &caCert, &caCert, &priv.PublicKey, priv)
-	if err != nil {
-		return nil, nil, err
-	}
-	certOut, err := os.Create(tlsCACertPath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	defer certOut.Close() // nolint: errcheck
-	if err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
-		return nil, nil, err
-	}
-
-	keyOut, err := os.OpenFile(tlsCAKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer keyOut.Close() // nolint: errcheck
-	err = pem.Encode(keyOut, &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(priv),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	return &caCert, priv, nil
-}
-
 // federationServer creates a federation server with the given handler
-func federationServer(name string, h http.Handler) (*http.Server, string, string, error) {
+func federationServer(cfg *config.Complement, h http.Handler) (*http.Server, string, string, error) {
 	var derBytes []byte
 	srv := &http.Server{
 		Addr:    ":8448",
@@ -573,13 +455,8 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 		template.DNSNames = append(template.DNSNames, host)
 	}
 
-	var ca *x509.Certificate
-	var caPrivKey *rsa.PrivateKey
-	ca, caPrivKey, err = GetOrCreateCaCert()
-	if err != nil {
-		return nil, "", "", err
-	}
-	derBytes, err = x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
+	// derive a new certificate from the base complement one
+	derBytes, err = x509.CreateCertificate(rand.Reader, &template, cfg.CACertificate, &priv.PublicKey, cfg.CAPrivateKey)
 	if err != nil {
 		return nil, "", "", err
 	}

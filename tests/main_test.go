@@ -15,7 +15,6 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/matrix-org/complement/internal/federation"
 )
 
 var namespaceCounter uint64
@@ -38,16 +37,6 @@ func TestMain(m *testing.M) {
 	complementBuilder = builder
 	// remove any old images/containers/networks in case we died horribly before
 	builder.Cleanup()
-
-	if os.Getenv("COMPLEMENT_CA") == "true" {
-		log.Printf("Running with Complement CA")
-		// make sure CA certs are generated
-		_, _, err = federation.GetOrCreateCaCert()
-		if err != nil {
-			fmt.Printf("Error: %s", err)
-			os.Exit(1)
-		}
-	}
 
 	// we use GMSL which uses logrus by default. We don't want those logs in our test output unless they are Serious.
 	logrus.SetLevel(logrus.ErrorLevel)
