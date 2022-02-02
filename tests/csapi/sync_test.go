@@ -2,9 +2,11 @@ package csapi_tests
 
 import (
 	"testing"
+	"time"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/tidwall/gjson"
 )
 
 // Observes "first bug" from https://github.com/matrix-org/dendrite/pull/1394#issuecomment-687056673
@@ -58,6 +60,7 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 	})
 
 	var since string
+	var jsonRes gjson.Result
 
 	// Get floating current next_batch
 	_, since = alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
@@ -70,15 +73,25 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 	bob.LeaveRoom(t, roomID)
 
 	// Full sync
-	jsonRes, since := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0", FullState: true, Since: since})
-	if !jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+	leaveExists := false
+	start := time.Now()
+	for !leaveExists && time.Since(start) < 1*time.Second {
+		jsonRes, since = bob.MustSync(t, client.SyncReq{TimeoutMillis: "0", FullState: true, Since: since})
+		leaveExists = jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists()
+	}
+	if !leaveExists {
 		t.Errorf("Bob just rejected an invite, it should show up under 'leave' in a full sync")
 	}
 
 	bob.JoinRoom(t, roomID, nil)
 
-	jsonRes, since = bob.MustSync(t, client.SyncReq{TimeoutMillis: "0", FullState: true, Since: since})
-	if jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+	start = time.Now()
+	leaveExists = true
+	for leaveExists && time.Since(start) < 1*time.Second {
+		jsonRes, since = bob.MustSync(t, client.SyncReq{TimeoutMillis: "0", FullState: true, Since: since})
+		leaveExists = jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists()
+	}
+	if leaveExists {
 		t.Errorf("Bob has rejected an invite, but then just joined the public room anyways, it should not show up under 'leave' in a full sync %s", since)
 	}
 }
