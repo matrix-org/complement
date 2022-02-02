@@ -2,13 +2,13 @@ FROM golang:1.16-stretch as build
 RUN apt-get update && apt-get install -y sqlite3
 WORKDIR /build
 
-# Utilise Docker caching when downloading dependencies, this stops us needlessly
-# downloading dependencies every time.
-COPY go.mod .
-COPY go.sum .
-RUN go mod download
+# pull files from branches
+ARG BRANCH=master
+ADD https://github.com/matrix-org/dendrite/archive/$BRANCH.tar.gz /build/dendrite.tar.gz
 
-COPY . .
+# strip the top-level directory which has the name of the branch in it
+RUN tar --strip=1 -xzf dendrite.tar.gz
+
 RUN go build ./cmd/dendrite-monolith-server
 RUN go build ./cmd/generate-keys
 RUN go build ./cmd/generate-config
