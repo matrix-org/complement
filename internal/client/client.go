@@ -572,6 +572,13 @@ func SyncTimelineHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt 
 	}
 }
 
+// Check that the timeline for `roomID` has an event which matches the event ID.
+func SyncTimelineHasEventID(roomID string, eventID string) SyncCheckOpt {
+	return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+		return ev.Get("event_id").Str == eventID
+	})
+}
+
 // Checks that `userID` gets invited to `roomID`.
 //
 // This checks different parts of the /sync response depending on the client making the request.

@@ -240,6 +240,17 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 			t.Fatalf("MustCreateEvent: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
 		}
 	}
+
+	var prevEvents interface{}
+	if ev.PrevEvents != nil {
+		// We deliberately want to set the prev events.
+		prevEvents = ev.PrevEvents
+	} else {
+		// No other prev events were supplied so we'll just
+		// use the forward extremities of the room, which is
+		// the usual behaviour.
+		prevEvents = room.ForwardExtremities
+	}
 	eb := gomatrixserverlib.EventBuilder{
 		Sender:     ev.Sender,
 		Depth:      int64(room.Depth + 1), // depth starts at 1
@@ -247,7 +258,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		StateKey:   ev.StateKey,
 		Content:    content,
 		RoomID:     room.RoomID,
-		PrevEvents: room.ForwardExtremities,
+		PrevEvents: prevEvents,
 		Unsigned:   unsigned,
 		AuthEvents: ev.AuthEvents,
 	}
