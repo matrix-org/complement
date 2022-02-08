@@ -47,11 +47,17 @@ func TestUnrejectRejectedEvents(t *testing.T) {
 	eventA := srv.MustCreateEvent(t, serverRoom, b.Event{
 		Type:   "m.event.a",
 		Sender: bob,
+		Content: map[string]interface{}{
+			"event": "A",
+		},
 	})
 	eventB := srv.MustCreateEvent(t, serverRoom, b.Event{
 		Type:       "m.event.b",
 		Sender:     bob,
 		PrevEvents: []string{eventA.EventID()},
+		Content: map[string]interface{}{
+			"event": "B",
+		},
 	})
 
 	// Send event B into the room. Event A at this point is unknown
