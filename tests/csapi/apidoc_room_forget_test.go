@@ -117,7 +117,7 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Can re-join room if re-invited
 		t.Run("Can re-join room if re-invited", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, nil)
+			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "private_chat"})
 			// Invite Bob
 			alice.InviteRoom(t, roomID, bob.UserID)
 			// Update join_rules
