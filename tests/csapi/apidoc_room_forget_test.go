@@ -117,21 +117,17 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Can re-join room if re-invited
 		t.Run("Can re-join room if re-invited", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"preset":       "public_chat",
-				"room_version": "8",
-				"initial_state": []map[string]interface{}{
-					{
-						"type":      "m.room.join_rules",
-						"state_key": "",
-						"content": map[string]interface{}{
-							"join_rule": "invite",
-						},
-					},
-				},
-			})
+			roomID := alice.CreateRoom(t, nil)
 			// Invite Bob
 			alice.InviteRoom(t, roomID, bob.UserID)
+			// Update join_rules
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type: "m.room.join_rules",
+				Content: map[string]interface{}{
+					"join_rule": "invite",
+				},
+			})
+			// Bob joins room
 			bob.JoinRoom(t, roomID, []string{})
 			messageID := bob.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
@@ -140,9 +136,10 @@ func TestRoomForget(t *testing.T) {
 					"body":    "Before leave",
 				},
 			})
-			// Bob leaves room
+			// Bob leaves and forgets room
 			bob.LeaveRoom(t, roomID)
 			bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "forget"})
+			// Try to re-join
 			joinRes := bob.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", roomID})
 			must.MatchResponse(t, joinRes, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
@@ -153,8 +150,11 @@ func TestRoomForget(t *testing.T) {
 			// Re-invite bob
 			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.JoinRoom(t, roomID, []string{})
+			// Query messages
 			queryParams := url.Values{}
 			queryParams.Set("dir", "b")
+			queryParams.Set("limit", "100")
+			// Check if we can see Bobs previous message
 			res := bob.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 			msgRes := &msgResult{}
 			must.MatchResponse(t, res, match.HTTPResponse{
@@ -164,6 +164,7 @@ func TestRoomForget(t *testing.T) {
 			if !msgRes.found {
 				t.Errorf("did not find expected 'before leave' message")
 			}
+			// Send new message after rejoining
 			messageID = bob.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -172,6 +173,8 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			msgRes.found = false
+			// We should now be able to see the new message
+			queryParams.Set("limit", "1")
 			res = bob.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusOK,
