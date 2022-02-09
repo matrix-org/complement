@@ -1,17 +1,18 @@
 package csapi_tests
 
 import (
+	"net/http"
+	"net/url"
+	"testing"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
-	"net/http"
-	"net/url"
-	"testing"
 )
 
-// These test ensures that forgetting about rooms works as intended
+// These tests ensure that forgetting about rooms works as intended
 //
 func TestRoomForget(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintCleanHS)
