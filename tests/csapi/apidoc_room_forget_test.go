@@ -95,13 +95,11 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			// Kick Bob
-			alice.MustDoFunc(
-				t,
-				"POST",
-				[]string{"_matrix", "client", "r0", "rooms", roomID, "kick"},
+			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "kick"},
 				client.WithJSONBody(t, map[string]interface{}{
 					"user_id": bob.UserID,
-				}))
+				}),
+			)
 			result, _ := bob.MustSync(t, client.SyncReq{})
 			if result.Get("rooms.archived").Get(roomID).Exists() {
 				t.Errorf("Did not expect room in archived")
@@ -129,7 +127,7 @@ func TestRoomForget(t *testing.T) {
 			})
 			// Bob joins room
 			bob.JoinRoom(t, roomID, []string{})
-			messageID := bob.SendEventSynced(t, roomID, b.Event{
+			messageID := alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
 					"msgtype": "m.text",
@@ -165,7 +163,7 @@ func TestRoomForget(t *testing.T) {
 				t.Errorf("did not find expected 'before leave' message")
 			}
 			// Send new message after rejoining
-			messageID = bob.SendEventSynced(t, roomID, b.Event{
+			messageID = alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
 					"msgtype": "m.text",
