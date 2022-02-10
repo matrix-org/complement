@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -14,14 +15,12 @@ import (
 )
 
 // These tests ensure that forgetting about rooms works as intended
-//
 func TestRoomForget(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintCleanHS)
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.RegisterUser(t, "hs1", "alice", "sufficiently_long_password_alice")
-	bob := deployment.RegisterUser(t, "hs1", "bob", "sufficiently_long_password_bob")
-	deployment.Config.AlwaysPrintServerLogs = true
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: Can't forget room you're still in
 		t.Run("Can't forget room you're still in", func(t *testing.T) {
@@ -71,6 +70,7 @@ func TestRoomForget(t *testing.T) {
 			})
 			alice.LeaveRoom(t, roomID)
 			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "forget"})
+			time.Sleep(10 * time.Millisecond)
 			result, _ := alice.MustSync(t, client.SyncReq{})
 			if result.Get("rooms.archived").Get(roomID).Exists() {
 				t.Errorf("Did not expect room in archived")
@@ -100,6 +100,7 @@ func TestRoomForget(t *testing.T) {
 					"user_id": bob.UserID,
 				}),
 			)
+			time.Sleep(10 * time.Millisecond)
 			result, _ := bob.MustSync(t, client.SyncReq{})
 			if result.Get("rooms.archived").Get(roomID).Exists() {
 				t.Errorf("Did not expect room in archived")
