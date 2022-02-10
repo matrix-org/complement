@@ -70,7 +70,7 @@ func TestRoomForget(t *testing.T) {
 			})
 			alice.LeaveRoom(t, roomID)
 			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "forget"})
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			result, _ := alice.MustSync(t, client.SyncReq{})
 			if result.Get("rooms.archived").Get(roomID).Exists() {
 				t.Errorf("Did not expect room in archived")
@@ -100,7 +100,7 @@ func TestRoomForget(t *testing.T) {
 					"user_id": bob.UserID,
 				}),
 			)
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			result, _ := bob.MustSync(t, client.SyncReq{})
 			if result.Get("rooms.archived").Get(roomID).Exists() {
 				t.Errorf("Did not expect room in archived")
