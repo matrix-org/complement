@@ -53,9 +53,6 @@ jobs:
           go get -v github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
 
       - name: "Checkout corresponding ${{ matrix.homeserver }} branch"
-        # This is only done for Synapse since Dendrite's docker file pulls in
-        # the Dendrite sources directly.
-        if: ${{ matrix.homeserver == 'Synapse' }}
         shell: bash
         run: |
           mkdir -p homeserver
@@ -81,20 +78,26 @@ jobs:
             (wget -O - "https://github.com/matrix-org/${{ matrix.homeserver }}/archive/$BRANCH_NAME.tar.gz" | tar -xz --strip-components=1 -C homeserver) && break
           done
 
-      # Build initial homeserver image
+      # Build homeserver image
+
+        # Build the base Synapse dockerfile and then build a Complement-specific image from that base.
       - run: docker build -t matrixdotorg/synapse:latest -f docker/Dockerfile .
-        # We only do this for Synapse since Dendrite's docker file pulls in
-        # the Dendrite sources directly (instead of being based on a previously
-        # built docker image).
         if: ${{ matrix.homeserver == 'Synapse' }}
         working-directory: homeserver
         env:
           DOCKER_BUILDKIT: 1
-
       - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
+        if: ${{ matrix.homeserver == 'Synapse' }}
+
+        # Build the Complement-specific dendrite image from the dockerfile in the Dendrite repo.
+        # We don't use the dockerfiles in the Complement repo as they tend to get stale quickly.
+      - run: docker build -t homeserver -f build/scripts/Complement.Dockerfile .
+        if: ${{ matrix.homeserver == 'Dendrite' }}
+        working-directory: homeserver
+
       - run: |
           set -o pipefail &&
-          go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
+          go test -p 1 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         name: Run Complement Tests
         env:
