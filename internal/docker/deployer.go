@@ -36,6 +36,12 @@ import (
 	"github.com/matrix-org/complement/internal/config"
 )
 
+const (
+	MountCACertPath     = "/complement/ca/ca.crt"
+	MountCAKeyPath      = "/complement/ca/ca.key"
+	MountAppServicePath = "/complement/appservice/" // All registration files sit here
+)
+
 type Deployer struct {
 	DeployNamespace string
 	Docker          *client.Client
@@ -174,18 +180,6 @@ func deployImage(
 		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
 
-	toMount := []Volume{
-		&VolumeAppService{},
-	}
-
-	for _, m := range toMount {
-		err = m.Prepare(ctx, docker, contextStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to prepare volume: %s", err)
-		}
-		mounts = append(mounts, m.Mount())
-	}
-
 	env := []string{
 		"SERVER_NAME=" + hsName,
 		// TODO: Remove once Synapse images don't rely on this anymore
@@ -225,7 +219,7 @@ func deployImage(
 
 	// Create the application service files
 	for asID, registration := range asIDToRegistrationMap {
-		err = copyToContainer(docker, containerID, fmt.Sprintf("/appservices/%s.yaml", url.PathEscape(asID)), []byte(registration))
+		err = copyToContainer(docker, containerID, fmt.Sprintf("%s%s.yaml", MountAppServicePath, url.PathEscape(asID)), []byte(registration))
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +230,7 @@ func deployImage(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CA certificate: %s", err)
 	}
-	err = copyToContainer(docker, containerID, "/ca/ca.crt", certBytes)
+	err = copyToContainer(docker, containerID, MountCACertPath, certBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to copy CA certificate to container: %s", err)
 	}
@@ -244,7 +238,7 @@ func deployImage(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CA key: %s", err)
 	}
-	err = copyToContainer(docker, containerID, "/ca/ca.key", certKeyBytes)
+	err = copyToContainer(docker, containerID, MountCAKeyPath, certKeyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to copy CA key to container: %s", err)
 	}
