@@ -57,7 +57,7 @@ func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	if complementBuilder == nil {
 		t.Fatalf("complementBuilder not set, did you forget to call TestMain?")
 	}
-	if err := complementBuilder.ConstructBlueprintsIfNotExist([]b.Blueprint{blueprint}); err != nil {
+	if err := complementBuilder.ConstructBlueprintIfNotExist(blueprint); err != nil {
 		t.Fatalf("Deploy: Failed to construct blueprint: %s", err)
 	}
 	namespace := fmt.Sprintf("%d", atomic.AddUint64(&namespaceCounter, 1))
