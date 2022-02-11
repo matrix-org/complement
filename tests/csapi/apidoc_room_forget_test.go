@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 // These tests ensure that forgetting about rooms works as intended
@@ -84,6 +85,7 @@ func TestRoomForget(t *testing.T) {
 		})
 		// sytest: Can forget room you've been kicked from
 		t.Run("Can forget room you've been kicked from", func(t *testing.T) {
+			runtime.SkipIf(t, runtime.Dendrite) // flakey
 			t.Parallel()
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			bob.JoinRoom(t, roomID, []string{})
