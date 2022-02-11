@@ -170,63 +170,49 @@ func (d *Builder) removeContainers() error {
 	return nil
 }
 
-func (d *Builder) ConstructBlueprintsIfNotExist(bs []b.Blueprint) error {
-	var blueprintsToBuild []b.Blueprint
-	for _, bprint := range bs {
-		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
-			Filters: label(
-				"complement_blueprint="+bprint.Name,
-				"complement_pkg="+d.Config.PackageNamespace,
-			),
-		})
-		if err != nil {
-			return fmt.Errorf("ConstructBlueprintsIfNotExist: failed to ImageList: %w", err)
-		}
-		if len(images) == 0 {
-			blueprintsToBuild = append(blueprintsToBuild, bprint)
-		}
+func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
+	images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
+		Filters: label(
+			"complement_blueprint="+bprint.Name,
+			"complement_pkg="+d.Config.PackageNamespace,
+		),
+	})
+	if err != nil {
+		return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ImageList: %w", bprint.Name, err)
 	}
-	if len(blueprintsToBuild) == 0 {
-		return nil
+	if len(images) == 0 {
+		d.ConstructBlueprint(bprint)
 	}
-	return d.ConstructBlueprints(blueprintsToBuild)
+	return nil
 }
 
-func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
-	errc := make(chan []error, len(bs))
-	for _, bprint := range bs {
-		go (func(bprint b.Blueprint) {
-			errc <- d.construct(bprint)
-		})(bprint)
-	}
-	var errs []error
-	for i := 0; i < len(bs); i++ {
-		// the channel returns a slice of errors;
-		// spread and append them to the error slice
-		// (nothing will be appended if the slice is empty)
-		errs = append(errs, <-errc...)
-	}
-	close(errc)
+func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
+	errs := d.construct(bprint)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			d.log("could not construct blueprint: %s", err)
 		}
-		return errs[0]
+		return fmt.Errorf("errors whilst constructing blueprint %s: %v", bprint.Name, errs)
 	}
 
 	// wait a bit for images/containers to show up in 'image ls'
 	foundImages := false
-	for i := 0; i < 50; i++ { // max 5s
-		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
+	var images []types.ImageSummary
+	var err error
+	waitTime := 5 * time.Second
+	startTime := time.Now()
+	for time.Now().Sub(startTime) < waitTime {
+		images, err = d.Docker.ImageList(context.Background(), types.ImageListOptions{
 			Filters: label(
 				complementLabel,
+				"complement_blueprint="+bprint.Name,
 				"complement_pkg="+d.Config.PackageNamespace,
 			),
 		})
 		if err != nil {
 			return err
 		}
-		if len(images) < len(bs) {
+		if len(images) < len(bprint.Homeservers) {
 			time.Sleep(100 * time.Millisecond)
 		} else {
 			foundImages = true
@@ -239,7 +225,11 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	if !foundImages {
 		return fmt.Errorf("failed to find built images via ImageList: did they all build ok?")
 	}
-	d.log("Constructed all blueprints")
+	var imgDatas []string
+	for _, img := range images {
+		imgDatas = append(imgDatas, fmt.Sprintf("%s=>%v", img.ID, img.Labels))
+	}
+	d.log("Constructed blueprint '%s' : %v", bprint.Name, imgDatas)
 	return nil
 }
 
