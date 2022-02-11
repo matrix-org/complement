@@ -201,7 +201,7 @@ func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
 	var err error
 	waitTime := 5 * time.Second
 	startTime := time.Now()
-	for time.Now().Sub(startTime) < waitTime {
+	for time.Since(startTime) < waitTime {
 		images, err = d.Docker.ImageList(context.Background(), types.ImageListOptions{
 			Filters: label(
 				complementLabel,
