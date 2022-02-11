@@ -182,8 +182,6 @@ func deployImage(
 
 	env := []string{
 		"SERVER_NAME=" + hsName,
-		// TODO: Remove once Synapse images don't rely on this anymore
-		"COMPLEMENT_CA=1",
 	}
 
 	body, err := docker.ContainerCreate(ctx, &container.Config{
@@ -255,6 +253,14 @@ func deployImage(
 	if err != nil {
 		return nil, err
 	}
+
+	for vol := range inspect.Config.Volumes {
+		log.Printf(
+			"WARNING: %s has a named VOLUME %s - volumes can lead to unpredictable behaviour due to "+
+				"test pollution. Remove the VOLUME in the Dockerfile to suppress this message.", containerName, vol,
+		)
+	}
+
 	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
 	if err != nil {
 		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
