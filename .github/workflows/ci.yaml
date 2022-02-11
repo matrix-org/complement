@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [ 'master' ]
+    branches: [ 'master', 'main' ]
   pull_request:
 
 jobs:
@@ -25,11 +25,9 @@ jobs:
         include:
           - homeserver: Synapse
             tags: synapse_blacklist,msc2403,msc3083
-            default_branch: develop
-
+            
           - homeserver: Dendrite
             tags: msc2836 dendrite_blacklist
-            default_branch: master
 
     steps:
       - uses: actions/checkout@v2 # Checkout complement
@@ -56,25 +54,24 @@ jobs:
         shell: bash
         run: |
           mkdir -p homeserver
+          
           # Attempt to use the version of the homeserver which best matches the
-          # current build. Depending on whether this is a PR or release, etc. we
-          # need to use different fallbacks.
+          # current build.
           #
-          # 1. Check if there's a similarly named branch (GITHUB_HEAD_REF for pull
-          #    requests, otherwise GITHUB_REF), but if this is the default complement
-          #    branch, use the default homeserver branch.
-          # 2. Use the default homeserver branch.
-          for BRANCH_NAME in "$GITHUB_HEAD_REF" "${GITHUB_REF#refs/heads/}" "${{ matrix.default_branch }}"; do
-            # Skip empty branch names and merge commits.
-            if [[ -z "$BRANCH_NAME" || $BRANCH_NAME =~ ^refs/pull/.* ]]; then
-              continue
-            fi
-
-            # If this is complement's default branch, use the homeserver's default branch.
-            if [[ "$BRANCH_NAME" == "master" ]]; then
-              BRANCH_NAME="${{ matrix.default_branch }}"
-            fi
-
+          # 1. If we are not on complement's default branch, check if there's a
+          #    similarly named branch (GITHUB_HEAD_REF for pull requests,
+          #    otherwise GITHUB_REF).
+          # 2. otherwise, use the default homeserver branch ("HEAD")
+          
+          for BRANCH_NAME in "$GITHUB_HEAD_REF" "${GITHUB_REF#refs/heads/}" "HEAD"; do
+            # Skip empty branch names, merge commits, and our default branch.
+            # (If we are on complement's default branch, we want to fall through to the HS's default branch
+            # rather than using the HS's 'master'/'main').
+            case "$BRANCH_NAME" in
+              "" | refs/pull/* | main | master)
+                continue
+                ;;
+            esac
             (wget -O - "https://github.com/matrix-org/${{ matrix.homeserver }}/archive/$BRANCH_NAME.tar.gz" | tar -xz --strip-components=1 -C homeserver) && break
           done
 
