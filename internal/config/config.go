@@ -52,9 +52,12 @@ func NewConfigFromEnvVars() *Complement {
 	}
 	cfg.KeepBlueprints = strings.Split(os.Getenv("COMPLEMENT_KEEP_BLUEPRINTS"), " ")
 	var err error
-	cfg.HostMounts, err = newHostMounts(strings.Split(os.Getenv("COMPLEMENT_HOST_MOUNTS"), ";"))
-	if err != nil {
-		panic("COMPLEMENT_HOST_MOUNTS parse error: " + err.Error())
+	hostMounts := os.Getenv("COMPLEMENT_HOST_MOUNTS")
+	if hostMounts != "" {
+		cfg.HostMounts, err = newHostMounts(strings.Split(hostMounts, ";"))
+		if err != nil {
+			panic("COMPLEMENT_HOST_MOUNTS parse error: " + err.Error())
+		}
 	}
 	if cfg.BaseImageURI == "" {
 		panic("COMPLEMENT_BASE_IMAGE must be set")
