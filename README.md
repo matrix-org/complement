@@ -77,6 +77,26 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 - The homeserver needs to accept the server name given by the environment variable `SERVER_NAME` at runtime.
 - The homeserver needs to assume dockerfile `CMD` or `ENTRYPOINT` instructions will be run multiple times.
 
+
+### Developing locally
+
+If you want to write Complement tests _and_ hack on a homeserver implementation at the same time it can be very awkward
+to have to `docker build` the image all the time. To resolve this, Complement support "host mounts" which mount a directory
+from the host to the container. This is set via `COMPLEMENT_HOST_MOUNTS`:
+
+```
+COMPLEMENT_HOST_MOUNTS='/my/local/dir:/container/dir;/another/local/dir:/container/dir2:ro'
+
+which is:
+  - /my/local/dir:/container/dir
+  - /another/local/dir:/container/dir2:ro
+
+which is of the form:
+  - HOST:CONTAINER[:ro] where :ro makes the mount read-only.
+```
+
+For example, for Dendrite: `COMPLEMENT_HOST_MOUNTS='/your/local/dendrite:/dendrite:ro;/your/go/path:/go:ro'`.
+
 ### Getting prettier output
 
 The default output isn't particularly nice to read. You can use [gotestfmt](https://github.com/haveyoudebuggedit/gotestfmt)
