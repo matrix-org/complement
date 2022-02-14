@@ -180,6 +180,18 @@ func deployImage(
 		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
 
+	for _, m := range cfg.HostMounts {
+		mounts = append(mounts, mount.Mount{
+			Source:   m.HostPath,
+			Target:   m.ContainerPath,
+			ReadOnly: m.ReadOnly,
+			Type:     mount.TypeBind,
+		})
+	}
+	if len(mounts) > 0 {
+		log.Printf("Using host mounts: %+v", mounts)
+	}
+
 	env := []string{
 		"SERVER_NAME=" + hsName,
 	}
