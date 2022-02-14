@@ -252,6 +252,11 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 				// something went wrong, but we have a container which may have interesting logs
 				printLogs(d.Docker, res.containerID, res.contextStr)
 			}
+			if delErr := d.Docker.ContainerRemove(context.Background(), res.containerID, types.ContainerRemoveOptions{
+				Force: true,
+			}); delErr != nil {
+				d.log("%s: failed to remove container which failed to deploy: %s", res.contextStr, delErr)
+			}
 		}
 		// kill the container
 		defer func(r result) {
@@ -259,6 +264,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			if killErr != nil {
 				d.log("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
 			}
+
 		}(res)
 		results[i] = res
 	}
