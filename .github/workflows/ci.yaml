@@ -6,16 +6,6 @@ on:
   pull_request:
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - run: sudo apt-get -qq install libolm-dev
-      - uses: golangci/golangci-lint-action@v2
-        with:
-          version: v1.33
-          args: ./internal/... ./tests/... 
-
   complement:
     needs: lint
     runs-on: ubuntu-latest
@@ -23,10 +13,6 @@ jobs:
       fail-fast: false # ensure if synapse fails we keep running dendrite and vice-versa
       matrix:
         include:
-          - homeserver: Synapse
-            tags: synapse_blacklist,msc2403,msc3083
-            default_branch: develop
-
           - homeserver: Dendrite
             tags: msc2836 dendrite_blacklist
             default_branch: master
@@ -97,7 +83,7 @@ jobs:
 
       - run: |
           set -o pipefail &&
-          go test -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
+          go test -v -json -tags "${{ matrix.tags }}" ./tt/... 2>&1 | gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         name: Run Complement Tests
         env:
