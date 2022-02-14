@@ -7,7 +7,6 @@ on:
 
 jobs:
   complement:
-    needs: lint
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false # ensure if synapse fails we keep running dendrite and vice-versa
