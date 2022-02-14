@@ -205,7 +205,7 @@ func deployImage(
 				Aliases:   []string{hsName},
 			},
 		},
-	}, containerName)
+	}, nil, containerName)
 	if err != nil {
 		return nil, err
 	}
