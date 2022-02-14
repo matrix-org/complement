@@ -9,7 +9,7 @@ import (
 
 func TestConcurrency(t *testing.T) {
 	var servers []b.Homeserver
-	num := 10
+	num := 5
 	for i := 0; i < num; i++ {
 		s := b.Homeserver{
 			Name: fmt.Sprintf("hs%d", i),
