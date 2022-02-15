@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -69,8 +68,16 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			alice.LeaveRoom(t, roomID)
+			// Ensure Alice left the room
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "forget"})
-			time.Sleep(50 * time.Millisecond)
+			bob.SendEventSynced(t, roomID, b.Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    "Hello world!",
+				},
+			})
 			result, _ := alice.MustSync(t, client.SyncReq{})
 			if result.Get("rooms.archived." + client.GjsonEscape(roomID)).Exists() {
 				t.Errorf("Did not expect room %s in archived", roomID)
