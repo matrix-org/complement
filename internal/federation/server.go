@@ -291,13 +291,13 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 	if err != nil {
 		t.Fatalf("MustJoinRoom: failed to sign event: %v", err)
 	}
-	sendJoinResp, err := fedClient.SendJoin(context.Background(), gomatrixserverlib.ServerName(remoteServer), joinEvent, roomVer)
+	sendJoinResp, err := fedClient.SendJoin(context.Background(), gomatrixserverlib.ServerName(remoteServer), joinEvent)
 	if err != nil {
 		t.Fatalf("MustJoinRoom: send_join failed: %v", err)
 	}
-
+	stateEvents := sendJoinResp.StateEvents.UntrustedEvents(roomVer)
 	room := newRoom(roomVer, roomID)
-	for _, ev := range sendJoinResp.StateEvents {
+	for _, ev := range stateEvents {
 		room.replaceCurrentState(ev)
 	}
 	room.AddEvent(joinEvent)

@@ -294,7 +294,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	must.NotError(t, "JoinEvent.Build", err)
 
 	// SendJoin should return a 403.
-	_, err = fedClient.SendJoin(context.Background(), "hs1", joinEvent, makeJoinResp.RoomVersion)
+	_, err = fedClient.SendJoin(context.Background(), "hs1", joinEvent)
 	if err == nil {
 		t.Errorf("SendJoin returned 200, want 403")
 	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
