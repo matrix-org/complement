@@ -212,7 +212,7 @@ func deployImage(
 		Mounts:          mounts,
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
-			hsName: {
+			contextStr: {
 				NetworkID: networkID,
 				Aliases:   []string{hsName},
 			},
@@ -274,6 +274,9 @@ func deployImage(
 			"WARNING: %s has a named VOLUME %s - volumes can lead to unpredictable behaviour due to "+
 				"test pollution. Remove the VOLUME in the Dockerfile to suppress this message.", containerName, vol,
 		)
+	}
+	for nw, nwinfo := range inspect.NetworkSettings.Networks {
+		log.Printf("%s network %s: %+v", containerName, nw, nwinfo)
 	}
 
 	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
