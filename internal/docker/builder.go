@@ -390,6 +390,9 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 	}
 	// return the existing network
 	if len(nws) > 0 {
+		if len(nws) > 1 {
+			log.Printf("WARNING: createNetworkIfNotExists got %d networks for pkg=%s blueprint=%s", len(nws), pkgNamespace, blueprintName)
+		}
 		return nws[0].ID, nil
 	}
 	// make a user-defined network so we get DNS based on the container name

@@ -38,7 +38,7 @@ type Complement struct {
 	CAPrivateKey  *rsa.PrivateKey
 }
 
-func NewConfigFromEnvVars() *Complement {
+func NewConfigFromEnvVars(pkgNamespace string) *Complement {
 	cfg := &Complement{}
 	cfg.BaseImageURI = os.Getenv("COMPLEMENT_BASE_IMAGE")
 	cfg.BaseImageArgs = strings.Split(os.Getenv("COMPLEMENT_BASE_IMAGE_ARGS"), " ")
@@ -62,11 +62,14 @@ func NewConfigFromEnvVars() *Complement {
 	if cfg.BaseImageURI == "" {
 		panic("COMPLEMENT_BASE_IMAGE must be set")
 	}
-	cfg.PackageNamespace = "pkg"
+	cfg.PackageNamespace = pkgNamespace
 
 	// create CA certs and keys
 	if err := cfg.GenerateCA(); err != nil {
 		panic("Failed to generate CA certificate/key: " + err.Error())
+	}
+	if cfg.PackageNamespace == "" {
+		panic("package namespace must be set")
 	}
 
 	return cfg
