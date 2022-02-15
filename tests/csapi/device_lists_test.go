@@ -26,10 +26,10 @@ func TestLocalUsersReceiveDeviceListUpdates(t *testing.T) {
 	resp := alice.MustDoFunc(
 		t,
 		"GET",
-		[]string{"_matrix", "client", "v3", "devices"},
+		[]string{"_matrix", "client", "v3", "account", "whoami"},
 	)
 	responseBodyBytes := client.ParseJSON(t, resp)
-	aliceDeviceID := gjson.GetBytes(responseBodyBytes, "devices.0.device_id").Str
+	aliceDeviceID := gjson.GetBytes(responseBodyBytes, "device_id").Str
 
 	// Bob performs an initial sync
 	_, bobNextBatch := bob.MustSync(t, client.SyncReq{})
