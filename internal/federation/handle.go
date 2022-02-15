@@ -107,8 +107,8 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
 		Origin:      gomatrixserverlib.ServerName(s.serverName),
-		AuthEvents:  authEvents,
-		StateEvents: stateEvents,
+		AuthEvents:  gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
+		StateEvents: gomatrixserverlib.NewEventJSONsFromEvents(stateEvents),
 	})
 	if err != nil {
 		w.WriteHeader(500)

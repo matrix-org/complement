@@ -77,24 +77,25 @@ func TestEventAuth(t *testing.T) {
 	getEventAuth := func(t *testing.T, eventID string, wantAuthEventIDs []string) {
 		t.Helper()
 		t.Logf("/event_auth for %s - want %v", eventID, wantAuthEventIDs)
-		resp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), "hs1", room.Version, roomID, eventID)
+		eventAuthResp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), "hs1", room.Version, roomID, eventID)
 		must.NotError(t, "failed to /event_auth", err)
-		if len(resp.AuthEvents) == 0 {
+		if len(eventAuthResp.AuthEvents) == 0 {
 			t.Fatalf("/event_auth returned 0 auth events")
 		}
-		if len(resp.AuthEvents) != len(wantAuthEventIDs) {
+		gotAuthEvents := eventAuthResp.AuthEvents.UntrustedEvents(room.Version)
+		if len(gotAuthEvents) != len(wantAuthEventIDs) {
 			msg := "got:\n"
-			for _, e := range resp.AuthEvents {
+			for _, e := range gotAuthEvents {
 				msg += e.EventID() + " : " + string(e.JSON()) + "\n\n"
 			}
-			t.Fatalf("got %d auth events, wanted %d.\n%s\nwant: %s", len(resp.AuthEvents), len(wantAuthEventIDs), msg, wantAuthEventIDs)
+			t.Fatalf("got %d valid auth events (%d total), wanted %d.\n%s\nwant: %s", len(gotAuthEvents), len(eventAuthResp.AuthEvents), len(wantAuthEventIDs), msg, wantAuthEventIDs)
 		}
 		// make sure all the events match
 		wantIDs := map[string]bool{}
 		for _, id := range wantAuthEventIDs {
 			wantIDs[id] = true
 		}
-		for _, e := range resp.AuthEvents {
+		for _, e := range gotAuthEvents {
 			delete(wantIDs, e.EventID())
 		}
 		if len(wantIDs) > 0 {
