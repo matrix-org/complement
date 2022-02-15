@@ -12,7 +12,6 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/complement/runtime"
 )
 
 // These tests ensure that forgetting about rooms works as intended
@@ -73,19 +72,18 @@ func TestRoomForget(t *testing.T) {
 			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "forget"})
 			time.Sleep(50 * time.Millisecond)
 			result, _ := alice.MustSync(t, client.SyncReq{})
-			if result.Get("rooms.archived").Get(roomID).Exists() {
-				t.Errorf("Did not expect room in archived")
+			if result.Get("rooms.archived." + client.GjsonEscape(roomID)).Exists() {
+				t.Errorf("Did not expect room %s in archived", roomID)
 			}
-			if result.Get("rooms.join").Get(roomID).Exists() {
-				t.Errorf("Did not expect room in joined")
+			if result.Get("rooms.join." + client.GjsonEscape(roomID)).Exists() {
+				t.Errorf("Did not expect room %s in joined", roomID)
 			}
-			if result.Get("rooms.invite").Get(roomID).Exists() {
-				t.Errorf("Did not expect room in invited")
+			if result.Get("rooms.invite." + client.GjsonEscape(roomID)).Exists() {
+				t.Errorf("Did not expect room %s in invited", roomID)
 			}
 		})
 		// sytest: Can forget room you've been kicked from
 		t.Run("Can forget room you've been kicked from", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // flakey
 			t.Parallel()
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			bob.JoinRoom(t, roomID, []string{})
@@ -102,16 +100,17 @@ func TestRoomForget(t *testing.T) {
 					"user_id": bob.UserID,
 				}),
 			)
-			time.Sleep(50 * time.Millisecond)
+			// Ensure Bob was really kicked
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 			result, _ := bob.MustSync(t, client.SyncReq{})
-			if result.Get("rooms.archived").Get(roomID).Exists() {
-				t.Errorf("Did not expect room in archived")
+			if result.Get("rooms.archived." + client.GjsonEscape(roomID)).Exists() {
+				t.Errorf("Did not expect room %s in archived", roomID)
 			}
-			if result.Get("rooms.join").Get(roomID).Exists() {
-				t.Errorf("Did not expect room in joined")
+			if result.Get("rooms.join." + client.GjsonEscape(roomID)).Exists() {
+				t.Errorf("Did not expect room %s in joined", roomID)
 			}
-			if result.Get("rooms.invite").Get(roomID).Exists() {
-				t.Errorf("Did not expect room in invited")
+			if result.Get("rooms.invite." + client.GjsonEscape(roomID)).Exists() {
+				t.Errorf("Did not expect room %s in invited", roomID)
 			}
 		})
 
@@ -139,6 +138,8 @@ func TestRoomForget(t *testing.T) {
 			})
 			// Bob leaves and forgets room
 			bob.LeaveRoom(t, roomID)
+			// Ensure Bob has really left the room
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 			bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "forget"})
 			// Try to re-join
 			joinRes := bob.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", roomID})
