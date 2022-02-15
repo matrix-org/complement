@@ -221,10 +221,13 @@ func deployImage(
 	if err != nil {
 		return nil, err
 	}
+	for _, w := range body.Warnings {
+		log.Printf("WARN: ContainerCreate: %s", w)
+	}
 
 	containerID := body.ID
 	if cfg.DebugLoggingEnabled {
-		log.Printf("%s: Created container %s", contextStr, containerID)
+		log.Printf("%s: Created container '%s' using image '%s' on network '%s'", contextStr, containerID, imageID, networkID)
 	}
 
 	// Create the application service files
