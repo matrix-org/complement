@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrix"
-	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/gomatrixserverlib"
 
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -468,7 +468,7 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	// alice creates a room, which bob joins
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.JoinRoom(t, roomID, nil)
 
 	// now we send a make_join...
