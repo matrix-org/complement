@@ -300,10 +300,6 @@ func deployImage(
 				"test pollution. Remove the VOLUME in the Dockerfile to suppress this message.", containerName, vol,
 		)
 	}
-	for nw, nwinfo := range inspect.NetworkSettings.Networks {
-		log.Printf("%s network %s: %+v", containerName, nw, nwinfo)
-	}
-	log.Printf("%s port bindings: %+v", containerName, inspect.NetworkSettings.Ports)
 
 	var lastErr error
 
