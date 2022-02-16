@@ -10,8 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
+
+	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/matrix-org/complement/internal/match"
 )
@@ -182,10 +183,37 @@ func HaveInOrder(t *testing.T, gots []string, wants []string) {
 	}
 }
 
+// CheckOffAll checks that a list contains exactly the given items, in any order.
+//
+// if an item is not present, the test is failed.
+// if an item not present in the want list is present, the test is failed.
+// Items are compared using reflect.DeepEqual
+func CheckOffAll(t *testing.T, items []interface{}, wantItems []interface{}) {
+	t.Helper()
+	remaining := CheckOffAllAllowUnwanted(t, items, wantItems)
+	if len(remaining) > 0 {
+		t.Errorf("CheckOffAll: unexpected items %v", remaining)
+	}
+}
+
+// CheckOffAllAllowUnwanted checks that a list contains all of the given items, in any order.
+// The updated list with the matched items removed from it is returned.
+//
+// if an item is not present, the test is failed.
+// Items are compared using reflect.DeepEqual
+func CheckOffAllAllowUnwanted(t *testing.T, items []interface{}, wantItems []interface{}) []interface{} {
+	t.Helper()
+	for _, wantItem := range wantItems {
+		items = CheckOff(t, items, wantItem)
+	}
+	return items
+}
+
 // CheckOff an item from the list. If the item is not present the test is failed.
 // The updated list with the matched item removed from it is returned. Items are
 // compared using reflect.DeepEqual
 func CheckOff(t *testing.T, items []interface{}, wantItem interface{}) []interface{} {
+	t.Helper()
 	// check off the item
 	want := -1
 	for i, w := range items {
@@ -195,7 +223,7 @@ func CheckOff(t *testing.T, items []interface{}, wantItem interface{}) []interfa
 		}
 	}
 	if want == -1 {
-		t.Errorf("CheckOff: unexpected item %s", wantItem)
+		t.Errorf("CheckOff: item %s not present", wantItem)
 		return items
 	}
 	// delete the wanted item
