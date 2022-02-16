@@ -440,12 +440,18 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", csapiPort, p)
 	}
+	if len(csapiPortInfo) == 0 {
+		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", csapiPort, p)
+	}
 	baseURL = fmt.Sprintf("http://"+HostnameRunningDocker+":%s", csapiPortInfo[0].HostPort)
 
 	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
 	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", ssapiPort, p)
+	}
+	if len(ssapiPortInfo) == 0 {
+		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", ssapiPort, p)
 	}
 	fedBaseURL = fmt.Sprintf("https://"+HostnameRunningDocker+":%s", ssapiPortInfo[0].HostPort)
 	return

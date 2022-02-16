@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -208,8 +209,20 @@ func deployImage(
 		},
 	}, &container.HostConfig{
 		PublishAllPorts: true,
-		ExtraHosts:      extraHosts,
-		Mounts:          mounts,
+		PortBindings: nat.PortMap{
+			nat.Port("8008/tcp"): []nat.PortBinding{
+				{
+					HostIP: "127.0.0.1",
+				},
+			},
+			nat.Port("8448/tcp"): []nat.PortBinding{
+				{
+					HostIP: "127.0.0.1",
+				},
+			},
+		},
+		ExtraHosts: extraHosts,
+		Mounts:     mounts,
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
 			contextStr: {
@@ -263,12 +276,24 @@ func deployImage(
 	if cfg.DebugLoggingEnabled {
 		log.Printf("%s: Started container %s", contextStr, containerID)
 	}
-	var inspect types.ContainerJSON
-	inspect, err = docker.ContainerInspect(ctx, containerID)
-	if err != nil {
-		return nil, err
-	}
 
+	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
+	var inspect types.ContainerJSON
+	var baseURL, fedBaseURL string
+	inspectStartTime := time.Now()
+	for time.Since(inspectStartTime) < time.Second {
+		inspect, err = docker.ContainerInspect(ctx, containerID)
+		if err != nil {
+			return nil, err
+		}
+		baseURL, fedBaseURL, err = endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
+	}
 	for vol := range inspect.Config.Volumes {
 		log.Printf(
 			"WARNING: %s has a named VOLUME %s - volumes can lead to unpredictable behaviour due to "+
@@ -280,10 +305,6 @@ func deployImage(
 	}
 	log.Printf("%s port bindings: %+v", containerName, inspect.NetworkSettings.Ports)
 
-	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
-	if err != nil {
-		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
-	}
 	var lastErr error
 
 	// Inspect health status of container to check it is up
