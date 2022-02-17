@@ -342,9 +342,9 @@ func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bo
 	mac.Write([]byte(pass))
 	mac.Write([]byte("\x00"))
 	if isAdmin {
-		mac.Write([]byte("notadmin"))
-	} else {
 		mac.Write([]byte("admin"))
+	} else {
+		mac.Write([]byte("notadmin"))
 	}
 	sig := mac.Sum(nil)
 	reqBody := map[string]interface{}{
@@ -352,7 +352,7 @@ func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bo
 		"username": user,
 		"password": pass,
 		"mac":      hex.EncodeToString(sig),
-		"admin":    false,
+		"admin":    isAdmin,
 	}
 	resp = c.MustDoFunc(t, "POST", []string{"_synapse", "admin", "v1", "register"}, WithJSONBody(t, reqBody))
 	body = must.ParseJSON(t, resp.Body)
