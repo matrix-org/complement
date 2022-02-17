@@ -62,7 +62,7 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 }
 
 // RegisterUser within a homeserver and return an authenticatedClient, Fails the test if the hsName is not found.
-func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password string) *client.CSAPI {
+func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password string, isAdmin bool) *client.CSAPI {
 	t.Helper()
 	dep, ok := d.HS[hsName]
 	if !ok {
@@ -75,7 +75,12 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 	}
-	userID, accessToken := client.RegisterUser(t, localpart, password)
+	var userID, accessToken string
+	if isAdmin {
+		userID, accessToken = client.RegisterSharedSecret(t, localpart, password, isAdmin)
+	} else {
+		userID, accessToken = client.RegisterUser(t, localpart, password)
+	}
 
 	// remember the token so subsequent calls to deployment.Client return the user
 	dep.AccessTokens[userID] = accessToken

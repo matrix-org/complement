@@ -1,3 +1,4 @@
+//go:build !dendrite_blacklist
 // +build !dendrite_blacklist
 
 // Rationale for being included in Dendrite's blacklist: https://github.com/matrix-org/dendrite/issues/600
@@ -26,9 +27,9 @@ import (
 func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
-	alice := deployment.RegisterUser(t, "hs1", "alice", "sufficiently_long_password_alice")
-	bob := deployment.RegisterUser(t, "hs1", "bob", "sufficiently_long_password_bob")
-	chris := deployment.RegisterUser(t, "hs1", "chris", "sufficiently_long_password_chris")
+	alice := deployment.RegisterUser(t, "hs1", "alice", "sufficiently_long_password_alice", false)
+	bob := deployment.RegisterUser(t, "hs1", "bob", "sufficiently_long_password_bob", false)
+	chris := deployment.RegisterUser(t, "hs1", "chris", "sufficiently_long_password_chris", false)
 
 	// Alice creates a room for herself.
 	publicRoom := alice.CreateRoom(t, map[string]interface{}{

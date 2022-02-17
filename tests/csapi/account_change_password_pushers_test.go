@@ -1,3 +1,4 @@
+//go:build !dendrite_blacklist
 // +build !dendrite_blacklist
 
 package csapi_tests
@@ -18,7 +19,7 @@ func TestChangePasswordPushers(t *testing.T) {
 	defer deployment.Destroy(t)
 	password1 := "superuser"
 	password2 := "my_new_password"
-	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_pusher_user", password1)
+	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_pusher_user", password1, false)
 
 	// sytest: Pushers created with a different access token are deleted on password change
 	t.Run("Pushers created with a different access token are deleted on password change", func(t *testing.T) {

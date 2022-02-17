@@ -12,6 +12,7 @@ enable_registration: true
 tls_certificate_path: /conf/server.tls.crt
 tls_private_key_path: /conf/server.tls.key
 bcrypt_rounds: 4
+registration_shared_secret: complement
 
 listeners:
   - port: 8448

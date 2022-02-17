@@ -2,6 +2,9 @@ package client
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha1" // nolint:gosec
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -17,6 +20,11 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/must"
+)
+
+const (
+	SharedSecret = "complement"
 )
 
 // RequestOpt is a functional option which will modify an outgoing HTTP request.
@@ -311,6 +319,44 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 	userID = gjson.GetBytes(body, "user_id").Str
 	accessToken = gjson.GetBytes(body, "access_token").Str
 	return userID, accessToken
+}
+
+// RegisterSharedSecret registers a new account with a shared secret via HMAC
+// See https://github.com/matrix-org/synapse/blob/e550ab17adc8dd3c48daf7fedcd09418a73f524b/synapse/_scripts/register_new_matrix_user.py#L40
+func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bool) (userID, password string) {
+	resp := c.DoFunc(t, "GET", []string{"_synapse", "admin", "v1", "register"})
+	if resp.StatusCode != 200 {
+		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
+		return
+	}
+	body := must.ParseJSON(t, resp.Body)
+	nonce := gjson.GetBytes(body, "nonce")
+	if !nonce.Exists() {
+		t.Fatalf("Malformed shared secret GET response: %s", string(body))
+	}
+	mac := hmac.New(sha1.New, []byte(SharedSecret))
+	mac.Write([]byte(nonce.Str))
+	mac.Write([]byte("\x00"))
+	mac.Write([]byte(user))
+	mac.Write([]byte("\x00"))
+	mac.Write([]byte(pass))
+	mac.Write([]byte("\x00"))
+	if isAdmin {
+		mac.Write([]byte("admin"))
+	} else {
+		mac.Write([]byte("notadmin"))
+	}
+	sig := mac.Sum(nil)
+	reqBody := map[string]interface{}{
+		"nonce":    nonce.Str,
+		"username": user,
+		"password": pass,
+		"mac":      hex.EncodeToString(sig),
+		"admin":    isAdmin,
+	}
+	resp = c.MustDoFunc(t, "POST", []string{"_synapse", "admin", "v1", "register"}, WithJSONBody(t, reqBody))
+	body = must.ParseJSON(t, resp.Body)
+	return gjson.GetBytes(body, "user_id").Str, gjson.GetBytes(body, "access_token").Str
 }
 
 // GetCapbabilities queries the server's capabilities

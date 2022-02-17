@@ -76,6 +76,7 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 - The homeserver needs to manage its own storage within the image.
 - The homeserver needs to accept the server name given by the environment variable `SERVER_NAME` at runtime.
 - The homeserver needs to assume dockerfile `CMD` or `ENTRYPOINT` instructions will be run multiple times.
+- The homeserver needs to use `complement` as the registration shared secret for `/_synapse/admin/v1/register`, if supported. If this endpoint 404s then these tests are skipped.
 
 
 ### Developing locally
