@@ -47,6 +47,7 @@ func TestServerNotices(t *testing.T) {
 	})
 	t.Run("/send_server_notice as an admin is allowed", func(t *testing.T) {
 		sendServerNotice(t, admin, reqBody, nil)
+
 	})
 	t.Run("Alice is invited to the server alert room", func(t *testing.T) {
 		sendServerNotice(t, admin, reqBody, nil)
@@ -59,8 +60,7 @@ func TestServerNotices(t *testing.T) {
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusForbidden,
 			JSON: []match.JSON{
-				match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
-				match.JSONKeyEqual("error", "You cannot reject this invite"),
+				match.JSONKeyEqual("errcode", "M_CANNOT_LEAVE_SERVER_NOTICE_ROOM"),
 			},
 		})
 	})
@@ -68,6 +68,8 @@ func TestServerNotices(t *testing.T) {
 		eventID := sendServerNotice(t, admin, reqBody, nil)
 		roomID := syncUntilInvite(t, alice)
 		alice.JoinRoom(t, roomID, []string{})
+		// cleanup room, so the next test is in a clean state
+		defer alice.LeaveRoom(t, roomID)
 		queryParams := url.Values{}
 		queryParams.Set("dir", "b")
 		// check if we received the message
@@ -82,6 +84,12 @@ func TestServerNotices(t *testing.T) {
 		if !msgRes.found {
 			t.Errorf("did not find expected message from server notices")
 		}
+	})
+	t.Run("Alice can leave the alert room, after joining it", func(t *testing.T) {
+		sendServerNotice(t, admin, reqBody, nil)
+		roomID := syncUntilInvite(t, alice)
+		alice.JoinRoom(t, roomID, []string{})
+		alice.LeaveRoom(t, roomID)
 	})
 	t.Run("Sending a notice with a transactionID is idempotent", func(t *testing.T) {
 		txnID := "1"
