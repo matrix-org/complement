@@ -71,6 +71,6 @@ experimental_features:
 
 server_notices:
   system_mxid_localpart: _server
-  system_mxid_display_name: "SServer Alert"
+  system_mxid_display_name: "Server Alert"
   system_mxid_avatar_url: ""
   room_name: "Server Alert"
