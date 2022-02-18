@@ -36,6 +36,10 @@ func TestServerNotices(t *testing.T) {
 			"body":    "hello from server notices!",
 		},
 	})
+	var (
+		eventID string
+		roomID  string
+	)
 	t.Run("/send_server_notice is not allowed as normal user", func(t *testing.T) {
 		res := alice.DoFunc(t, "POST", []string{"_synapse", "admin", "v1", "send_server_notice"})
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -46,16 +50,12 @@ func TestServerNotices(t *testing.T) {
 		})
 	})
 	t.Run("/send_server_notice as an admin is allowed", func(t *testing.T) {
-		sendServerNotice(t, admin, reqBody, nil)
-
+		eventID = sendServerNotice(t, admin, reqBody, nil)
 	})
 	t.Run("Alice is invited to the server alert room", func(t *testing.T) {
-		sendServerNotice(t, admin, reqBody, nil)
-		syncUntilInvite(t, alice)
+		roomID = syncUntilInvite(t, alice)
 	})
 	t.Run("Alice cannot reject the invite", func(t *testing.T) {
-		sendServerNotice(t, admin, reqBody, nil)
-		roomID := syncUntilInvite(t, alice)
 		res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusForbidden,
@@ -65,11 +65,7 @@ func TestServerNotices(t *testing.T) {
 		})
 	})
 	t.Run("Alice can join the alert room", func(t *testing.T) {
-		eventID := sendServerNotice(t, admin, reqBody, nil)
-		roomID := syncUntilInvite(t, alice)
 		alice.JoinRoom(t, roomID, []string{})
-		// cleanup room, so the next test is in a clean state
-		defer alice.LeaveRoom(t, roomID)
 		queryParams := url.Values{}
 		queryParams.Set("dir", "b")
 		// check if we received the message
@@ -86,10 +82,14 @@ func TestServerNotices(t *testing.T) {
 		}
 	})
 	t.Run("Alice can leave the alert room, after joining it", func(t *testing.T) {
-		sendServerNotice(t, admin, reqBody, nil)
-		roomID := syncUntilInvite(t, alice)
-		alice.JoinRoom(t, roomID, []string{})
 		alice.LeaveRoom(t, roomID)
+	})
+	t.Run("After leaving the alert room, a new room is created", func(t *testing.T) {
+		sendServerNotice(t, admin, reqBody, nil)
+		newRoomID := syncUntilInvite(t, alice)
+		if roomID == newRoomID {
+			t.Errorf("expected a new room, but they are the same")
+		}
 	})
 	t.Run("Sending a notice with a transactionID is idempotent", func(t *testing.T) {
 		txnID := "1"
@@ -118,6 +118,8 @@ func sendServerNotice(t *testing.T, admin *client.CSAPI, reqBody client.RequestO
 	return gjson.GetBytes(body, "event_id").Str
 }
 
+// syncUntilInvite checks if we got an invitation from the server notice sender, as the roomID is unknown.
+// Returns the found roomID on success
 func syncUntilInvite(t *testing.T, alice *client.CSAPI) string {
 	var roomID string
 	alice.MustSyncUntil(t, client.SyncReq{}, func(userID string, res gjson.Result) error {
