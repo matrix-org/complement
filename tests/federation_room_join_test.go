@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/matrix-org/gomatrix"
+
 	"github.com/matrix-org/gomatrixserverlib"
 
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -294,7 +297,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	must.NotError(t, "JoinEvent.Build", err)
 
 	// SendJoin should return a 403.
-	_, err = fedClient.SendJoin(context.Background(), "hs1", joinEvent, makeJoinResp.RoomVersion)
+	_, err = fedClient.SendJoin(context.Background(), "hs1", joinEvent)
 	if err == nil {
 		t.Errorf("SendJoin returned 200, want 403")
 	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -444,4 +447,78 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		})
 		assertRequestFails(t, event)
 	})
+}
+
+// Tests an implementation's support for MSC3706-style partial-state responses to send_join.
+//
+// Will be skipped if the server returns a full-state response.
+func TestSendJoinPartialStateResponse(t *testing.T) {
+	// start with a homeserver with two users
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+
+	// annoyingly we can't get to the room that alice and bob already share (see https://github.com/matrix-org/complement/issues/254)
+	// so we have to create a new one.
+	// alice creates a room, which bob joins
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	bob.JoinRoom(t, roomID, nil)
+
+	// now we send a make_join...
+	charlie := srv.UserID("charlie")
+	fedClient := srv.FederationClient(deployment)
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), "hs1", roomID, charlie, federation.SupportedRoomVersions())
+	if err != nil {
+		t.Fatalf("make_join failed: %v", err)
+	}
+
+	// ... construct a signed join event ...
+	roomVer := makeJoinResp.RoomVersion
+	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName()), srv.KeyID, srv.Priv, roomVer)
+	if err != nil {
+		t.Fatalf("failed to sign join event: %v", err)
+	}
+
+	// and send_join it, with the magic param
+	sendJoinResp, err := fedClient.SendJoinPartialState(context.Background(), "hs1", joinEvent)
+	if err != nil {
+		t.Fatalf("send_join failed: %v", err)
+	}
+
+	if !sendJoinResp.PartialState {
+		t.Skip("Server does not support partial_state")
+	}
+
+	// check the returned state events match those expected
+	var returnedStateEventKeys []interface{}
+	for _, ev := range sendJoinResp.StateEvents {
+		returnedStateEventKeys = append(returnedStateEventKeys, typeAndStateKeyForEvent(gjson.ParseBytes(ev)))
+	}
+	must.CheckOffAll(t, returnedStateEventKeys, []interface{}{
+		"m.room.create|", "m.room.power_levels|", "m.room.join_rules|", "m.room.history_visibility|",
+	})
+
+	// check the returned auth events match those expected
+	var returnedAuthEventKeys []interface{}
+	for _, ev := range sendJoinResp.AuthEvents {
+		returnedAuthEventKeys = append(returnedAuthEventKeys, typeAndStateKeyForEvent(gjson.ParseBytes(ev)))
+	}
+	must.CheckOffAll(t, returnedAuthEventKeys, []interface{}{
+		"m.room.member|" + alice.UserID,
+	})
+
+	// check the server list. Only one, so we can use HaveInOrder even though the list is unordered
+	must.HaveInOrder(t, sendJoinResp.ServersInRoom, []string{"hs1"})
+}
+
+// given an event JSON, return the type and state_key, joined with a "|"
+func typeAndStateKeyForEvent(result gjson.Result) string {
+	return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
 }

@@ -106,9 +106,7 @@ by an actual sytest run due to parameterised tests.
 ### Where should I put new tests?
 
 If the test *only* has CS API calls, then put it in `/tests/csapi`. If the test involves both CS API and Federation, or just Federation, put it in `/tests`.
-This is because of how parallelisation works currently. All federation tests MUST be in the same directory due to the use of shared resources (for example,
-the local Complement server always binds to `:8448` which is a problem if 2 fed tests want to do that at the same time). This will be resolved in the future
-by the use of `.well-known` but at present this is how things stand.
+This will change in the future once we have decided how to split tests by category.
 
 ### Should I always make a new blueprint for a test?
 
@@ -173,19 +171,9 @@ There is no syntactically pleasing way to do this. Create a separate function wh
 
 This is done using standard Go testing mechanisms, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
 
-For debugging, you can also use `logrus` to expand a bunch of variables:
-
-```go
-logrus.WithFields(logrus.Fields{
-	"events": events,
-	"context": context,
-}).Error("message response")
-```
-
 ### How do I show the server logs even when the tests pass?
 
 Normally, server logs are only printed when one of the tests fail. To override that behavior to always show server logs, you can use `COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1`.
-
 
 ### How do I skip a test?
 
@@ -263,6 +251,4 @@ It can be useful to view the output of a test in Element to better debug somethi
 
 ### What do I need to know if I'm coming from sytest?
 
-Sytest has a concept of a `fixture` to configure the homeserver or test in a particular way, these are replaced with a `Blueprint` in Complement.
-
-Unlike Sytest, each test must opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically.
+Unlike Sytest, each test must opt-in to attaching core functionality to the test federation server so the reader can clearly see what is and is not being handled automatically.

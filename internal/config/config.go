@@ -15,6 +15,12 @@ import (
 	"time"
 )
 
+type HostMount struct {
+	HostPath      string
+	ContainerPath string
+	ReadOnly      bool
+}
+
 type Complement struct {
 	BaseImageURI          string
 	BaseImageArgs         []string
@@ -23,6 +29,7 @@ type Complement struct {
 	BestEffort            bool
 	SpawnHSTimeout        time.Duration
 	KeepBlueprints        []string
+	HostMounts            []HostMount
 	// The namespace for all complement created blueprints and deployments
 	PackageNamespace string
 	// Certificate Authority generated values for this run of complement. Homeservers will use this
@@ -31,7 +38,7 @@ type Complement struct {
 	CAPrivateKey  *rsa.PrivateKey
 }
 
-func NewConfigFromEnvVars() *Complement {
+func NewConfigFromEnvVars(pkgNamespace string) *Complement {
 	cfg := &Complement{}
 	cfg.BaseImageURI = os.Getenv("COMPLEMENT_BASE_IMAGE")
 	cfg.BaseImageArgs = strings.Split(os.Getenv("COMPLEMENT_BASE_IMAGE_ARGS"), " ")
@@ -44,14 +51,25 @@ func NewConfigFromEnvVars() *Complement {
 		cfg.SpawnHSTimeout = time.Duration(50*parseEnvWithDefault("COMPLEMENT_VERSION_CHECK_ITERATIONS", 100)) * time.Millisecond
 	}
 	cfg.KeepBlueprints = strings.Split(os.Getenv("COMPLEMENT_KEEP_BLUEPRINTS"), " ")
+	var err error
+	hostMounts := os.Getenv("COMPLEMENT_HOST_MOUNTS")
+	if hostMounts != "" {
+		cfg.HostMounts, err = newHostMounts(strings.Split(hostMounts, ";"))
+		if err != nil {
+			panic("COMPLEMENT_HOST_MOUNTS parse error: " + err.Error())
+		}
+	}
 	if cfg.BaseImageURI == "" {
 		panic("COMPLEMENT_BASE_IMAGE must be set")
 	}
-	cfg.PackageNamespace = "pkg"
+	cfg.PackageNamespace = pkgNamespace
 
 	// create CA certs and keys
 	if err := cfg.GenerateCA(); err != nil {
 		panic("Failed to generate CA certificate/key: " + err.Error())
+	}
+	if cfg.PackageNamespace == "" {
+		panic("package namespace must be set")
 	}
 
 	return cfg
@@ -93,6 +111,26 @@ func parseEnvWithDefault(key string, def int) int {
 		return i
 	}
 	return def
+}
+
+func newHostMounts(mounts []string) ([]HostMount, error) {
+	var hostMounts []HostMount
+	for _, m := range mounts {
+		segments := strings.Split(m, ":")
+		if len(segments) < 2 {
+			return nil, fmt.Errorf("mount '%s' malformed", m)
+		}
+		var ro string
+		if len(segments) == 3 {
+			ro = segments[2]
+		}
+		hostMounts = append(hostMounts, HostMount{
+			HostPath:      segments[0],
+			ContainerPath: segments[1],
+			ReadOnly:      ro == "ro" || ro == "readonly",
+		})
+	}
+	return hostMounts, nil
 }
 
 // Generate a certificate and private key

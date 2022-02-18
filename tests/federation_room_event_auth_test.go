@@ -98,7 +98,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 			_, _ = w.Write([]byte("{}"))
 			return
 		}
-		res := gomatrixserverlib.RespEventAuth{AuthEvents: authEvents}
+		res := gomatrixserverlib.RespEventAuth{AuthEvents: gomatrixserverlib.NewEventJSONsFromEvents(authEvents)}
 		responseBytes, _ := json.Marshal(&res)
 		w.WriteHeader(200)
 		_, _ = w.Write(responseBytes)

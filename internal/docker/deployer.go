@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -34,6 +35,12 @@ import (
 	"github.com/docker/docker/api/types/network"
 
 	"github.com/matrix-org/complement/internal/config"
+)
+
+const (
+	MountCACertPath     = "/complement/ca/ca.crt"
+	MountCAKeyPath      = "/complement/ca/ca.key"
+	MountAppServicePath = "/complement/appservice/" // All registration files sit here
 )
 
 type Deployer struct {
@@ -174,22 +181,20 @@ func deployImage(
 		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
 
-	toMount := []Volume{
-		&VolumeAppService{},
+	for _, m := range cfg.HostMounts {
+		mounts = append(mounts, mount.Mount{
+			Source:   m.HostPath,
+			Target:   m.ContainerPath,
+			ReadOnly: m.ReadOnly,
+			Type:     mount.TypeBind,
+		})
 	}
-
-	for _, m := range toMount {
-		err = m.Prepare(ctx, docker, contextStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to prepare volume: %s", err)
-		}
-		mounts = append(mounts, m.Mount())
+	if len(mounts) > 0 {
+		log.Printf("Using host mounts: %+v", mounts)
 	}
 
 	env := []string{
 		"SERVER_NAME=" + hsName,
-		// TODO: Remove once Synapse images don't rely on this anymore
-		"COMPLEMENT_CA=1",
 	}
 
 	body, err := docker.ContainerCreate(ctx, &container.Config{
@@ -204,28 +209,43 @@ func deployImage(
 		},
 	}, &container.HostConfig{
 		PublishAllPorts: true,
-		ExtraHosts:      extraHosts,
-		Mounts:          mounts,
+		PortBindings: nat.PortMap{
+			nat.Port("8008/tcp"): []nat.PortBinding{
+				{
+					HostIP: "127.0.0.1",
+				},
+			},
+			nat.Port("8448/tcp"): []nat.PortBinding{
+				{
+					HostIP: "127.0.0.1",
+				},
+			},
+		},
+		ExtraHosts: extraHosts,
+		Mounts:     mounts,
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
-			hsName: {
+			contextStr: {
 				NetworkID: networkID,
 				Aliases:   []string{hsName},
 			},
 		},
-	}, containerName)
+	}, nil, containerName)
 	if err != nil {
 		return nil, err
+	}
+	for _, w := range body.Warnings {
+		log.Printf("WARN: ContainerCreate: %s", w)
 	}
 
 	containerID := body.ID
 	if cfg.DebugLoggingEnabled {
-		log.Printf("%s: Created container %s", contextStr, containerID)
+		log.Printf("%s: Created container '%s' using image '%s' on network '%s'", contextStr, containerID, imageID, networkID)
 	}
 
 	// Create the application service files
 	for asID, registration := range asIDToRegistrationMap {
-		err = copyToContainer(docker, containerID, fmt.Sprintf("/appservices/%s.yaml", url.PathEscape(asID)), []byte(registration))
+		err = copyToContainer(docker, containerID, fmt.Sprintf("%s%s.yaml", MountAppServicePath, url.PathEscape(asID)), []byte(registration))
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +256,7 @@ func deployImage(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CA certificate: %s", err)
 	}
-	err = copyToContainer(docker, containerID, "/ca/ca.crt", certBytes)
+	err = copyToContainer(docker, containerID, MountCACertPath, certBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to copy CA certificate to container: %s", err)
 	}
@@ -244,7 +264,7 @@ func deployImage(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CA key: %s", err)
 	}
-	err = copyToContainer(docker, containerID, "/ca/ca.key", certKeyBytes)
+	err = copyToContainer(docker, containerID, MountCAKeyPath, certKeyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to copy CA key to container: %s", err)
 	}
@@ -256,15 +276,31 @@ func deployImage(
 	if cfg.DebugLoggingEnabled {
 		log.Printf("%s: Started container %s", contextStr, containerID)
 	}
+
+	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
 	var inspect types.ContainerJSON
-	inspect, err = docker.ContainerInspect(ctx, containerID)
-	if err != nil {
-		return nil, err
+	var baseURL, fedBaseURL string
+	inspectStartTime := time.Now()
+	for time.Since(inspectStartTime) < time.Second {
+		inspect, err = docker.ContainerInspect(ctx, containerID)
+		if err != nil {
+			return nil, err
+		}
+		baseURL, fedBaseURL, err = endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
+		if err == nil {
+			break
+		}
 	}
-	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
 	if err != nil {
 		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
 	}
+	for vol := range inspect.Config.Volumes {
+		log.Printf(
+			"WARNING: %s has a named VOLUME %s - volumes can lead to unpredictable behaviour due to "+
+				"test pollution. Remove the VOLUME in the Dockerfile to suppress this message.", containerName, vol,
+		)
+	}
+
 	var lastErr error
 
 	// Inspect health status of container to check it is up

@@ -15,7 +15,7 @@ func TestDeviceManagement(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
-	authedClient := deployment.RegisterUser(t, "hs1", "test_device_management_user", "superuser")
+	authedClient := deployment.RegisterUser(t, "hs1", "test_device_management_user", "superuser", false)
 
 	// sytest: GET /device/{deviceId}
 	t.Run("GET /device/{deviceId}", func(t *testing.T) {

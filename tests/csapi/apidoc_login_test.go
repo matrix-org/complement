@@ -17,7 +17,7 @@ func TestLogin(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
-	_ = deployment.RegisterUser(t, "hs1", "test_login_user", "superuser")
+	_ = deployment.RegisterUser(t, "hs1", "test_login_user", "superuser", false)
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: GET /login yields a set of flows
 		t.Run("GET /login yields a set of flows", func(t *testing.T) {
