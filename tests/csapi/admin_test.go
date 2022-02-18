@@ -1,9 +1,16 @@
 package csapi_tests
 
 import (
+	"fmt"
+	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
+	"github.com/tidwall/gjson"
 )
 
 // Check if this homeserver supports Synapse-style admin registration.
@@ -12,4 +19,104 @@ func TestCanRegisterAdmin(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	deployment.RegisterUser(t, "hs1", "admin", "adminpassword", true)
+}
+
+// Test if the implemented /_synapse/admin/v1/send_server_notice behaves as expected
+func TestServerNotices(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+	admin := deployment.RegisterUser(t, "hs1", "admin", "adminpassword", true)
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"user_id": "@alice:hs1",
+		"content": map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "hello from server notices!",
+		},
+	})
+	t.Run("/send_server_notice is not allowed as normal user", func(t *testing.T) {
+		res := alice.DoFunc(t, "POST", []string{"_synapse", "admin", "v1", "send_server_notice"})
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: http.StatusForbidden,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
+			},
+		})
+	})
+	t.Run("/send_server_notice as an admin is allowed", func(t *testing.T) {
+		sendServerNotice(t, admin, reqBody, nil)
+	})
+	t.Run("Alice is invited to the server alert room", func(t *testing.T) {
+		sendServerNotice(t, admin, reqBody, nil)
+		syncUntilInvite(t, alice)
+	})
+	t.Run("Alice cannot reject the invite", func(t *testing.T) {
+		sendServerNotice(t, admin, reqBody, nil)
+		roomID := syncUntilInvite(t, alice)
+		res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: http.StatusForbidden,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
+				match.JSONKeyEqual("error", "You cannot reject this invite"),
+			},
+		})
+	})
+	t.Run("Alice can join the alert room", func(t *testing.T) {
+		eventID := sendServerNotice(t, admin, reqBody, nil)
+		roomID := syncUntilInvite(t, alice)
+		alice.JoinRoom(t, roomID, []string{})
+		queryParams := url.Values{}
+		queryParams.Set("dir", "b")
+		// check if we received the message
+		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+		msgRes := &msgResult{}
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: http.StatusOK,
+			JSON: []match.JSON{
+				findMessageId(eventID, msgRes),
+			},
+		})
+		if !msgRes.found {
+			t.Errorf("did not find expected message from server notices")
+		}
+	})
+	t.Run("Sending a notice with a transactionID is idempotent", func(t *testing.T) {
+		txnID := "1"
+		eventID1 := sendServerNotice(t, admin, reqBody, &txnID)
+		eventID2 := sendServerNotice(t, admin, reqBody, &txnID)
+		if eventID1 != eventID2 {
+			t.Errorf("expected event IDs to be the same, but got '%s' and '%s'", eventID1, eventID2)
+		}
+	})
+
+}
+
+func sendServerNotice(t *testing.T, admin *client.CSAPI, reqBody client.RequestOpt, txnID *string) (eventID string) {
+	var res *http.Response
+	if txnID != nil {
+		res = admin.MustDoFunc(t, "PUT", []string{"_synapse", "admin", "v1", "send_server_notice", *txnID}, reqBody)
+	} else {
+		res = admin.MustDoFunc(t, "POST", []string{"_synapse", "admin", "v1", "send_server_notice"}, reqBody)
+	}
+	body := must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON: []match.JSON{
+			match.JSONKeyPresent("event_id"),
+		},
+	})
+	return gjson.GetBytes(body, "event_id").Str
+}
+
+func syncUntilInvite(t *testing.T, alice *client.CSAPI) string {
+	var roomID string
+	alice.MustSyncUntil(t, client.SyncReq{}, func(userID string, res gjson.Result) error {
+		if res.Get("rooms.invite.*.invite_state.events.0.sender").Str == "@_server:hs1" {
+			roomID = res.Get("rooms.invite").Get("@keys.0").Str
+			return nil
+		}
+		return fmt.Errorf("invite not found")
+	})
+	return roomID
 }
