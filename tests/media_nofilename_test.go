@@ -77,7 +77,7 @@ func TestMediaWithoutFileName(t *testing.T) {
 			t.Parallel()
 			alice := deployment.Client(t, "hs1", userID)
 
-			b, ct := alice.DownloadContent(t, fmt.Sprintf("mxc://%s/%s", srv.ServerName, remoteMediaId))
+			b, ct := alice.DownloadContent(t, fmt.Sprintf("mxc://%s/%s", srv.ServerName(), remoteMediaId))
 
 			// Check the Content-Type response header.
 			// NOTSPEC: There is ambiguity over whether the homeserver is allowed to change the

@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,13 +50,13 @@ var (
 var createPublicRoomOpts = map[string]interface{}{
 	"preset":       "public_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v3",
+	"room_version": "org.matrix.msc2716v4",
 }
 
 var createPrivateRoomOpts = map[string]interface{}{
 	"preset":       "private_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v3",
+	"room_version": "org.matrix.msc2716v4",
 }
 
 func TestImportHistoricalMessages(t *testing.T) {
@@ -84,9 +85,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 		// come back in the correct order from /messages.
 		//
 		// Final timeline output: ( [n] = historical batch )
-		// (oldest) A, B, [insertion, c, d, e, batch] [insertion, f, g, h, batch, insertion], I, J (newest)
+		// (oldest) A, B, [insertion, c, d, e, batch] [insertion, f, g, h, batch], baseInsertion, I, J (newest)
 		//                historical batch 1          historical batch 0
-		t.Run("Historical events resolve with proper state in correct order", func(t *testing.T) {
+		t.Run("Historical events resolve in the correct order", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -98,7 +99,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			//
 			// Create the first batch including the "live" event we are going to
 			// import our historical events next to.
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 2, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[len(eventIDsBefore)-1]
 			timeAfterEventBefore := time.Now()
 
@@ -110,7 +111,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// Create the second batch of events.
 			// This will also fill up the buffer so we have to scrollback to the
 			// inserted history later.
-			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2)
+			eventIDsAfter := createMessagesInRoom(t, alice, roomID, 2, "eventIDsAfter")
 
 			// Insert the most recent batch of historical messages
 			insertTime0 := timeAfterEventBefore.Add(timeBetweenMessages * 3)
@@ -174,37 +175,15 @@ func TestImportHistoricalMessages(t *testing.T) {
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			}))
-			messsageResBody := client.ParseJSON(t, messagesRes)
-			eventDebugStringsFromResponse := getRelevantEventDebugStringsFromMessagesResponse(t, messsageResBody)
-			// Since the original body can only be read once, create a new one from the body bytes we just read
-			messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
-
-			// Copy the array by slice so we can modify it as we iterate in the foreach loop.
-			// We save the full untouched `expectedEventIDOrder` for use in the log messages
-			workingExpectedEventIDOrder := expectedEventIDOrder
 
 			must.MatchResponse(t, messagesRes, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONArrayEach("chunk", func(r gjson.Result) error {
-						// Find all events in order
-						if isRelevantEvent(r) {
-							// Pop the next message off the expected list
-							nextEventIdInOrder := workingExpectedEventIDOrder[0]
-							workingExpectedEventIDOrder = workingExpectedEventIDOrder[1:]
-
-							if r.Get("event_id").Str != nextEventIdInOrder {
-								return fmt.Errorf("Next event found was %s but expected %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", r.Get("event_id").Str, nextEventIdInOrder, len(eventDebugStringsFromResponse), eventDebugStringsFromResponse, len(expectedEventIDOrder), expectedEventIDOrder)
-							}
-						}
-
-						return nil
-					}),
+					matcherJSONEventIDArrayInOrder("chunk",
+						expectedEventIDOrder,
+						relevantToScrollbackEventFilter,
+					),
 				},
 			})
-
-			if len(workingExpectedEventIDOrder) != 0 {
-				t.Fatalf("Expected all events to be matched in message response but there were some left-over events: %s", workingExpectedEventIDOrder)
-			}
 		})
 
 		t.Run("Historical events from multiple users in the same batch", func(t *testing.T) {
@@ -214,7 +193,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -238,36 +217,26 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-
-			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
+			validateBatchSendRes(t, as, roomID, batchSendRes, false)
 		})
 
-		t.Run("Historical events from /batch_send do not come down in an incremental sync", func(t *testing.T) {
+		t.Run("Historical events from batch_send do not come down in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
 			// Create some "live" events to saturate and fill up the /sync response
-			createMessagesInRoom(t, alice, roomID, 5)
+			createMessagesInRoom(t, alice, roomID, 5, "live")
+
+			// Get a /sync `since` pagination token we can try paginating from later
+			// on
+			_, since := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 			// Import a historical event
 			batchSendRes := batchSendHistoricalMessages(
@@ -283,23 +252,24 @@ func TestImportHistoricalMessages(t *testing.T) {
 			)
 			batchSendResBody := client.ParseJSON(t, batchSendRes)
 			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-			historicalEventId := historicalEventIDs[0]
+			historicalStateEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "state_event_ids")
 
-			// This is just a dummy event we search for after the historicalEventId
-			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1)
+			// This is just a dummy event we search for after the historicalEventIDs/historicalStateEventIDs
+			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1, "eventIDsAfterHistoricalImport")
 			eventIDAfterHistoricalImport := eventIDsAfterHistoricalImport[0]
 
-			// Sync until we find the eventIDAfterHistoricalImport.
-			// If we're able to see the eventIDAfterHistoricalImport that occurs after
-			// the historicalEventId without seeing eventIDAfterHistoricalImport in
-			// between, we're probably safe to assume it won't sync
-			alice.SyncUntil(t, "", `{ "room": { "timeline": { "limit": 3 } } }`, "rooms.join."+client.GjsonEscape(roomID)+".timeline.events", func(r gjson.Result) bool {
-				if r.Get("event_id").Str == historicalEventId {
-					t.Fatalf("We should not see the %s historical event in /sync response but it was present", historicalEventId)
+			// Sync from before we did any batch sending until we find the
+			// eventIDAfterHistoricalImport. If we're able to see
+			// eventIDAfterHistoricalImport without any the
+			// historicalEventIDs/historicalStateEventIDs in between, we're probably
+			// safe to assume it won't sync.
+			alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+				if includes(r.Get("event_id").Str, historicalEventIDs) || includes(r.Get("event_id").Str, historicalStateEventIDs) {
+					t.Fatalf("We should not see the %s historical event in /sync response but it was present", r.Get("event_id").Str)
 				}
 
 				return r.Get("event_id").Str == eventIDAfterHistoricalImport
-			})
+			}))
 		})
 
 		t.Run("Batch send endpoint only returns state events that we passed in via state_events_at_start", func(t *testing.T) {
@@ -309,7 +279,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to import our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -363,7 +333,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -417,7 +387,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			roomID := as.CreateRoom(t, createPublicRoomOpts)
 			alice.JoinRoom(t, roomID, nil)
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -448,7 +418,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to import our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -468,329 +438,446 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Status
 				200,
 			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-
-			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
+			validateBatchSendRes(
+				t,
+				as,
+				roomID,
+				batchSendRes,
+				// We can't validate the state in this case because the invite event
+				// won't be resolved in `/messages` state field (i.e. only the member
+				// event is needed to auth those events)
+				false,
+			)
 		})
 
-		t.Run("TODO: Test if historical avatar/display name set back in time are picked up on historical messages", func(t *testing.T) {
-			t.Skip("Skipping until implemented")
-			// TODO: Try adding avatar and displayName and see if historical messages get this info
+		t.Run("should resolve member state events for historical events", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create the "live" event we are going to insert our backfilled events next to
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
+			eventIdBefore := eventIDsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			createMessagesInRoom(t, alice, roomID, 2, "eventIDsAfter")
+
+			// Import a batch of historical events
+			batchSendRes0 := batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				"",
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 4),
+				// Status
+				200,
+			)
+			validateBatchSendRes(
+				t,
+				as,
+				roomID,
+				batchSendRes0,
+				// Validate the state
+				true,
+			)
+			batchSendResBody0 := client.ParseJSON(t, batchSendRes0)
+			nextBatchID0 := client.GetJSONFieldStr(t, batchSendResBody0, "next_batch_id")
+
+			// Import another older batch of history from the same user.
+			// Make sure the meta data and joins still work on the subsequent batch
+			batchSendRes1 := batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				nextBatchID0,
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 4),
+				// Status
+				200,
+			)
+			validateBatchSendRes(
+				t,
+				as,
+				roomID,
+				batchSendRes1,
+				// Validate the state
+				true,
+			)
+		})
+
+		t.Run("Should be able to send a batch without any state_events_at_start - user already joined in the current room state", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := as.CreateRoom(t, createPublicRoomOpts)
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create the "live" event we are going to import our historical events next to
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
+			eventIdBefore := eventIDsBefore[0]
+			timeAfterEventBefore := time.Now()
+
+			// Import a historical event
+			batchSendRes := batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				"",
+				// The key thing we're testing here is that we can still batch send
+				// messages when no `state_events_at_start` are given
+				make([]map[string]interface{}, 0),
+				createMessageEventsForBatchSendRequest([]string{alice.UserID}, timeAfterEventBefore, 3),
+				// Status
+				200,
+			)
+
+			validateBatchSendRes(
+				t,
+				as,
+				roomID,
+				batchSendRes,
+				false,
+			)
 		})
 
 		t.Run("TODO: What happens when you point multiple batches at the same insertion event?", func(t *testing.T) {
 			t.Skip("Skipping until implemented")
 		})
 
-		t.Run("Historical messages are visible when joining on federated server - auto-generated base insertion event", func(t *testing.T) {
-			t.Parallel()
+		t.Run("Federation", func(t *testing.T) {
+			t.Run("Historical messages are visible when joining on federated server - auto-generated base insertion event", func(t *testing.T) {
+				t.Parallel()
 
-			roomID := as.CreateRoom(t, createPublicRoomOpts)
-			alice.JoinRoom(t, roomID, nil)
+				roomID := as.CreateRoom(t, createPublicRoomOpts)
+				alice.JoinRoom(t, roomID, nil)
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdBefore := eventIDsBefore[0]
-			timeAfterEventBefore := time.Now()
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
+				eventIdBefore := eventIDsBefore[0]
+				timeAfterEventBefore := time.Now()
 
-			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 3)
+				createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
 
-			batchSendRes := batchSendHistoricalMessages(
-				t,
-				as,
-				roomID,
-				eventIdBefore,
-				"",
-				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
-				// Status
-				200,
-			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+				batchSendRes := batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					"",
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
+					// Status
+					200,
+				)
+				batchSendResBody := client.ParseJSON(t, batchSendRes)
+				historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+				baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
 
-			// Join the room from a remote homeserver after the historical messages were sent
-			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				// Send the marker event which lets remote homeservers know there are
+				// some historical messages back at the given insertion event.
+				sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
 
-			// Make sure all of the events have been backfilled
-			fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
-				if ev.Get("event_id").Str == eventIdBefore {
-					return true
+				// Join the room from a remote homeserver after the historical messages were sent
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+				// Make sure all of the events have been backfilled
+				fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
+					if ev.Get("event_id").Str == eventIdBefore {
+						return true
+					}
+
+					return false
+				})
+
+				// FIXME: In the future, we should probably replace the following logic
+				// with `validateBatchSendRes` to re-use and have some more robust
+				// assertion logic here. We're currently not using it because the message
+				// order isn't quite perfect when a remote federated homeserver gets
+				// backfilled.
+				// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+				}))
+
+				must.MatchResponse(t, messagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						}, nil),
+					},
+				})
+			})
+
+			t.Run("Historical messages are visible when joining on federated server - pre-made insertion event", func(t *testing.T) {
+				t.Parallel()
+
+				roomID := as.CreateRoom(t, createPublicRoomOpts)
+				alice.JoinRoom(t, roomID, nil)
+
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
+				eventIdBefore := eventIDsBefore[0]
+				timeAfterEventBefore := time.Now()
+
+				// Create insertion event in the normal DAG
+				batchID := "mynextBatchID123"
+				insertionEvent := b.Event{
+					Type: insertionEventType,
+					Content: map[string]interface{}{
+						nextBatchIDContentField: batchID,
+						historicalContentField:  true,
+					},
+				}
+				// We can't use as.SendEventSynced(...) because application services can't use the /sync API
+				txnId := getTxnID("sendInsertionAndEnsureBackfilled-txn")
+				insertionSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEvent.Type, txnId}, client.WithJSONBody(t, insertionEvent.Content))
+				insertionSendBody := client.ParseJSON(t, insertionSendRes)
+				insertionEventID := client.GetJSONFieldStr(t, insertionSendBody, "event_id")
+				// Make sure the insertion event has reached the homeserver
+				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+					return ev.Get("event_id").Str == insertionEventID
+				}))
+
+				createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
+
+				batchSendRes := batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					batchID,
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
+					// Status
+					200,
+				)
+				batchSendResBody := client.ParseJSON(t, batchSendRes)
+				historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+
+				// Send the marker event which lets remote homeservers know there are
+				// some historical messages back at the given insertion event.
+				sendMarkerAndEnsureBackfilled(t, as, alice, roomID, insertionEventID)
+
+				// Join the room from a remote homeserver after the historical messages were sent
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+				// Make sure all of the events have been backfilled
+				fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
+					if ev.Get("event_id").Str == eventIdBefore {
+						return true
+					}
+
+					return false
+				})
+
+				// FIXME: In the future, we should probably replace the following logic
+				// with `validateBatchSendRes` to re-use and have some more robust
+				// assertion logic here. We're currently not using it because the message
+				// order isn't quite perfect when a remote federated homeserver gets
+				// backfilled.
+				// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+				}))
+
+				must.MatchResponse(t, messagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						}, nil),
+					},
+				})
+			})
+
+			t.Run("Historical messages are visible when already joined on federated server", func(t *testing.T) {
+				t.Parallel()
+
+				roomID := as.CreateRoom(t, createPublicRoomOpts)
+				alice.JoinRoom(t, roomID, nil)
+
+				// Join the room from a remote homeserver before any historical messages are sent
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
+				eventIdBefore := eventIDsBefore[0]
+				timeAfterEventBefore := time.Now()
+
+				createMessagesInRoom(t, alice, roomID, 10, "eventIDsAfter")
+
+				// Mimic scrollback just through the latest messages
+				remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir": []string{"b"},
+					// Limited so we can only see a portion of the latest messages
+					"limit": []string{"5"},
+				}))
+
+				numMessagesSent := 2
+				batchSendRes := batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					"",
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
+					// Status
+					200,
+				)
+				batchSendResBody := client.ParseJSON(t, batchSendRes)
+				historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+				baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
+
+				if len(historicalEventIDs) != numMessagesSent {
+					t.Fatalf("Expected %d event_ids in the response that correspond to the %d events we sent in the request but saw %d: %s", numMessagesSent, numMessagesSent, len(historicalEventIDs), historicalEventIDs)
 				}
 
-				return false
+				beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+				}))
+				beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
+				eventDebugStringsFromBeforeMarkerResponse := mustGetRelevantEventDebugStringsFromMessagesResponse(t, "chunk", beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
+				// Since the original body can only be read once, create a new one from the body bytes we just read
+				beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
+
+				// Make sure the history isn't visible before we expect it to be there.
+				// This is to avoid some bug in the homeserver using some unknown
+				// mechanism to distribute the historical messages to other homeservers.
+				must.MatchResponse(t, beforeMarkerMessagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONArrayEach("chunk", func(r gjson.Result) error {
+							// Throw if we find one of the historical events in the message response
+							for _, historicalEventID := range historicalEventIDs {
+								if r.Get("event_id").Str == historicalEventID {
+									return fmt.Errorf("Historical event (%s) found on remote homeserver before marker event was sent out\nmessage response (%d): %v\nhistoricalEventIDs (%d): %v", historicalEventID, len(eventDebugStringsFromBeforeMarkerResponse), eventDebugStringsFromBeforeMarkerResponse, len(historicalEventIDs), historicalEventIDs)
+								}
+							}
+
+							return nil
+						}),
+					},
+				})
+
+				// Send the marker event which lets remote homeservers know there are
+				// some historical messages back at the given insertion event.
+				sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
+
+				// FIXME: In the future, we should probably replace the following logic
+				// with `validateBatchSendRes` to re-use and have some more robust
+				// assertion logic here. We're currently not using it because the message
+				// order isn't quite perfect when a remote federated homeserver gets
+				// backfilled.
+				// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+				remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+				}))
+
+				// Make sure all of the historical messages are visible when we scrollback again
+				must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						}, nil),
+					},
+				})
 			})
 
-			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
+			t.Run("When messages have already been scrolled back through, new historical messages are visible in next scroll back on federated server", func(t *testing.T) {
+				t.Parallel()
 
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
-		})
+				roomID := as.CreateRoom(t, createPublicRoomOpts)
+				alice.JoinRoom(t, roomID, nil)
 
-		t.Run("Historical messages are visible when joining on federated server - pre-made insertion event", func(t *testing.T) {
-			t.Parallel()
+				// Join the room from a remote homeserver before any historical messages are sent
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
-			roomID := as.CreateRoom(t, createPublicRoomOpts)
-			alice.JoinRoom(t, roomID, nil)
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
+				eventIdBefore := eventIDsBefore[0]
+				timeAfterEventBefore := time.Now()
 
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdBefore := eventIDsBefore[0]
-			timeAfterEventBefore := time.Now()
+				createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
 
-			// Create insertion event in the normal DAG
-			batchID := "mynextBatchID123"
-			insertionEvent := b.Event{
-				Type: insertionEventType,
-				Content: map[string]interface{}{
-					nextBatchIDContentField: batchID,
-					historicalContentField:  true,
-				},
-			}
-			// We can't use as.SendEventSynced(...) because application services can't use the /sync API
-			txnId := getTxnID("sendInsertionAndEnsureBackfilled-txn")
-			insertionSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEvent.Type, txnId}, client.WithJSONBody(t, insertionEvent.Content))
-			insertionSendBody := client.ParseJSON(t, insertionSendRes)
-			insertionEventID := client.GetJSONFieldStr(t, insertionSendBody, "event_id")
-			// Make sure the insertion event has reached the homeserver
-			alice.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
-				return ev.Get("event_id").Str == insertionEventID
-			})
+				// Mimic scrollback to all of the messages
+				// scrollbackMessagesRes
+				remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+				}))
 
-			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 3)
+				// Historical messages are inserted where we have already scrolled back to
+				numMessagesSent := 2
+				batchSendRes := batchSendHistoricalMessages(
+					t,
+					as,
+					roomID,
+					eventIdBefore,
+					"",
+					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
+					// Status
+					200,
+				)
+				batchSendResBody := client.ParseJSON(t, batchSendRes)
+				historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+				baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
 
-			batchSendRes := batchSendHistoricalMessages(
-				t,
-				as,
-				roomID,
-				eventIdBefore,
-				batchID,
-				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
-				// Status
-				200,
-			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-
-			// Join the room from a remote homeserver after the historical messages were sent
-			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
-
-			// Make sure all of the events have been backfilled
-			fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
-				if ev.Get("event_id").Str == eventIdBefore {
-					return true
+				if len(historicalEventIDs) != numMessagesSent {
+					t.Fatalf("Expected %d event_ids in the response that correspond to the %d events we sent in the request but saw %d: %s", numMessagesSent, numMessagesSent, len(historicalEventIDs), historicalEventIDs)
 				}
 
-				return false
-			})
-
-			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			must.MatchResponse(t, messagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
-		})
-
-		t.Run("Historical messages are visible when already joined on federated server", func(t *testing.T) {
-			t.Parallel()
-
-			roomID := as.CreateRoom(t, createPublicRoomOpts)
-			alice.JoinRoom(t, roomID, nil)
-
-			// Join the room from a remote homeserver before any historical messages are sent
-			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
-
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdBefore := eventIDsBefore[0]
-			timeAfterEventBefore := time.Now()
-
-			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 10)
-
-			// Mimic scrollback just through the latest messages
-			remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir": []string{"b"},
-				// Limited so we can only see a portion of the latest messages
-				"limit": []string{"5"},
-			}))
-
-			numMessagesSent := 2
-			batchSendRes := batchSendHistoricalMessages(
-				t,
-				as,
-				roomID,
-				eventIdBefore,
-				"",
-				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
-				// Status
-				200,
-			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-			baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
-
-			if len(historicalEventIDs) != numMessagesSent {
-				t.Fatalf("Expected %d event_ids in the response that correspond to the %d events we sent in the request but saw %d: %s", numMessagesSent, numMessagesSent, len(historicalEventIDs), historicalEventIDs)
-			}
-
-			beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
-			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody)
-			// Since the original body can only be read once, create a new one from the body bytes we just read
-			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
-
-			// Make sure the history isn't visible before we expect it to be there.
-			// This is to avoid some bug in the homeserver using some unknown
-			// mechanism to distribute the historical messages to other homeservers.
-			must.MatchResponse(t, beforeMarkerMessagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONArrayEach("chunk", func(r gjson.Result) error {
-						// Throw if we find one of the historical events in the message response
-						for _, historicalEventID := range historicalEventIDs {
-							if r.Get("event_id").Str == historicalEventID {
-								return fmt.Errorf("Historical event (%s) found on remote homeserver before marker event was sent out\nmessage response (%d): %v\nhistoricalEventIDs (%d): %v", historicalEventID, len(eventDebugStringsFromBeforeMarkerResponse), eventDebugStringsFromBeforeMarkerResponse, len(historicalEventIDs), historicalEventIDs)
+				beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+				}))
+				beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
+				eventDebugStringsFromBeforeMarkerResponse := mustGetRelevantEventDebugStringsFromMessagesResponse(t, "chunk", beforeMarkerMesssageResBody, relevantToScrollbackEventFilter)
+				// Since the original body can only be read once, create a new one from the body bytes we just read
+				beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
+				// Make sure the history isn't visible before we expect it to be there.
+				// This is to avoid some bug in the homeserver using some unknown
+				// mechanism to distribute the historical messages to other homeservers.
+				must.MatchResponse(t, beforeMarkerMessagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONArrayEach("chunk", func(r gjson.Result) error {
+							// Throw if we find one of the historical events in the message response
+							for _, historicalEventID := range historicalEventIDs {
+								if r.Get("event_id").Str == historicalEventID {
+									return fmt.Errorf("Historical event (%s) found on remote homeserver before marker event was sent out\nmessage response (%d): %v\nhistoricalEventIDs (%d): %v", historicalEventID, len(eventDebugStringsFromBeforeMarkerResponse), eventDebugStringsFromBeforeMarkerResponse, len(historicalEventIDs), historicalEventIDs)
+								}
 							}
-						}
+							return nil
+						}),
+					},
+				})
 
-						return nil
-					}),
-				},
-			})
+				// Send the marker event which lets remote homeservers know there are
+				// some historical messages back at the given insertion event.
+				sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
 
-			// Send the marker event
-			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
+				// FIXME: In the future, we should probably replace the following logic
+				// with `validateBatchSendRes` to re-use and have some more robust
+				// assertion logic here. We're currently not using it because the message
+				// order isn't quite perfect when a remote federated homeserver gets
+				// backfilled.
+				// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
+				remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+				}))
 
-			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			// Make sure all of the historical messages are visible when we scrollback again
-			must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
-			})
-		})
-
-		t.Run("When messages have already been scrolled back through, new historical messages are visible in next scroll back on federated server", func(t *testing.T) {
-			t.Parallel()
-
-			roomID := as.CreateRoom(t, createPublicRoomOpts)
-			alice.JoinRoom(t, roomID, nil)
-
-			// Join the room from a remote homeserver before any historical messages are sent
-			remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
-
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
-			eventIdBefore := eventIDsBefore[0]
-			timeAfterEventBefore := time.Now()
-
-			// eventIDsAfter
-			createMessagesInRoom(t, alice, roomID, 3)
-
-			// Mimic scrollback to all of the messages
-			// scrollbackMessagesRes
-			remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			// Historical messages are inserted where we have already scrolled back to
-			numMessagesSent := 2
-			batchSendRes := batchSendHistoricalMessages(
-				t,
-				as,
-				roomID,
-				eventIdBefore,
-				"",
-				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
-				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, numMessagesSent),
-				// Status
-				200,
-			)
-			batchSendResBody := client.ParseJSON(t, batchSendRes)
-			historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-			baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
-
-			if len(historicalEventIDs) != numMessagesSent {
-				t.Fatalf("Expected %d event_ids in the response that correspond to the %d events we sent in the request but saw %d: %s", numMessagesSent, numMessagesSent, len(historicalEventIDs), historicalEventIDs)
-			}
-
-			beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-			beforeMarkerMesssageResBody := client.ParseJSON(t, beforeMarkerMessagesRes)
-			eventDebugStringsFromBeforeMarkerResponse := getRelevantEventDebugStringsFromMessagesResponse(t, beforeMarkerMesssageResBody)
-			// Since the original body can only be read once, create a new one from the body bytes we just read
-			beforeMarkerMessagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(beforeMarkerMesssageResBody))
-			// Make sure the history isn't visible before we expect it to be there.
-			// This is to avoid some bug in the homeserver using some unknown
-			// mechanism to distribute the historical messages to other homeservers.
-			must.MatchResponse(t, beforeMarkerMessagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONArrayEach("chunk", func(r gjson.Result) error {
-						// Throw if we find one of the historical events in the message response
-						for _, historicalEventID := range historicalEventIDs {
-							if r.Get("event_id").Str == historicalEventID {
-								return fmt.Errorf("Historical event (%s) found on remote homeserver before marker event was sent out\nmessage response (%d): %v\nhistoricalEventIDs (%d): %v", historicalEventID, len(eventDebugStringsFromBeforeMarkerResponse), eventDebugStringsFromBeforeMarkerResponse, len(historicalEventIDs), historicalEventIDs)
-							}
-						}
-						return nil
-					}),
-				},
-			})
-
-			// Send the marker event
-			sendMarkerAndEnsureBackfilled(t, as, remoteCharlie, roomID, baseInsertionEventID)
-
-			remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-				"dir":   []string{"b"},
-				"limit": []string{"100"},
-			}))
-
-			// Make sure all of the historical messages are visible when we scrollback again
-			must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-						return r.Get("event_id").Str
-					}, nil),
-				},
+				// Make sure all of the historical messages are visible when we scrollback again
+				must.MatchResponse(t, remoteMessagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						}, nil),
+					},
+				})
 			})
 		})
 
@@ -809,12 +896,12 @@ func TestImportHistoricalMessages(t *testing.T) {
 				alice.JoinRoom(t, roomID, nil)
 
 				// Create the "live" event we are going to import our historical events next to
-				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
 				// Create eventIDsAfter to avoid the "No forward extremities left!" 500 error from Synapse
-				createMessagesInRoom(t, alice, roomID, 2)
+				createMessagesInRoom(t, alice, roomID, 2, "eventIDsAfter")
 
 				// Import a historical event
 				batchSendRes := batchSendHistoricalMessages(
@@ -828,26 +915,16 @@ func TestImportHistoricalMessages(t *testing.T) {
 					// Status
 					200,
 				)
+				// Make sure we can see all of the historical messages
+				validateBatchSendRes(t, as, roomID, batchSendRes, false)
+				// Grab the `next_batch_id` for the next batch
 				batchSendResBody := client.ParseJSON(t, batchSendRes)
-				historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
 				nextBatchID := client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
 
-				messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"dir":   []string{"b"},
-					"limit": []string{"100"},
-				}))
-
-				must.MatchResponse(t, messagesRes, match.HTTPResponse{
-					JSON: []match.JSON{
-						match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-							return r.Get("event_id").Str
-						}, nil),
-					},
-				})
-
-				// Now try to do a subsequent batch send. This will make sure
-				// that insertion events are stored/tracked and can be matched up in the next batch
-				batchSendHistoricalMessages(
+				// Now try to do a subsequent batch send. This will make sure that
+				// insertion events are stored/tracked and can be matched up in the next
+				// batch
+				batchSendRes1 := batchSendHistoricalMessages(
 					t,
 					as,
 					roomID,
@@ -858,6 +935,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 					// Status
 					200,
 				)
+				// Make sure we can see all of the historical messages
+				validateBatchSendRes(t, as, roomID, batchSendRes1, false)
 			})
 
 			t.Run("Not allowed to redact MSC2716 insertion, batch, marker events", func(t *testing.T) {
@@ -867,7 +946,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				alice.JoinRoom(t, roomID, nil)
 
 				// Create the "live" event we are going to import our historical events next to
-				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 				eventIdBefore := eventIDsBefore[0]
 				timeAfterEventBefore := time.Now()
 
@@ -888,7 +967,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				batchEventID := client.GetJSONFieldStr(t, batchSendResBody, "batch_event_id")
 				baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
 
-				// Send the marker event
+				// Send the marker event which lets remote homeservers know there are
+				// some historical messages back at the given insertion event.
 				markerEventID := sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
 
 				redactEventID(t, alice, roomID, insertionEventID, 403)
@@ -924,6 +1004,17 @@ func reversed(in []string) []string {
 		out[i] = in[len(in)-i-1]
 	}
 	return out
+}
+
+// Find a given "needle" string in a list of strings, the haystack
+func includes(needle string, haystack []string) bool {
+	for _, item := range haystack {
+		if needle == item {
+			return true
+		}
+	}
+
+	return false
 }
 
 func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string, check func(gjson.Result) bool) {
@@ -962,33 +1053,44 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 	}
 }
 
-func isRelevantEvent(r gjson.Result) bool {
-	return len(r.Get("content").Get("body").Str) > 0 ||
-		r.Get("type").Str == insertionEventType ||
-		r.Get("type").Str == batchEventType ||
-		r.Get("type").Str == markerEventType
+func historicalEventFilter(r gjson.Result) bool {
+	// This includes messages, insertion, batch, and marker events because we
+	// include the historical field on all of them.
+	return r.Get("content").Get(strings.ReplaceAll(historicalContentField, ".", "\\.")).Exists()
 }
 
-func getRelevantEventDebugStringsFromMessagesResponse(t *testing.T, body []byte) (eventIDsFromResponse []string) {
+func relevantToScrollbackEventFilter(r gjson.Result) bool {
+	return r.Get("type").Str == "m.room.message" || historicalEventFilter(r)
+}
+
+func mustGetRelevantEventDebugStringsFromMessagesResponse(t *testing.T, wantKey string, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string) {
 	t.Helper()
 
-	wantKey := "chunk"
+	debugStrings, err := getRelevantEventDebugStringsFromMessagesResponse(wantKey, body, eventFilter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return debugStrings
+}
+
+func getRelevantEventDebugStringsFromMessagesResponse(wantKey string, body []byte, eventFilter func(gjson.Result) bool) (eventIDsFromResponse []string, err error) {
 	res := gjson.GetBytes(body, wantKey)
 	if !res.Exists() {
-		t.Fatalf("missing key '%s'", wantKey)
+		return nil, fmt.Errorf("missing key '%s'", wantKey)
 	}
 	if !res.IsArray() {
-		t.Fatalf("key '%s' is not an array (was %s)", wantKey, res.Type)
+		return nil, fmt.Errorf("key '%s' is not an array (was %s)", wantKey, res.Type)
 	}
 
 	res.ForEach(func(key, r gjson.Result) bool {
-		if isRelevantEvent(r) {
+		if eventFilter(r) {
 			eventIDsFromResponse = append(eventIDsFromResponse, r.Get("event_id").Str+" ("+r.Get("content").Get("body").Str+")")
 		}
 		return true
 	})
 
-	return eventIDsFromResponse
+	return eventIDsFromResponse, nil
 }
 
 // ensureVirtualUserRegistered makes sure the user is registered for the homeserver regardless
@@ -1017,11 +1119,11 @@ func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocal
 	}
 }
 
+// Send the marker event which lets remote homeservers know there are
+// some historical messages back at the given insertion event.
 func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSAPI, roomID, insertionEventID string) (markerEventID string) {
 	t.Helper()
 
-	// Send a marker event to let all of the homeservers know about the
-	// insertion point where all of the historical messages are at
 	markerEvent := b.Event{
 		Type: markerEventType,
 		Content: map[string]interface{}{
@@ -1035,9 +1137,9 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 	markerEventID = client.GetJSONFieldStr(t, markerSendBody, "event_id")
 
 	// Make sure the marker event has reached the remote homeserver
-	c.SyncUntilTimelineHas(t, roomID, func(ev gjson.Result) bool {
+	c.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 		return ev.Get("event_id").Str == markerEventID
-	})
+	}))
 
 	// Make sure all of the base insertion event has been backfilled
 	// after the marker was received
@@ -1052,14 +1154,14 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 	return markerEventID
 }
 
-func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count int) (eventIDs []string) {
+func createMessagesInRoom(t *testing.T, c *client.CSAPI, roomID string, count int, messageSuffix string) (eventIDs []string) {
 	eventIDs = make([]string, count)
 	for i := 0; i < len(eventIDs); i++ {
 		newEvent := b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
-				"body":    fmt.Sprintf("Message %d", i),
+				"body":    fmt.Sprintf("Message %d (%s)", i, messageSuffix),
 			},
 		}
 		newEventId := c.SendEventSynced(t, roomID, newEvent)
@@ -1109,7 +1211,8 @@ func createJoinStateEventsForBatchSendRequest(
 			"sender":           virtualUserID,
 			"origin_server_ts": insertOriginServerTs,
 			"content": map[string]interface{}{
-				"membership": "join",
+				"membership":  "join",
+				"displayname": fmt.Sprintf("some-display-name-for-%s", virtualUserID),
 			},
 			"state_key": virtualUserID,
 		}
@@ -1210,4 +1313,164 @@ func batchSendHistoricalMessages(
 	batchCount++
 
 	return res
+}
+
+// Verify that the batch of historical messages looks correct and in order
+// (newest -> oldest) from /messages?dir=b. We can also optionally check that
+// the historical state resolves for that chunk of messages.
+//
+// Note: the historical state will only resolve correctly if the first message
+// of `/messages` is one of messages in the historical batch.
+func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSendRes *http.Response, validateState bool) {
+	t.Helper()
+
+	batchSendResBody0 := client.ParseJSON(t, batchSendRes)
+	// Since the original body can only be read once, create a new one from the
+	// body bytes we just read
+	batchSendRes.Body = ioutil.NopCloser(bytes.NewBuffer(batchSendResBody0))
+
+	historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody0, "event_ids")
+	stateEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody0, "state_event_ids")
+	batchEventID := client.GetJSONFieldStr(t, batchSendResBody0, "batch_event_id")
+	insertionEventID := client.GetJSONFieldStr(t, batchSendResBody0, "insertion_event_id")
+	baseInsertionEventID := gjson.GetBytes(batchSendResBody0, "base_insertion_event_id").Str
+
+	// Expected list is ordered from newest -> oldest event time
+	var expectedEventIDOrder []string
+	if baseInsertionEventID != "" {
+		expectedEventIDOrder = append(expectedEventIDOrder, baseInsertionEventID)
+	}
+	expectedEventIDOrder = append(expectedEventIDOrder, batchEventID)
+	expectedEventIDOrder = append(expectedEventIDOrder, reversed(historicalEventIDs)...)
+	expectedEventIDOrder = append(expectedEventIDOrder, insertionEventID)
+
+	if validateState {
+		// Get a pagination token for the newest-in-time event in the historical batch itself
+		contextRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", expectedEventIDOrder[0]}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			"limit": []string{"0"},
+		}))
+		contextResBody := client.ParseJSON(t, contextRes)
+		batchStartPaginationToken := client.GetJSONFieldStr(t, contextResBody, "end")
+
+		// Fetch a chunk of `/messages` which only contains the historical batch. We
+		// want to do this because `/messages` only returns the state for the first
+		// message in the `chunk` and we want to be able assert that the historical
+		// state is able to be resolved.
+		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			// Go backwards (newest -> oldest) (same direction as if you were using scrollback)
+			"dir": []string{"b"},
+			// From the newest-in-time event in the historical batch
+			"from": []string{batchStartPaginationToken},
+			// We are aiming to scrollback to the oldest-in-time event from the
+			// historical batch
+			"limit": []string{fmt.Sprintf("%d", len(expectedEventIDOrder))},
+			// We add these options to the filter so we get member events in the state field
+			"filter": []string{"{\"lazy_load_members\":true,\"include_redundant_members\":true}"},
+		}))
+
+		must.MatchResponse(t, messagesRes, match.HTTPResponse{
+			JSON: []match.JSON{
+				// Double-check that we're in the right place of scrollback
+				matcherJSONEventIDArrayInOrder("chunk",
+					expectedEventIDOrder,
+					historicalEventFilter,
+				),
+				// Make sure the historical m.room.member join state event resolves
+				// for the given chunk of messages in scrollback. The member event
+				// will include the displayname and avatar.
+				match.JSONCheckOffAllowUnwanted("state", makeInterfaceSlice(stateEventIDs), func(r gjson.Result) interface{} {
+					return r.Get("event_id").Str
+				}, nil),
+			},
+		})
+	}
+
+	// Make sure the historical events appear in scrollback without jumping back
+	// in time specifically.
+	fullMessagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		"dir":   []string{"b"},
+		"limit": []string{"100"},
+	}))
+	must.MatchResponse(t, fullMessagesRes, match.HTTPResponse{
+		JSON: []match.JSON{
+			matcherJSONEventIDArrayInOrder("chunk",
+				expectedEventIDOrder,
+				historicalEventFilter,
+			),
+		},
+	})
+}
+
+// matcherJSONEventIDArrayInOrder loops through `jsonArrayKey` in the response
+// to find the sliding window of expected event ID's(`expectedEventIDOrder`)
+// somewhere in the array in order. The expected list can start anywhere in the
+// overall list filtered by `eventFilter`.
+func matcherJSONEventIDArrayInOrder(jsonArrayKey string, expectedEventIDOrder []string, eventFilter func(gjson.Result) bool) match.JSON {
+	return func(body []byte) error {
+		if len(expectedEventIDOrder) == 0 {
+			return fmt.Errorf("expectedEventIDOrder can not be an empty list")
+		}
+
+		// Copy the array by slice so we can modify it as we iterate in the foreach loop.
+		// We save the full untouched `expectedEventIDOrder` for use in the log messages
+		workingExpectedEventIDOrder := expectedEventIDOrder
+
+		var res gjson.Result
+		if jsonArrayKey == "" {
+			res = gjson.ParseBytes(body)
+		} else {
+			res = gjson.GetBytes(body, jsonArrayKey)
+		}
+
+		if !res.Exists() {
+			return fmt.Errorf("missing key '%s'", jsonArrayKey)
+		}
+		if !res.IsArray() {
+			return fmt.Errorf("key '%s' is not an array", jsonArrayKey)
+		}
+
+		eventDebugStringsFromResponse, err := getRelevantEventDebugStringsFromMessagesResponse("chunk", body, eventFilter)
+		if err != nil {
+			return err
+		}
+
+		// Loop through the overall event list
+		foundFirstEvent := false
+		res.ForEach(func(_, r gjson.Result) bool {
+			eventID := r.Get("event_id").Str
+			nextEventIdInOrder := workingExpectedEventIDOrder[0]
+
+			// We need to find the start of the sliding window inside the overall
+			// event list
+			if !foundFirstEvent && eventID == nextEventIdInOrder {
+				foundFirstEvent = true
+			}
+
+			// Once we found the first event, find all events in order
+			if foundFirstEvent && eventFilter(r) {
+				if r.Get("event_id").Str != nextEventIdInOrder {
+					err = fmt.Errorf("Next event found was %s but expected %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", r.Get("event_id").Str, nextEventIdInOrder, len(eventDebugStringsFromResponse), eventDebugStringsFromResponse, len(expectedEventIDOrder), expectedEventIDOrder)
+					return false
+				}
+
+				// Now that we found it, pop the message off the expected list
+				workingExpectedEventIDOrder = workingExpectedEventIDOrder[1:]
+			}
+
+			// Found all of the expected events, stop iterating
+			if len(workingExpectedEventIDOrder) == 0 {
+				return false
+			}
+
+			return true
+		})
+
+		// There was some left-over events in the list but we should have found all
+		// of them
+		if len(workingExpectedEventIDOrder) != 0 {
+			return fmt.Errorf("Expected all events to be matched in message response but there were some left-over events (%d): %s\nActualEvents (%d): %v\nExpectedEvents (%d): %v", len(workingExpectedEventIDOrder), workingExpectedEventIDOrder, len(eventDebugStringsFromResponse), eventDebugStringsFromResponse, len(expectedEventIDOrder), expectedEventIDOrder)
+		}
+
+		return err
+	}
 }

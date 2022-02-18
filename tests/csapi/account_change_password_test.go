@@ -18,7 +18,7 @@ func TestChangePassword(t *testing.T) {
 	defer deployment.Destroy(t)
 	password1 := "superuser"
 	password2 := "my_new_password"
-	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", password1)
+	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", password1, false)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	sessionTest := createSession(t, deployment, "test_change_password_user", "superuser")
 	// sytest: After changing password, can't log in with old password

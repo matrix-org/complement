@@ -10,7 +10,7 @@ Complement is a black box integration testing framework for Matrix homeservers.
 You need to have Go and Docker installed, as well as `libolm3` and `libolm-dev`. Then:
 
 ```
-$ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl COMPLEMENT_BASE_IMAGE_ARGS='-foo bar -baz 1' go test -v ./tests/...
+$ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl go test -v ./tests/...
 ```
 
 You can install `libolm3` on Debian using something like:
@@ -41,7 +41,8 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(
 For instance, for Dendrite:
 ```
 # build a docker image for Dendrite...
-$ (cd dockerfiles && docker build -t complement-dendrite -f Dendrite.Dockerfile .)
+$ git clone https://github.com/matrix-org/dendrite
+$ (cd dendrite && docker build -t complement-dendrite -f build/scripts/Complement.Dockerfile .)
 # ...and test it
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests/...
 ```
@@ -70,11 +71,41 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 
 - The Dockerfile must `EXPOSE 8008` and `EXPOSE 8448` for client and federation traffic respectively.
 - The homeserver should run and listen on these ports.
+- The homeserver should become healthy within `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS` if a `HEALTHCHECK` is specified in the Dockerfile.
 - The homeserver needs to `200 OK` requests to `GET /_matrix/client/versions`.
 - The homeserver needs to manage its own storage within the image.
 - The homeserver needs to accept the server name given by the environment variable `SERVER_NAME` at runtime.
 - The homeserver needs to assume dockerfile `CMD` or `ENTRYPOINT` instructions will be run multiple times.
-- The homeserver can use the CA certificate mounted at /ca to create its own TLS cert (see [Complement PKI](README.md#complement-pki)).
+- The homeserver needs to use `complement` as the registration shared secret for `/_synapse/admin/v1/register`, if supported. If this endpoint 404s then these tests are skipped.
+
+
+### Developing locally
+
+If you want to write Complement tests _and_ hack on a homeserver implementation at the same time it can be very awkward
+to have to `docker build` the image all the time. To resolve this, Complement support "host mounts" which mount a directory
+from the host to the container. This is set via `COMPLEMENT_HOST_MOUNTS`:
+
+```
+COMPLEMENT_HOST_MOUNTS='/my/local/dir:/container/dir;/another/local/dir:/container/dir2:ro'
+
+which is:
+  - /my/local/dir:/container/dir
+  - /another/local/dir:/container/dir2:ro
+
+which is of the form:
+  - HOST:CONTAINER[:ro] where :ro makes the mount read-only.
+```
+
+For example, for Dendrite: `COMPLEMENT_HOST_MOUNTS='/your/local/dendrite:/dendrite:ro;/your/go/path:/go:ro'`.
+
+### Getting prettier output
+
+The default output isn't particularly nice to read. You can use [gotestfmt](https://github.com/haveyoudebuggedit/gotestfmt)
+to make this very pretty. To do so, ask for JSON output via `go test -json` then pipe the output to `gotestfmt`.
+If you are doing this in CI, make sure to `set -o pipefail` or else test failures will NOT result in a non-zero exit code
+as `gotestfmt`'s exit code (0 as it successfully printed) will replace the previous commands exit code.
+See Complement's [Github Actions](https://github.com/matrix-org/complement/blob/master/.github/workflows/ci.yaml) file
+for an example of how to do this correctly.
 
 ## Writing tests
 
@@ -106,20 +137,16 @@ Because **M**<sup>*C*</sup> = **1** - **M**
 ## Complement PKI
 
 As the Matrix federation protocol expects federation endpoints to be served with valid TLS certs,
-Complement will create a self-signed CA cert to use for creating valid TLS certs in homeserver containers.
-
-To enable it pass `COMPLEMENT_CA=true` to complement or the docker container.
-If not used, the homeserver needs to not validate the cert when federating.
-To check whether complements runs in PKI mode, `COMPLEMENT_CA` is passed through to the homeserver containers.
-
-The public key to add to the trusted cert store (e.g., /etc/ca-certificates) is mounted at: `/ca/ca.crt`
-The private key to sign the created TLS cert is mounted at: `/ca/ca.key`
+Complement will create a self-signed CA cert to use for creating valid TLS certs in homeserver containers,
+and mount these files onto your homeserver container:
+- `/complement/ca/ca.crt`: the public key to add to the trusted cert store (e.g., /etc/ca-certificates)
+- `/complement/ca.key`: the private key to sign the created TLS cert
 
 For example, to sign your certificate for the homeserver, run at each container start (Ubuntu):
 ```
 openssl genrsa -out $SERVER_NAME.key 2048
 openssl req -new -sha256 -key $SERVER_NAME.key -subj "/C=US/ST=CA/O=MyOrg, Inc./CN=$SERVER_NAME" -out $SERVER_NAME.csr
-openssl x509 -req -in $SERVER_NAME.csr -CA /ca/ca.crt -CAkey /ca/ca.key -CAcreateserial -out $SERVER_NAME.crt -days 1 -sha256
+openssl x509 -req -in $SERVER_NAME.csr -CA /complement/ca/ca.crt -CAkey /complement/ca/ca.key -CAcreateserial -out $SERVER_NAME.crt -days 1 -sha256
 ```
 
 To add the CA cert to your trust store (Ubuntu):
@@ -133,44 +160,96 @@ update-ca-certificates
 ```
 $ go build ./cmd/sytest-coverage
 $ ./sytest-coverage -v
-10apidoc/01register 3/9 tests
+10apidoc/01register 3/10 tests
     × GET /register yields a set of flows
+    × POST $ep_name admin with shared secret
+    × POST $ep_name with shared secret
+    × POST $ep_name with shared secret disallows symbols
+    × POST $ep_name with shared secret downcases capitals
+    × POST /register allows registration of usernames with '$chr'
     ✓ POST /register can create a user
     ✓ POST /register downcases capitals in usernames
-    ✓ POST /register returns the same device_id as that in the request
     × POST /register rejects registration of usernames with '$q'
-    × POST $ep_name with shared secret
-    × POST $ep_name admin with shared secret
-    × POST $ep_name with shared secret downcases capitals
-    × POST $ep_name with shared secret disallows symbols
+    ✓ POST /register returns the same device_id as that in the request
 
 10apidoc/01request-encoding 1/1 tests
     ✓ POST rejects invalid utf-8 in JSON
 
 10apidoc/02login 6/6 tests
     ✓ GET /login yields a set of flows
-    ✓ POST /login can log in as a user
-    ✓ POST /login returns the same device_id as that in the request
-    ✓ POST /login can log in as a user with just the local part of the id
     ✓ POST /login as non-existing user is rejected
+    ✓ POST /login can log in as a user
+    ✓ POST /login can log in as a user with just the local part of the id
+    ✓ POST /login returns the same device_id as that in the request
     ✓ POST /login wrong password is rejected
 
-10apidoc/03events-initial 0/2 tests
 10apidoc/04version 1/1 tests
     ✓ Version responds 200 OK with valid structure
 
-10apidoc/10profile-displayname 0/2 tests
-10apidoc/11profile-avatar_url 0/2 tests
-10apidoc/12device_management 0/8 tests
+10apidoc/10profile-displayname 2/2 tests
+    ✓ GET /profile/:user_id/displayname publicly accessible
+    ✓ PUT /profile/:user_id/displayname sets my name
+
+10apidoc/11profile-avatar_url 2/2 tests
+    ✓ GET /profile/:user_id/avatar_url publicly accessible
+    ✓ PUT /profile/:user_id/avatar_url sets my avatar
+
+10apidoc/12device_management 2/8 tests
+    × DELETE /device/{deviceId}
+    × DELETE /device/{deviceId} requires UI auth user to match device owner
+    × DELETE /device/{deviceId} with no body gives a 401
+    ✓ GET /device/{deviceId}
+    ✓ GET /device/{deviceId} gives a 404 for unknown devices
+    × GET /devices
+    × PUT /device/{deviceId} gives a 404 for unknown devices
+    × PUT /device/{deviceId} updates device fields
+
 10apidoc/13ui-auth 0/4 tests
 10apidoc/20presence 2/2 tests
     ✓ GET /presence/:user_id/status fetches initial status
     ✓ PUT /presence/:user_id/status updates my presence
 
-10apidoc/30room-create 0/10 tests
-10apidoc/31room-state 0/14 tests
-10apidoc/32room-alias 0/2 tests
-10apidoc/33room-members 0/8 tests
+10apidoc/30room-create 10/10 tests
+    ✓ Can /sync newly created room
+    ✓ POST /createRoom creates a room with the given version
+    ✓ POST /createRoom ignores attempts to set the room version via creation_content
+    ✓ POST /createRoom makes a private room
+    ✓ POST /createRoom makes a private room with invites
+    ✓ POST /createRoom makes a public room
+    ✓ POST /createRoom makes a room with a name
+    ✓ POST /createRoom makes a room with a topic
+    ✓ POST /createRoom rejects attempts to create rooms with numeric versions
+    ✓ POST /createRoom rejects attempts to create rooms with unknown versions
+
+10apidoc/31room-state 13/13 tests
+    ✓ GET /directory/room/:room_alias yields room ID
+    ✓ GET /joined_rooms lists newly-created room
+    ✓ GET /publicRooms lists newly-created room
+    ✓ GET /rooms/:room_id/joined_members fetches my membership
+    ✓ GET /rooms/:room_id/state fetches entire room state
+    ✓ GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership
+    ✓ GET /rooms/:room_id/state/m.room.member/:user_id?format=event fetches my membership event
+    ✓ GET /rooms/:room_id/state/m.room.name gets name
+    ✓ GET /rooms/:room_id/state/m.room.power_levels fetches powerlevels
+    ✓ GET /rooms/:room_id/state/m.room.topic gets topic
+    ✓ POST /createRoom with creation content
+    ✓ POST /rooms/:room_id/state/m.room.name sets name
+    ✓ POST /rooms/:room_id/state/m.room.topic sets topic
+
+10apidoc/32room-alias 2/2 tests
+    ✓ GET /rooms/:room_id/aliases lists aliases
+    ✓ PUT /directory/room/:room_alias creates alias
+
+10apidoc/33room-members 3/8 tests
+    ✓ POST /join/:room_alias can join a room
+    × POST /join/:room_alias can join a room with custom content
+    ✓ POST /join/:room_id can join a room
+    × POST /join/:room_id can join a room with custom content
+    × POST /rooms/:room_id/ban can ban a user
+    × POST /rooms/:room_id/invite can send an invite
+    ✓ POST /rooms/:room_id/join can join a room
+    × POST /rooms/:room_id/leave can leave a room
+
 10apidoc/34room-messages 0/5 tests
 10apidoc/35room-typing 0/1 tests
 10apidoc/36room-levels 0/4 tests
@@ -178,60 +257,90 @@ $ ./sytest-coverage -v
 10apidoc/38room-read-marker 0/1 tests
 10apidoc/40content 0/2 tests
 10apidoc/45server-capabilities 0/2 tests
-11register 0/8 tests
+11register 0/7 tests
 12login/01threepid-and-password 0/1 tests
 12login/02cas 0/3 tests
 13logout 0/4 tests
-14account/01change-password 5/7 tests
-    ✓ After changing password, can't log in with old password
-    ✓ After changing password, can log in with new password
-    ✓ After changing password, existing session still works
+14account/01change-password 7/7 tests
     ✓ After changing password, a different session no longer works by default
+    ✓ After changing password, can log in with new password
+    ✓ After changing password, can't log in with old password
     ✓ After changing password, different sessions can optionally be kept
-    × Pushers created with a different access token are deleted on password change
-    × Pushers created with a the same access token are not deleted on password change
+    ✓ After changing password, existing session still works
+    ✓ Pushers created with a different access token are deleted on password change
+    ✓ Pushers created with a the same access token are not deleted on password change
 
 14account/02deactivate 3/4 tests
+    × After deactivating account, can't log in with an email
+    ✓ After deactivating account, can't log in with password
     ✓ Can deactivate account
     ✓ Can't deactivate account with wrong password
-    ✓ After deactivating account, can't log in with password
-    × After deactivating account, can't log in with an email
 
-21presence-events 0/3 tests
-30rooms/01state 2/9 tests
+21presence-events 0/2 tests
+30rooms/01state 2/7 tests
+    × Global initialSync
+    × Global initialSync with limit=0 gives no messages
+    × Joining room twice is idempotent
     ✓ Room creation reports m.room.create to myself
     ✓ Room creation reports m.room.member to myself
     × Setting room topic reports m.room.topic to myself
-    × Global initialSync
-    × Global initialSync with limit=0 gives no messages
-    × Room initialSync
-    × Room initialSync with limit=0 gives no messages
     × Setting state twice is idempotent
-    × Joining room twice is idempotent
 
-30rooms/02members-local 0/5 tests
-30rooms/03members-remote 0/8 tests
+30rooms/02members-local 0/3 tests
+30rooms/03members-remote 0/5 tests
 30rooms/04messages 0/9 tests
-30rooms/05aliases 0/13 tests
-30rooms/06invite 0/12 tests
+30rooms/05aliases 6/13 tests
+    ✓ Canonical alias can be set
+    ✓ Canonical alias can include alt_aliases
+    ✓ Alias creators can delete alias with no ops
+    ✓ Alias creators can delete canonical alias with no ops
+    × Can delete canonical alias
+    ✓ Deleting a non-existent alias should return a 404
+    ✓ Only room members can list aliases of a room
+    × Regular users can add and delete aliases in the default room configuration
+    × Regular users can add and delete aliases when m.room.aliases is restricted
+    × Remote room alias queries can handle Unicode
+    × Room aliases can contain Unicode
+    × Users can't delete other's aliases
+    × Users with sufficient power-level can delete other's aliases
+
+30rooms/06invite 1/13 tests
+    × Can invite users to invite-only rooms
+    ✓ Test that we can be reinvited to a room we created
+    × Invited user can reject invite
+    × Invited user can reject invite for empty room
+    × Invited user can reject invite over federation
+    × Invited user can reject invite over federation for empty room
+    × Invited user can reject invite over federation several times
+    × Invited user can reject local invite after originator leaves
+    × Invited user can see room metadata
+    × Remote invited user can see room metadata
+    × Uninvited users cannot join the room
+    × Users cannot invite a user that is already in the room
+    × Users cannot invite themselves to a room
+
 30rooms/07ban 0/2 tests
 30rooms/08levels 0/3 tests
 30rooms/09eventstream 0/2 tests
 30rooms/10redactions 0/5 tests
-30rooms/11leaving 0/7 tests
+30rooms/11leaving 0/5 tests
 30rooms/12thirdpartyinvite 0/13 tests
-30rooms/13guestaccess 0/13 tests
+30rooms/13guestaccess 0/11 tests
 30rooms/14override-per-room 0/2 tests
 30rooms/15kick 0/2 tests
 30rooms/20typing 0/3 tests
-30rooms/21receipts 0/3 tests
+30rooms/21receipts 0/2 tests
 30rooms/22profile 0/1 tests
 30rooms/30history-visibility 0/2 tests
 30rooms/31forget 0/5 tests
 30rooms/32erasure 0/1 tests
 30rooms/40joinedapis 0/2 tests
 30rooms/50context 0/4 tests
-30rooms/51event 0/3 tests
+30rooms/51event 3/3 tests
+    ✓ /event/ does not allow access to events before the user joined
+    ✓ /event/ on joined room works
+    ✓ /event/ on non world readable room does not work
+
 30rooms/52members 0/3 tests
 30rooms/60version_upgrade 0/19 tests
 30rooms/70publicroomslist 0/5 tests
@@ -241,7 +350,7 @@ $ ./sytest-coverage -v
 
 31sync/02sync 0/1 tests
 31sync/03joined 0/6 tests
-31sync/04timeline 0/8 tests
+31sync/04timeline 0/9 tests
 31sync/05presence 0/3 tests
 31sync/06state 0/14 tests
 31sync/07invited 0/3 tests
@@ -254,18 +363,19 @@ $ ./sytest-coverage -v
 31sync/14read-markers 0/3 tests
 31sync/15lazy-members 0/11 tests
 31sync/16room-summary 0/4 tests
+31sync/17peeking 0/4 tests
 32room-versions 0/6 tests
-40presence 0/5 tests
-41end-to-end-keys/01-upload-key 0/5 tests
+40presence 0/4 tests
+41end-to-end-keys/01-upload-key 0/6 tests
 41end-to-end-keys/03-one-time-keys 0/1 tests
 41end-to-end-keys/04-query-key-federation 0/1 tests
 41end-to-end-keys/05-one-time-key-federation 0/1 tests
 41end-to-end-keys/06-device-lists 0/15 tests
 41end-to-end-keys/07-backup 0/10 tests
 41end-to-end-keys/08-cross-signing 0/8 tests
-42tags 0/10 tests
+42tags 0/7 tests
 43search 0/5 tests
-44account_data 0/10 tests
+44account_data 0/6 tests
 45openid 0/3 tests
 46direct/01directmessage 0/3 tests
 46direct/02reliability 0/2 tests
@@ -274,66 +384,55 @@ $ ./sytest-coverage -v
 46direct/05wildcard 0/4 tests
 48admin 0/5 tests
 49ignore 0/3 tests
-50federation/00prepare 0/2 tests
+50federation/00prepare 0/1 tests
 50federation/01keys 1/4 tests
     ✓ Federation key API allows unsigned requests for keys
     × Federation key API can act as a notary server via a $method request
-    × Key notary server should return an expired key if it can't find any others
     × Key notary server must not overwrite a valid key with a spurious result from the origin server
+    × Key notary server should return an expired key if it can't find any others
 
 50federation/02server-names 0/1 tests
 50federation/10query-profile 1/2 tests
-    ✓ Outbound federation can query profile data
     × Inbound federation can query profile data
+    ✓ Outbound federation can query profile data
 
 50federation/11query-directory 0/2 tests
-50federation/30room-join 0/17 tests
+50federation/30room-join 0/19 tests
 50federation/31room-send 0/5 tests
 50federation/32room-getevent 0/2 tests
 50federation/33room-get-missing-events 1/4 tests
-    × Outbound federation can request missing events
     × Inbound federation can return missing events for $vis visibility
-    × outliers whose auth_events are in a different room are correctly rejected
+    × Outbound federation can request missing events
     ✓ Outbound federation will ignore a missing event with bad JSON for room version 6
+    × outliers whose auth_events are in a different room are correctly rejected
 
 50federation/34room-backfill 0/5 tests
-50federation/35room-invite 0/12 tests
+50federation/35room-invite 0/11 tests
 50federation/36state 0/11 tests
 50federation/37public-rooms 0/1 tests
 50federation/38receipts 0/2 tests
 50federation/39redactions 0/4 tests
-50federation/40devicelists 0/11 tests
+50federation/40devicelists 0/7 tests
 50federation/40publicroomlist 0/1 tests
 50federation/41power-levels 0/2 tests
 50federation/43typing 0/1 tests
+50federation/44presence 0/1 tests
 50federation/50no-deextrem-outliers 0/1 tests
 50federation/50server-acl-endpoints 0/1 tests
 50federation/51transactions 0/2 tests
 50federation/52soft-fail 0/3 tests
 51media/01unicode 0/5 tests
 51media/02nofilename 3/3 tests
-    ✓ Can upload without a file name
     ✓ Can download without a file name locally
     ✓ Can download without a file name over federation
+    ✓ Can upload without a file name
 
 51media/03ascii 0/5 tests
 51media/10thumbnail 0/2 tests
 51media/20urlpreview 0/1 tests
 51media/30config 0/1 tests
-51media/48admin-quarantine 0/1 tests
 52user-directory/01public 0/7 tests
 52user-directory/02private 0/3 tests
-53groups/01create 0/3 tests
-53groups/02read 0/4 tests
-53groups/03local 0/3 tests
-53groups/04remote-group 0/3 tests
-53groups/05categories 0/3 tests
-53groups/05roles 0/3 tests
-53groups/06summaries 0/11 tests
-53groups/10sync 0/3 tests
-53groups/11publicise 0/2 tests
-53groups/12joinable 0/4 tests
-53groups/20room-upgrade 0/1 tests
 54identity 0/6 tests
 60app-services/01as-create 0/7 tests
 60app-services/02ghost 0/6 tests
@@ -347,23 +446,34 @@ $ ./sytest-coverage -v
 61push/03_unread_count 0/2 tests
 61push/05_set_actions 0/4 tests
 61push/06_get_pusher 0/1 tests
-61push/06_push_rules_in_sync 0/5 tests
+61push/06_push_rules_in_sync 0/4 tests
 61push/07_set_enabled 0/2 tests
 61push/08_rejected_pushers 0/1 tests
 61push/09_notifications_api 0/1 tests
 61push/80torture 0/3 tests
-80torture/03events 0/5 tests
-80torture/10filters 0/1 tests
-80torture/20json 0/3 tests
-90jira/SYN-115 0/1 tests
-90jira/SYN-202 0/1 tests
-90jira/SYN-205 0/1 tests
+80torture/03events 1/1 tests
+    ✓ Event size limits
+
+80torture/10filters 1/1 tests
+    ✓ Check creating invalid filters returns 4xx
+
+80torture/20json 3/3 tests
+    ✓ Invalid JSON floats
+    ✓ Invalid JSON integers
+    ✓ Invalid JSON special values
+
+90jira/SYN-205 1/1 tests
+    ✓ Rooms can be created with an initial invite list (SYN-205)
+
 90jira/SYN-328 0/1 tests
-90jira/SYN-343 0/1 tests
-90jira/SYN-390 0/1 tests
-90jira/SYN-442 0/1 tests
+90jira/SYN-343 1/1 tests
+    ✓ Non-present room members cannot ban others
+
+90jira/SYN-390 1/1 tests
+    ✓ Getting push rules doesn't corrupt the cache SYN-390
+
 90jira/SYN-516 0/1 tests
 90jira/SYN-627 0/1 tests
 
-TOTAL: 31/690 tests converted
+TOTAL: 85/622 tests converted
 ```

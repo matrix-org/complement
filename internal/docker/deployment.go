@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/config"
 )
 
 // Deployment is the complete instantiation of a Blueprint, with running containers
@@ -15,7 +16,8 @@ type Deployment struct {
 	// The name of the deployed blueprint
 	BlueprintName string
 	// A map of HS name to a HomeserverDeployment
-	HS map[string]HomeserverDeployment
+	HS     map[string]HomeserverDeployment
+	Config *config.Complement
 }
 
 // HomeserverDeployment represents a running homeserver in a container.
@@ -60,7 +62,7 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 }
 
 // RegisterUser within a homeserver and return an authenticatedClient, Fails the test if the hsName is not found.
-func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password string) *client.CSAPI {
+func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password string, isAdmin bool) *client.CSAPI {
 	t.Helper()
 	dep, ok := d.HS[hsName]
 	if !ok {
@@ -73,7 +75,12 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 	}
-	userID, accessToken := client.RegisterUser(t, localpart, password)
+	var userID, accessToken string
+	if isAdmin {
+		userID, accessToken = client.RegisterSharedSecret(t, localpart, password, isAdmin)
+	} else {
+		userID, accessToken = client.RegisterUser(t, localpart, password)
+	}
 
 	// remember the token so subsequent calls to deployment.Client return the user
 	dep.AccessTokens[userID] = accessToken

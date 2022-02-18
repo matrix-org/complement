@@ -11,7 +11,6 @@ import (
 
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/matrix-org/complement/internal/federation"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,16 +19,29 @@ const Pkg = "homerunner"
 type Config struct {
 	HomeserverLifetimeMins int
 	Port                   int
-	VersionCheckIterations int
+	SpawnHSTimeout         time.Duration
 	KeepBlueprints         []string
 	Snapshot               string
+}
+
+func (c *Config) DeriveComplementConfig(baseImageURI string) *config.Complement {
+	cfg := &config.Complement{
+		BaseImageURI:        baseImageURI,
+		DebugLoggingEnabled: true,
+		SpawnHSTimeout:      c.SpawnHSTimeout,
+		KeepBlueprints:      c.KeepBlueprints,
+		BestEffort:          true,
+		PackageNamespace:    Pkg,
+	}
+	_ = cfg.GenerateCA()
+	return cfg
 }
 
 func NewConfig() *Config {
 	cfg := &Config{
 		HomeserverLifetimeMins: 30,
 		Port:                   54321,
-		VersionCheckIterations: 100,
+		SpawnHSTimeout:         5 * time.Second,
 		KeepBlueprints:         strings.Split(os.Getenv("HOMERUNNER_KEEP_BLUEPRINTS"), " "),
 		Snapshot:               os.Getenv("HOMERUNNER_SNAPSHOT_BLUEPRINT"),
 	}
@@ -39,21 +51,14 @@ func NewConfig() *Config {
 	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_PORT")); val != 0 {
 		cfg.Port = val
 	}
-	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_VER_CHECK_ITERATIONS")); val != 0 {
-		cfg.VersionCheckIterations = val
+	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_SPAWN_HS_TIMEOUT_SECS")); val != 0 {
+		cfg.SpawnHSTimeout = time.Duration(val) * time.Second
 	}
 	return cfg
 }
 
 func cleanup(c *Config) {
-	cfg := &config.Complement{
-		PackageNamespace:       Pkg,
-		BaseImageURI:           "nothing",
-		DebugLoggingEnabled:    true,
-		VersionCheckIterations: c.VersionCheckIterations,
-		KeepBlueprints:         c.KeepBlueprints,
-		BestEffort:             true,
-	}
+	cfg := c.DeriveComplementConfig("nothing")
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
 		logrus.WithError(err).Fatalf("failed to run cleanup")
@@ -68,11 +73,6 @@ func main() {
 		logrus.Fatalf("failed to setup new runtime: %s", err)
 	}
 	cleanup(cfg)
-
-	_, _, err = federation.GetOrCreateCaCert()
-	if err != nil {
-		logrus.Fatalf("failed to make CA certs")
-	}
 
 	if cfg.Snapshot != "" {
 		logrus.Infof("Running in single-shot snapshot mode for request file '%s'", cfg.Snapshot)

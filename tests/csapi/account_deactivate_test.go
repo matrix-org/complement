@@ -14,7 +14,7 @@ func TestDeactivateAccount(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	password := "superuser"
-	authedClient := deployment.RegisterUser(t, "hs1", "test_deactivate_user", password)
+	authedClient := deployment.RegisterUser(t, "hs1", "test_deactivate_user", password, false)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	// sytest: Can't deactivate account with wrong password
 	t.Run("Can't deactivate account with wrong password", func(t *testing.T) {

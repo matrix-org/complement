@@ -106,6 +106,10 @@ type Event struct {
 	// This can be either []EventReference for room v1/v2, or []string for room v3 onwards.
 	// If it is left at nil, MustCreateEvent will populate it automatically based on the room state.
 	AuthEvents interface{}
+
+	// The prev events of the event if we want to override or falsify them.
+	// If it is left at nil, MustCreateEvent will populate it automatically based on the forward extremities.
+	PrevEvents interface{}
 }
 
 func MustValidate(bp Blueprint) Blueprint {
