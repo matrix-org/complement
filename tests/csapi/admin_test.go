@@ -84,10 +84,10 @@ func TestServerNotices(t *testing.T) {
 	t.Run("Alice can leave the alert room, after joining it", func(t *testing.T) {
 		alice.LeaveRoom(t, roomID)
 	})
-	t.Run("After leaving the alert room, a new room is created", func(t *testing.T) {
+	t.Run("After leaving the alert room and on re-invitation, no new room is created", func(t *testing.T) {
 		sendServerNotice(t, admin, reqBody, nil)
 		newRoomID := syncUntilInvite(t, alice)
-		if roomID == newRoomID {
+		if roomID != newRoomID {
 			t.Errorf("expected a new room, but they are the same")
 		}
 	})
