@@ -1,6 +1,3 @@
-//go:build !dendrite_blacklist
-// +build !dendrite_blacklist
-
 // This file includes tests for MSC2946, the spaces summary API.
 //
 // There are currently tests for two unstable versions of it for backwards
@@ -27,6 +24,7 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 var (
@@ -133,6 +131,8 @@ func TestClientSpacesSummary(t *testing.T) {
 		"preset": "public_chat",
 		"name":   "R5",
 	})
+	roomNames[r5] = "R5"
+	t.Logf("%+v", roomNames)
 
 	// create the links
 	rootToR1 := eventKey(root, r1, spaceChildEventType)
@@ -529,6 +529,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 // Tests that:
 // - Querying from root returns the entire graph
 func TestFederatedClientSpaces(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // partial support only
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
