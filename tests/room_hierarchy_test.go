@@ -24,7 +24,6 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/complement/runtime"
 )
 
 var (
@@ -529,7 +528,6 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 // Tests that:
 // - Querying from root returns the entire graph
 func TestFederatedClientSpaces(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // partial support only
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
