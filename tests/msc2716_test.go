@@ -50,13 +50,13 @@ var (
 var createPublicRoomOpts = map[string]interface{}{
 	"preset":       "public_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v4",
+	"room_version": "org.matrix.msc2716v3",
 }
 
 var createPrivateRoomOpts = map[string]interface{}{
 	"preset":       "private_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v4",
+	"room_version": "org.matrix.msc2716v3",
 }
 
 func TestImportHistoricalMessages(t *testing.T) {
@@ -320,10 +320,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, insertTime),
 				createMessageEventsForBatchSendRequest([]string{virtualUserID}, insertTime, 1),
 				// Status
-				// TODO: Seems like this makes more sense as a 404
-				// But the current Synapse code around unknown prev events will throw ->
-				// `403: No create event in auth events`
-				403,
+				400,
 			)
 		})
 
