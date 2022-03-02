@@ -17,6 +17,8 @@ type Snapshot struct {
 	MemoryUsage      uint64
 	CPUUserland      uint64
 	CPUKernel        uint64
+	BytesWritten     uint64
+	BytesRead        uint64
 	TxBytes          int64
 	RxBytes          int64
 }
@@ -33,10 +35,19 @@ func snapshotStats(spanName string, deployment *docker.Deployment, absDuration, 
 		if err != nil {
 			return nil
 		}
+
 		var rxBytes, txBytes int64
 		for _, nw := range sj.Networks {
 			rxBytes += int64(nw.RxBytes)
 			txBytes += int64(nw.TxBytes)
+		}
+		var bw, br uint64
+		for _, block := range sj.BlkioStats.IoServiceBytesRecursive {
+			if block.Op == "read" {
+				br = block.Value
+			} else if block.Op == "write" {
+				bw = block.Value
+			}
 		}
 		snapshots = append(snapshots, Snapshot{
 			HSName:           hsName,
@@ -48,6 +59,8 @@ func snapshotStats(spanName string, deployment *docker.Deployment, absDuration, 
 			CPUKernel:        sj.CPUStats.CPUUsage.UsageInKernelmode,
 			TxBytes:          txBytes,
 			RxBytes:          rxBytes,
+			BytesWritten:     bw,
+			BytesRead:        br,
 		})
 	}
 	return

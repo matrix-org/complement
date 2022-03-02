@@ -20,6 +20,7 @@ require (
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
+	gonum.org/v1/plot v0.10.0
 	google.golang.org/genproto v0.0.0-20220211171837-173942840c17 // indirect
 	maunium.net/go/mautrix v0.8.3
 )
