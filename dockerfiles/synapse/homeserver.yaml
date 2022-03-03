@@ -112,6 +112,8 @@ experimental_features:
   msc2716_enabled: true
   # server-side support for partial state in /send_join
   msc3706_enabled: true
+  # Enable jump to date endpoint
+  msc3030_enabled: true
 
 server_notices:
   system_mxid_localpart: _server
