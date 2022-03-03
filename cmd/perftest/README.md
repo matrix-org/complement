@@ -1,5 +1,10 @@
 ### Performance Test
 
+```
+go build ./cmd/perftest
+./perftest -seed 12345 -image complement-synapse:latest -output synapse.json -name 'synapse 1.54'
+```
+
 This contains a binary which can run a series of tests on a homeserver implementation and uses `docker stats` to compare:
  - CPU usage
  - Memory usage

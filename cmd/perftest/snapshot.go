@@ -11,6 +11,7 @@ import (
 
 type Snapshot struct {
 	Name             string
+	Description      string
 	HSName           string
 	Duration         time.Duration
 	AbsoluteDuration time.Duration
@@ -23,7 +24,7 @@ type Snapshot struct {
 	RxBytes          int64
 }
 
-func snapshotStats(spanName string, deployment *docker.Deployment, absDuration, duration time.Duration) (snapshots []Snapshot) {
+func snapshotStats(spanName, desc string, deployment *docker.Deployment, absDuration, duration time.Duration) (snapshots []Snapshot) {
 	for hsName, hsInfo := range deployment.HS {
 		stats, err := deployment.Deployer.Docker.ContainerStatsOneShot(context.Background(), hsInfo.ContainerID)
 		if err != nil {
@@ -52,6 +53,7 @@ func snapshotStats(spanName string, deployment *docker.Deployment, absDuration, 
 		snapshots = append(snapshots, Snapshot{
 			HSName:           hsName,
 			Name:             spanName,
+			Description:      desc,
 			Duration:         duration,
 			AbsoluteDuration: absDuration,
 			MemoryUsage:      sj.MemoryStats.Usage,

@@ -15,8 +15,16 @@ import (
 )
 
 // TODO: remove duplication
+type Output struct {
+	Name      string
+	Snapshots []Snapshot
+	Seed      int64
+	BaseImage string
+}
+
 type Snapshot struct {
 	Name        string
+	Description string
 	HSName      string
 	Duration    time.Duration
 	MemoryUsage uint64
@@ -28,7 +36,7 @@ type Snapshot struct {
 
 type PerfRun struct {
 	Snapshots []Snapshot
-	Filename  string
+	Name      string
 }
 
 func loadFile(filename string) (*PerfRun, error) {
@@ -36,13 +44,17 @@ func loadFile(filename string) (*PerfRun, error) {
 	if err != nil {
 		return nil, err
 	}
-	var s []Snapshot
+	var s Output
 	if err = json.NewDecoder(f).Decode(&s); err != nil {
 		return nil, err
 	}
+	name := filename
+	if s.Name != "" {
+		name = s.Name
+	}
 	return &PerfRun{
-		Filename:  filename,
-		Snapshots: s,
+		Name:      name,
+		Snapshots: s.Snapshots,
 	}, nil
 }
 
@@ -83,7 +95,7 @@ func generateCPUGraph(runs []PerfRun, names []string, filename string) {
 		bars.Color = plotutil.Color(i)
 		bars.Offset = offsets[i]
 		p.Add(bars)
-		p.Legend.Add(runs[i].Filename, bars)
+		p.Legend.Add(runs[i].Name, bars)
 	}
 
 	p.Legend.Top = true
@@ -132,7 +144,7 @@ func generateMemoryGraph(runs []PerfRun, names []string, filename string) {
 		bars.Color = plotutil.Color(i)
 		bars.Offset = offsets[i]
 		p.Add(bars)
-		p.Legend.Add(runs[i].Filename, bars)
+		p.Legend.Add(runs[i].Name, bars)
 	}
 
 	p.Legend.Top = true
