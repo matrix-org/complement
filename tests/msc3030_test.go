@@ -129,7 +129,7 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
-			"body":    "Message A",
+			"body":    "Message B",
 		},
 	})
 	timeAfterEventB := time.Now()
