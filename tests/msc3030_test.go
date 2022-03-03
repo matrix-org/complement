@@ -84,6 +84,34 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			}
 		})
 
+		// Just a sanity check that we're not leaking anything from the `/timestamp_to_event` endpoint
+		t.Run("should not be able to query a public room you are not a member of", func(t *testing.T) {
+			t.Parallel()
+			timeBeforeRoomCreation := time.Now()
+
+			// Alice will create the public room
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"preset": "public_chat",
+			})
+
+			// We will use Bob to query the room they're not a member of
+			nonMemberUser := deployment.Client(t, "hs1", "@bob:hs1")
+
+			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
+			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
+			timestampString := strconv.FormatInt(timestamp, 10)
+			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc3030", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				"ts":  []string{timestampString},
+				"dir": []string{"f"},
+			}))
+
+			// A random user is not allowed to query for events in a public room
+			// they're not a member of (forbidden).
+			if timestampToEventRes.StatusCode != 403 {
+				t.Fatalf("/timestamp_to_event returned %d HTTP status code but expected %d", timestampToEventRes.StatusCode, 403)
+			}
+		})
+
 		t.Run("federation", func(t *testing.T) {
 			t.Run("looking forwards, should be able to find event that was sent before we joined", func(t *testing.T) {
 				t.Parallel()
