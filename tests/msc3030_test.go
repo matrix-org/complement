@@ -111,7 +111,9 @@ type eventTime struct {
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
 	t.Helper()
 
-	roomID = c.CreateRoom(t, map[string]interface{}{})
+	roomID = c.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+	})
 
 	timeBeforeEventA := time.Now()
 	eventAID := c.SendEventSynced(t, roomID, b.Event{
