@@ -5,18 +5,16 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
-	"time"
 
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 )
 
 var (
-	flagName    = flag.String("name", "", "The name to attach to this homeserver run. E.g 'dendrite 0.6.4'.")
-	flagSeed    = flag.Int64("seed", 0, "The seed to use for deterministic tests. This allows homeservers to be compared.")
-	flagTimeout = flag.Int("timeout", 30, "The max time to wait in seconds for a homeserver to start.")
-	flagImage   = flag.String("image", "", "Required. The complement-compatible homserver image to use.")
-	flagOutput  = flag.String("output", "output.json", "Where to write the output data")
+	flagName   = flag.String("name", "", "The name to attach to this homeserver run. E.g 'dendrite 0.6.4'.")
+	flagSeed   = flag.Int64("seed", 0, "The seed to use for deterministic tests. This allows homeservers to be compared.")
+	flagImage  = flag.String("image", "", "Required. The complement-compatible homserver image to use.")
+	flagOutput = flag.String("output", "output.json", "Where to write the output data")
 )
 
 type Output struct {
@@ -27,28 +25,20 @@ type Output struct {
 }
 
 type Config struct {
-	BaseImage      string
-	Seed           int64
-	SpawnHSTimeout time.Duration
+	BaseImage string
+	Seed      int64
 }
 
 func main() {
 	flag.Parse()
 	cfg := Config{
-		BaseImage:      *flagImage,
-		Seed:           *flagSeed,
-		SpawnHSTimeout: time.Duration(*flagTimeout) * time.Second,
+		BaseImage: *flagImage,
+		Seed:      *flagSeed,
 	}
 	// initialise complement
-	complementConfig := &config.Complement{
-		BaseImageURI:        cfg.BaseImage,
-		DebugLoggingEnabled: true,
-		SpawnHSTimeout:      cfg.SpawnHSTimeout,
-		PackageNamespace:    "perf",
-	}
-	if err := complementConfig.GenerateCA(); err != nil {
-		panic(err)
-	}
+	complementConfig := config.NewConfigFromEnvVars("perf", cfg.BaseImage)
+	complementConfig.DebugLoggingEnabled = true
+
 	builder, err := docker.NewBuilder(complementConfig)
 	if err != nil {
 		panic(err)

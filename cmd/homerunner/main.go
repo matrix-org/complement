@@ -25,15 +25,10 @@ type Config struct {
 }
 
 func (c *Config) DeriveComplementConfig(baseImageURI string) *config.Complement {
-	cfg := &config.Complement{
-		BaseImageURI:        baseImageURI,
-		DebugLoggingEnabled: true,
-		SpawnHSTimeout:      c.SpawnHSTimeout,
-		KeepBlueprints:      c.KeepBlueprints,
-		BestEffort:          true,
-		PackageNamespace:    Pkg,
-	}
-	_ = cfg.GenerateCA()
+	cfg := config.NewConfigFromEnvVars(Pkg, baseImageURI)
+	cfg.BestEffort = true
+	cfg.KeepBlueprints = c.KeepBlueprints
+	cfg.SpawnHSTimeout = c.SpawnHSTimeout
 	return cfg
 }
 

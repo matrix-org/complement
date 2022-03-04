@@ -38,9 +38,12 @@ type Complement struct {
 	CAPrivateKey  *rsa.PrivateKey
 }
 
-func NewConfigFromEnvVars(pkgNamespace string) *Complement {
+func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	cfg := &Complement{}
 	cfg.BaseImageURI = os.Getenv("COMPLEMENT_BASE_IMAGE")
+	if cfg.BaseImageURI == "" {
+		cfg.BaseImageURI = baseImageURI
+	}
 	cfg.BaseImageArgs = strings.Split(os.Getenv("COMPLEMENT_BASE_IMAGE_ARGS"), " ")
 	cfg.DebugLoggingEnabled = os.Getenv("COMPLEMENT_DEBUG") == "1"
 	cfg.AlwaysPrintServerLogs = os.Getenv("COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS") == "1"
