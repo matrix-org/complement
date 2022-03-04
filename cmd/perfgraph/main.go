@@ -84,6 +84,12 @@ func generateCPUGraph(runs []PerfRun, names []string, filename string) {
 		offsets[0] = -w
 		offsets[1] = 0
 		offsets[2] = w
+	case 5:
+		offsets[0] = -2 * w
+		offsets[1] = -w
+		offsets[2] = 0
+		offsets[3] = w
+		offsets[4] = 2 * w
 	}
 
 	for i := range groups {
@@ -99,6 +105,7 @@ func generateCPUGraph(runs []PerfRun, names []string, filename string) {
 	}
 
 	p.Legend.Top = true
+	p.Legend.Left = true
 	p.NominalX(names...)
 	p.Add(plotter.NewGrid())
 
@@ -133,6 +140,12 @@ func generateMemoryGraph(runs []PerfRun, names []string, filename string) {
 		offsets[0] = -w
 		offsets[1] = 0
 		offsets[2] = w
+	case 5:
+		offsets[0] = -2 * w
+		offsets[1] = -w
+		offsets[2] = 0
+		offsets[3] = w
+		offsets[4] = 2 * w
 	}
 
 	for i := range groups {
@@ -148,6 +161,7 @@ func generateMemoryGraph(runs []PerfRun, names []string, filename string) {
 	}
 
 	p.Legend.Top = true
+	p.Legend.Left = true
 	p.NominalX(names...)
 	p.Add(plotter.NewGrid())
 
