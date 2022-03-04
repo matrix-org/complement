@@ -104,8 +104,6 @@ AS_REGISTRATION_FILES
 ## Experimental Features ##
 
 experimental_features:
-  # Enable knocking support
-  msc2403_enabled: true
   # Enable spaces support
   spaces_enabled: true
   # Enable history backfilling support
