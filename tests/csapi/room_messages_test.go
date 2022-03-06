@@ -2,14 +2,16 @@ package csapi_tests
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
+	"testing"
+
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/gjson"
-	"net/http"
-	"net/url"
-	"testing"
 )
 
 // sytest: POST /rooms/:room_id/send/:event_type sends a message
