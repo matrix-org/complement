@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 // sytest: POST /rooms/:room_id/send/:event_type sends a message
@@ -26,6 +27,8 @@ func TestSendAndFetchMessage(t *testing.T) {
 
 	const testMessage = "TestSendAndFetchMessage"
 
+	_, token := alice.MustSync(t, client.SyncReq{})
+
 	// first use the non-txn endpoint
 	alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "send", "m.room.message"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
@@ -33,12 +36,15 @@ func TestSendAndFetchMessage(t *testing.T) {
 	}))
 
 	// sync until the server has processed it
-	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+	alice.MustSyncUntil(t, client.SyncReq{Since: token}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		return r.Get("type").Str == "m.room.message" && r.Get("content").Get("body").Str == testMessage
 	}))
 
-	// then request messages on the room
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"})
+	// then request messages from the room
+	queryParams := url.Values{}
+	queryParams.Set("dir", "f")
+	queryParams.Set("from", token)
+	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -82,6 +88,8 @@ func TestSendMessageWithTxn(t *testing.T) {
 }
 
 func TestRoomMessagesLazyLoading(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2257
+
 	deployment := Deploy(t, b.MustValidate(b.Blueprint{
 		Name: "alice_bob_and_charlie",
 		Homeservers: []b.Homeserver{
