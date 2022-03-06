@@ -18,7 +18,7 @@ func TestTyping(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 	bob.JoinRoom(t, roomID, nil)
 
