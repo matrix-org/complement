@@ -23,7 +23,7 @@ func TestSendAndFetchMessage(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 	const testMessage = "TestSendAndFetchMessage"
 
@@ -130,7 +130,7 @@ func TestRoomMessagesLazyLoading(t *testing.T) {
 		},
 	})
 
-	beforeToken := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID), client.SyncJoinedTo(alice.UserID, roomID))
+	beforeToken := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID), client.SyncJoinedTo(charlie.UserID, roomID))
 
 	eventID := charlie.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
