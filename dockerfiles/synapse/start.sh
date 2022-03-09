@@ -24,5 +24,4 @@ openssl x509 -req -in /conf/server.tls.csr \
   -CA /ca/ca.crt -CAkey /ca/ca.key -set_serial 1 \
   -out /conf/server.tls.crt
 
-exec python -m synapse.app.homeserver -c /conf/homeserver.yaml "$@"
-
+exec /synapse/.venv/bin/python -m synapse.app.homeserver -c /conf/homeserver.yaml "$@"
