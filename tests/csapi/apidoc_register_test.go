@@ -1,8 +1,12 @@
 package csapi_tests
 
 import (
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -181,15 +185,27 @@ func TestRegistration(t *testing.T) {
 		})
 		// sytest: POST $ep_name admin with shared secret
 		t.Run("POST /_synapse/admin/v1/register admin with shared secret", func(t *testing.T) {
-			unauthedClient.MustRegisterSharedSecret(t, "adminuser", "sUp3rs3kr1t", true)
+			res := registerSharedSecret(t, unauthedClient, "adminuser", "sUp3rs3kr1t", true)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("user_id", "@adminuser:hs1"),
+				},
+			})
 		})
 		// sytest: POST $ep_name with shared secret
 		t.Run("POST /_synapse/admin/v1/register with shared secret", func(t *testing.T) {
-			unauthedClient.MustRegisterSharedSecret(t, "user-shared-secret", "sUp3rs3kr1t", false)
+			res := registerSharedSecret(t, unauthedClient, "user-shared-secret", "sUp3rs3kr1t", false)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("user_id", "@user-shared-secret:hs1"),
+				},
+			})
 		})
 		// sytest: POST $ep_name with shared secret disallows symbols
 		t.Run("POST /_synapse/admin/v1/register with shared secret disallows symbols", func(t *testing.T) {
-			res := unauthedClient.RegisterSharedSecret(t, "us,er", "sUp3rs3kr1t", false)
+			res := registerSharedSecret(t, unauthedClient, "us,er", "sUp3rs3kr1t", false)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
 				JSON: []match.JSON{
@@ -199,7 +215,7 @@ func TestRegistration(t *testing.T) {
 		})
 		// sytest: POST $ep_name with shared secret downcases capitals
 		t.Run("POST /_synapse/admin/v1/register with shared secret downcases capitals", func(t *testing.T) {
-			res := unauthedClient.RegisterSharedSecret(t, "user-UPPER-shared-SECRET", "sUp3rs3kr1t", false)
+			res := registerSharedSecret(t, unauthedClient, "user-UPPER-shared-SECRET", "sUp3rs3kr1t", false)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{
@@ -209,4 +225,40 @@ func TestRegistration(t *testing.T) {
 			})
 		})
 	})
+}
+
+// registerSharedSecret tries to register using a shared secret, returns the *http.Response
+func registerSharedSecret(t *testing.T, c *client.CSAPI, user, pass string, isAdmin bool) *http.Response {
+	resp := c.DoFunc(t, "GET", []string{"_synapse", "admin", "v1", "register"})
+	if resp.StatusCode != 200 {
+		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
+		return resp
+	}
+	body := must.ParseJSON(t, resp.Body)
+	nonce := gjson.GetBytes(body, "nonce")
+	if !nonce.Exists() {
+		t.Fatalf("Malformed shared secret GET response: %s", string(body))
+	}
+	mac := hmac.New(sha1.New, []byte(client.SharedSecret))
+	mac.Write([]byte(nonce.Str))
+	mac.Write([]byte("\x00"))
+	mac.Write([]byte(user))
+	mac.Write([]byte("\x00"))
+	mac.Write([]byte(pass))
+	mac.Write([]byte("\x00"))
+	if isAdmin {
+		mac.Write([]byte("admin"))
+	} else {
+		mac.Write([]byte("notadmin"))
+	}
+	sig := mac.Sum(nil)
+	reqBody := map[string]interface{}{
+		"nonce":    nonce.Str,
+		"username": user,
+		"password": pass,
+		"mac":      hex.EncodeToString(sig),
+		"admin":    isAdmin,
+	}
+	resp = c.DoFunc(t, "POST", []string{"_synapse", "admin", "v1", "register"}, client.WithJSONBody(t, reqBody))
+	return resp
 }

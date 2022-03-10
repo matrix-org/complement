@@ -77,7 +77,7 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 	}
 	var userID, accessToken string
 	if isAdmin {
-		userID, accessToken = client.MustRegisterSharedSecret(t, localpart, password, isAdmin)
+		userID, accessToken = client.RegisterSharedSecret(t, localpart, password, isAdmin)
 	} else {
 		userID, accessToken = client.RegisterUser(t, localpart, password)
 	}

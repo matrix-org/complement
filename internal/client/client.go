@@ -321,27 +321,13 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 	return userID, accessToken
 }
 
-// MustRegisterSharedSecret registers a new account with a shared secret via HMAC, fails on error.
+// RegisterSharedSecret registers a new account with a shared secret via HMAC
 // See https://github.com/matrix-org/synapse/blob/e550ab17adc8dd3c48daf7fedcd09418a73f524b/synapse/_scripts/register_new_matrix_user.py#L40
-func (c *CSAPI) MustRegisterSharedSecret(t *testing.T, user, pass string, isAdmin bool) (userID, password string) {
-	resp := c.RegisterSharedSecret(t, user, pass, isAdmin)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		defer resp.Body.Close()
-		body, _ := ioutil.ReadAll(resp.Body)
-		t.Fatalf("MustRegisterSharedSecret response return non-2xx code: %s - body: %s", resp.Status, string(body))
-	}
-
-	body := must.ParseJSON(t, resp.Body)
-	return gjson.GetBytes(body, "user_id").Str, gjson.GetBytes(body, "access_token").Str
-}
-
-// RegisterSharedSecret tries registers a new account with a shared secret via HMAC, returns the http.Response for further inspection.
-// See https://github.com/matrix-org/synapse/blob/e550ab17adc8dd3c48daf7fedcd09418a73f524b/synapse/_scripts/register_new_matrix_user.py#L40
-func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bool) *http.Response {
+func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bool) (userID, password string) {
 	resp := c.DoFunc(t, "GET", []string{"_synapse", "admin", "v1", "register"})
 	if resp.StatusCode != 200 {
 		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
-		return resp
+		return
 	}
 	body := must.ParseJSON(t, resp.Body)
 	nonce := gjson.GetBytes(body, "nonce")
@@ -368,8 +354,9 @@ func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bo
 		"mac":      hex.EncodeToString(sig),
 		"admin":    isAdmin,
 	}
-	resp = c.DoFunc(t, "POST", []string{"_synapse", "admin", "v1", "register"}, WithJSONBody(t, reqBody))
-	return resp
+	resp = c.MustDoFunc(t, "POST", []string{"_synapse", "admin", "v1", "register"}, WithJSONBody(t, reqBody))
+	body = must.ParseJSON(t, resp.Body)
+	return gjson.GetBytes(body, "user_id").Str, gjson.GetBytes(body, "access_token").Str
 }
 
 // GetCapbabilities queries the server's capabilities
