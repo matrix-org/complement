@@ -33,7 +33,8 @@ func TestRegistration(t *testing.T) {
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	t.Run("parallel", func(t *testing.T) {
-		// sytest: POST {} returns a set of flows
+		// sytest: GET /register yields a set of flows
+		// The name in Sytest is different, the test is actually doing a POST request.
 		t.Run("POST {} returns a set of flows", func(t *testing.T) {
 			t.Parallel()
 			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithRawBody(json.RawMessage(`{}`)))
@@ -105,7 +106,7 @@ func TestRegistration(t *testing.T) {
 				},
 			})
 		})
-		// sytest: POST /register rejects usernames with special characters
+		// sytest: POST /register rejects registration of usernames with '$q'
 		t.Run("POST /register rejects usernames with special characters", func(t *testing.T) {
 			t.Parallel()
 			specialChars := []string{
@@ -166,6 +167,45 @@ func TestRegistration(t *testing.T) {
 			}`)))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
+			})
+		})
+		// sytest: POST /register allows registration of usernames with '$chr'
+		t.Run("POST /register allows registration of usernames with ", func(t *testing.T) {
+			testChars := []rune("q3._=-/")
+			for x := range testChars {
+				localpart := fmt.Sprintf("chrtestuser%s", string(testChars[x]))
+				t.Run(string(testChars[x]), func(t *testing.T) {
+					deployment.RegisterUser(t, "hs1", localpart, "sUp3rs3kr1t", false)
+				})
+			}
+		})
+		// sytest: POST $ep_name admin with shared secret
+		t.Run("POST /_synapse/admin/v1/register admin with shared secret", func(t *testing.T) {
+			unauthedClient.MustRegisterSharedSecret(t, "adminuser", "sUp3rs3kr1t", true)
+		})
+		// sytest: POST $ep_name with shared secret
+		t.Run("POST /_synapse/admin/v1/register with shared secret", func(t *testing.T) {
+			unauthedClient.MustRegisterSharedSecret(t, "user-shared-secret", "sUp3rs3kr1t", false)
+		})
+		// sytest: POST $ep_name with shared secret disallows symbols
+		t.Run("POST /_synapse/admin/v1/register with shared secret disallows symbols", func(t *testing.T) {
+			res := unauthedClient.RegisterSharedSecret(t, "us,er", "sUp3rs3kr1t", false)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 400,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
+				},
+			})
+		})
+		// sytest: POST $ep_name with shared secret downcases capitals
+		t.Run("POST /_synapse/admin/v1/register with shared secret downcases capitals", func(t *testing.T) {
+			res := unauthedClient.RegisterSharedSecret(t, "user-UPPER-shared-SECRET", "sUp3rs3kr1t", false)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual("access_token", gjson.String),
+					match.JSONKeyEqual("user_id", "@user-upper-shared-secret:hs1"),
+				},
 			})
 		})
 	})
