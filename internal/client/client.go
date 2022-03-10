@@ -341,7 +341,7 @@ func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bo
 	resp := c.DoFunc(t, "GET", []string{"_synapse", "admin", "v1", "register"})
 	if resp.StatusCode != 200 {
 		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
-		return nil
+		return resp
 	}
 	body := must.ParseJSON(t, resp.Body)
 	nonce := gjson.GetBytes(body, "nonce")
