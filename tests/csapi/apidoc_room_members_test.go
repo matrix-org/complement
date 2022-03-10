@@ -226,7 +226,7 @@ func TestRoomMembers(t *testing.T) {
 		// sytest: POST /rooms/:room_id/invite can send an invite
 		t.Run("POST /rooms/:room_id/invite can send an invite", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, nil)
+			roomID := alice.CreateRoom(t, map[string]interface{}{})
 			alice.InviteRoom(t, roomID, bob.UserID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
@@ -240,7 +240,7 @@ func TestRoomMembers(t *testing.T) {
 		// sytest: POST /rooms/:room_id/leave can leave a room
 		t.Run("POST /rooms/:room_id/leave can leave a room", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, nil)
+			roomID := alice.CreateRoom(t, map[string]interface{}{})
 			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			bob.JoinRoom(t, roomID, []string{})
