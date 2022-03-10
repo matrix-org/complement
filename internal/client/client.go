@@ -18,6 +18,7 @@ import (
 
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/must"
@@ -319,6 +320,66 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 	userID = gjson.GetBytes(body, "user_id").Str
 	accessToken = gjson.GetBytes(body, "access_token").Str
 	return userID, accessToken
+}
+
+// LoginOpt is an option to Login/MustLogin
+type LoginOpt func(t *testing.T, js []byte) []byte
+
+// WithDisplayName sets the initial_device_display_name for /login requests
+func WithDisplayName(name string) LoginOpt {
+	return func(t *testing.T, js []byte) []byte {
+		res, err := sjson.SetBytes(js, "initial_device_display_name", name)
+		if err != nil {
+			t.Fatalf("unable to set displayname: %v", err)
+		}
+		return res
+	}
+}
+
+// WithDeviceID sets the device_id for /login requests
+func WithDeviceID(deviceID string) LoginOpt {
+	return func(t *testing.T, js []byte) []byte {
+		res, err := sjson.SetBytes(js, "device_id", deviceID)
+		if err != nil {
+			t.Fatalf("unable to set device_id: %v", err)
+		}
+		return res
+	}
+}
+
+// Login tries to log in with the given password, returns the *http.Response for further inspection.
+func (c *CSAPI) Login(t *testing.T, userID, password string, opts ...LoginOpt) *http.Response {
+	reqBody := json.RawMessage(fmt.Sprintf(`{
+				"type": "m.login.password",
+				"identifier": {
+					"type": "m.id.user",
+					"user": "%s"
+				},
+				"password": "%s"
+			}`, userID, password))
+	// Add more fields to the login request
+	for _, opt := range opts {
+		reqBody = opt(t, reqBody)
+	}
+	return c.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, WithJSONBody(t, reqBody))
+}
+
+// MustLogin creates a new session, returns deviceID and accessToken.
+func (c *CSAPI) MustLogin(t *testing.T, userID, password string, opts ...LoginOpt) (deviceID, accessToken string) {
+	res := c.Login(t, userID, password, opts...)
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		defer res.Body.Close()
+		body, _ := ioutil.ReadAll(res.Body)
+		t.Fatalf("CSAPI.MustLogin %s %s returned HTTP %d : %s", "POST", res.Request.URL.String(), res.StatusCode, string(body))
+	}
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	accessToken = gjson.GetBytes(body, "access_token").Str
+	return deviceID, accessToken
 }
 
 // RegisterSharedSecret registers a new account with a shared secret via HMAC

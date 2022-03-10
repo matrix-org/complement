@@ -43,14 +43,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login can log in as a user
 		t.Run("POST /login can login as user", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
-				"type": "m.login.password",
-				"identifier": {
-					"type": "m.id.user",
-					"user": "@test_login_user:hs1"
-				},
-				"password": "superuser"
-			}`))
+			res := unauthedClient.Login(t, "@test_login_user:hs1", "superuser")
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -63,15 +56,7 @@ func TestLogin(t *testing.T) {
 		t.Run("POST /login returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
 			deviceID := "test_device_id"
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
-				"type": "m.login.password",
-				"identifier": {
-					"type": "m.id.user",
-					"user": "@test_login_user:hs1"
-				},
-				"password": "superuser",
-				"device_id": "`+deviceID+`"
-			}`))
+			res := unauthedClient.Login(t, "@test_login_user:hs1", "superuser", client.WithDeviceID(deviceID))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -83,15 +68,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login can log in as a user with just the local part of the id
 		t.Run("POST /login can log in as a user with just the local part of the id", func(t *testing.T) {
 			t.Parallel()
-
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, json.RawMessage(`{
-				"type": "m.login.password",
-				"identifier": {
-					"type": "m.id.user",
-					"user": "test_login_user"
-				},
-				"password": "superuser"
-			}`))
+			res := unauthedClient.Login(t, "test_login_user", "superuser")
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -103,14 +80,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login as non-existing user is rejected
 		t.Run("POST /login as non-existing user is rejected", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, client.WithRawBody(json.RawMessage(`{
-				"type": "m.login.password",
-				"identifier": {
-					"type": "m.id.user",
-					"user": "i-dont-exist"
-				},
-				"password": "superuser"
-			}`)))
+			res := unauthedClient.Login(t, "i-dont-exist", "superuser")
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 403,
 			})
@@ -118,14 +88,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login wrong password is rejected
 		t.Run("POST /login wrong password is rejected", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, client.WithRawBody(json.RawMessage(`{
-				"type": "m.login.password",
-				"identifier": {
-					"type": "m.id.user",
-					"user": "@test_login_user:hs1"
-				},
-				"password": "wrong_password"
-			}`)))
+			res := unauthedClient.Login(t, "@test_login_user:hs1", "wrong_password")
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 403,
 				JSON: []match.JSON{
