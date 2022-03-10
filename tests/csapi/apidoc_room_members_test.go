@@ -133,5 +133,127 @@ func TestRoomMembers(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 			alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncJoinedTo(alice.UserID, roomID))
 		})
+		// sytest: POST /join/:room_id can join a room with custom content
+		t.Run("POST /join/:room_id can join a room with custom content", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"visibility": "public",
+				"preset":     "public_chat",
+				"room_alias": "helloWorld",
+			})
+
+			joinBody := client.WithJSONBody(t, map[string]string{"foo": "bar"})
+
+			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID}, joinBody)
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyPresent("room_id"),
+					match.JSONKeyTypeEqual("room_id", gjson.String),
+					match.JSONKeyEqual("room_id", roomID),
+				},
+			})
+
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+			res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyEqual("foo", "bar"),
+					match.JSONKeyEqual("membership", "join"),
+				},
+			})
+		})
+		// sytest: POST /join/:room_alias can join a room with custom content
+		t.Run("POST /join/:room_alias can join a room with custom content", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"visibility":      "public",
+				"preset":          "public_chat",
+				"room_alias_name": "room_alias_random2",
+			})
+			joinBody := client.WithJSONBody(t, map[string]string{"foo": "bar"})
+			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", "#room_alias_random2:hs1"}, joinBody)
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyPresent("room_id"),
+					match.JSONKeyTypeEqual("room_id", gjson.String),
+					match.JSONKeyEqual("room_id", roomID),
+				},
+			})
+
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+			res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyEqual("foo", "bar"),
+					match.JSONKeyEqual("membership", "join"),
+				},
+			})
+		})
+
+		// sytest: POST /rooms/:room_id/ban can ban a user
+		t.Run("POST /rooms/:room_id/ban can ban a user", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"visibility": "public",
+				"preset":     "public_chat",
+			})
+
+			bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+			// ban bob from room
+			banBody := client.WithJSONBody(t, map[string]string{
+				"user_id": bob.UserID,
+				"reason":  "Testing",
+			})
+			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, banBody)
+			must.MatchResponse(t, res, match.HTTPResponse{StatusCode: 200})
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+
+			// verify bob is banned
+			res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyEqual("membership", "ban"),
+				},
+			})
+		})
+
+		// sytest: POST /rooms/:room_id/invite can send an invite
+		t.Run("POST /rooms/:room_id/invite can send an invite", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.CreateRoom(t, nil)
+			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyEqual("membership", "invite"),
+				},
+			})
+		})
+
+		// sytest: POST /rooms/:room_id/leave can leave a room
+		t.Run("POST /rooms/:room_id/leave can leave a room", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.CreateRoom(t, nil)
+			alice.InviteRoom(t, roomID, bob.UserID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			bob.JoinRoom(t, roomID, []string{})
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+			bob.LeaveRoom(t, roomID)
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+
+			res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyEqual("membership", "leave"),
+				},
+			})
+		})
 	})
 }
