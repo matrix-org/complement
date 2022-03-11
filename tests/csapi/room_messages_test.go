@@ -18,6 +18,7 @@ import (
 // sytest: POST /rooms/:room_id/send/:event_type sends a message
 // sytest: GET /rooms/:room_id/messages returns a message
 func TestSendAndFetchMessage(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // flakey
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
