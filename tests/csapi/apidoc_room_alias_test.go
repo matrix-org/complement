@@ -8,7 +8,6 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/complement/runtime"
 )
 
 func setRoomAliasResp(t *testing.T, c *client.CSAPI, roomID, roomAlias string) *http.Response {
@@ -252,7 +251,6 @@ func TestRoomCanonicalAlias(t *testing.T) {
 
 		// part of "Canonical alias can be set"
 		t.Run("m.room.canonical_alias rejects missing aliases", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // FIXME https://github.com/matrix-org/dendrite/issues/2068
 
 			roomID := alice.CreateRoom(t, map[string]interface{}{})
 
@@ -272,7 +270,6 @@ func TestRoomCanonicalAlias(t *testing.T) {
 
 		// part of "Canonical alias can be set"
 		t.Run("m.room.canonical_alias rejects invalid aliases", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // FIXME https://github.com/matrix-org/dendrite/issues/2069
 
 			roomID := alice.CreateRoom(t, map[string]interface{}{})
 
@@ -291,7 +288,6 @@ func TestRoomCanonicalAlias(t *testing.T) {
 		})
 
 		t.Run("m.room.canonical_alias setting rejects deleted aliases", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // FIXME https://github.com/matrix-org/dendrite/issues/2068
 
 			roomID := alice.CreateRoom(t, map[string]interface{}{})
 
@@ -326,7 +322,6 @@ func TestRoomCanonicalAlias(t *testing.T) {
 		})
 
 		t.Run("m.room.canonical_alias rejects alias pointing to different local room", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // FIXME https://github.com/matrix-org/dendrite/issues/2068
 
 			room1 := alice.CreateRoom(t, map[string]interface{}{})
 			room2 := alice.CreateRoom(t, map[string]interface{}{})
@@ -376,7 +371,6 @@ func TestRoomCanonicalAlias(t *testing.T) {
 
 		// part of "Canonical alias can include alt_aliases"
 		t.Run("m.room.canonical_alias rejects missing aliases", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // FIXME https://github.com/matrix-org/dendrite/issues/2068
 			roomID := alice.CreateRoom(t, map[string]interface{}{})
 
 			t.Parallel()
@@ -401,7 +395,6 @@ func TestRoomCanonicalAlias(t *testing.T) {
 
 		// part of "Canonical alias can include alt_aliases"
 		t.Run("m.room.canonical_alias rejects invalid aliases", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // FIXME https://github.com/matrix-org/dendrite/issues/2069
 			roomID := alice.CreateRoom(t, map[string]interface{}{})
 
 			t.Parallel()
@@ -426,7 +419,6 @@ func TestRoomCanonicalAlias(t *testing.T) {
 
 		// part of "Canonical alias can include alt_aliases"
 		t.Run("m.room.canonical_alias rejects alt_alias pointing to different local room", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // FIXME https://github.com/matrix-org/dendrite/issues/2068
 
 			room1 := alice.CreateRoom(t, map[string]interface{}{})
 			room2 := alice.CreateRoom(t, map[string]interface{}{})
