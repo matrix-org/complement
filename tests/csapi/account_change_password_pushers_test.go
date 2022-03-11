@@ -23,7 +23,7 @@ func TestChangePasswordPushers(t *testing.T) {
 
 	// sytest: Pushers created with a different access token are deleted on password change
 	t.Run("Pushers created with a different access token are deleted on password change", func(t *testing.T) {
-		sessionOptional := createSession(t, deployment, passwordClient.UserID, password1)
+		_, sessionOptional := createSession(t, deployment, passwordClient.UserID, password1)
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"data": map[string]interface{}{
 				"url": "https://dummy.url/_matrix/push/v1/notify",
