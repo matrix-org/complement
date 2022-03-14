@@ -212,8 +212,12 @@ func TestRoomMembers(t *testing.T) {
 			})
 			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, banBody)
 			must.MatchResponse(t, res, match.HTTPResponse{StatusCode: 200})
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
-
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+				if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
+					return false
+				}
+				return ev.Get("content.membership").Str == "ban"
+			}))
 			// verify bob is banned
 			res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
 			must.MatchResponse(t, res, match.HTTPResponse{
