@@ -242,36 +242,39 @@ func deployImage(
 	if cfg.DebugLoggingEnabled {
 		log.Printf("%s: Created container '%s' using image '%s' on network '%s'", contextStr, containerID, imageID, networkID)
 	}
+	stubDeployment := &HomeserverDeployment{
+		ContainerID: containerID,
+	}
 
 	// Create the application service files
 	for asID, registration := range asIDToRegistrationMap {
 		err = copyToContainer(docker, containerID, fmt.Sprintf("%s%s.yaml", MountAppServicePath, url.PathEscape(asID)), []byte(registration))
 		if err != nil {
-			return nil, err
+			return stubDeployment, err
 		}
 	}
 
 	// Copy CA certificate and key
 	certBytes, err := cfg.CACertificateBytes()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get CA certificate: %s", err)
+		return stubDeployment, fmt.Errorf("failed to get CA certificate: %s", err)
 	}
 	err = copyToContainer(docker, containerID, MountCACertPath, certBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to copy CA certificate to container: %s", err)
+		return stubDeployment, fmt.Errorf("failed to copy CA certificate to container: %s", err)
 	}
 	certKeyBytes, err := cfg.CAPrivateKeyBytes()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get CA key: %s", err)
+		return stubDeployment, fmt.Errorf("failed to get CA key: %s", err)
 	}
 	err = copyToContainer(docker, containerID, MountCAKeyPath, certKeyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to copy CA key to container: %s", err)
+		return stubDeployment, fmt.Errorf("failed to copy CA key to container: %s", err)
 	}
 
 	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
 	if err != nil {
-		return nil, err
+		return stubDeployment, err
 	}
 	if cfg.DebugLoggingEnabled {
 		log.Printf("%s: Started container %s", contextStr, containerID)
@@ -284,7 +287,11 @@ func deployImage(
 	for time.Since(inspectStartTime) < time.Second {
 		inspect, err = docker.ContainerInspect(ctx, containerID)
 		if err != nil {
-			return nil, err
+			return stubDeployment, err
+		}
+		if inspect.State != nil && !inspect.State.Running {
+			// the container exited, bail out with a container ID for logs
+			return stubDeployment, fmt.Errorf("container is not running, state=%v", inspect.State.Status)
 		}
 		baseURL, fedBaseURL, err = endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
 		if err == nil {
@@ -292,7 +299,7 @@ func deployImage(
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
+		return stubDeployment, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
 	}
 	for vol := range inspect.Config.Volumes {
 		log.Printf(
@@ -316,12 +323,12 @@ func deployImage(
 			}
 			inspect, err = docker.ContainerInspect(ctx, containerID)
 			if err != nil {
-				lastErr = fmt.Errorf("Inspect container %s => error: %s", containerID, err)
+				lastErr = fmt.Errorf("inspect container %s => error: %s", containerID, err)
 				time.Sleep(50 * time.Millisecond)
 				continue
 			}
 			if inspect.State.Health.Status != "healthy" {
-				lastErr = fmt.Errorf("Inspect container %s => health: %s", containerID, inspect.State.Health.Status)
+				lastErr = fmt.Errorf("inspect container %s => health: %s", containerID, inspect.State.Health.Status)
 				time.Sleep(50 * time.Millisecond)
 				continue
 			}
