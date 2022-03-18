@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/runtime"
-	"github.com/tidwall/gjson"
 )
 
 // Observes "first bug" from https://github.com/matrix-org/dendrite/pull/1394#issuecomment-687056673
