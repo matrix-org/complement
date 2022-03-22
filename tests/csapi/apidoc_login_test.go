@@ -157,8 +157,7 @@ func TestLogin(t *testing.T) {
 			unauthedClient.UserID = js.Get("user_id").Str
 			unauthedClient.AccessToken = js.Get("access_token").Str
 			// check that we can successfully query /whoami
-			res = unauthedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "account", "whoami"})
-			must.MatchResponse(t, res, match.HTTPResponse{StatusCode: 200})
+			unauthedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "account", "whoami"})
 		})
 	})
 }
