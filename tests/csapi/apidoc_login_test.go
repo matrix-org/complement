@@ -152,8 +152,9 @@ func TestLogin(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unable to parse response body: %+v", err)
 			}
+			defer res.Body.Close()
 			js := gjson.ParseBytes(body)
-			unauthedClient.UserID = js.Get("user_id").Str // user_id should now be lowercase
+			unauthedClient.UserID = js.Get("user_id").Str
 			unauthedClient.AccessToken = js.Get("access_token").Str
 			// syncing should now be possible
 			unauthedClient.MustSync(t, client.SyncReq{})
