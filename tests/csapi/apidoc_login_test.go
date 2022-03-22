@@ -156,8 +156,9 @@ func TestLogin(t *testing.T) {
 			js := gjson.ParseBytes(body)
 			unauthedClient.UserID = js.Get("user_id").Str
 			unauthedClient.AccessToken = js.Get("access_token").Str
-			// syncing should now be possible
-			unauthedClient.MustSync(t, client.SyncReq{})
+			// check that we can successfully query /whoami
+			res = unauthedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "account", "whoami"})
+			must.MatchResponse(t, res, match.HTTPResponse{StatusCode: 200})
 		})
 	})
 }
