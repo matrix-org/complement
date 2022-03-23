@@ -3,7 +3,6 @@ package csapi_tests
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -136,7 +135,7 @@ func TestLogin(t *testing.T) {
 		})
 
 		// Regression test for https://github.com/matrix-org/dendrite/issues/2287
-		t.Run("Login with uppercase username works and syncing afterwards also", func(t *testing.T) {
+		t.Run("Login with uppercase username works and GET /whoami afterwards also", func(t *testing.T) {
 			t.Parallel()
 			// login should be possible with uppercase username
 			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, client.WithRawBody(json.RawMessage(`{
@@ -148,10 +147,7 @@ func TestLogin(t *testing.T) {
 				"password": "superuser"
 			}`)))
 			// extract access_token
-			body, err := ioutil.ReadAll(res.Body)
-			if err != nil {
-				t.Fatalf("unable to parse response body: %+v", err)
-			}
+			body := must.ParseJSON(t, res.Body)
 			defer res.Body.Close()
 			js := gjson.ParseBytes(body)
 			unauthedClient.UserID = js.Get("user_id").Str
