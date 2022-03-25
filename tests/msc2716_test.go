@@ -582,6 +582,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				},
 			})
 
+			// Sync while invited.
 			// We expect to find the `m.bridge` event in the `invite_state`
 			// TODO: This is commented out because `m.bridge` is not part of `invite_state`
 			// since = alice.MustSyncUntil(t, client.SyncReq{Since: since}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
@@ -596,6 +597,14 @@ func TestImportHistoricalMessages(t *testing.T) {
 			// 	}
 			// 	return nil
 			// })
+
+			// Sync while invited.
+			// Alternative to the `MustSyncUntil` above because `m.bridge` is not part
+			// of `invite_state` and don't want it to just fail.
+			firstIncrementalSyncGjson, since := alice.MustSync(t, client.SyncReq{Since: since})
+			logrus.WithFields(logrus.Fields{
+				"firstIncrementalSyncGjson": firstIncrementalSyncGjson.Raw,
+			}).Error("/sync while invited (1)")
 
 			// As the bot, join the user to the room via `m.room.member` events
 			// TODO: This results in HTTP 403 : {"errcode":"M_FORBIDDEN","error":"Cannot force another user to join."}
@@ -644,7 +653,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.MustSyncUntil(t, client.SyncReq{Since: since}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 				logrus.WithFields(logrus.Fields{
 					"topLevelSyncJSON": topLevelSyncJSON.Raw,
-				}).Error("/sync")
+				}).Error("/sync after join (2)")
 
 				if syncCount == 3 {
 					return nil
