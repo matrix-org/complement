@@ -39,3 +39,7 @@ Push rules come down in an initial /sync
 Guest user calling /events doesn't tightloop
 Guest user cannot call /events globally
 !53groups
+Global initialSync
+Global initialSync with limit=0 gives no messages
+Room initialSync
+Room initialSync with limit=0 gives no messages
