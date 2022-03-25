@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -539,6 +540,119 @@ func TestImportHistoricalMessages(t *testing.T) {
 				batchSendRes,
 				false,
 			)
+		})
+
+		t.Run("try reproduce missing state in sync synapse#12281", func(t *testing.T) {
+			t.Parallel()
+
+			// Initial /sync for Alice
+			_, since := alice.MustSync(t, client.SyncReq{})
+
+			// Bridge creates a room and invites Alice to it.
+			// Along with some `m.bridge` `initial_state`.
+			roomID := as.CreateRoom(t, map[string]interface{}{
+				"preset":       "public_chat",
+				"name":         "the hangout spot",
+				"room_version": "org.matrix.msc2716v3",
+				"invite":       []string{alice.UserID},
+				"initial_state": []map[string]interface{}{
+					{
+						"type":      "m.bridge",
+						"state_key": "",
+						"content": map[string]interface{}{
+							"bridgebot": "@bridgebot:hs1",
+							"protocol": map[string]interface{}{
+								"id":           "gitter",
+								"displayname":  "Gitter",
+								"external_url": "https://gitter.im/",
+							},
+							"channel": map[string]interface{}{
+								"id":           "123abc",
+								"displayname":  "foo/bar",
+								"external_url": "https://gitter.im/foo/bar",
+							},
+						},
+					}, {
+						"type":      "m.other.state",
+						"state_key": "",
+						"content": map[string]interface{}{
+							"foo": "bar",
+						},
+					},
+				},
+			})
+
+			// We expect to find the `m.bridge` event in the `invite_state`
+			// TODO: This is commented out because `m.bridge` is not part of `invite_state`
+			// since = alice.MustSyncUntil(t, client.SyncReq{Since: since}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+			// 	err := client.LoopArray(
+			// 		topLevelSyncJSON, "rooms.invite."+client.GjsonEscape(roomID)+".invite_state.events",
+			// 		func(ev gjson.Result) bool {
+			// 			return ev.Get("type").Str == "m.bridge"
+			// 		},
+			// 	)
+			// 	if err != nil {
+			// 		return fmt.Errorf("SyncInvitedTo(%s): %s", roomID, err)
+			// 	}
+			// 	return nil
+			// })
+
+			// As the bot, join the user to the room via `m.room.member` events
+			// TODO: This results in HTTP 403 : {"errcode":"M_FORBIDDEN","error":"Cannot force another user to join."}
+			// as.SendEventSynced(t, roomID, b.Event{
+			// 	Type:     "m.room.member",
+			// 	Sender:   as.UserID,
+			// 	StateKey: &alice.UserID,
+			// 	Content: map[string]interface{}{
+			// 		"membership": "join",
+			// 	},
+			// })
+
+			// Alternative to bot joins Alice via m.room.member commented out above.
+			// Alice joins the room
+			alice.JoinRoom(t, roomID, nil)
+
+			// Create the "live" event we are going to import our historical events next to
+			// We can't use as.SendEventSynced(...) because application services can't use the /sync API
+			eventBefore := b.Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"body":    "foo",
+					"msgtype": "m.text",
+				},
+			}
+			txnId := getTxnID("sendLiveEvent-txn")
+			eventBeforeSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", eventBefore.Type, txnId}, client.WithJSONBody(t, eventBefore.Content))
+			eventBeforeSendBody := client.ParseJSON(t, eventBeforeSendRes)
+			eventIdBefore := client.GetJSONFieldStr(t, eventBeforeSendBody, "event_id")
+			timeAfterEventBefore := time.Now()
+
+			// Import some historical events
+			batchSendHistoricalMessages(
+				t,
+				as,
+				roomID,
+				eventIdBefore,
+				"",
+				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 3),
+				// Status
+				200,
+			)
+
+			syncCount := 0
+			alice.MustSyncUntil(t, client.SyncReq{Since: since}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+				logrus.WithFields(logrus.Fields{
+					"topLevelSyncJSON": topLevelSyncJSON.Raw,
+				}).Error("/sync")
+
+				if syncCount == 3 {
+					return nil
+				}
+
+				syncCount++
+				return fmt.Errorf("another sync...")
+			})
 		})
 
 		t.Run("TODO: What happens when you point multiple batches at the same insertion event?", func(t *testing.T) {

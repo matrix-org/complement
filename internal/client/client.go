@@ -608,7 +608,7 @@ func GjsonEscape(in string) string {
 // Check that the timeline for `roomID` has an event which passes the check function.
 func SyncTimelineHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		err := loopArray(
+		err := LoopArray(
 			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", check,
 		)
 		if err == nil {
@@ -637,7 +637,7 @@ func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 		// - actively being invited to a room.
 		if clientUserID == userID {
 			// active
-			err := loopArray(
+			err := LoopArray(
 				topLevelSyncJSON, "rooms.invite."+GjsonEscape(roomID)+".invite_state.events",
 				func(ev gjson.Result) bool {
 					return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
@@ -696,11 +696,11 @@ func SyncLeftFrom(userID, roomID string) SyncCheckOpt {
 // `check` function returns true for at least one event.
 func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		return loopArray(topLevelSyncJSON, "account_data.events", check)
+		return LoopArray(topLevelSyncJSON, "account_data.events", check)
 	}
 }
 
-func loopArray(object gjson.Result, key string, check func(gjson.Result) bool) error {
+func LoopArray(object gjson.Result, key string, check func(gjson.Result) bool) error {
 	array := object.Get(key)
 	if !array.Exists() {
 		return fmt.Errorf("Key %s does not exist", key)
