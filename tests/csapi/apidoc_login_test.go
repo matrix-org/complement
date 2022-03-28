@@ -133,5 +133,27 @@ func TestLogin(t *testing.T) {
 				},
 			})
 		})
+
+		// Regression test for https://github.com/matrix-org/dendrite/issues/2287
+		t.Run("Login with uppercase username works and GET /whoami afterwards also", func(t *testing.T) {
+			t.Parallel()
+			// login should be possible with uppercase username
+			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, client.WithRawBody(json.RawMessage(`{
+				"type": "m.login.password",
+				"identifier": {
+					"type": "m.id.user",
+					"user": "@Test_login_user:hs1"
+				},
+				"password": "superuser"
+			}`)))
+			// extract access_token
+			body := must.ParseJSON(t, res.Body)
+			defer res.Body.Close()
+			js := gjson.ParseBytes(body)
+			unauthedClient.UserID = js.Get("user_id").Str
+			unauthedClient.AccessToken = js.Get("access_token").Str
+			// check that we can successfully query /whoami
+			unauthedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "account", "whoami"})
+		})
 	})
 }
