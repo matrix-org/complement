@@ -1,7 +1,9 @@
-// +build msc2403
+// Knocking is not yet implemented on Dendrite
+//go:build !dendrite_blacklist
+// +build !dendrite_blacklist
 
-// This file contains tests for knocking, a currently experimental feature defined by MSC2403,
-// which you can read here: https://github.com/matrix-org/matrix-doc/pull/2403
+// This file contains Client-Server and Federation API tests for knocking
+// https://spec.matrix.org/1.2/client-server-api/#knocking-on-rooms
 
 package tests
 
