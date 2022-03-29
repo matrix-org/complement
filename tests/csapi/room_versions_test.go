@@ -5,11 +5,12 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/gomatrixserverlib"
-	"github.com/tidwall/gjson"
 )
 
 func TestRoomVersions(t *testing.T) {
