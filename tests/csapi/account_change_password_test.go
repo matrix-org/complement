@@ -20,7 +20,7 @@ func TestChangePassword(t *testing.T) {
 	password2 := "my_new_password"
 	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_user", password1, false)
 	unauthedClient := deployment.Client(t, "hs1", "")
-	sessionTest := createSession(t, deployment, "test_change_password_user", "superuser")
+	_, sessionTest := createSession(t, deployment, "test_change_password_user", "superuser")
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
 
@@ -78,7 +78,7 @@ func TestChangePassword(t *testing.T) {
 
 	// sytest: After changing password, different sessions can optionally be kept
 	t.Run("After changing password, different sessions can optionally be kept", func(t *testing.T) {
-		sessionOptional := createSession(t, deployment, "test_change_password_user", password2)
+		_, sessionOptional := createSession(t, deployment, "test_change_password_user", password2)
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"auth": map[string]interface{}{
 				"type":     "m.login.password",
@@ -120,8 +120,8 @@ func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword stri
 	})
 }
 
-func createSession(t *testing.T, deployment *docker.Deployment, userID, password string) *client.CSAPI {
-	authedClient := deployment.Client(t, "hs1", "")
+func createSession(t *testing.T, deployment *docker.Deployment, userID, password string) (deviceID string, authedClient *client.CSAPI) {
+	authedClient = deployment.Client(t, "hs1", "")
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"identifier": map[string]interface{}{
 			"type": "m.id.user",
@@ -138,5 +138,6 @@ func createSession(t *testing.T, deployment *docker.Deployment, userID, password
 
 	authedClient.UserID = gjson.GetBytes(body, "user_id").Str
 	authedClient.AccessToken = gjson.GetBytes(body, "access_token").Str
-	return authedClient
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	return deviceID, authedClient
 }
