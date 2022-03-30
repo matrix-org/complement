@@ -320,10 +320,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, insertTime),
 				createMessageEventsForBatchSendRequest([]string{virtualUserID}, insertTime, 1),
 				// Status
-				// TODO: Seems like this makes more sense as a 404
-				// But the current Synapse code around unknown prev events will throw ->
-				// `403: No create event in auth events`
-				403,
+				400,
 			)
 		})
 

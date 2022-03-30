@@ -1,3 +1,4 @@
+//go:build !dendrite_blacklist
 // +build !dendrite_blacklist
 
 // Rationale for being included in Dendrite's blacklist: https://github.com/matrix-org/complement/pull/199#issuecomment-904852233
@@ -43,8 +44,8 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	}
 
 	alice := deployment.Client(t, "hs1", aliceUserID)
-	bob := deployment.RegisterUser(t, "hs1", "bob", "bob-has-a-very-secret-pw")
-	eve := deployment.RegisterUser(t, "hs1", "eve", "eve-has-a-very-secret-pw")
+	bob := deployment.RegisterUser(t, "hs1", "bob", "bob-has-a-very-secret-pw", false)
+	eve := deployment.RegisterUser(t, "hs1", "eve", "eve-has-a-very-secret-pw", false)
 
 	// Alice sets her profile displayname. This ensures that her
 	// public name, private name and userid localpart are all

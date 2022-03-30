@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -39,22 +38,11 @@ var (
 	HostnameRunningDocker = "localhost"
 )
 
-func init() {
-	if os.Getenv("CI") == "true" {
-		log.Println("Running under CI: redirecting localhost to docker host on 172.17.0.1")
-		// this assumes we are running inside docker so they have
-		// forwarded the docker socket to us and we're in a container.
-		HostnameRunningDocker = "172.17.0.1"
-	}
-}
-
 const complementLabel = "complement_context"
 
 type Builder struct {
-	Config         *config.Complement
-	CSAPIPort      int
-	FederationPort int
-	Docker         *client.Client
+	Config *config.Complement
+	Docker *client.Client
 }
 
 func NewBuilder(cfg *config.Complement) (*Builder, error) {
@@ -63,10 +51,8 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 		return nil, err
 	}
 	return &Builder{
-		Docker:         cli,
-		Config:         cfg,
-		CSAPIPort:      8008,
-		FederationPort: 8448,
+		Docker: cli,
+		Config: cfg,
 	}, nil
 }
 
@@ -184,63 +170,49 @@ func (d *Builder) removeContainers() error {
 	return nil
 }
 
-func (d *Builder) ConstructBlueprintsIfNotExist(bs []b.Blueprint) error {
-	var blueprintsToBuild []b.Blueprint
-	for _, bprint := range bs {
-		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
-			Filters: label(
-				"complement_blueprint="+bprint.Name,
-				"complement_pkg="+d.Config.PackageNamespace,
-			),
-		})
-		if err != nil {
-			return fmt.Errorf("ConstructBlueprintsIfNotExist: failed to ImageList: %w", err)
-		}
-		if len(images) == 0 {
-			blueprintsToBuild = append(blueprintsToBuild, bprint)
-		}
+func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
+	images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
+		Filters: label(
+			"complement_blueprint="+bprint.Name,
+			"complement_pkg="+d.Config.PackageNamespace,
+		),
+	})
+	if err != nil {
+		return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ImageList: %w", bprint.Name, err)
 	}
-	if len(blueprintsToBuild) == 0 {
-		return nil
+	if len(images) == 0 {
+		d.ConstructBlueprint(bprint)
 	}
-	return d.ConstructBlueprints(blueprintsToBuild)
+	return nil
 }
 
-func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
-	errc := make(chan []error, len(bs))
-	for _, bprint := range bs {
-		go (func(bprint b.Blueprint) {
-			errc <- d.construct(bprint)
-		})(bprint)
-	}
-	var errs []error
-	for i := 0; i < len(bs); i++ {
-		// the channel returns a slice of errors;
-		// spread and append them to the error slice
-		// (nothing will be appended if the slice is empty)
-		errs = append(errs, <-errc...)
-	}
-	close(errc)
+func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
+	errs := d.construct(bprint)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			d.log("could not construct blueprint: %s", err)
 		}
-		return errs[0]
+		return fmt.Errorf("errors whilst constructing blueprint %s: %v", bprint.Name, errs)
 	}
 
 	// wait a bit for images/containers to show up in 'image ls'
 	foundImages := false
-	for i := 0; i < 50; i++ { // max 5s
-		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
+	var images []types.ImageSummary
+	var err error
+	waitTime := 5 * time.Second
+	startTime := time.Now()
+	for time.Since(startTime) < waitTime {
+		images, err = d.Docker.ImageList(context.Background(), types.ImageListOptions{
 			Filters: label(
 				complementLabel,
+				"complement_blueprint="+bprint.Name,
 				"complement_pkg="+d.Config.PackageNamespace,
 			),
 		})
 		if err != nil {
 			return err
 		}
-		if len(images) < len(bs) {
+		if len(images) < len(bprint.Homeservers) {
 			time.Sleep(100 * time.Millisecond)
 		} else {
 			foundImages = true
@@ -253,11 +225,18 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	if !foundImages {
 		return fmt.Errorf("failed to find built images via ImageList: did they all build ok?")
 	}
+	var imgDatas []string
+	for _, img := range images {
+		imgDatas = append(imgDatas, fmt.Sprintf("%s=>%v", img.ID, img.Labels))
+	}
+	d.log("Constructed blueprint '%s' : %v", bprint.Name, imgDatas)
 	return nil
 }
 
 // construct all Homeservers sequentially then commits them
 func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
+	d.log("Constructing blueprint '%s'", bprint.Name)
+
 	networkID, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
 	if err != nil {
 		return []error{err}
@@ -273,6 +252,11 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 				// something went wrong, but we have a container which may have interesting logs
 				printLogs(d.Docker, res.containerID, res.contextStr)
 			}
+			if delErr := d.Docker.ContainerRemove(context.Background(), res.containerID, types.ContainerRemoveOptions{
+				Force: true,
+			}); delErr != nil {
+				d.log("%s: failed to remove container which failed to deploy: %s", res.contextStr, delErr)
+			}
 		}
 		// kill the container
 		defer func(r result) {
@@ -280,6 +264,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			if killErr != nil {
 				d.log("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
 			}
+
 		}(res)
 		results[i] = res
 	}
@@ -328,7 +313,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			continue
 		}
 		imageID := strings.Replace(commit.ID, "sha256:", "", 1)
-		d.log("%s => %s\n", res.contextStr, imageID)
+		d.log("%s: Created docker image %s\n", res.contextStr, imageID)
 	}
 	return errs
 }
@@ -369,9 +354,9 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 
 	return deployImage(
-		d.Docker, d.Config.BaseImageURI, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr),
+		d.Docker, d.Config.BaseImageURI, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
-		networkID, d.Config.SpawnHSTimeout,
+		networkID, d.Config,
 	)
 }
 
@@ -405,6 +390,9 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 	}
 	// return the existing network
 	if len(nws) > 0 {
+		if len(nws) > 1 {
+			log.Printf("WARNING: createNetworkIfNotExists got %d networks for pkg=%s blueprint=%s", len(nws), pkgNamespace, blueprintName)
+		}
 		return nws[0].ID, nil
 	}
 	// make a user-defined network so we get DNS based on the container name
@@ -452,12 +440,18 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", csapiPort, p)
 	}
+	if len(csapiPortInfo) == 0 {
+		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", csapiPort, p)
+	}
 	baseURL = fmt.Sprintf("http://"+HostnameRunningDocker+":%s", csapiPortInfo[0].HostPort)
 
 	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
 	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", ssapiPort, p)
+	}
+	if len(ssapiPortInfo) == 0 {
+		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", ssapiPort, p)
 	}
 	fedBaseURL = fmt.Sprintf("https://"+HostnameRunningDocker+":%s", ssapiPortInfo[0].HostPort)
 	return

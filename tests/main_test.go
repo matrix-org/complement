@@ -15,7 +15,6 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/matrix-org/complement/internal/federation"
 )
 
 var namespaceCounter uint64
@@ -28,7 +27,7 @@ var complementBuilder *docker.Builder
 // It will clean up any old containers/images/networks from the previous run, then run the tests, then clean up
 // again. No blueprints are made at this point as they are lazily made on demand.
 func TestMain(m *testing.M) {
-	cfg := config.NewConfigFromEnvVars()
+	cfg := config.NewConfigFromEnvVars("fed", "")
 	log.Printf("config: %+v", cfg)
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {
@@ -38,16 +37,6 @@ func TestMain(m *testing.M) {
 	complementBuilder = builder
 	// remove any old images/containers/networks in case we died horribly before
 	builder.Cleanup()
-
-	if os.Getenv("COMPLEMENT_CA") == "true" {
-		log.Printf("Running with Complement CA")
-		// make sure CA certs are generated
-		_, _, err = federation.GetOrCreateCaCert()
-		if err != nil {
-			fmt.Printf("Error: %s", err)
-			os.Exit(1)
-		}
-	}
 
 	// we use GMSL which uses logrus by default. We don't want those logs in our test output unless they are Serious.
 	logrus.SetLevel(logrus.ErrorLevel)
@@ -67,7 +56,7 @@ func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	if complementBuilder == nil {
 		t.Fatalf("complementBuilder not set, did you forget to call TestMain?")
 	}
-	if err := complementBuilder.ConstructBlueprintsIfNotExist([]b.Blueprint{blueprint}); err != nil {
+	if err := complementBuilder.ConstructBlueprintIfNotExist(blueprint); err != nil {
 		t.Fatalf("Deploy: Failed to construct blueprint: %s", err)
 	}
 	namespace := fmt.Sprintf("%d", atomic.AddUint64(&namespaceCounter, 1))

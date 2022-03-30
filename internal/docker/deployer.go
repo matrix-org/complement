@@ -22,12 +22,12 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"runtime"
 	"sync"
 	"time"
 
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -35,6 +35,12 @@ import (
 	"github.com/docker/docker/api/types/network"
 
 	"github.com/matrix-org/complement/internal/config"
+)
+
+const (
+	MountCACertPath     = "/complement/ca/ca.crt"
+	MountCAKeyPath      = "/complement/ca/ca.key"
+	MountAppServicePath = "/complement/appservice/" // All registration files sit here
 )
 
 type Deployer struct {
@@ -71,6 +77,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		Deployer:      d,
 		BlueprintName: blueprintName,
 		HS:            make(map[string]HomeserverDeployment),
+		Config:        d.config,
 	}
 	images, err := d.Docker.ImageList(ctx, types.ImageListOptions{
 		Filters: label(
@@ -106,8 +113,9 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 
 		// TODO: Make CSAPI port configurable
 		deployment, err := deployImage(
-			d.Docker, img.ID, 8008, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
-			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config.SpawnHSTimeout)
+			d.Docker, img.ID, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
+			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config,
+		)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
 				// print logs to help debug
@@ -156,9 +164,10 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 	}
 }
 
+// nolint
 func deployImage(
-	docker *client.Client, imageID string, csPort int, containerName, pkgNamespace, blueprintName, hsName string,
-	asIDToRegistrationMap map[string]string, contextStr, networkID string, spawnHSTimeout time.Duration,
+	docker *client.Client, imageID string, containerName, pkgNamespace, blueprintName, hsName string,
+	asIDToRegistrationMap map[string]string, contextStr, networkID string, cfg *config.Complement,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -172,21 +181,20 @@ func deployImage(
 		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
 	}
 
-	toMount := []Volume{
-		&VolumeCA{}, &VolumeAppService{},
+	for _, m := range cfg.HostMounts {
+		mounts = append(mounts, mount.Mount{
+			Source:   m.HostPath,
+			Target:   m.ContainerPath,
+			ReadOnly: m.ReadOnly,
+			Type:     mount.TypeBind,
+		})
 	}
-	for _, m := range toMount {
-		err = m.Prepare(ctx, docker, contextStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to prepare volume: %s", err)
-		}
-		mounts = append(mounts, m.Mount())
+	if len(mounts) > 0 {
+		log.Printf("Using host mounts: %+v", mounts)
 	}
 
 	env := []string{
 		"SERVER_NAME=" + hsName,
-		// TODO: Remove once HS images don't rely on this anymore
-		"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
 	}
 
 	body, err := docker.ContainerCreate(ctx, &container.Config{
@@ -201,65 +209,141 @@ func deployImage(
 		},
 	}, &container.HostConfig{
 		PublishAllPorts: true,
-		ExtraHosts:      extraHosts,
-		Mounts:          mounts,
+		PortBindings: nat.PortMap{
+			nat.Port("8008/tcp"): []nat.PortBinding{
+				{
+					HostIP: "127.0.0.1",
+				},
+			},
+			nat.Port("8448/tcp"): []nat.PortBinding{
+				{
+					HostIP: "127.0.0.1",
+				},
+			},
+		},
+		ExtraHosts: extraHosts,
+		Mounts:     mounts,
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
-			hsName: {
+			contextStr: {
 				NetworkID: networkID,
 				Aliases:   []string{hsName},
 			},
 		},
-	}, containerName)
+	}, nil, containerName)
 	if err != nil {
 		return nil, err
 	}
+	for _, w := range body.Warnings {
+		log.Printf("WARN: ContainerCreate: %s", w)
+	}
 
 	containerID := body.ID
+	if cfg.DebugLoggingEnabled {
+		log.Printf("%s: Created container '%s' using image '%s' on network '%s'", contextStr, containerID, imageID, networkID)
+	}
+	stubDeployment := &HomeserverDeployment{
+		ContainerID: containerID,
+	}
 
 	// Create the application service files
 	for asID, registration := range asIDToRegistrationMap {
-		// Create a fake/virtual file in memory that we can copy to the container
-		// via https://stackoverflow.com/a/52131297/796832
-		var buf bytes.Buffer
-		tw := tar.NewWriter(&buf)
-		err = tw.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("/appservices/%s.yaml", url.PathEscape(asID)),
-			Mode: 0777,
-			Size: int64(len(registration)),
-		})
+		err = copyToContainer(docker, containerID, fmt.Sprintf("%s%s.yaml", MountAppServicePath, url.PathEscape(asID)), []byte(registration))
 		if err != nil {
-			return nil, fmt.Errorf("failed to copy regstration to container: %v", err)
+			return stubDeployment, err
 		}
-		tw.Write([]byte(registration))
-		tw.Close()
+	}
 
-		// Put our new fake file in the container volume
-		err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
-			AllowOverwriteDirWithFile: false,
-		})
-		if err != nil {
-			return nil, err
-		}
+	// Copy CA certificate and key
+	certBytes, err := cfg.CACertificateBytes()
+	if err != nil {
+		return stubDeployment, fmt.Errorf("failed to get CA certificate: %s", err)
+	}
+	err = copyToContainer(docker, containerID, MountCACertPath, certBytes)
+	if err != nil {
+		return stubDeployment, fmt.Errorf("failed to copy CA certificate to container: %s", err)
+	}
+	certKeyBytes, err := cfg.CAPrivateKeyBytes()
+	if err != nil {
+		return stubDeployment, fmt.Errorf("failed to get CA key: %s", err)
+	}
+	err = copyToContainer(docker, containerID, MountCAKeyPath, certKeyBytes)
+	if err != nil {
+		return stubDeployment, fmt.Errorf("failed to copy CA key to container: %s", err)
 	}
 
 	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
 	if err != nil {
-		return nil, err
+		return stubDeployment, err
 	}
-	inspect, err := docker.ContainerInspect(ctx, containerID)
+	if cfg.DebugLoggingEnabled {
+		log.Printf("%s: Started container %s", contextStr, containerID)
+	}
+
+	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
+	var inspect types.ContainerJSON
+	var baseURL, fedBaseURL string
+	inspectStartTime := time.Now()
+	for time.Since(inspectStartTime) < time.Second {
+		inspect, err = docker.ContainerInspect(ctx, containerID)
+		if err != nil {
+			return stubDeployment, err
+		}
+		if inspect.State != nil && !inspect.State.Running {
+			// the container exited, bail out with a container ID for logs
+			return stubDeployment, fmt.Errorf("container is not running, state=%v", inspect.State.Status)
+		}
+		baseURL, fedBaseURL, err = endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
-		return nil, err
+		return stubDeployment, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
 	}
-	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
-	if err != nil {
-		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
+	for vol := range inspect.Config.Volumes {
+		log.Printf(
+			"WARNING: %s has a named VOLUME %s - volumes can lead to unpredictable behaviour due to "+
+				"test pollution. Remove the VOLUME in the Dockerfile to suppress this message.", containerName, vol,
+		)
 	}
-	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
-	// hit /versions to check it is up
+
 	var lastErr error
-	stopTime := time.Now().Add(spawnHSTimeout)
+
+	// Inspect health status of container to check it is up
+	stopTime := time.Now().Add(cfg.SpawnHSTimeout)
+	iterCount := 0
+	if inspect.State.Health != nil {
+		// If the container has a healthcheck, wait for it first
+		for {
+			iterCount += 1
+			if time.Now().After(stopTime) {
+				lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
+				break
+			}
+			inspect, err = docker.ContainerInspect(ctx, containerID)
+			if err != nil {
+				lastErr = fmt.Errorf("inspect container %s => error: %s", containerID, err)
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			if inspect.State.Health.Status != "healthy" {
+				lastErr = fmt.Errorf("inspect container %s => health: %s", containerID, inspect.State.Health.Status)
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			lastErr = nil
+			break
+
+		}
+	}
+
+	// Having optionally waited for container to self-report healthy
+	// hit /versions to check it is actually responding
+	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
+
 	for {
+		iterCount += 1
 		if time.Now().After(stopTime) {
 			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
 			break
@@ -288,8 +372,38 @@ func deployImage(
 	}
 	if lastErr != nil {
 		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
+	} else {
+		if cfg.DebugLoggingEnabled {
+			log.Printf("%s: Server is responding after %d iterations", contextStr, iterCount)
+		}
 	}
 	return d, nil
+}
+
+func copyToContainer(docker *client.Client, containerID, path string, data []byte) error {
+	// Create a fake/virtual file in memory that we can copy to the container
+	// via https://stackoverflow.com/a/52131297/796832
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	err := tw.WriteHeader(&tar.Header{
+		Name: path,
+		Mode: 0777,
+		Size: int64(len(data)),
+	})
+	if err != nil {
+		return fmt.Errorf("copyToContainer: failed to write tarball header for %s: %v", path, err)
+	}
+	tw.Write([]byte(data))
+	tw.Close()
+
+	// Put our new fake file in the container volume
+	err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
+		AllowOverwriteDirWithFile: false,
+	})
+	if err != nil {
+		return fmt.Errorf("copyToContainer: failed to copy: %s", err)
+	}
+	return nil
 }
 
 // RoundTripper is a round tripper that maps https://hs1 to the federation port of the container

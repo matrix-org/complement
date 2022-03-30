@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [ 'master' ]
+    branches: [ 'master', 'main' ]
   pull_request:
 
 jobs:
@@ -24,65 +24,80 @@ jobs:
       matrix:
         include:
           - homeserver: Synapse
-            tags: synapse_blacklist,msc2403,msc3083
-            default_branch: develop
-
+            tags: synapse_blacklist,msc3083
+            
           - homeserver: Dendrite
             tags: msc2836 dendrite_blacklist
-            default_branch: master
-
-    container:
-      image: matrixdotorg/complement  # dockerfiles/ComplementCIBuildkite.Dockerfile
-      env:
-        CI: true
-        DOCKER_BUILDKIT: 1
-      ports:
-        - 8448:8448
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v2 # Checkout complement
+
+      # Env vars are set file a file given by $GITHUB_PATH. We need both Go 1.17 and GOPATH on env.
+      # See https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-system-path
+      - name: "Set Go Version"
+        run: |
+          echo "$GOROOT_1_17_X64/bin" >> $GITHUB_PATH
+          echo "~/go/bin" >> $GITHUB_PATH
+
+      # Similar steps as dockerfiles/ComplementCIBuildkite.Dockerfile but on the host. We need
+      # to do this so we can _be_ the host when running Complement so we can snaffle all the ports. If
+      # we run Complement _in_ Docker then we can't -p all high numbered ports which then breaks federation
+      # servers which listen on random high numbered ports.
+      - name: "Install Complement Dependencies"
+        # We don't need to install Go because it is included on the Ubuntu 20.04 image:
+        # See https://github.com/actions/virtual-environments/blob/main/images/linux/Ubuntu2004-Readme.md specifically GOROOT_1_17_X64
+        run: |
+          sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
+          go get -v github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
 
       - name: "Checkout corresponding ${{ matrix.homeserver }} branch"
-        # This is only done for Synapse since Dendrite's docker file pulls in
-        # the Dendrite sources directly.
-        if: ${{ matrix.homeserver == 'Synapse' }}
         shell: bash
         run: |
           mkdir -p homeserver
+          
           # Attempt to use the version of the homeserver which best matches the
-          # current build. Depending on whether this is a PR or release, etc. we
-          # need to use different fallbacks.
+          # current build.
           #
-          # 1. Check if there's a similarly named branch (GITHUB_HEAD_REF for pull
-          #    requests, otherwise GITHUB_REF), but if this is the default complement
-          #    branch, use the default homeserver branch.
-          # 2. Use the default homeserver branch.
-          for BRANCH_NAME in "$GITHUB_HEAD_REF" "${GITHUB_REF#refs/heads/}" "${{ matrix.default_branch }}"; do
-            # Skip empty branch names and merge commits.
-            if [[ -z "$BRANCH_NAME" || $BRANCH_NAME =~ ^refs/pull/.* ]]; then
-              continue
-            fi
-
-            # If this is complement's default branch, use the homeserver's default branch.
-            if [[ "$BRANCH_NAME" == "master" ]]; then
-              BRANCH_NAME="${{ matrix.default_branch }}"
-            fi
-
+          # 1. If we are not on complement's default branch, check if there's a
+          #    similarly named branch (GITHUB_HEAD_REF for pull requests,
+          #    otherwise GITHUB_REF).
+          # 2. otherwise, use the default homeserver branch ("HEAD")
+          
+          for BRANCH_NAME in "$GITHUB_HEAD_REF" "${GITHUB_REF#refs/heads/}" "HEAD"; do
+            # Skip empty branch names, merge commits, and our default branch.
+            # (If we are on complement's default branch, we want to fall through to the HS's default branch
+            # rather than using the HS's 'master'/'main').
+            case "$BRANCH_NAME" in
+              "" | refs/pull/* | main | master)
+                continue
+                ;;
+            esac
             (wget -O - "https://github.com/matrix-org/${{ matrix.homeserver }}/archive/$BRANCH_NAME.tar.gz" | tar -xz --strip-components=1 -C homeserver) && break
           done
 
-      # Build initial homeserver image
+      # Build homeserver image
+
+        # Build the base Synapse dockerfile and then build a Complement-specific image from that base.
       - run: docker build -t matrixdotorg/synapse:latest -f docker/Dockerfile .
-        # We only do this for Synapse since Dendrite's docker file pulls in
-        # the Dendrite sources directly (instead of being based on a previously
-        # built docker image).
         if: ${{ matrix.homeserver == 'Synapse' }}
         working-directory: homeserver
-
+        env:
+          DOCKER_BUILDKIT: 1
       - run: docker build -t homeserver -f dockerfiles/${{ matrix.homeserver }}.Dockerfile dockerfiles/
-      - run: set -o pipefail && go test -p 2 -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
+        if: ${{ matrix.homeserver == 'Synapse' }}
+
+        # Build the Complement-specific dendrite image from the dockerfile in the Dendrite repo.
+        # We don't use the dockerfiles in the Complement repo as they tend to get stale quickly.
+      - run: docker build -t homeserver -f build/scripts/Complement.Dockerfile .
+        if: ${{ matrix.homeserver == 'Dendrite' }}
+        working-directory: homeserver
+
+      - run: |
+          set -o pipefail &&
+          go test -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
+        name: Run Complement Tests
         env:
           COMPLEMENT_BASE_IMAGE: homeserver
+          COMPLEMENT_DEBUG: 1
+          DOCKER_BUILDKIT: 1

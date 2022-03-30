@@ -17,7 +17,7 @@ func TestLogin(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
-	_ = deployment.RegisterUser(t, "hs1", "test_login_user", "superuser")
+	_ = deployment.RegisterUser(t, "hs1", "test_login_user", "superuser", false)
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: GET /login yields a set of flows
 		t.Run("GET /login yields a set of flows", func(t *testing.T) {
@@ -132,6 +132,28 @@ func TestLogin(t *testing.T) {
 					match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
 				},
 			})
+		})
+
+		// Regression test for https://github.com/matrix-org/dendrite/issues/2287
+		t.Run("Login with uppercase username works and GET /whoami afterwards also", func(t *testing.T) {
+			t.Parallel()
+			// login should be possible with uppercase username
+			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, client.WithRawBody(json.RawMessage(`{
+				"type": "m.login.password",
+				"identifier": {
+					"type": "m.id.user",
+					"user": "@Test_login_user:hs1"
+				},
+				"password": "superuser"
+			}`)))
+			// extract access_token
+			body := must.ParseJSON(t, res.Body)
+			defer res.Body.Close()
+			js := gjson.ParseBytes(body)
+			unauthedClient.UserID = js.Get("user_id").Str
+			unauthedClient.AccessToken = js.Get("access_token").Str
+			// check that we can successfully query /whoami
+			unauthedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "account", "whoami"})
 		})
 	})
 }

@@ -1,5 +1,3 @@
-// +build !dendrite_blacklist
-
 // This file includes tests for MSC2946, the spaces summary API.
 //
 // There are currently tests for two unstable versions of it for backwards
@@ -132,6 +130,8 @@ func TestClientSpacesSummary(t *testing.T) {
 		"preset": "public_chat",
 		"name":   "R5",
 	})
+	roomNames[r5] = "R5"
+	t.Logf("%+v", roomNames)
 
 	// create the links
 	rootToR1 := eventKey(root, r1, spaceChildEventType)

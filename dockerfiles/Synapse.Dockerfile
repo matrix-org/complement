@@ -24,10 +24,13 @@ COPY keys/* /ca/
 RUN openssl genrsa -out /conf/server.tls.key 2048
 
 # generate a signing key
-RUN generate_signing_key.py -o /conf/server.signing.key
+RUN generate_signing_key -o /conf/server.signing.key
 
 WORKDIR /data
 
 EXPOSE 8008 8448
 
 ENTRYPOINT ["/conf/start.sh"]
+
+HEALTHCHECK --start-period=5s --interval=1s --timeout=1s \
+    CMD curl -fSs http://localhost:8008/health || exit 1

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -29,7 +28,7 @@ func TestOutboundFederationProfile(t *testing.T) {
 
 	// sytest: Outbound federation can query profile data
 	t.Run("Outbound federation can query profile data", func(t *testing.T) {
-		remoteUserID := "@user:" + docker.HostnameRunningComplement
+		remoteUserID := srv.UserID("user")
 		remoteDisplayName := "my remote display name"
 
 		srv.Mux().Handle("/_matrix/federation/v1/query/profile", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

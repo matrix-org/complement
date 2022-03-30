@@ -14,6 +14,8 @@ handlers:
     class: logging.StreamHandler
     formatter: precise
     filters: [context]
+    # log to stdout, for easier use with 'docker logs'
+    stream: 'ext://sys.stdout'
 
 root:
     level: INFO

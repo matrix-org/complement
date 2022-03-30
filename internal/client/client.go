@@ -2,6 +2,9 @@ package client
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha1" // nolint:gosec
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -17,6 +20,11 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/must"
+)
+
+const (
+	SharedSecret = "complement"
 )
 
 // RequestOpt is a functional option which will modify an outgoing HTTP request.
@@ -146,6 +154,14 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 		"user_id": userID,
 	}
 	c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
+}
+
+func (c *CSAPI) GetGlobalAccountData(t *testing.T, eventType string) *http.Response {
+	return c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "user", c.UserID, "account_data", eventType})
+}
+
+func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map[string]interface{}) *http.Response {
+	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
@@ -305,6 +321,44 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 	return userID, accessToken
 }
 
+// RegisterSharedSecret registers a new account with a shared secret via HMAC
+// See https://github.com/matrix-org/synapse/blob/e550ab17adc8dd3c48daf7fedcd09418a73f524b/synapse/_scripts/register_new_matrix_user.py#L40
+func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bool) (userID, password string) {
+	resp := c.DoFunc(t, "GET", []string{"_synapse", "admin", "v1", "register"})
+	if resp.StatusCode != 200 {
+		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
+		return
+	}
+	body := must.ParseJSON(t, resp.Body)
+	nonce := gjson.GetBytes(body, "nonce")
+	if !nonce.Exists() {
+		t.Fatalf("Malformed shared secret GET response: %s", string(body))
+	}
+	mac := hmac.New(sha1.New, []byte(SharedSecret))
+	mac.Write([]byte(nonce.Str))
+	mac.Write([]byte("\x00"))
+	mac.Write([]byte(user))
+	mac.Write([]byte("\x00"))
+	mac.Write([]byte(pass))
+	mac.Write([]byte("\x00"))
+	if isAdmin {
+		mac.Write([]byte("admin"))
+	} else {
+		mac.Write([]byte("notadmin"))
+	}
+	sig := mac.Sum(nil)
+	reqBody := map[string]interface{}{
+		"nonce":    nonce.Str,
+		"username": user,
+		"password": pass,
+		"mac":      hex.EncodeToString(sig),
+		"admin":    isAdmin,
+	}
+	resp = c.MustDoFunc(t, "POST", []string{"_synapse", "admin", "v1", "register"}, WithJSONBody(t, reqBody))
+	body = must.ParseJSON(t, resp.Body)
+	return gjson.GetBytes(body, "user_id").Str, gjson.GetBytes(body, "access_token").Str
+}
+
 // GetCapbabilities queries the server's capabilities
 func (c *CSAPI) GetCapabilities(t *testing.T) []byte {
 	t.Helper()
@@ -337,7 +391,9 @@ func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody int
 	t.Helper()
 	res := c.DoFunc(t, method, paths, WithJSONBody(t, jsonBody))
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+		defer res.Body.Close()
+		body, _ := ioutil.ReadAll(res.Body)
+		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d : %s", method, res.Request.URL.String(), res.StatusCode, string(body))
 	}
 	return res
 }
@@ -430,7 +486,7 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 	}
 	// debug log the request
 	if c.Debug {
-		t.Logf("Making %s request to %s", method, req.URL)
+		t.Logf("Making %s request to %s (%s)", method, req.URL, c.AccessToken)
 		contentType := req.Header.Get("Content-Type")
 		if contentType == "application/json" || strings.HasPrefix(contentType, "text/") {
 			if req.Body != nil {
@@ -560,6 +616,13 @@ func SyncTimelineHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt 
 		}
 		return fmt.Errorf("SyncTimelineHas(%s): %s", roomID, err)
 	}
+}
+
+// Check that the timeline for `roomID` has an event which matches the event ID.
+func SyncTimelineHasEventID(roomID string, eventID string) SyncCheckOpt {
+	return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+		return ev.Get("event_id").Str == eventID
+	})
 }
 
 // Checks that `userID` gets invited to `roomID`.
