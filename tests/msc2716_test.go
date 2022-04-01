@@ -316,9 +316,9 @@ func TestImportHistoricalMessages(t *testing.T) {
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
-			state_events_at_start := createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore)
+			stateEventsAtStart := createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore)
 			// Add the non-member state
-			state_events_at_start = append(state_events_at_start, map[string]interface{}{
+			stateEventsAtStart = append(stateEventsAtStart, map[string]interface{}{
 				"type":             "org.matrix.msc2716.foobarbaz",
 				"sender":           as.UserID,
 				"origin_server_ts": uint64(timeAfterEventBefore.UnixNano() / int64(time.Millisecond)),
@@ -334,7 +334,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				roomID,
 				eventIdBefore,
 				"",
-				state_events_at_start,
+				stateEventsAtStart,
 				createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 1),
 				// Status
 				200,
