@@ -8,7 +8,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -18,24 +17,23 @@ func TestLogout(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	password := "superuser"
-	testuser := deployment.RegisterUser(t, "hs1", "testuser", password, false)
+	verifyClientUser := deployment.RegisterUser(t, "hs1", "testuser", password, false)
 
 	// sytest: Can logout current device
 	t.Run("Can logout current device", func(t *testing.T) {
-		deviceID, c := createSession(t, deployment, testuser.UserID, password)
-		res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices"})
+		deviceID, clientToLogout := createSession(t, deployment, verifyClientUser.UserID, password)
+		res := clientToLogout.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyArrayOfSize("devices", 2),
 			},
 		})
-		res = c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
-		must.MatchResponse(t, res, match.HTTPResponse{StatusCode: http.StatusOK})
+		res = clientToLogout.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
 		// the session should be invalidated
-		res = c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "sync"})
+		res = clientToLogout.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "sync"})
 		must.MatchResponse(t, res, match.HTTPResponse{StatusCode: http.StatusUnauthorized})
 		// verify with first device
-		res = testuser.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices"})
+		res = verifyClientUser.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyArrayOfSize("devices", 1),
@@ -47,32 +45,29 @@ func TestLogout(t *testing.T) {
 				}),
 			},
 		})
-		// initial session should still be able to sync
-		testuser.MustSync(t, client.SyncReq{})
 	})
 	// sytest: Can logout all devices
 	t.Run("Can logout all devices", func(t *testing.T) {
-		_, c := createSession(t, deployment, testuser.UserID, password)
-		res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices"})
+		_, clientToLogout := createSession(t, deployment, verifyClientUser.UserID, password)
+		res := clientToLogout.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyArrayOfSize("devices", 2),
 			},
 		})
-		res = c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout", "all"})
+		res = clientToLogout.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout", "all"})
 		must.MatchResponse(t, res, match.HTTPResponse{StatusCode: http.StatusOK})
 		// all sessions should be invalidated
-		res = c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "sync"})
+		res = clientToLogout.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "sync"})
 		must.MatchResponse(t, res, match.HTTPResponse{StatusCode: http.StatusUnauthorized})
-		res = testuser.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "sync"})
+		res = verifyClientUser.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "sync"})
 		must.MatchResponse(t, res, match.HTTPResponse{StatusCode: http.StatusUnauthorized})
-
 	})
 	// sytest: Request to logout with invalid an access token is rejected
 	t.Run("Request to logout with invalid an access token is rejected", func(t *testing.T) {
-		_, c := createSession(t, deployment, testuser.UserID, password)
-		c.AccessToken = "invalidAccessToken"
-		res := c.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
+		_, clientToLogout := createSession(t, deployment, verifyClientUser.UserID, password)
+		clientToLogout.AccessToken = "invalidAccessToken"
+		res := clientToLogout.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusUnauthorized,
 			JSON: []match.JSON{
@@ -82,9 +77,9 @@ func TestLogout(t *testing.T) {
 	})
 	// sytest: Request to logout without an access token is rejected
 	t.Run("Request to logout without an access token is rejected", func(t *testing.T) {
-		_, c := createSession(t, deployment, testuser.UserID, password)
-		c.AccessToken = ""
-		res := c.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
+		_, clientToLogout := createSession(t, deployment, verifyClientUser.UserID, password)
+		clientToLogout.AccessToken = ""
+		res := clientToLogout.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusUnauthorized,
 			JSON: []match.JSON{
