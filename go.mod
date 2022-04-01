@@ -1,6 +1,6 @@
 module github.com/matrix-org/complement
 
-go 1.13
+go 1.16
 
 require (
 	github.com/Microsoft/go-winio v0.4.14 // indirect
@@ -18,7 +18,6 @@ require (
 	github.com/tidwall/gjson v1.9.3
 	github.com/tidwall/sjson v1.1.5
 	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4 // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
 	maunium.net/go/mautrix v0.8.3
 )

@@ -29,18 +29,19 @@ func TestMediaFilenames(t *testing.T) {
 			t.Run("Can upload with ASCII file name", func(t *testing.T) {
 				t.Parallel()
 
-				alice.UploadContent(t, data.TestPngImage, asciiFileName, "image/png")
+				alice.UploadContent(t, data.MatrixPng, asciiFileName, "image/png")
 			})
 
 			// sytest: Can download file '$filename'
 			for _, filename := range []string{"ascii", "name with spaces", "name;with;semicolons"} {
 
-				// else linter will scream
+				// To preserve variable in loop
 				var filename = filename
+
 				t.Run(fmt.Sprintf("Can download file '%s'", filename), func(t *testing.T) {
 					t.Parallel()
 
-					mxcUri := alice.UploadContent(t, data.TestPngImage, filename, "image/png")
+					mxcUri := alice.UploadContent(t, data.MatrixPng, filename, "image/png")
 
 					name := downloadForFilename(t, alice, mxcUri, "")
 
@@ -54,7 +55,7 @@ func TestMediaFilenames(t *testing.T) {
 			t.Run("Can download specifying a different ASCII file name", func(t *testing.T) {
 				t.Parallel()
 
-				mxcUri := alice.UploadContent(t, data.TestPngImage, "test.png", "image/png")
+				mxcUri := alice.UploadContent(t, data.MatrixPng, "test.png", "image/png")
 
 				const altName = "file.png"
 				filename := downloadForFilename(t, alice, mxcUri, altName)
@@ -71,14 +72,14 @@ func TestMediaFilenames(t *testing.T) {
 			t.Run("Can upload with Unicode file name", func(t *testing.T) {
 				t.Parallel()
 
-				alice.UploadContent(t, data.TestPngImage, unicodeFileName, "image/png")
+				alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
 			})
 
 			// sytest: Can download specifying a different Unicode file name
 			t.Run("Can download specifying a different Unicode file name", func(t *testing.T) {
 				t.Parallel()
 
-				mxcUri := alice.UploadContent(t, data.TestPngImage, unicodeFileName, "image/png")
+				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
 
 				const diffUnicodeFilename = "\u2615" // coffee emoji
 
@@ -92,7 +93,7 @@ func TestMediaFilenames(t *testing.T) {
 			t.Run("Can download with Unicode file name locally", func(t *testing.T) {
 				t.Parallel()
 
-				mxcUri := alice.UploadContent(t, data.TestPngImage, unicodeFileName, "image/png")
+				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
 
 				filename := downloadForFilename(t, alice, mxcUri, "")
 
@@ -105,7 +106,7 @@ func TestMediaFilenames(t *testing.T) {
 			t.Run("Can download with Unicode file name over federation", func(t *testing.T) {
 				t.Parallel()
 
-				mxcUri := alice.UploadContent(t, data.TestPngImage, unicodeFileName, "image/png")
+				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
 
 				filename := downloadForFilename(t, bob, mxcUri, "")
 

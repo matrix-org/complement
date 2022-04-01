@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"bytes"
+	"image/png"
 	"io/ioutil"
 	"net/url"
 	"strings"
@@ -9,7 +11,6 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/data"
-	"github.com/matrix-org/complement/internal/validate"
 )
 
 // TODO: add JPEG testing
@@ -24,7 +25,7 @@ func TestLocalPngThumbnail(t *testing.T) {
 	fileName := "test.png"
 	contentType := "image/png"
 
-	uri := alice.UploadContent(t, data.TestPngImage, fileName, contentType)
+	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
 	fetchAndValidateThumbnail(t, alice, uri)
 }
@@ -40,7 +41,7 @@ func TestRemotePngThumbnail(t *testing.T) {
 	fileName := "test.png"
 	contentType := "image/png"
 
-	uri := alice.UploadContent(t, data.TestPngImage, fileName, contentType)
+	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
 	fetchAndValidateThumbnail(t, bob, uri)
 }
@@ -70,7 +71,7 @@ func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string) {
 	mimeType := strings.Split(contentType, ";")[0]
 
 	if mimeType == "image/png" {
-		err = validate.ValidatePng(body)
+		_, err := png.Decode(bytes.NewReader(body))
 
 		if err != nil {
 			t.Fatalf("validating thumbnail png failed: %s", err)
@@ -80,5 +81,6 @@ func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string) {
 		t.Fatalf("Encountered unknown mimetype %s", mimeType)
 	}
 
-	// todo test for thumbnail size conformity?
+	// We can't check for thumbnail size due to the spec's loose wording around returned thumbnails;
+	// https://spec.matrix.org/v1.2/client-server-api/#thumbnails
 }

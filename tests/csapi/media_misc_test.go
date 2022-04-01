@@ -24,7 +24,7 @@ func TestRoomImageRoundtrip(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	mxcUri := alice.UploadContent(t, data.TestPngImage, "test.png", "image/png")
+	mxcUri := alice.UploadContent(t, data.MatrixPng, "test.png", "image/png")
 
 	roomId := alice.CreateRoom(t, struct{}{})
 
