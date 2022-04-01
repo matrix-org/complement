@@ -6,6 +6,7 @@ report_stats: False
 signing_key_path: /conf/server.signing.key
 trusted_key_servers: []
 enable_registration: true
+enable_registration_without_verification: true
 
 ## Listeners ##
 
@@ -104,8 +105,6 @@ AS_REGISTRATION_FILES
 ## Experimental Features ##
 
 experimental_features:
-  # Enable knocking support
-  msc2403_enabled: true
   # Enable spaces support
   spaces_enabled: true
   # Enable history backfilling support

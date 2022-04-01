@@ -89,8 +89,6 @@ func TestSendMessageWithTxn(t *testing.T) {
 }
 
 func TestRoomMessagesLazyLoading(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2257
-
 	deployment := Deploy(t, b.MustValidate(b.Blueprint{
 		Name: "alice_bob_and_charlie",
 		Homeservers: []b.Homeserver{

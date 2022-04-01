@@ -2,6 +2,7 @@
 report_stats: False
 trusted_key_servers: []
 enable_registration: true
+enable_registration_without_verification: true
 bcrypt_rounds: 4
 
 ## Federation ##
@@ -62,8 +63,6 @@ federation_rr_transactions_per_room_per_second: 9999
 ## Experimental Features ##
 
 experimental_features:
-  # Enable knocking support
-  msc2403_enabled: true
   # Enable history backfilling support
   msc2716_enabled: true
   # Enable spaces support
