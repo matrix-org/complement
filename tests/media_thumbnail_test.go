@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"image/jpeg"
 	"image/png"
 	"io/ioutil"
 	"net/url"
@@ -70,14 +71,24 @@ func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string) {
 	contentType := res.Header.Get("Content-Type")
 	mimeType := strings.Split(contentType, ";")[0]
 
+	// The spec says nothing about matching uploaded to thumbnailed mimetypes;
+	// https://spec.matrix.org/v1.2/client-server-api/#thumbnails
+	//
+	// We're just picking common ones found "in the wild" and validate them on their own dime.
 	if mimeType == "image/png" {
 		_, err := png.Decode(bytes.NewReader(body))
 
 		if err != nil {
-			t.Fatalf("validating thumbnail png failed: %s", err)
+			t.Fatalf("validating png thumbnail failed: %s", err)
+		}
+	} else if mimeType == "image/jpg" || mimeType == "image/jpeg" {
+		_, err := jpeg.Decode(bytes.NewReader(body))
+
+		if err != nil {
+			t.Fatalf("validating jp(e)g thumbnail failed: %s", err)
 		}
 	} else {
-		// TODO: more mimetypes
+		// TODO: more mimetypes?
 		t.Fatalf("Encountered unknown mimetype %s", mimeType)
 	}
 
