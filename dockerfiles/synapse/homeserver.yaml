@@ -6,8 +6,6 @@ report_stats: False
 signing_key_path: /conf/server.signing.key
 trusted_key_servers: []
 enable_registration: true
-url_preview_enabled: true
-url_preview_ip_range_blacklist: []
 
 ## Listeners ##
 
