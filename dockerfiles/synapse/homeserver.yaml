@@ -6,12 +6,14 @@ report_stats: False
 signing_key_path: /conf/server.signing.key
 trusted_key_servers: []
 enable_registration: true
+enable_registration_without_verification: true
 
 ## Listeners ##
 
 tls_certificate_path: /conf/server.tls.crt
 tls_private_key_path: /conf/server.tls.key
 bcrypt_rounds: 4
+registration_shared_secret: complement
 
 listeners:
   - port: 8448
@@ -103,9 +105,17 @@ AS_REGISTRATION_FILES
 ## Experimental Features ##
 
 experimental_features:
-  # Enable knocking support
-  msc2403_enabled: true
   # Enable spaces support
   spaces_enabled: true
   # Enable history backfilling support
   msc2716_enabled: true
+  # server-side support for partial state in /send_join
+  msc3706_enabled: true
+  # Enable jump to date endpoint
+  msc3030_enabled: true
+
+server_notices:
+  system_mxid_localpart: _server
+  system_mxid_display_name: "Server Alert"
+  system_mxid_avatar_url: ""
+  room_name: "Server Alert"

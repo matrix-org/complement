@@ -21,6 +21,33 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 )
 
+// An instruction for the runner to run.
+type Instr struct {
+	UserID  string
+	Method  string
+	Path    string
+	Queries map[string]string
+	Body    interface{}
+	Store   map[string]string
+}
+
+type ConcurrencyType int
+
+const (
+	// No concurrency: instructions execute in serial.
+	ConcurrencyTypeNone ConcurrencyType = iota
+	// Per-user concurrency: User requests execute in serial but multiple users can have concurrent requests.
+	ConcurrencyTypePerUser
+	// All concurrency: All requests are executed at the same time.
+	ConcurrencyTypeAll
+)
+
+type RunOpts struct {
+	Concurrency    ConcurrencyType
+	HSURL          string
+	StoreNamespace string
+}
+
 type Runner struct {
 	blueprintName string
 	lookup        *sync.Map // string -> string
@@ -73,6 +100,40 @@ func (r *Runner) AccessTokens(hsDomain string) map[string]string {
 	return res
 }
 
+// Load a previously stored value from RunInstructions
+func (r *Runner) GetStoredValue(opts RunOpts, key string) string {
+	fullKey := opts.StoreNamespace + key
+	val, ok := r.lookup.Load(fullKey)
+	if !ok {
+		return ""
+	}
+	return val.(string)
+}
+
+// RunInstructions runs custom instruction sets on this runner.
+func (r *Runner) RunInstructions(opts RunOpts, instrs []Instr) (resErr error) {
+	sets := r.createInstructionSets(opts, instrs)
+	var wg sync.WaitGroup
+	wg.Add(len(sets))
+	for _, set := range sets {
+		go func(s []instruction) {
+			defer wg.Done()
+			err := r.runInstructionSet("RunInstructions", opts.HSURL, s)
+			if err != nil {
+				r.log("RunInstructions set failed: %s", err)
+				resErr = err
+				r.terminate.Store(true)
+			}
+		}(set)
+	}
+	wg.Wait()
+	if resErr != nil {
+		r.log("Terminating: user creation failed: %s", resErr)
+		return resErr
+	}
+	return nil
+}
+
 // Run all instructions until completion. Return an error if there was a problem executing any instruction.
 func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 	userInstrSets := calculateUserInstructionSets(r, hs)
@@ -81,7 +142,7 @@ func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 	for _, set := range userInstrSets {
 		go func(s []instruction) {
 			defer wg.Done()
-			err := r.runInstructionSet(hs, hsURL, s)
+			err := r.runInstructionSet(fmt.Sprintf("%s.%s", r.blueprintName, hs.Name), hsURL, s)
 			if err != nil {
 				r.log("Instruction set failed: %s", err)
 				resErr = err
@@ -100,7 +161,7 @@ func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 	for _, set := range roomInstrSets {
 		go func(s []instruction) {
 			defer wg.Done()
-			err := r.runInstructionSet(hs, hsURL, s)
+			err := r.runInstructionSet(fmt.Sprintf("%s.%s", r.blueprintName, hs.Name), hsURL, s)
 			if err != nil {
 				r.log("Instruction set failed: %s", err)
 				resErr = err
@@ -113,8 +174,7 @@ func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 	return resErr
 }
 
-func (r *Runner) runInstructionSet(hs b.Homeserver, hsURL string, instrs []instruction) error {
-	contextStr := fmt.Sprintf("%s.%s", r.blueprintName, hs.Name)
+func (r *Runner) runInstructionSet(contextStr string, hsURL string, instrs []instruction) error {
 	i := 0
 	cli := http.Client{
 		Timeout: 30 * time.Second,
@@ -225,6 +285,49 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 	}
 	req.URL.RawQuery = q.Encode()
 	return req, &instr, i
+}
+
+func (r *Runner) createInstructionSets(opts RunOpts, instrs []Instr) (sets [][]instruction) {
+	switch opts.Concurrency {
+	case ConcurrencyTypeAll: // every instruction is its own set
+		for _, in := range instrs {
+			sets = append(sets, []instruction{
+				r.toInstruction(opts, in),
+			})
+		}
+	case ConcurrencyTypeNone: // all instructions in one set
+		set := make([]instruction, len(instrs))
+		for i, in := range instrs {
+			set[i] = r.toInstruction(opts, in)
+		}
+		sets = append(sets, set)
+	case ConcurrencyTypePerUser: // set per user based on user concurrency
+		sets = make([][]instruction, r.userConcurrency)
+		for _, in := range instrs {
+			i := indexFor(in.UserID, r.userConcurrency)
+			instrs := sets[i]
+			instrs = append(instrs, r.toInstruction(opts, in))
+			sets[i] = instrs
+		}
+	default:
+		panic("unknown RunOpts.Concurrency")
+	}
+	return
+}
+
+func (r *Runner) toInstruction(opts RunOpts, i Instr) instruction {
+	sr := make(map[string]string)
+	for k, v := range i.Store {
+		sr[opts.StoreNamespace+k] = v
+	}
+	return instruction{
+		method:        i.Method,
+		path:          i.Path,
+		queryParams:   i.Queries,
+		accessToken:   "user_" + i.UserID,
+		body:          i.Body,
+		storeResponse: sr,
+	}
 }
 
 // instruction represents an HTTP request which should be made to a remote server

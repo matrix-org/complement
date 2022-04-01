@@ -9,9 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"net/http"
@@ -23,8 +21,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/util"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 )
 
@@ -37,7 +37,8 @@ type Server struct {
 
 	Priv       ed25519.PrivateKey
 	KeyID      gomatrixserverlib.KeyID
-	ServerName string
+	serverName string
+	listening  bool
 
 	certPath string
 	keyPath  string
@@ -59,11 +60,13 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	}
 
 	srv := &Server{
-		t:                           t,
-		Priv:                        priv,
-		KeyID:                       "ed25519:complement",
-		mux:                         mux.NewRouter(),
-		ServerName:                  docker.HostnameRunningComplement,
+		t:     t,
+		Priv:  priv,
+		KeyID: "ed25519:complement",
+		mux:   mux.NewRouter(),
+		// The server name will be updated when the caller calls Listen() to include the port number
+		// of the HTTP server e.g "host.docker.internal:56353"
+		serverName:                  docker.HostnameRunningComplement,
 		rooms:                       make(map[string]*ServerRoom),
 		aliases:                     make(map[string]string),
 		UnexpectedRequestsAreErrors: true,
@@ -100,7 +103,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	})
 
 	// generate certs and an http.Server
-	httpServer, certPath, keyPath, err := federationServer("name", srv.mux)
+	httpServer, certPath, keyPath, err := federationServer(deployment.Config, srv.mux)
 	if err != nil {
 		t.Fatalf("complement: unable to create federation server and certificates: %s", err.Error())
 	}
@@ -114,16 +117,35 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	return srv
 }
 
+// Return the server name of this federation server. Only valid AFTER calling Listen() - doing so
+// before will produce an error.
+//
+// It is not supported to call ServerName() before Listen() because Listen() modifies the server name.
+// Listen() will select a random OS-provided high-numbered port to listen on, which then needs to be
+// retrofitted into the server name so containers know how to route to it.
+func (s *Server) ServerName() string {
+	if !s.listening {
+		s.t.Fatalf("ServerName() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name. Ensure you Listen() first!")
+	}
+	return s.serverName
+}
+
 // UserID returns the complete user ID for the given localpart
 func (s *Server) UserID(localpart string) string {
-	return fmt.Sprintf("@%s:%s", localpart, s.ServerName)
+	if !s.listening {
+		s.t.Fatalf("UserID() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the user ID. Ensure you Listen() first!")
+	}
+	return fmt.Sprintf("@%s:%s", localpart, s.serverName)
 }
 
 // MakeAliasMapping will create a mapping of room alias to room ID on this server. Returns the alias.
 // If this is the first time calling this function, a directory lookup handler will be added to
 // handle alias requests over federation.
 func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
-	alias := fmt.Sprintf("#%s:%s", aliasLocalpart, s.ServerName)
+	if !s.listening {
+		s.t.Fatalf("MakeAliasMapping() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room alias. Ensure you Listen() first!")
+	}
+	alias := fmt.Sprintf("#%s:%s", aliasLocalpart, s.serverName)
 	s.aliases[alias] = roomID
 	HandleDirectoryLookups()(s)
 	return alias
@@ -132,7 +154,10 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 // MustMakeRoom will add a room to this server so it is accessible to other servers when prompted via federation.
 // The `events` will be added to this room. Returns the created room.
 func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
-	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.ServerName)
+	if !s.listening {
+		s.t.Fatalf("MustMakeRoom() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room ID. Ensure you Listen() first!")
+	}
+	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.serverName)
 	t.Logf("Creating room %s with version %s", roomID, roomVer)
 	room := newRoom(roomVer, roomID)
 
@@ -149,18 +174,45 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 //
 // The requests will be routed according to the deployment map in `deployment`.
 func (s *Server) FederationClient(deployment *docker.Deployment) *gomatrixserverlib.FederationClient {
+	if !s.listening {
+		s.t.Fatalf("FederationClient() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the way federation requests are signed. Ensure you Listen() first!")
+	}
 	f := gomatrixserverlib.NewFederationClient(
-		gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv,
+		gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv,
 		gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}),
 	)
 	return f
+}
+
+// MustSendTransaction sends the given PDUs/EDUs to the target destination, returning an error if the /send fails or if the response contains an error
+// for any sent PDUs. Times out after 10 seconds.
+func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment, destination string, pdus []json.RawMessage, edus []gomatrixserverlib.EDU) {
+	t.Helper()
+	cli := s.FederationClient(deployment)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	resp, err := cli.SendTransaction(ctx, gomatrixserverlib.Transaction{
+		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("complement-%d", time.Now().Nanosecond())),
+		Origin:        gomatrixserverlib.ServerName(s.ServerName()),
+		Destination:   gomatrixserverlib.ServerName(destination),
+		PDUs:          pdus,
+		EDUs:          edus,
+	})
+	if err != nil {
+		t.Fatalf("MustSendTransaction: %s", err)
+	}
+	for eventID, e := range resp.PDUs {
+		if e.Error != "" {
+			t.Fatalf("MustSendTransaction: response for %s contained error: %s", eventID, e.Error)
+		}
+	}
 }
 
 // SendFederationRequest signs and sends an arbitrary federation request from this server.
 //
 // The requests will be routed according to the deployment map in `deployment`.
 func (s *Server) SendFederationRequest(deployment *docker.Deployment, req gomatrixserverlib.FederationRequest, resBody interface{}) error {
-	if err := req.Sign(gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv); err != nil {
+	if err := req.Sign(gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
 		return err
 	}
 
@@ -188,6 +240,17 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 			t.Fatalf("MustCreateEvent: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
 		}
 	}
+
+	var prevEvents interface{}
+	if ev.PrevEvents != nil {
+		// We deliberately want to set the prev events.
+		prevEvents = ev.PrevEvents
+	} else {
+		// No other prev events were supplied so we'll just
+		// use the forward extremities of the room, which is
+		// the usual behaviour.
+		prevEvents = room.ForwardExtremities
+	}
 	eb := gomatrixserverlib.EventBuilder{
 		Sender:     ev.Sender,
 		Depth:      int64(room.Depth + 1), // depth starts at 1
@@ -195,7 +258,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		StateKey:   ev.StateKey,
 		Content:    content,
 		RoomID:     room.RoomID,
-		PrevEvents: room.ForwardExtremities,
+		PrevEvents: prevEvents,
 		Unsigned:   unsigned,
 		AuthEvents: ev.AuthEvents,
 	}
@@ -207,7 +270,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		}
 		eb.AuthEvents = room.AuthEvents(stateNeeded)
 	}
-	signedEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, room.Version)
+	signedEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv, room.Version)
 	if err != nil {
 		t.Fatalf("MustCreateEvent: failed to sign event: %s", err)
 	}
@@ -224,17 +287,17 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 		t.Fatalf("MustJoinRoom: make_join failed: %v", err)
 	}
 	roomVer := makeJoinResp.RoomVersion
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.KeyID, s.Priv, roomVer)
+	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv, roomVer)
 	if err != nil {
 		t.Fatalf("MustJoinRoom: failed to sign event: %v", err)
 	}
-	sendJoinResp, err := fedClient.SendJoin(context.Background(), gomatrixserverlib.ServerName(remoteServer), joinEvent, roomVer)
+	sendJoinResp, err := fedClient.SendJoin(context.Background(), gomatrixserverlib.ServerName(remoteServer), joinEvent)
 	if err != nil {
 		t.Fatalf("MustJoinRoom: send_join failed: %v", err)
 	}
-
+	stateEvents := sendJoinResp.StateEvents.UntrustedEvents(roomVer)
 	room := newRoom(roomVer, roomID)
-	for _, ev := range sendJoinResp.StateEvents {
+	for _, ev := range stateEvents {
 		room.replaceCurrentState(ev)
 	}
 	room.AddEvent(joinEvent)
@@ -245,20 +308,98 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 	return room
 }
 
-// Mux returns this server's router so you can attach additional paths
+// Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
+func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string) {
+	t.Helper()
+	fedClient := s.FederationClient(deployment)
+	var leaveEvent *gomatrixserverlib.Event
+	room := s.rooms[roomID]
+	if room == nil {
+		// e.g rejecting an invite
+		makeLeaveResp, err := fedClient.MakeLeave(context.Background(), remoteServer, roomID, userID)
+		if err != nil {
+			t.Fatalf("MustLeaveRoom: (rejecting invite) make_leave failed: %v", err)
+		}
+		roomVer := makeLeaveResp.RoomVersion
+		leaveEvent, err = makeLeaveResp.LeaveEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv, roomVer)
+		if err != nil {
+			t.Fatalf("MustLeaveRoom: (rejecting invite) failed to sign event: %v", err)
+		}
+	} else {
+		// make the leave event
+		leaveEvent = s.MustCreateEvent(t, room, b.Event{
+			Type:     "m.room.member",
+			StateKey: &userID,
+			Sender:   userID,
+			Content: map[string]interface{}{
+				"membership": "leave",
+			},
+		})
+	}
+	err := fedClient.SendLeave(context.Background(), gomatrixserverlib.ServerName(remoteServer), leaveEvent)
+	if err != nil {
+		t.Fatalf("MustLeaveRoom: send_leave failed: %v", err)
+	}
+	room.AddEvent(leaveEvent)
+	s.rooms[roomID] = room
+
+	t.Logf("Server.MustLeaveRoom left room ID %s", roomID)
+}
+
+// ValidFederationRequest is a wrapper around http.HandlerFunc which automatically validates the incoming
+// federation request and supports sending back JSON. Fails the test if the request is not valid.
+func (s *Server) ValidFederationRequest(t *testing.T, handler func(fr *gomatrixserverlib.FederationRequest, pathParams map[string]string) util.JSONResponse) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		// Check federation signature
+		fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
+			req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+		)
+		if fedReq == nil {
+			t.Errorf(
+				"complement: ValidFederationRequest: HTTP Code %d. Invalid http request: %s",
+				errResp.Code, errResp.JSON,
+			)
+
+			w.WriteHeader(errResp.Code)
+			b, _ := json.Marshal(errResp.JSON)
+			w.Write(b)
+			return
+		}
+		vars := mux.Vars(req)
+
+		// invoke the handler
+		res := handler(fedReq, vars)
+
+		// send back the response
+		for k, v := range res.Headers {
+			w.Header().Set(k, v)
+		}
+		w.WriteHeader(res.Code)
+		b, _ := json.Marshal(res.JSON)
+		w.Write(b)
+	}
+}
+
+// Mux returns this server's router so you can attach additional paths.
 func (s *Server) Mux() *mux.Router {
 	return s.mux
 }
 
 // Listen for federation server requests - call the returned function to gracefully close the server.
 func (s *Server) Listen() (cancel func()) {
+	if s.listening {
+		return
+	}
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	ln, err := net.Listen("tcp", s.srv.Addr)
+	ln, err := net.Listen("tcp", ":0") //nolint
 	if err != nil {
 		s.t.Fatalf("ListenFederationServer: net.Listen failed: %s", err)
 	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	s.serverName += fmt.Sprintf(":%d", port)
+	s.listening = true
 
 	go func() {
 		defer ln.Close()
@@ -280,127 +421,8 @@ func (s *Server) Listen() (cancel func()) {
 	}
 }
 
-// GetOrCreateCaCert is used to create the federation TLS cert.
-// In addition, it is passed to homeserver containers to create TLS certs
-// for the homeservers.
-// This basically acts as a test only valid PKI.
-func GetOrCreateCaCert() (*x509.Certificate, *rsa.PrivateKey, error) {
-	var tlsCACertPath, tlsCAKeyPath string
-	if os.Getenv("CI") == "true" {
-		// When in CI we create the cert dir in the root directory instead.
-		tlsCACertPath = path.Join("/ca", "ca.crt")
-		tlsCAKeyPath = path.Join("/ca", "ca.key")
-	} else {
-		wd, err := os.Getwd()
-		if err != nil {
-			return nil, nil, err
-		}
-		tlsCACertPath = path.Join(wd, "ca", "ca.crt")
-		tlsCAKeyPath = path.Join(wd, "ca", "ca.key")
-		if _, err := os.Stat(path.Join(wd, "ca")); os.IsNotExist(err) {
-			err = os.Mkdir(path.Join(wd, "ca"), 0770)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-	}
-	if _, err := os.Stat(tlsCACertPath); err == nil {
-		if _, err := os.Stat(tlsCAKeyPath); err == nil {
-			// We already created a CA cert, let's use that.
-			dat, err := ioutil.ReadFile(tlsCACertPath)
-			if err != nil {
-				return nil, nil, err
-			}
-			block, _ := pem.Decode([]byte(dat))
-			if block == nil || block.Type != "CERTIFICATE" {
-				return nil, nil, errors.New("ca.crt is not a valid pem encoded x509 cert")
-			}
-			caCerts, err := x509.ParseCertificates(block.Bytes)
-			if err != nil {
-				return nil, nil, err
-			}
-			if len(caCerts) != 1 {
-				return nil, nil, errors.New("ca.crt contains none or more than one cert")
-			}
-			caCert := caCerts[0]
-			dat, err = ioutil.ReadFile(tlsCAKeyPath)
-			if err != nil {
-				return nil, nil, err
-			}
-			block, _ = pem.Decode([]byte(dat))
-			if block == nil || block.Type != "RSA PRIVATE KEY" {
-				return nil, nil, errors.New("ca.key is not a valid pem encoded rsa private key")
-			}
-			priv, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-			if err != nil {
-				return nil, nil, err
-			}
-			return caCert, priv, nil
-		}
-	}
-
-	// valid for 10 years
-	certificateDuration := time.Hour * 24 * 365 * 10
-	priv, err := rsa.GenerateKey(rand.Reader, 4096)
-	if err != nil {
-		return nil, nil, err
-	}
-	notBefore := time.Now()
-	notAfter := notBefore.Add(certificateDuration)
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-		return nil, nil, err
-	}
-	caCert := x509.Certificate{
-		SerialNumber:          serialNumber,
-		NotBefore:             notBefore,
-		NotAfter:              notAfter,
-		IsCA:                  true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature | x509.KeyUsageCRLSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		Subject: pkix.Name{
-			Organization:  []string{"matrix.org"},
-			Country:       []string{"GB"},
-			Province:      []string{"London"},
-			Locality:      []string{"London"},
-			StreetAddress: []string{"123 Street"},
-			PostalCode:    []string{"12345"},
-		},
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, &caCert, &caCert, &priv.PublicKey, priv)
-	if err != nil {
-		return nil, nil, err
-	}
-	certOut, err := os.Create(tlsCACertPath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	defer certOut.Close() // nolint: errcheck
-	if err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
-		return nil, nil, err
-	}
-
-	keyOut, err := os.OpenFile(tlsCAKeyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer keyOut.Close() // nolint: errcheck
-	err = pem.Encode(keyOut, &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(priv),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	return &caCert, priv, nil
-}
-
 // federationServer creates a federation server with the given handler
-func federationServer(name string, h http.Handler) (*http.Server, string, string, error) {
+func federationServer(cfg *config.Complement, h http.Handler) (*http.Server, string, string, error) {
 	var derBytes []byte
 	srv := &http.Server{
 		Addr:    ":8448",
@@ -444,23 +466,10 @@ func federationServer(name string, h http.Handler) (*http.Server, string, string
 		template.DNSNames = append(template.DNSNames, host)
 	}
 
-	if os.Getenv("COMPLEMENT_CA") == "true" {
-		// Gate COMPLEMENT_CA
-		var ca *x509.Certificate
-		var caPrivKey *rsa.PrivateKey
-		ca, caPrivKey, err = GetOrCreateCaCert()
-		if err != nil {
-			return nil, "", "", err
-		}
-		derBytes, err = x509.CreateCertificate(rand.Reader, &template, ca, &priv.PublicKey, caPrivKey)
-		if err != nil {
-			return nil, "", "", err
-		}
-	} else {
-		derBytes, err = x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
-		if err != nil {
-			return nil, "", "", err
-		}
+	// derive a new certificate from the base complement one
+	derBytes, err = x509.CreateCertificate(rand.Reader, &template, cfg.CACertificate, &priv.PublicKey, cfg.CAPrivateKey)
+	if err != nil {
+		return nil, "", "", err
 	}
 
 	certOut, err := os.Create(tlsCertPath)
@@ -518,7 +527,7 @@ func (f *basicKeyFetcher) FetchKeys(
 ) {
 	result := make(map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, len(requests))
 	for req := range requests {
-		if string(req.ServerName) == f.srv.ServerName && req.KeyID == f.srv.KeyID {
+		if string(req.ServerName) == f.srv.serverName && req.KeyID == f.srv.KeyID {
 			publicKey := f.srv.Priv.Public().(ed25519.PublicKey)
 			result[req] = gomatrixserverlib.PublicKeyLookupResult{
 				ValidUntilTS: gomatrixserverlib.AsTimestamp(time.Now().Add(24 * time.Hour)),

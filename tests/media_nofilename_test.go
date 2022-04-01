@@ -75,7 +75,7 @@ func TestMediaWithoutFileName(t *testing.T) {
 		t.Run("Can download without a file name over federation", func(t *testing.T) {
 			t.Parallel()
 
-			b, ct := alice.DownloadContent(t, fmt.Sprintf("mxc://%s/%s", srv.ServerName, remoteMediaId))
+			b, ct := alice.DownloadContent(t, fmt.Sprintf("mxc://%s/%s", srv.ServerName(), remoteMediaId))
 
 			// Check the Content-Type response header.
 			// NOTSPEC: There is ambiguity over whether the homeserver is allowed to change the
