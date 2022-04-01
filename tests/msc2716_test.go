@@ -1382,6 +1382,23 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 	expectedEventIDOrder = append(expectedEventIDOrder, reversed(historicalEventIDs)...)
 	expectedEventIDOrder = append(expectedEventIDOrder, insertionEventID)
 
+	// Make sure the historical events appear in scrollback without jumping back
+	// in time specifically.
+	fullMessagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		"dir":   []string{"b"},
+		"limit": []string{"100"},
+	}))
+	must.MatchResponse(t, fullMessagesRes, match.HTTPResponse{
+		JSON: []match.JSON{
+			matcherJSONEventIDArrayInOrder("chunk",
+				expectedEventIDOrder,
+				historicalEventFilter,
+			),
+		},
+	})
+
+	// Validate state after we paginate `/messages` to avoid any potential 404 if
+	// the server hasn't backfilled here yet
 	if validateState {
 		contextRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", expectedEventIDOrder[0]}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 			"limit": []string{"0"},
@@ -1398,21 +1415,6 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 			},
 		})
 	}
-
-	// Make sure the historical events appear in scrollback without jumping back
-	// in time specifically.
-	fullMessagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-		"dir":   []string{"b"},
-		"limit": []string{"100"},
-	}))
-	must.MatchResponse(t, fullMessagesRes, match.HTTPResponse{
-		JSON: []match.JSON{
-			matcherJSONEventIDArrayInOrder("chunk",
-				expectedEventIDOrder,
-				historicalEventFilter,
-			),
-		},
-	})
 }
 
 // matcherJSONEventIDArrayInOrder loops through `jsonArrayKey` in the response
