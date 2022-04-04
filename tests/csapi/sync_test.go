@@ -128,7 +128,7 @@ func TestSync(t *testing.T) {
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			res, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID})
 			// check all required fields exist
-			verifyFields(t, res, roomID)
+			checkJoinFieldsExist(t, res, roomID)
 			// sync again
 			res, _ = alice.MustSync(t, client.SyncReq{Filter: filterID, Since: nextBatch})
 			if res.Get("rooms.join." + client.GjsonEscape(roomID)).Exists() {
@@ -143,7 +143,7 @@ func TestSync(t *testing.T) {
 			_, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID})
 
 			res, _ := alice.MustSync(t, client.SyncReq{Filter: filterID, Since: nextBatch, FullState: true})
-			verifyFields(t, res, roomID)
+			checkJoinFieldsExist(t, res, roomID)
 		})
 		// sytest: Newly joined room is included in an incremental sync
 		t.Run("Newly joined room is included in an incremental sync", func(t *testing.T) {
@@ -152,7 +152,7 @@ func TestSync(t *testing.T) {
 			roomID := alice.CreateRoom(t, struct{}{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			res, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID, Since: nextBatch})
-			verifyFields(t, res, roomID)
+			checkJoinFieldsExist(t, res, roomID)
 			res, _ = alice.MustSync(t, client.SyncReq{Filter: filterID, Since: nextBatch})
 			if res.Get("rooms.join." + client.GjsonEscape(roomID)).Exists() {
 				t.Errorf("unchanged room %s should not be in the sync", roomID)
@@ -162,7 +162,7 @@ func TestSync(t *testing.T) {
 		t.Run("Newly joined room has correct timeline in incremental sync", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
 			t.Parallel()
-			filter := map[string]interface{}{
+			filter = map[string]interface{}{
 				"room": map[string]interface{}{
 					"timeline": map[string]interface{}{
 						"limit": 10,
@@ -173,7 +173,7 @@ func TestSync(t *testing.T) {
 					},
 				},
 			}
-			f, err := json.Marshal(filter)
+			f, err = json.Marshal(filter)
 			if err != nil {
 				t.Errorf("unable to marshal filter: %v", err)
 			}
@@ -218,14 +218,14 @@ func TestSync(t *testing.T) {
 			nextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(userID string, sync gjson.Result) error {
 				presence := sync.Get("presence")
 				if len(presence.Get("events").Array()) == 0 {
-					return fmt.Errorf("presence does not exist: %+v", sync)
+					return fmt.Errorf("presence.events is empty: %+v", presence)
 				}
-				assertPresence(t, presence, 1, bob.UserID)
+				usersInPresenceEvents(t, presence, []string{alice.UserID})
 				return nil
 			})
-
+			// There should be no new presence events
 			res, _ := bob.MustSync(t, client.SyncReq{Since: nextBatch})
-			assertPresence(t, res.Get("presence"), 0, bob.UserID)
+			usersInPresenceEvents(t, res.Get("presence"), []string{})
 		})
 		// sytest: Get presence for newly joined members in incremental sync
 		t.Run("Get presence for newly joined members in incremental sync", func(t *testing.T) {
@@ -237,22 +237,24 @@ func TestSync(t *testing.T) {
 			bob.JoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
+			// wait until there are presence events
 			nextBatch = alice.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(userID string, sync gjson.Result) error {
 				presence := sync.Get("presence")
 				if len(presence.Get("events").Array()) == 0 {
-					return fmt.Errorf("presence does not exist: %+v", sync)
+					return fmt.Errorf("presence.events is empty: %+v", presence)
 				}
-				assertPresence(t, presence, 1, alice.UserID)
+				usersInPresenceEvents(t, presence, []string{bob.UserID})
 				return nil
 			})
-
+			// There should be no new presence events
 			res, _ := alice.MustSync(t, client.SyncReq{Since: nextBatch})
-			assertPresence(t, res.Get("presence"), 0, alice.UserID)
+			usersInPresenceEvents(t, res.Get("presence"), []string{})
 		})
 	})
 }
 
 func sendMessages(t *testing.T, client *client.CSAPI, roomID string, prefix string, count int) {
+	t.Helper()
 	for i := 0; i < count; i++ {
 		client.SendEventSynced(t, roomID, b.Event{
 			Sender: client.UserID,
@@ -265,7 +267,7 @@ func sendMessages(t *testing.T, client *client.CSAPI, roomID string, prefix stri
 	}
 }
 
-func verifyFields(t *testing.T, res gjson.Result, roomID string) {
+func checkJoinFieldsExist(t *testing.T, res gjson.Result, roomID string) {
 	t.Helper()
 	room := res.Get("rooms.join." + client.GjsonEscape(roomID))
 	timeline := room.Get("timeline")
@@ -284,6 +286,9 @@ func verifyFields(t *testing.T, res gjson.Result, roomID string) {
 	if !state.Get("events").Exists() {
 		t.Errorf("state events do not exist")
 	}
+	if !state.Get("events").IsArray() {
+		t.Errorf("state events is not an array")
+	}
 	ephemeral := room.Get("ephemeral")
 	if !ephemeral.Exists() {
 		t.Errorf("ephemeral does not exist: %+v", res)
@@ -291,35 +296,42 @@ func verifyFields(t *testing.T, res gjson.Result, roomID string) {
 	if !ephemeral.Get("events").Exists() {
 		t.Errorf("ephemeral events do not exist")
 	}
+	if !ephemeral.Get("events").IsArray() {
+		t.Errorf("ephemeral events is not an array")
+	}
 }
 
-func assertPresence(t *testing.T, presence gjson.Result, wantCount int, filterUser string) {
+// usersInPresenceEvents checks that all users are present in presence.events. If the users list is empty,
+// it is expected that presence.events is empty as well. Also verifies that all needed fields are present.
+func usersInPresenceEvents(t *testing.T, presence gjson.Result, users []string) {
 	t.Helper()
+	if users == nil {
+		t.Fatal("can not use nil as string slice")
+	}
 
 	presenceEvents := presence.Get("events").Array()
-	filteredPresence := []gjson.Result{}
-	for _, x := range presenceEvents {
-		if x.Get("sender").Str != filterUser {
-			filteredPresence = append(filteredPresence, x)
+
+	if len(users) > len(presenceEvents) {
+		t.Fatalf("expected at least %d presence events, got %d", len(users), len(presenceEvents))
+	}
+
+	foundCounter := 0
+	for i := range users {
+		for _, x := range presenceEvents {
+			if x.Get("sender").Str == users[i] {
+				foundCounter++
+			}
+			ok := x.Get("type").Exists() && x.Get("sender").Exists() && x.Get("content").Exists()
+			if !ok {
+				t.Fatalf("missing field for presence event:")
+			}
+			if x.Get("type").Str != "m.presence" {
+				t.Fatalf("expected event type to be 'm.presence', got %s", x.Get("type").Str)
+			}
 		}
 	}
-	if len(filteredPresence) != wantCount {
-		t.Fatalf("expected %d presence events, got %d: %+v", wantCount, len(filteredPresence), presence)
-		return
-	}
-	if wantCount == 0 {
-		return
-	}
-	if len(filteredPresence) == 0 {
-		t.Fatal("No more presence events after filtering")
-		return
-	}
-	presenceEvent := filteredPresence[0]
-	ok := presenceEvent.Get("type").Exists() && presenceEvent.Get("sender").Exists() && presenceEvent.Get("content").Exists()
-	if !ok {
-		t.Fatalf("missing field for presence event")
-	}
-	if presenceEvent.Get("type").Str != "m.presence" {
-		t.Fatalf("expected event type to be 'm.presence', got %s", presenceEvent.Get("type").Str)
+
+	if len(users) != foundCounter {
+		t.Fatalf("expected %d presence events, got %d: %+v", len(users), foundCounter, presenceEvents)
 	}
 }
