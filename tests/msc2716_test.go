@@ -1,3 +1,4 @@
+//go:build msc2716
 // +build msc2716
 
 // This file contains tests for incrementally importing history to an existing room,
