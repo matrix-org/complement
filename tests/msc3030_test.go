@@ -1,3 +1,4 @@
+//go:build msc3030
 // +build msc3030
 
 // This file contains tests for a jump to date API endpoint,
