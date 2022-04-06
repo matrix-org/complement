@@ -72,7 +72,11 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 // SendJoinRequestsHandler is the http.Handler implementation for the send_join part of
 // HandleMakeSendJoinRequests.
-func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
+//
+// expectPartialState should be true if we should expect the incoming send_join
+// request to use the partial_state flag, per MSC3706. In that case, we reply
+// with only the critical subset of the room state.
+func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request, expectPartialState bool) {
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
 		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 	)
@@ -82,6 +86,18 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		w.Write(b)
 		return
 	}
+
+	// if we expect a partial-state join, the request should have a "partial_state" flag
+	queryParams := req.URL.Query()
+	partialState := queryParams.Get("org.matrix.msc3706.partial_state")
+	if expectPartialState && partialState != "true" {
+		log.Printf("Not a partial-state request: got %v, want %s",
+			partialState, "true")
+		w.WriteHeader(500)
+		w.Write([]byte("complement: Incoming send_join was not partial_state"))
+		return
+	}
+
 	vars := mux.Vars(req)
 	roomID := vars["roomID"]
 
@@ -95,24 +111,41 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 	if err != nil {
 		w.WriteHeader(500)
 		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot parse event JSON: " + err.Error()))
+		return
 	}
 
 	// build the state list *before* we insert the new event
-	var stateEvents = room.AllCurrentState()
-	var authEvents = room.AuthChain()
+	var stateEvents []*gomatrixserverlib.Event
+	for _, ev := range room.State {
+		// filter out non-critical memberships if this is a partial-state join
+		if expectPartialState {
+			if ev.Type() == "m.room.member" && ev.StateKey() != event.StateKey() {
+				continue
+			}
+		}
+		stateEvents = append(stateEvents, ev)
+	}
+
+	authEvents := room.AuthChainForEvents(stateEvents)
 
 	// insert the join event into the room state
 	room.AddEvent(event)
 
+	// servers in room: just us. TODO(faster_joins): this may not be correct
+	serversInRoom := []string{s.serverName}
+
 	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
-		Origin:      gomatrixserverlib.ServerName(s.serverName),
-		AuthEvents:  gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
-		StateEvents: gomatrixserverlib.NewEventJSONsFromEvents(stateEvents),
+		Origin:        gomatrixserverlib.ServerName(s.serverName),
+		AuthEvents:    gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
+		StateEvents:   gomatrixserverlib.NewEventJSONsFromEvents(stateEvents),
+		PartialState:  expectPartialState,
+		ServersInRoom: serversInRoom,
 	})
 	if err != nil {
 		w.WriteHeader(500)
 		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot marshal RespSendJoin: " + err.Error()))
+		return
 	}
 	w.WriteHeader(200)
 	w.Write(b)
@@ -128,7 +161,20 @@ func HandleMakeSendJoinRequests() func(*Server) {
 		})).Methods("GET")
 
 		s.mux.Handle("/_matrix/federation/v2/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			SendJoinRequestsHandler(s, w, req)
+			SendJoinRequestsHandler(s, w, req, false)
+		})).Methods("PUT")
+	}
+}
+
+// HandlePartialStateMakeSendJoinRequests is similar to HandleMakeSendJoinRequests, but expects a partial-state join.
+func HandlePartialStateMakeSendJoinRequests() func(*Server) {
+	return func(s *Server) {
+		s.mux.Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			MakeJoinRequestsHandler(s, w, req)
+		})).Methods("GET")
+
+		s.mux.Handle("/_matrix/federation/v2/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			SendJoinRequestsHandler(s, w, req, true)
 		})).Methods("PUT")
 	}
 }
