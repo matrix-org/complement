@@ -457,6 +457,7 @@ func federationServer(cfg *config.Complement, h http.Handler) (*http.Server, str
 			Locality:      []string{"London"},
 			StreetAddress: []string{"123 Street"},
 			PostalCode:    []string{"12345"},
+			CommonName:    docker.HostnameRunningComplement,
 		},
 	}
 	host := docker.HostnameRunningComplement
