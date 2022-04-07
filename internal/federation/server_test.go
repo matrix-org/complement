@@ -23,19 +23,41 @@ func TestComplementServerIsSigned(t *testing.T) {
 
 	caCertPool := x509.NewCertPool()
 	caCertPool.AddCert(cfg.CACertificate)
-	tlsConfig := &tls.Config{
-		RootCAs: caCertPool,
-	}
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	client := &http.Client{Transport: transport}
 
-	resp, err := client.Get("https://" + srv.ServerName())
-	if err != nil {
-		t.Fatalf("Failed to GET: %s", err)
+	testCases := []struct {
+		config      *tls.Config
+		wantSuccess bool
+	}{
+		{
+			config: &tls.Config{
+				RootCAs: caCertPool,
+			},
+			wantSuccess: true,
+		},
+		{
+			config:      &tls.Config{},
+			wantSuccess: false,
+		},
 	}
-	defer resp.Body.Close()
+	for _, tc := range testCases {
+		transport := &http.Transport{TLSClientConfig: tc.config}
+		client := &http.Client{Transport: transport}
 
-	if resp.StatusCode != 404 {
-		t.Errorf("expected 404, got %d", resp.StatusCode)
+		resp, err := client.Get("https://" + srv.ServerName())
+		if err != nil {
+			if tc.wantSuccess {
+				t.Fatalf("Failed to GET: %s", err)
+			} else {
+				return // wanted failure, got failure
+			}
+		}
+		if !tc.wantSuccess {
+			t.Fatalf("request succeeded when we expected it to fail")
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 404 {
+			t.Errorf("expected 404, got %d", resp.StatusCode)
+		}
 	}
 }
