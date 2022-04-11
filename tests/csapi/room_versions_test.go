@@ -26,14 +26,13 @@ func TestRoomVersions(t *testing.T) {
 	// Query room versions the server supports
 	capabilities := alice.GetCapabilities(t)
 	availableRoomVersions := gjson.GetBytes(capabilities, `capabilities.m\.room_versions.available`).Map()
-	t.Logf("available room versions: %+v", availableRoomVersions)
 	t.Run("Parallel", func(t *testing.T) {
 		// iterate over all room versions
 		for v := range roomVersions {
 			roomVersion := v
 			// skip versions the server doesn't know about
 			if _, ok := availableRoomVersions[string(roomVersion)]; !ok {
-				t.Logf("Skipping room version %s", roomVersion)
+				t.Logf("Skipping unsupported room version %s", roomVersion)
 				continue
 			}
 			// sytest: User can create and send/receive messages in a room with version $version
