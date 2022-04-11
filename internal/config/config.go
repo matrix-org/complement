@@ -166,6 +166,7 @@ func generateCAValues() (*x509.Certificate, *rsa.PrivateKey, error) {
 			Locality:      []string{"London"},
 			StreetAddress: []string{"123 Street"},
 			PostalCode:    []string{"12345"},
+			CommonName:    "Complement Test CA",
 		},
 	}
 
