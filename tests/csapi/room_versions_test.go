@@ -23,17 +23,25 @@ func TestRoomVersions(t *testing.T) {
 
 	roomVersions := gomatrixserverlib.RoomVersions()
 
+	// Query room versions the server supports
+	capabilities := alice.GetCapabilities(t)
+	availableRoomVersions := gjson.GetBytes(capabilities, `capabilities.m\.room_versions.available`).Map()
+	t.Logf("available room versions: %+v", availableRoomVersions)
 	t.Run("Parallel", func(t *testing.T) {
 		// iterate over all room versions
 		for v := range roomVersions {
 			roomVersion := v
+			// skip versions the server doesn't know about
+			if _, ok := availableRoomVersions[string(roomVersion)]; !ok {
+				t.Logf("Skipping room version %s", roomVersion)
+				continue
+			}
 			// sytest: User can create and send/receive messages in a room with version $version
 			t.Run(fmt.Sprintf("User can create and send/receive messages in a room with version %s", roomVersion), func(t *testing.T) {
 				t.Parallel()
 				roomID := createRoomSynced(t, alice, map[string]interface{}{
 					"room_version": roomVersion,
 				})
-				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 				res, _ := alice.MustSync(t, client.SyncReq{})
 				room := res.Get("rooms.join." + client.GjsonEscape(roomID))
@@ -47,6 +55,7 @@ func TestRoomVersions(t *testing.T) {
 				"remote": charlie,
 			}
 			for typ, joiner := range userTypes {
+				// Ensure to use the correct value and not only the last one.
 				typ := typ
 				joiner := joiner
 
@@ -128,6 +137,7 @@ func TestRoomVersions(t *testing.T) {
 				})
 				charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(charlie.UserID, roomID))
 				charlie.LeaveRoom(t, roomID)
+				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, roomID))
 			})
 
 			// sytest: Can receive redactions from regular users over federation in room version $version
