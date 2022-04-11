@@ -18,13 +18,7 @@ func TestRoomLevels(t *testing.T) {
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	successCount := 0
-	defer func() {
-		// sytest: Both GET and PUT work
-		if successCount != 2 {
-			t.Fatalf("expected GET and PUT to work")
-		}
-	}()
+	// sytest: Both GET and PUT work
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: GET /rooms/:room_id/state/m.room.power_levels can fetch levels
 		t.Run("GET /rooms/:room_id/state/m.room.power_levels can fetch levels", func(t *testing.T) {
@@ -51,7 +45,6 @@ func TestRoomLevels(t *testing.T) {
 			if userDefaults > alicePowerLevel.Int() {
 				t.Fatalf("Expected room creator to have a higher-than-default powerlevel")
 			}
-			successCount++
 		})
 		// sytest: PUT /rooms/:room_id/state/m.room.power_levels can set levels
 		t.Run("PUT /rooms/:room_id/state/m.room.power_levels can set levels", func(t *testing.T) {
@@ -62,7 +55,7 @@ func TestRoomLevels(t *testing.T) {
 
 			powerLevels := gjson.ParseBytes(must.ParseJSON(t, res.Body))
 			changedUser := client.GjsonEscape("@random-other-user:their.home")
-			alicePowerLevel := powerLevels.Get("users." + alice.UserID).Int()
+			alicePowerLevel := powerLevels.Get("users." + client.GjsonEscape(alice.UserID)).Int()
 			pl := map[string]int64{
 				alice.UserID:                    alicePowerLevel,
 				"@random-other-user:their.home": 20,
@@ -78,7 +71,6 @@ func TestRoomLevels(t *testing.T) {
 			if powerLevels.Get("users."+changedUser).Int() != 20 {
 				t.Fatal("Expected to have set other user's level to 20")
 			}
-			successCount++
 		})
 		// sytest: PUT power_levels should not explode if the old power levels were empty
 		t.Run("PUT power_levels should not explode if the old power levels were empty", func(t *testing.T) {
@@ -86,6 +78,7 @@ func TestRoomLevels(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
+			// absence of an 'events' key
 			reqBody := client.WithJSONBody(t, map[string]interface{}{
 				"users": map[string]int64{
 					alice.UserID: 100,
@@ -96,6 +89,9 @@ func TestRoomLevels(t *testing.T) {
 			reqBody = client.WithJSONBody(t, map[string]interface{}{})
 			alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"}, reqBody)
 			// this should now give a 403 (not a 500)
+			reqBody = client.WithJSONBody(t, map[string]interface{}{
+				"users": struct{}{},
+			})
 			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"}, reqBody)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
