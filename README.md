@@ -139,8 +139,11 @@ Because **M**<sup>*C*</sup> = **1** - **M**
 As the Matrix federation protocol expects federation endpoints to be served with valid TLS certs,
 Complement will create a self-signed CA cert to use for creating valid TLS certs in homeserver containers,
 and mount these files onto your homeserver container:
-- `/complement/ca/ca.crt`: the public key to add to the trusted cert store (e.g., /etc/ca-certificates)
-- `/complement/ca.key`: the private key to sign the created TLS cert
+- `/complement/ca/ca.crt`: the public certificate for the CA. The homeserver
+  under test should be configured to trust certificates signed by this CA (e.g.
+  by adding it to the trusted cert store in `/etc/ca-certificates`).
+- `/complement/ca/ca.key`: the CA's private key. This is needed to sign the
+  homeserver's certificate.
 
 For example, to sign your certificate for the homeserver, run at each container start (Ubuntu):
 ```
@@ -151,7 +154,7 @@ openssl x509 -req -in $SERVER_NAME.csr -CA /complement/ca/ca.crt -CAkey /complem
 
 To add the CA cert to your trust store (Ubuntu):
 ```
-cp /root/ca.crt /usr/local/share/ca-certificates/complement.crt
+cp /complement/ca/ca.crt /usr/local/share/ca-certificates/complement.crt
 update-ca-certificates
 ```
 

@@ -16,6 +16,8 @@ func TestMediaWithoutFileName(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+
 	remoteMediaId := "PlainTextFile"
 	remoteFile := []byte("Hello from the other side")
 	remoteContentType := "text/plain"
@@ -32,7 +34,6 @@ func TestMediaWithoutFileName(t *testing.T) {
 	cancel := srv.Listen()
 	defer cancel()
 
-	userID := "@alice:hs1"
 	file := []byte("Hello World!")
 	fileName := ""
 	contentType := "text/plain"
@@ -41,7 +42,6 @@ func TestMediaWithoutFileName(t *testing.T) {
 		// sytest: Can upload without a file name
 		t.Run("Can upload without a file name", func(t *testing.T) {
 			t.Parallel()
-			alice := deployment.Client(t, "hs1", userID)
 			mxc := alice.UploadContent(t, file, fileName, contentType)
 			must.NotEqualStr(t, mxc, "", "did not return an MXC URI")
 			must.StartWithStr(t, mxc, "mxc://", "returned invalid MXC URI")
@@ -49,7 +49,6 @@ func TestMediaWithoutFileName(t *testing.T) {
 		// sytest: Can download without a file name locally
 		t.Run("Can download without a file name locally", func(t *testing.T) {
 			t.Parallel()
-			alice := deployment.Client(t, "hs1", userID)
 			mxc := alice.UploadContent(t, file, fileName, contentType)
 			must.NotEqualStr(t, mxc, "", "did not return an MXC URI")
 			must.StartWithStr(t, mxc, "mxc://", "returned invalid MXC URI")
@@ -75,7 +74,6 @@ func TestMediaWithoutFileName(t *testing.T) {
 		// sytest: Can download without a file name over federation
 		t.Run("Can download without a file name over federation", func(t *testing.T) {
 			t.Parallel()
-			alice := deployment.Client(t, "hs1", userID)
 
 			b, ct := alice.DownloadContent(t, fmt.Sprintf("mxc://%s/%s", srv.ServerName(), remoteMediaId))
 

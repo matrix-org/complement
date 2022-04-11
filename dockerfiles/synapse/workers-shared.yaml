@@ -75,8 +75,6 @@ federation_rr_transactions_per_room_per_second: 9999
 ## Experimental Features ##
 
 experimental_features:
-  # Enable knocking support
-  msc2403_enabled: true
   # Enable history backfilling support
   msc2716_enabled: true
   # Enable spaces support
