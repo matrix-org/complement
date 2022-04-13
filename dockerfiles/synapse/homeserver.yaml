@@ -113,6 +113,8 @@ experimental_features:
   msc3706_enabled: true
   # Enable jump to date endpoint
   msc3030_enabled: true
+  # Enable user-defined EDUs
+  msc2477_enabled: true
 
 server_notices:
   system_mxid_localpart: _server
