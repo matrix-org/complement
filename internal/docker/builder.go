@@ -260,6 +260,18 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		}
 		// kill the container
 		defer func(r result) {
+			containerInfo, err := d.Docker.ContainerInspect(context.Background(), r.containerID)
+
+			if err != nil {
+				d.log("%s : Can't get status of %s", r.contextStr, r.containerID)
+				return
+			}
+
+			if !containerInfo.State.Running {
+				// The container isn't running anyway, so no need to kill it.
+				return
+			}
+
 			killErr := d.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
 			if killErr != nil {
 				d.log("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
@@ -297,6 +309,14 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		for k, v := range asLabels {
 			labels[k] = v
 		}
+
+		// Stop the container before we commit it.
+		// This gives it chance to shut down gracefully.
+		// If we don't do this, then e.g. Postgres databases can become corrupt, which
+		// then incurs a slow recovery process when we use the blueprint later.
+		d.log("%s : Stopping container: %s", res.contextStr, res.containerID)
+		timeout := 30 * time.Second
+		d.Docker.ContainerStop(context.Background(), res.containerID, &timeout)
 
 		// commit the container
 		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
