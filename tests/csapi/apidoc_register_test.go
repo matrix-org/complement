@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"testing"
 
@@ -27,7 +28,6 @@ import (
 // registration is idempotent, without username specified
 // registration is idempotent, with username specified
 // registration remembers parameters
-// registration accepts non-ascii passwords
 // registration with inhibit_login inhibits login
 // User signups are forbidden from starting with '_'
 // Can register using an email address
@@ -223,6 +223,36 @@ func TestRegistration(t *testing.T) {
 					match.JSONKeyEqual("user_id", "@user-upper-shared-secret:hs1"),
 				},
 			})
+		})
+		// sytest: registration accepts non-ascii passwords
+		t.Run("Registration accepts non-ascii passwords", func(t *testing.T) {
+			reqJson := map[string]interface{}{
+				"username":                    "test_user",
+				"password":                    "übers3kr1t",
+				"device_id":                   "xyzzy",
+				"initial_device_display_name": "display_name"}
+			resp := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithJSONBody(t, reqJson))
+			body, err := ioutil.ReadAll(resp.Body)
+			session := gjson.GetBytes(body, "session")
+			if err != nil {
+				t.Fatalf("Failed to read response body: %s", err)
+			}
+			must.MatchResponse(t, resp, match.HTTPResponse{StatusCode: 401})
+			auth := map[string]interface{}{
+				"session": session.Str,
+				"type":    "m.login.dummy",
+			}
+			reqBody := map[string]interface{}{
+				"username":                    "test_user",
+				"password":                    "übers3kr1t",
+				"device_id":                   "xyzzy",
+				"initial_device_display_name": "display_name",
+				"auth":                        auth,
+			}
+			resp2 := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithJSONBody(t, reqBody))
+			must.MatchResponse(t, resp2, match.HTTPResponse{JSON: []match.JSON{
+				match.JSONKeyPresent("access_token"),
+			}})
 		})
 	})
 }
