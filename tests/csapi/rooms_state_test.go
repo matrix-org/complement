@@ -1,3 +1,5 @@
+//go:build !dendrite_blacklist
+
 package csapi_tests
 
 import (
