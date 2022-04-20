@@ -49,8 +49,6 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 	defer fedStateIdsRequestReceivedWaiter.Finish()
 	fedStateIdsSendResponseWaiter := NewWaiter()
 	defer fedStateIdsSendResponseWaiter.Finish()
-	fedStateRequestReceivedWaiter := NewWaiter()
-	defer fedStateRequestReceivedWaiter.Finish()
 
 	// create the room on the complement server, with charlie and derek as members
 	charlie := srv.UserID("charlie")
@@ -61,9 +59,8 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 	// waits for fedStateIdsSendResponseWaiter and  sends a reply
 	handleStateIdsRequests(t, srv, serverRoom, fedStateIdsRequestReceivedWaiter, fedStateIdsSendResponseWaiter)
 
-	// a handler for /state requests, which sends a sensible response and
-	// finishes fedStateRequestReceivedWaiter
-	handleStateRequests(t, srv, serverRoom, fedStateRequestReceivedWaiter, nil)
+	// a handler for /state requests, which sends a sensible response
+	handleStateRequests(t, srv, serverRoom, nil, nil)
 
 	// have alice join the room by room ID.
 	alice.JoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
@@ -99,6 +96,7 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 		t.Fatalf("/sync request request did not complete")
 	case syncRes = <-syncResponseChan:
 	}
+
 	roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID))
 	if !roomRes.Exists() {
 		t.Fatalf("/sync completed without join to new room\n")
