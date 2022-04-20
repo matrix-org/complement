@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/internal/match"
 )
 
 // TestSyncBlocksDuringPartialStateJoin tests that a regular /sync request
@@ -97,14 +99,23 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 		t.Fatalf("/sync request request did not complete")
 	case syncRes = <-syncResponseChan:
 	}
-
-	if err := client.SyncJoinedTo(alice.UserID, serverRoom.RoomID)(alice.UserID, syncRes); err != nil {
-		t.Fatalf("/sync completed without join to new room")
+	roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID))
+	if !roomRes.Exists() {
+		t.Fatalf("/sync completed without join to new room\n")
 	}
 
-	// get the state for the room
-	timeline := syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID) + ".timeline.events")
-	t.Logf("timeline: %v", timeline)
+	// check that the state includes both charlie and derek.
+	matcher := match.JSONCheckOffAllowUnwanted("state.events",
+		[]interface{}{
+			"m.room.member|" + charlie,
+			"m.room.member|" + derek,
+		}, func(result gjson.Result) interface{} {
+			return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
+		}, nil,
+	)
+	if err := matcher([]byte(roomRes.Raw)); err != nil {
+		t.Errorf("Did not find expected state events in /sync response: %s", err)
+	}
 }
 
 // makeTestRoom constructs a test room on the Complement server, and adds the given extra members
