@@ -101,6 +101,7 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 }
 
 func TestSync(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // too flakey, fails with sync_test.go:135: unchanged room !7ciB69Jg2lCc4Vdf:hs1 should not be in the sync
 	// sytest: Can sync
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
