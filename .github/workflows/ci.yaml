@@ -6,6 +6,22 @@ on:
   pull_request:
 
 jobs:
+  complement-internal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2 # Checkout complement
+      - name: "Set Go Version"
+        run: |
+          echo "$GOROOT_1_17_X64/bin" >> $GITHUB_PATH
+          echo "~/go/bin" >> $GITHUB_PATH
+      - name: "Install Complement Dependencies"
+        # We don't need to install Go because it is included on the Ubuntu 20.04 image:
+        # See https://github.com/actions/virtual-environments/blob/main/images/linux/Ubuntu2004-Readme.md specifically GOROOT_1_17_X64
+        run: |
+          sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
+      - name: "Run internal Complement tests"
+        run: |
+          go test ./internal/... 
 
   complement:
     runs-on: ubuntu-latest
@@ -89,5 +105,4 @@ jobs:
         name: Run Complement Tests
         env:
           COMPLEMENT_BASE_IMAGE: homeserver
-          COMPLEMENT_DEBUG: 1
           DOCKER_BUILDKIT: 1
