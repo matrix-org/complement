@@ -113,7 +113,6 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 	if err := matcher([]byte(roomRes.Raw)); err != nil {
 		t.Errorf("Did not find expected state events in /sync response: %s", err)
 	}
-	t.Fail()
 }
 
 // makeTestRoom constructs a test room on the Complement server, and adds the given extra members
