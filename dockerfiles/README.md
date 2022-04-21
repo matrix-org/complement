@@ -6,4 +6,4 @@ end up copying the Dockerfiles in this directory to their own repository. In an 
 duplication, we now point to dockerfiles in respective repositories rather than have them directly here.
 
 - Dendrite: https://github.com/matrix-org/dendrite/blob/v0.6.3/build/scripts/Complement.Dockerfile
-- Synapse: https://github.com/matrix-org/synapse/blob/v1.52.0/scripts-dev/complement.sh
+- Synapse: https://github.com/matrix-org/synapse/blob/develop/docker/complement/Dockerfile

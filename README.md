@@ -51,17 +51,22 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests/...
 
 If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
 
-If you want to develop Complement tests while working on a local dev instance of Synapse, use the [`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh) script and set the `COMPLEMENT_DIR` environment variable to the filepath of your local Complement checkout. A regex that matches against test names can also be supplied as an argument to the script, i.e:
+If you want to develop Complement tests while working on a local dev instance
+of Synapse, use the
+[`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh)
+script and set the `COMPLEMENT_DIR` environment variable to the filepath of
+your local Complement checkout. Arguments to `go test` can be supplied as an argument to the script, e.g.:
 
 ```sh
-COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh "TestOutboundFederation(Profile|Send)"
+COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh -run "TestOutboundFederation(Profile|Send)"
 ```
 
-To run Complement against a specific release of Synapse, set the
-`SYNAPSE_VERSION` build argument. For example:
+To run Complement against a specific release of Synapse, build the
+"complement-synapse" image with a `SYNAPSE_VERSION` build argument. For
+example:
 
 ```sh
-docker build -t complement-synapse:v1.36.0 -f dockerfiles/Synapse.Dockerfile --build-arg=SYNAPSE_VERSION=v1.36.0 dockerfiles
+(cd synapse && docker build -t complement-synapse:v1.36.0 -f docker/complement/Dockerfile --build-arg=SYNAPSE_VERSION=v1.36.0 docker/complement)
 COMPLEMENT_BASE_IMAGE=complement-synapse:v1.36.0 go test ./tests/...
 ```
 
