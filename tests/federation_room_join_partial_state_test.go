@@ -56,7 +56,7 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 	serverRoom := makeTestRoom(t, srv, alice.GetDefaultRoomVersion(t), charlie, derek)
 
 	// register a handler for /state_ids requests, which finishes fedStateIdsRequestReceivedWaiter, then
-	// waits for fedStateIdsSendResponseWaiter and  sends a reply
+	// waits for fedStateIdsSendResponseWaiter and sends a reply
 	handleStateIdsRequests(t, srv, serverRoom, fedStateIdsRequestReceivedWaiter, fedStateIdsSendResponseWaiter)
 
 	// a handler for /state requests, which sends a sensible response
