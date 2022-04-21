@@ -314,9 +314,12 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		// This gives it chance to shut down gracefully.
 		// If we don't do this, then e.g. Postgres databases can become corrupt, which
 		// then incurs a slow recovery process when we use the blueprint later.
-		d.log("%s : Stopping container: %s", res.contextStr, res.containerID)
+		d.log("%s: Stopping container: %s", res.contextStr, res.containerID)
 		timeout := 10 * time.Second
 		d.Docker.ContainerStop(context.Background(), res.containerID, &timeout)
+
+		// Log again so we can see the timings.
+		d.log("%s: Stopped container: %s", res.contextStr, res.containerID)
 
 		// commit the container
 		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
