@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/gomatrixserverlib"
@@ -114,6 +113,7 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 	if err := matcher([]byte(roomRes.Raw)); err != nil {
 		t.Errorf("Did not find expected state events in /sync response: %s", err)
 	}
+	t.Fail()
 }
 
 // makeTestRoom constructs a test room on the Complement server, and adds the given extra members
@@ -144,9 +144,8 @@ func handleStateIdsRequests(
 	srv.Mux().Handle(
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s", serverRoom.RoomID),
 		http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			vars := mux.Vars(req)
 			queryParams := req.URL.Query()
-			t.Logf("Incoming state_ids request for event %s in room %s", queryParams["event_id"], vars["roomId"])
+			t.Logf("Incoming state_ids request for event %s in room %s", queryParams["event_id"], serverRoom.RoomID)
 			if requestReceivedWaiter != nil {
 				requestReceivedWaiter.Finish()
 			}
@@ -180,9 +179,8 @@ func handleStateRequests(
 	srv.Mux().Handle(
 		fmt.Sprintf("/_matrix/federation/v1/state/%s", serverRoom.RoomID),
 		http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			vars := mux.Vars(req)
 			queryParams := req.URL.Query()
-			t.Logf("Incoming state request for event %s in room %s", queryParams["event_id"], vars["roomId"])
+			t.Logf("Incoming state request for event %s in room %s", queryParams["event_id"], serverRoom.RoomID)
 			if requestReceivedWaiter != nil {
 				requestReceivedWaiter.Finish()
 			}
