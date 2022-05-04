@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrixserverlib"
-
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -32,6 +31,11 @@ const testKnockReason string = "Let me in... LET ME IN!!!"
 // Knocking is currently an experimental feature and not in the matrix spec.
 // This function tests knocking on local and remote room.
 func TestKnocking(t *testing.T) {
+	// v7 is required for knocking support
+	doTestKnocking(t, "7", "knock")
+}
+
+func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 
@@ -67,14 +71,14 @@ func TestKnocking(t *testing.T) {
 		RoomVersion string `json:"room_version"`
 	}{
 		"private_chat", // Set to private in order to get an invite-only room
-		"7",            // Room version required for knocking.
+		roomVersion,
 	})
 	alice.InviteRoom(t, roomIDOne, david)
 	inviteWaiter.Wait(t, 5*time.Second)
 	serverRoomOne := srv.MustJoinRoom(t, deployment, "hs1", roomIDOne, david)
 
 	// Test knocking between two users on the same homeserver
-	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, serverRoomOne, false)
+	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, serverRoomOne, false, joinRule)
 
 	// Create a room for alice and charlie to test knocking with
 	roomIDTwo := alice.CreateRoom(t, struct {
@@ -82,7 +86,7 @@ func TestKnocking(t *testing.T) {
 		RoomVersion string `json:"room_version"`
 	}{
 		"private_chat", // Set to private in order to get an invite-only room
-		"7",            // Room version required for knocking.
+		roomVersion,
 	})
 	inviteWaiter = NewWaiter()
 	alice.InviteRoom(t, roomIDTwo, david)
@@ -90,10 +94,10 @@ func TestKnocking(t *testing.T) {
 	serverRoomTwo := srv.MustJoinRoom(t, deployment, "hs1", roomIDTwo, david)
 
 	// Test knocking between two users, each on a separate homeserver
-	knockingBetweenTwoUsersTest(t, roomIDTwo, alice, charlie, serverRoomTwo, true)
+	knockingBetweenTwoUsersTest(t, roomIDTwo, alice, charlie, serverRoomTwo, true, joinRule)
 }
 
-func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, serverRoom *federation.ServerRoom, testFederation bool) {
+func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, serverRoom *federation.ServerRoom, testFederation bool, joinRule string) {
 	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
 		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{"hs1"}, 403)
 	})
@@ -105,7 +109,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			Sender:   inRoomUser.UserID,
 			StateKey: &emptyStateKey,
 			Content: map[string]interface{}{
-				"join_rule": "knock",
+				"join_rule": joinRule,
 			},
 		})
 	})
@@ -367,6 +371,11 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 // representing a knock room. For sanity-checking, this test will also create a public room and ensure it has a
 // 'join_rule' representing a publicly-joinable room.
 func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
+	// v7 is required for knocking
+	doTestKnockRoomsInPublicRoomsDirectory(t, "7", "knock")
+}
+
+func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, joinRule string) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -380,7 +389,7 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 		RoomVersion string `json:"room_version"`
 	}{
 		"private_chat", // Set to private in order to get an invite-only room
-		"7",            // Room version required for knocking.
+		roomVersion,
 	})
 
 	// Change the join_rule to allow knocking
@@ -390,12 +399,12 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 		Sender:   alice.UserID,
 		StateKey: &emptyStateKey,
 		Content: map[string]interface{}{
-			"join_rule": "knock",
+			"join_rule": joinRule,
 		},
 	})
 
 	// Publish the room to the public room directory and check that the 'join_rule' key is knock
-	publishAndCheckRoomJoinRule(t, alice, roomID, "knock")
+	publishAndCheckRoomJoinRule(t, alice, roomID, joinRule)
 
 	// Create a public room
 	roomID = alice.CreateRoom(t, struct {
