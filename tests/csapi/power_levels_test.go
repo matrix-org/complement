@@ -18,7 +18,7 @@ func TestDemotingUsersViaUsersDefault(t *testing.T) {
 	roomID := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"power_level_content_override": map[string]interface{}{
-			"users_default": 100, // the default is 100
+			"users_default": 100, // the default is 0
 			"users": map[string]interface{}{
 				alice.UserID: 100,
 			},
