@@ -60,7 +60,7 @@ func TestSendAndFetchMessage(t *testing.T) {
 }
 
 // With a non-existent room_id, GET /rooms/:room_id/messages returns 403
-// forbidden.
+// forbidden ("You aren't a member of the room").
 func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // flakey
 	deployment := Deploy(t, b.BlueprintAlice)
