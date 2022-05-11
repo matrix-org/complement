@@ -59,6 +59,24 @@ func TestSendAndFetchMessage(t *testing.T) {
 	})
 }
 
+// With a non-existent room_id, GET /rooms/:room_id/messages returns 403
+// forbidden ("You aren't a member of the room").
+func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	roomID := "!does-not-exist:hs1"
+
+	// then request messages from the room
+	queryParams := url.Values{}
+	queryParams.Set("dir", "b")
+	res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: http.StatusForbidden,
+	})
+}
+
 // sytest: PUT /rooms/:room_id/send/:event_type/:txn_id sends a message
 // sytest: PUT /rooms/:room_id/send/:event_type/:txn_id deduplicates the same txn id
 func TestSendMessageWithTxn(t *testing.T) {
