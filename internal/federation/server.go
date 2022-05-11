@@ -98,7 +98,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 			body, _ := ioutil.ReadAll(req.Body)
 			t.Errorf("Server.UnexpectedRequestsAreErrors=true received unexpected request to server: %s %s\n%s", req.Method, req.URL.Path, string(body))
 		} else {
-			t.Logf("Server.UnexpectedRequestsAreErrors=false received unexpected request to server: %s %s", req.Method, req.URL.Path)
+			t.Logf("Server.UnexpectedRequestsAreErrors=false received unexpected request to server: %s %s - sending 404 which may cause the HS to backoff from Complement", req.Method, req.URL.Path)
 		}
 		w.WriteHeader(404)
 		w.Write([]byte("complement: federation server is not listening for this path"))
