@@ -196,9 +196,8 @@ func TestFederatedEventRelationships(t *testing.T) {
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil, nil),
 	)
-	// we expect to be pushed transactions but don't care about them
-	srv.UnexpectedRequestsAreErrors = false
 	cancel := srv.Listen()
 	defer cancel()
 
