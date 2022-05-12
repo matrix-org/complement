@@ -919,7 +919,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				})
 			})
 
-			t.Run("Historical messages show up for remote federated homeserver even the homeserver is missing the part of the timeline where the marker was sent and it paginates before it occured", func(t *testing.T) {
+			t.Run("Historical messages show up for remote federated homeserver even when the homeserver is missing the part of the timeline where the marker was sent and it paginates before it occured", func(t *testing.T) {
 				t.Parallel()
 
 				roomID := as.CreateRoom(t, createPublicRoomOpts)
@@ -964,7 +964,11 @@ func TestImportHistoricalMessages(t *testing.T) {
 				baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
 
 				// Send the marker event which lets remote homeservers know there are
-				// some historical messages back at the given insertion event.
+				// some historical messages back at the given insertion event. We
+				// purposely use the local user Alice here as remoteCharlie isn't even
+				// in the room at this point in time and even if they were, the purpose
+				// of this test is to make sure the remote-join will pick up the state,
+				// not our backfill here.
 				sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
 
 				// Add some events after the marker so that remoteCharlie doesn't see the marker
@@ -991,24 +995,97 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// We don't want to use `validateBatchSendRes(t, remoteCharlie, roomID,
 				// batchSendRes, false)` here because it tests against the full message
 				// response and we need to skip past the marker in the timeline.
-				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"dir":   []string{"b"},
-					"limit": []string{"100"},
-					"from":  []string{paginationTokenBeforeMarker},
-				}))
-
-				// Make sure all of the historical events are present
-				must.MatchResponse(t, messagesRes, match.HTTPResponse{
-					JSON: []match.JSON{
-						match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
-							return r.Get("event_id").Str
-						}, nil),
-					},
-				})
+				paginateUntilMessageCheckOff(t, remoteCharlie, roomID, paginationTokenBeforeMarker, historicalEventIDs, []string{})
 			})
 
-			t.Run("TODO: do multiple marker events as state to see if homeserver can follow the state update chain and get all history", func(t *testing.T) {
-				t.Skip("Skipping until I write this test")
+			t.Run("Historical messages show up for remote federated homeserver even when the homeserver is missing the part of the timeline where multiple marker events were sent and it paginates before they occured", func(t *testing.T) {
+				t.Parallel()
+
+				roomID := as.CreateRoom(t, createPublicRoomOpts)
+				alice.JoinRoom(t, roomID, nil)
+
+				// Anything above 1 here should be sufficient to test whether we can
+				// follow the state and previous state all the way up to injest all of
+				// the marker events along the way
+				numBatches := 2
+
+				eventIDsBefore := createMessagesInRoom(t, alice, roomID, numBatches, "eventIDsBefore")
+				timeAfterEventBefore := time.Now()
+
+				eventIDsAfter := createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
+				eventIDAfter := eventIDsAfter[0]
+
+				// Join the room from a remote homeserver before the historical messages were sent
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+				// Make sure all of the events have been backfilled for the remote user
+				// before we leave the room
+				fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
+					if ev.Get("event_id").Str == eventIDsBefore[0] {
+						return true
+					}
+
+					return false
+				})
+
+				// Leave before the historical messages are imported
+				remoteCharlie.LeaveRoom(t, roomID)
+
+				var expectedEventIDs []string
+				for i := 0; i < numBatches; i++ {
+					// Create separate disconnected batches
+					batchSendRes := batchSendHistoricalMessages(
+						t,
+						as,
+						roomID,
+						eventIDsBefore[i],
+						"",
+						createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
+						createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
+						// Status
+						200,
+					)
+					batchSendResBody := client.ParseJSON(t, batchSendRes)
+					historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
+					baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
+
+					// Store the historical events we will expect to see later
+					expectedEventIDs = append(expectedEventIDs, historicalEventIDs...)
+
+					// Send the marker event which lets remote homeservers know there are
+					// some historical messages back at the given insertion event. We
+					// purposely use the local user Alice here as remoteCharlie isn't even
+					// in the room at this point in time and even if they were, the purpose
+					// of this test is to make sure the remote-join will pick up the state,
+					// not our backfill here.
+					sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
+				}
+
+				// Add some events after the marker so that remoteCharlie doesn't see the marker
+				createMessagesInRoom(t, alice, roomID, 3, "eventIDFiller")
+
+				// Join the room from a remote homeserver after the historical messages were sent
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+
+				// From the remote user, make a /context request for eventIDAfter to get
+				// pagination token before the marker event
+				contextRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventIDAfter}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"limit": []string{"0"},
+				}))
+				contextResResBody := client.ParseJSON(t, contextRes)
+				paginationTokenBeforeMarker := client.GetJSONFieldStr(t, contextResResBody, "end")
+
+				// Start the /messages request from that pagination token which
+				// jumps/skips over the marker event in the timeline. This is the key
+				// part of the test. We want to make sure that new marker state can be
+				// injested and processed to reveal the imported history after a
+				// remote-join without paginating and backfilling over the spot in the
+				// timeline with the marker event.
+				//
+				// We don't want to use `validateBatchSendRes(t, remoteCharlie, roomID,
+				// batchSendRes, false)` here because it tests against the full message
+				// response and we need to skip past the marker in the timeline.
+				paginateUntilMessageCheckOff(t, remoteCharlie, roomID, paginationTokenBeforeMarker, expectedEventIDs, []string{})
 			})
 		})
 
@@ -1181,6 +1258,103 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 		checkCounter++
 		// Add a slight delay so we don't hammmer the messages endpoint
 		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// Paginate the /messages endpoint until we find all of the expectedEventIds
+// (order does not matter). If any event in denyListEventIDs is found, an error
+// will be thrown.
+func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, fromPaginationToken string, expectedEventIDs []string, denyListEventIDs []string) {
+	t.Helper()
+	start := time.Now()
+
+	workingExpectedEventIDMap := make(map[string]string)
+	for _, expectedEventID := range expectedEventIDs {
+		workingExpectedEventIDMap[expectedEventID] = expectedEventID
+	}
+
+	denyEventIDMap := make(map[string]string)
+	for _, denyEventID := range denyListEventIDs {
+		denyEventIDMap[denyEventID] = denyEventID
+	}
+
+	var actualEventIDList []string
+	callCounter := 0
+	messageResEnd := fromPaginationToken
+	generateErrorMesssageInfo := func() string {
+		i := 0
+		leftoverEventIDs := make([]string, len(workingExpectedEventIDMap))
+		for eventID := range workingExpectedEventIDMap {
+			leftoverEventIDs[i] = eventID
+			i++
+		}
+
+		return fmt.Sprintf("Called /messages %d times but only found %d/%d expected messages. Leftover messages we expected (%d): %s. We saw %d events over all of the API calls: %s",
+			callCounter,
+			len(expectedEventIDs)-len(leftoverEventIDs),
+			len(expectedEventIDs),
+			len(leftoverEventIDs),
+			leftoverEventIDs,
+			len(actualEventIDList),
+			actualEventIDList,
+		)
+	}
+
+	for {
+		if time.Since(start) > 200*c.SyncUntilTimeout {
+			t.Fatalf(
+				"paginateUntilMessageCheckOff timed out. %s",
+				generateErrorMesssageInfo(),
+			)
+		}
+
+		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			"dir":   []string{"b"},
+			"limit": []string{"100"},
+			"from":  []string{messageResEnd},
+		}))
+		callCounter++
+		messsageResBody := client.ParseJSON(t, messagesRes)
+		messageResEnd = client.GetJSONFieldStr(t, messsageResBody, "end")
+		// Since the original body can only be read once, create a new one from the body bytes we just read
+		messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
+
+		foundEventInMessageResponse := false
+		must.MatchResponse(t, messagesRes, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONArrayEach("chunk", func(ev gjson.Result) error {
+					foundEventInMessageResponse = true
+					eventID := ev.Get("event_id").Str
+					actualEventIDList = append(actualEventIDList, eventID)
+
+					if _, keyExists := denyEventIDMap[eventID]; keyExists {
+						return fmt.Errorf(
+							"paginateUntilMessageCheckOff found unexpected message=%s in deny list while paginating. %s",
+							eventID,
+							generateErrorMesssageInfo(),
+						)
+					}
+
+					if _, keyExists := workingExpectedEventIDMap[eventID]; keyExists {
+						delete(workingExpectedEventIDMap, eventID)
+					}
+
+					return nil
+				}),
+			},
+		})
+
+		if !foundEventInMessageResponse {
+			t.Fatalf(
+				"paginateUntilMessageCheckOff reached the end of the messages without finding all expected events. %s",
+				generateErrorMesssageInfo(),
+			)
+		}
+
+		// We were able to find all of the expected events!
+		if len(workingExpectedEventIDMap) == 0 {
+			return
+		}
 	}
 }
 
