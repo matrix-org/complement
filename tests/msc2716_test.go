@@ -973,28 +973,31 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// Join the room from a remote homeserver after the historical messages were sent
 				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 
-				// Make a /context request for eventIDAfter to get pagination token before the marker event
+				// From the remote user, make a /context request for eventIDAfter to get
+				// pagination token before the marker event
 				contextRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventIDAfter}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"limit": []string{"0"},
 				}))
 				contextResResBody := client.ParseJSON(t, contextRes)
 				paginationTokenBeforeMarker := client.GetJSONFieldStr(t, contextResResBody, "end")
 
-				// Start /messages request from that pagination token which skips over
-				// the marker event in the timeline.
+				// Start the /messages request from that pagination token which
+				// jumps/skips over the marker event in the timeline. This is the key
+				// part of the test. We want to make sure that new marker state can be
+				// injested and processed to reveal the imported history after a
+				// remote-join without paginating and backfilling over the spot in the
+				// timeline with the marker event.
 				//
-				// FIXME: In the future, we should probably replace the following logic
-				// with `validateBatchSendRes` to re-use and have some more robust
-				// assertion logic here. We're currently not using it because the
-				// message order isn't quite perfect when a remote federated homeserver
-				// gets backfilled. validateBatchSendRes(t, remoteCharlie, roomID,
-				// batchSendRes, false)
+				// We don't want to use `validateBatchSendRes(t, remoteCharlie, roomID,
+				// batchSendRes, false)` here because it tests against the full message
+				// response and we need to skip past the marker in the timeline.
 				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 					"from":  []string{paginationTokenBeforeMarker},
 				}))
 
+				// Make sure all of the historical events are present
 				must.MatchResponse(t, messagesRes, match.HTTPResponse{
 					JSON: []match.JSON{
 						match.JSONCheckOffAllowUnwanted("chunk", makeInterfaceSlice(historicalEventIDs), func(r gjson.Result) interface{} {
