@@ -31,7 +31,7 @@ func TestRoomReceiptsReadMarkers(t *testing.T) {
 			if eventID == "" {
 				t.Fatal("did not find an event_id")
 			}
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID})
+			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
 		})
 
 		// sytest: POST /rooms/:room_id/read_markers can create read marker
