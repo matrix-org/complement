@@ -51,17 +51,22 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests/...
 
 If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
 
-If you want to develop Complement tests while working on a local dev instance of Synapse, use the [`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh) script and set the `COMPLEMENT_DIR` environment variable to the filepath of your local Complement checkout. A regex that matches against test names can also be supplied as an argument to the script, i.e:
+If you want to develop Complement tests while working on a local dev instance
+of Synapse, use the
+[`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh)
+script and set the `COMPLEMENT_DIR` environment variable to the filepath of
+your local Complement checkout. Arguments to `go test` can be supplied as an argument to the script, e.g.:
 
 ```sh
-COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh "TestOutboundFederation(Profile|Send)"
+COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh -run "TestOutboundFederation(Profile|Send)"
 ```
 
-To run Complement against a specific release of Synapse, set the
-`SYNAPSE_VERSION` build argument. For example:
+To run Complement against a specific release of Synapse, build the
+"complement-synapse" image with a `SYNAPSE_VERSION` build argument. For
+example:
 
 ```sh
-docker build -t complement-synapse:v1.36.0 -f dockerfiles/Synapse.Dockerfile --build-arg=SYNAPSE_VERSION=v1.36.0 dockerfiles
+(cd synapse && docker build -t complement-synapse:v1.36.0 -f docker/complement/Dockerfile --build-arg=SYNAPSE_VERSION=v1.36.0 docker/complement)
 COMPLEMENT_BASE_IMAGE=complement-synapse:v1.36.0 go test ./tests/...
 ```
 
@@ -139,8 +144,11 @@ Because **M**<sup>*C*</sup> = **1** - **M**
 As the Matrix federation protocol expects federation endpoints to be served with valid TLS certs,
 Complement will create a self-signed CA cert to use for creating valid TLS certs in homeserver containers,
 and mount these files onto your homeserver container:
-- `/complement/ca/ca.crt`: the public key to add to the trusted cert store (e.g., /etc/ca-certificates)
-- `/complement/ca.key`: the private key to sign the created TLS cert
+- `/complement/ca/ca.crt`: the public certificate for the CA. The homeserver
+  under test should be configured to trust certificates signed by this CA (e.g.
+  by adding it to the trusted cert store in `/etc/ca-certificates`).
+- `/complement/ca/ca.key`: the CA's private key. This is needed to sign the
+  homeserver's certificate.
 
 For example, to sign your certificate for the homeserver, run at each container start (Ubuntu):
 ```
@@ -151,7 +159,7 @@ openssl x509 -req -in $SERVER_NAME.csr -CA /complement/ca/ca.crt -CAkey /complem
 
 To add the CA cert to your trust store (Ubuntu):
 ```
-cp /root/ca.crt /usr/local/share/ca-certificates/complement.crt
+cp /complement/ca/ca.crt /usr/local/share/ca-certificates/complement.crt
 update-ca-certificates
 ```
 

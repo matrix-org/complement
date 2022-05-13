@@ -100,9 +100,7 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 // DownloadContent downloads media from the server, returning the raw bytes and the Content-Type. Fails the test on error.
 func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 	t.Helper()
-	mxcParts := strings.Split(strings.TrimPrefix(mxcUri, "mxc://"), "/")
-	origin := mxcParts[0]
-	mediaId := strings.Join(mxcParts[1:], "/")
+	origin, mediaId := SplitMxc(mxcUri)
 	res := c.MustDo(t, "GET", []string{"_matrix", "media", "r0", "download", origin, mediaId}, struct{}{})
 	contentType := res.Header.Get("Content-Type")
 	b, err := ioutil.ReadAll(res.Body)
@@ -715,4 +713,13 @@ func loopArray(object gjson.Result, key string, check func(gjson.Result) bool) e
 		}
 	}
 	return fmt.Errorf("check function did not pass while iterating over %d elements: %v", len(goArray), array.Raw)
+}
+
+// Splits an MXC URI into its origin and media ID parts
+func SplitMxc(mxcUri string) (string, string) {
+	mxcParts := strings.Split(strings.TrimPrefix(mxcUri, "mxc://"), "/")
+	origin := mxcParts[0]
+	mediaId := strings.Join(mxcParts[1:], "/")
+
+	return origin, mediaId
 }

@@ -93,11 +93,19 @@ func NewWaiter() *Waiter {
 // If the timeout is reached, the test is failed.
 func (w *Waiter) Wait(t *testing.T, timeout time.Duration) {
 	t.Helper()
+	w.Waitf(t, timeout, "Wait")
+}
+
+// Waitf blocks until Finish() is called or until the timeout is reached.
+// If the timeout is reached, the test is failed with the given error message.
+func (w *Waiter) Waitf(t *testing.T, timeout time.Duration, errFormat string, args ...interface{}) {
+	t.Helper()
 	select {
 	case <-w.ch:
 		return
 	case <-time.After(timeout):
-		t.Fatalf("Wait: timed out after %f seconds.", timeout.Seconds())
+		errmsg := fmt.Sprintf(errFormat, args...)
+		t.Fatalf("%s: timed out after %f seconds.", errmsg, timeout.Seconds())
 	}
 }
 
