@@ -19,26 +19,12 @@ func TestMembersLocal(t *testing.T) {
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 	t.Run("Parallel", func(t *testing.T) {
-		// sytest: New room members see their own join event
-		t.Run("New room members see their own join event", func(t *testing.T) {
-			t.Parallel()
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
-				if result.Get("type").Str == "m.room.member" && result.Get("sender").Str == alice.UserID {
-					membership := result.Get("content.membership").Str
-					if membership != "join" {
-						t.Fatalf("Expected user membership to be 'join', got %s", membership)
-					}
-					return true
-				}
-				return false
-			}))
-		})
-
 		// sytest: Existing members see new members' join events
+		// sytest: New room members see their own join event
 		t.Run("Existing members see new members' join events", func(t *testing.T) {
 			t.Parallel()
 			bob.JoinRoom(t, roomID, []string{})
-			// SyncJoinedTo already checks everything we need to know
+			// SyncJoinedTo already checks everything we need to know for the two tests mentioned
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 		})
 
