@@ -29,35 +29,50 @@ func TestEventsInCorrectRoom(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	const roomAmount = 30
+	const (
+		roomAmount     = 30
+		goConcurrency  = 4
+		channelTimeout = 30 * time.Second
+	)
 
 	// Create all rooms
 
-	var chanRooms = make(chan string, roomAmount)
+	var doneRooms = make(chan string, roomAmount)
+	var todoRooms = make(chan bool, goConcurrency)
 
-	// semaphore, to reduce load on the server when creating rooms
-	// on slow PCs, increasing this will time out the test :(
-	var sem = make(chan bool, 1)
-
-	for i := 0; i < roomAmount; i++ {
-		sem <- true
-
+	for i := 0; i < goConcurrency; i++ {
 		go func() {
-			roomId := alice.CreateRoom(t, map[string]interface{}{
-				"preset": "public_chat",
-			})
+			for {
+				_, ok := <-todoRooms
 
-			chanRooms <- roomId
+				if !ok {
+					return
+				}
 
-			<-sem
+				roomId := alice.CreateRoom(t, map[string]interface{}{
+					"preset": "public_chat",
+				})
+
+				doneRooms <- roomId
+			}
 		}()
 	}
+
+	for i := 0; i < roomAmount; i++ {
+		todoRooms <- true
+	}
+
+	close(todoRooms)
 
 	var rooms []string
 
 	for i := 0; i < roomAmount; i++ {
-		// This implicitly waits until all rooms are done creating
-		rooms = append(rooms, <-chanRooms)
+		select {
+		case newRoom := <-doneRooms:
+			rooms = append(rooms, newRoom)
+		case <-time.After(channelTimeout):
+			t.Fatalf("Room creation timed out, got to %d rooms (from %d)", i, roomAmount)
+		}
 	}
 
 	// Send events to all rooms with corresponding roomID
@@ -65,25 +80,57 @@ func TestEventsInCorrectRoom(t *testing.T) {
 	// get current next_batch
 	_, since := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
-	wg := NewWaiterGroup(roomAmount)
+	type txnAndId struct {
+		txn    int
+		roomId string
+	}
+
+	var doneEvents = make(chan string, roomAmount)
+	var todoEvents = make(chan txnAndId, goConcurrency)
 
 	txnCount := 0
 
-	for _, id := range rooms {
-		go func(roomId string, txn int) {
-			defer wg.Done()
+	for i := 0; i < goConcurrency; i++ {
+		go func() {
+			for {
+				tid, ok := <-todoEvents
 
-			paths := []string{"_matrix", "client", "r0", "rooms", roomId, "send", "m.room.message", strconv.Itoa(txn)}
-			alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
-				"msgtype": "m.text",
-				"body":    roomId,
-			}))
-		}(id, txnCount)
+				if !ok {
+					return
+				}
+
+				paths := []string{"_matrix", "client", "r0", "rooms", tid.roomId, "send", "m.room.message", strconv.Itoa(tid.txn)}
+				res := alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    tid.roomId,
+				}))
+				body := client.ParseJSON(t, res)
+				eventID := client.GetJSONFieldStr(t, body, "event_id")
+
+				doneEvents <- eventID
+			}
+		}()
+	}
+
+	for _, id := range rooms {
+		todoEvents <- txnAndId{
+			roomId: id,
+			txn:    txnCount,
+		}
 
 		txnCount++
 	}
 
-	wg.WaitAll(t, 10*time.Second)
+	close(todoEvents)
+
+	for i := 0; i < roomAmount; i++ {
+		select {
+		case <-doneEvents:
+			break
+		case <-time.After(channelTimeout):
+			t.Fatalf("Receiving events timed out, got to %d events (from %d)", i, roomAmount)
+		}
+	}
 
 	// Collect all events, check if room IDs check out
 
