@@ -30,9 +30,9 @@ func TestEventsInCorrectRoom(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
 	const (
-		roomAmount     = 30
+		roomAmount     = 10
 		goConcurrency  = 4
-		channelTimeout = 30 * time.Second
+		channelTimeout = 10 * time.Second
 	)
 
 	// Create all rooms
