@@ -93,6 +93,7 @@ func TestRoomsInvite(t *testing.T) {
 			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			alice.LeaveRoom(t, roomID)
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 			bob.LeaveRoom(t, roomID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 			// sytest: Invited user can reject local invite after originator leaves
@@ -114,6 +115,7 @@ func TestRoomsInvite(t *testing.T) {
 			alice.InviteRoom(t, roomID, charlie.UserID)
 			charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(charlie.UserID, roomID))
 			alice.LeaveRoom(t, roomID)
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 			charlie.LeaveRoom(t, roomID)
 			charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, roomID))
 		})
