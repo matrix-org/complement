@@ -30,7 +30,7 @@ jobs:
       matrix:
         include:
           - homeserver: Synapse
-            tags: synapse_blacklist,msc3083
+            tags: synapse_blacklist msc3083 faster_joins
             
           - homeserver: Dendrite
             tags: msc2836 dendrite_blacklist
