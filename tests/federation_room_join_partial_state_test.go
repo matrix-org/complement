@@ -19,6 +19,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 )
@@ -27,43 +28,12 @@ import (
 // made during a partial-state /send_join request blocks until the state is
 // correctly synced.
 func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
-	// We make a room on the Complement server, then have @alice:hs1 join it,
-	// and make a sync request while the resync is in flight
-
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	srv := federation.NewServer(t, deployment,
-		federation.HandleKeyRequests(),
-		federation.HandlePartialStateMakeSendJoinRequests(),
-		federation.HandleEventRequests(),
-	)
-	cancel := srv.Listen()
-	defer cancel()
-
-	// some things for orchestration
-	fedStateIdsRequestReceivedWaiter := NewWaiter()
-	defer fedStateIdsRequestReceivedWaiter.Finish()
-	fedStateIdsSendResponseWaiter := NewWaiter()
-	defer fedStateIdsSendResponseWaiter.Finish()
-
-	// create the room on the complement server, with charlie and derek as members
-	charlie := srv.UserID("charlie")
-	derek := srv.UserID("derek")
-	serverRoom := makeTestRoom(t, srv, alice.GetDefaultRoomVersion(t), charlie, derek)
-
-	// register a handler for /state_ids requests, which finishes fedStateIdsRequestReceivedWaiter, then
-	// waits for fedStateIdsSendResponseWaiter and sends a reply
-	handleStateIdsRequests(t, srv, serverRoom, fedStateIdsRequestReceivedWaiter, fedStateIdsSendResponseWaiter)
-
-	// a handler for /state requests, which sends a sensible response
-	handleStateRequests(t, srv, serverRoom, nil, nil)
-
-	// have alice join the room by room ID.
-	alice.JoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
-	t.Logf("Join completed")
+	psjResult := beginPartialStateJoin(t, deployment, alice)
+	defer psjResult.Destroy()
 
 	// Alice has now joined the room, and the server is syncing the state in the background.
 
@@ -76,7 +46,7 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 	}()
 
 	// wait for the state_ids request to arrive
-	fedStateIdsRequestReceivedWaiter.Waitf(t, 5*time.Second, "Waiting for /state_ids request")
+	psjResult.AwaitStateIdsRequest(t)
 
 	// the client-side requests should still be waiting
 	select {
@@ -86,7 +56,7 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 	}
 
 	// release the federation /state response
-	fedStateIdsSendResponseWaiter.Finish()
+	psjResult.FinishStateRequest()
 
 	// the /sync request should now complete, with the new room
 	var syncRes gjson.Result
@@ -96,7 +66,7 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 	case syncRes = <-syncResponseChan:
 	}
 
-	roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID))
+	roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(psjResult.ServerRoom.RoomID))
 	if !roomRes.Exists() {
 		t.Fatalf("/sync completed without join to new room\n")
 	}
@@ -104,32 +74,105 @@ func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
 	// check that the state includes both charlie and derek.
 	matcher := match.JSONCheckOffAllowUnwanted("state.events",
 		[]interface{}{
-			"m.room.member|" + charlie,
-			"m.room.member|" + derek,
+			"m.room.member|" + psjResult.Server.UserID("charlie"),
+			"m.room.member|" + psjResult.Server.UserID("derek"),
 		}, func(result gjson.Result) interface{} {
 			return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
 		}, nil,
 	)
 	if err := matcher([]byte(roomRes.Raw)); err != nil {
 		t.Errorf("Did not find expected state events in /sync response: %s", err)
+
 	}
 }
 
-// makeTestRoom constructs a test room on the Complement server, and adds the given extra members
-func makeTestRoom(t *testing.T, srv *federation.Server, roomVer gomatrixserverlib.RoomVersion, creator string, members ...string) *federation.ServerRoom {
-	serverRoom := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, creator))
-	for _, m := range members {
-		serverRoom.AddEvent(srv.MustCreateEvent(t, serverRoom, b.Event{
-			Type:     "m.room.member",
-			StateKey: b.Ptr(m),
-			Sender:   m,
-			Content: map[string]interface{}{
-				"membership": "join",
-			},
-		}),
-		)
+// partialStateJoinResult is the result of beginPartialStateJoin
+type partialStateJoinResult struct {
+	cancelListener                   func()
+	Server                           *federation.Server
+	ServerRoom                       *federation.ServerRoom
+	fedStateIdsRequestReceivedWaiter *Waiter
+	fedStateIdsSendResponseWaiter    *Waiter
+}
+
+// beginPartialStateJoin spins up a room on a complement server,
+// then has a test user join it. It returns a partialStateJoinResult,
+// which must be Destroy'd on completion.
+//
+// When this method completes, the /join request will have completed, but the
+// state has not yet been re-synced. To allow the re-sync to proceed, call
+// partialStateJoinResult.FinishStateRequest.
+func beginPartialStateJoin(t *testing.T, deployment *docker.Deployment, joiningUser *client.CSAPI) partialStateJoinResult {
+	result := partialStateJoinResult{}
+	success := false
+	defer func() {
+		if !success {
+			result.Destroy()
+		}
+	}()
+
+	result.Server = federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandlePartialStateMakeSendJoinRequests(),
+		federation.HandleEventRequests(),
+	)
+	result.cancelListener = result.Server.Listen()
+
+	// some things for orchestration
+	result.fedStateIdsRequestReceivedWaiter = NewWaiter()
+	result.fedStateIdsSendResponseWaiter = NewWaiter()
+
+	// create the room on the complement server, with charlie and derek as members
+	roomVer := joiningUser.GetDefaultRoomVersion(t)
+	result.ServerRoom = result.Server.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, result.Server.UserID("charlie")))
+	result.ServerRoom.AddEvent(result.Server.MustCreateEvent(t, result.ServerRoom, b.Event{
+		Type:     "m.room.member",
+		StateKey: b.Ptr(result.Server.UserID("derek")),
+		Sender:   result.Server.UserID("derek"),
+		Content: map[string]interface{}{
+			"membership": "join",
+		},
+	}))
+
+	// register a handler for /state_ids requests, which finishes fedStateIdsRequestReceivedWaiter, then
+	// waits for fedStateIdsSendResponseWaiter and sends a reply
+	handleStateIdsRequests(t, result.Server, result.ServerRoom, result.fedStateIdsRequestReceivedWaiter, result.fedStateIdsSendResponseWaiter)
+
+	// a handler for /state requests, which sends a sensible response
+	handleStateRequests(t, result.Server, result.ServerRoom, nil, nil)
+
+	// have joiningUser join the room by room ID.
+	joiningUser.JoinRoom(t, result.ServerRoom.RoomID, []string{result.Server.ServerName()})
+	t.Logf("/join request completed")
+
+	success = true
+	return result
+}
+
+// Destroy cleans up the resources associated with the join attempt. It must
+// be called once the test is finished
+func (psj *partialStateJoinResult) Destroy() {
+	if psj.fedStateIdsSendResponseWaiter != nil {
+		psj.fedStateIdsSendResponseWaiter.Finish()
 	}
-	return serverRoom
+
+	if psj.fedStateIdsRequestReceivedWaiter != nil {
+		psj.fedStateIdsRequestReceivedWaiter.Finish()
+	}
+
+	if psj.cancelListener != nil {
+		psj.cancelListener()
+	}
+}
+
+// wait for a /state_ids request for the test room to arrive
+func (psj *partialStateJoinResult) AwaitStateIdsRequest(t *testing.T) {
+	psj.fedStateIdsRequestReceivedWaiter.Waitf(t, 5*time.Second, "Waiting for /state_ids request")
+}
+
+// allow the /state_ids request to complete, thus allowing the state re-sync to complete
+func (psj *partialStateJoinResult) FinishStateRequest() {
+	psj.fedStateIdsSendResponseWaiter.Finish()
 }
 
 // handleStateIdsRequests registers a handler for /state_ids requests for serverRoom.
