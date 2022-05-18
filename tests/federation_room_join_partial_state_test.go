@@ -26,161 +26,162 @@ import (
 	"github.com/matrix-org/complement/internal/must"
 )
 
-// TestSyncBlocksDuringPartialStateJoin tests that a regular /sync request
-// made during a partial-state /send_join request blocks until the state is
-// correctly synced.
-func TestSyncBlocksDuringPartialStateJoin(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
-	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+func TestPartialStateJoin(t *testing.T) {
+	// test that a regular /sync request made during a partial-state /send_join
+	// request blocks until the state is correctly synced.
+	t.Run("SyncBlocksDuringPartialStateJoin", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	psjResult := beginPartialStateJoin(t, deployment, alice)
-	defer psjResult.Destroy()
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
 
-	// Alice has now joined the room, and the server is syncing the state in the background.
+		// Alice has now joined the room, and the server is syncing the state in the background.
 
-	// attempts to sync should now block. Fire off a goroutine to try it.
-	syncResponseChan := make(chan gjson.Result)
-	defer close(syncResponseChan)
-	go func() {
-		response, _ := alice.MustSync(t, client.SyncReq{})
-		syncResponseChan <- response
-	}()
+		// attempts to sync should now block. Fire off a goroutine to try it.
+		syncResponseChan := make(chan gjson.Result)
+		defer close(syncResponseChan)
+		go func() {
+			response, _ := alice.MustSync(t, client.SyncReq{})
+			syncResponseChan <- response
+		}()
 
-	// wait for the state_ids request to arrive
-	psjResult.AwaitStateIdsRequest(t)
+		// wait for the state_ids request to arrive
+		psjResult.AwaitStateIdsRequest(t)
 
-	// the client-side requests should still be waiting
-	select {
-	case <-syncResponseChan:
-		t.Fatalf("Sync completed before state resync complete")
-	default:
-	}
+		// the client-side requests should still be waiting
+		select {
+		case <-syncResponseChan:
+			t.Fatalf("Sync completed before state resync complete")
+		default:
+		}
 
-	// release the federation /state response
-	psjResult.FinishStateRequest()
+		// release the federation /state response
+		psjResult.FinishStateRequest()
 
-	// the /sync request should now complete, with the new room
-	var syncRes gjson.Result
-	select {
-	case <-time.After(1 * time.Second):
-		t.Fatalf("/sync request request did not complete")
-	case syncRes = <-syncResponseChan:
-	}
+		// the /sync request should now complete, with the new room
+		var syncRes gjson.Result
+		select {
+		case <-time.After(1 * time.Second):
+			t.Fatalf("/sync request request did not complete")
+		case syncRes = <-syncResponseChan:
+		}
 
-	roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(psjResult.ServerRoom.RoomID))
-	if !roomRes.Exists() {
-		t.Fatalf("/sync completed without join to new room\n")
-	}
+		roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(psjResult.ServerRoom.RoomID))
+		if !roomRes.Exists() {
+			t.Fatalf("/sync completed without join to new room\n")
+		}
 
-	// check that the state includes both charlie and derek.
-	matcher := match.JSONCheckOffAllowUnwanted("state.events",
-		[]interface{}{
-			"m.room.member|" + psjResult.Server.UserID("charlie"),
-			"m.room.member|" + psjResult.Server.UserID("derek"),
-		}, func(result gjson.Result) interface{} {
-			return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
-		}, nil,
-	)
-	if err := matcher([]byte(roomRes.Raw)); err != nil {
-		t.Errorf("Did not find expected state events in /sync response: %s", err)
-
-	}
-}
-
-// when Alice does a lazy-loading sync, she should see the room immediately
-func TestCanLazyLoadingSyncDuringPartialStateJoin(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
-	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-
-	psjResult := beginPartialStateJoin(t, deployment, alice)
-	defer psjResult.Destroy()
-
-	alice.MustSyncUntil(t,
-		client.SyncReq{
-			Filter: buildLazyLoadingSyncFilter(),
-		},
-		client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
-	)
-	t.Logf("Alice successfully synced")
-}
-
-// we should be able to send events in the room, during the resync
-func TestCanSendEventsDuringPartialStateJoin(t *testing.T) {
-	t.Skip("Cannot yet send events during resync")
-	deployment := Deploy(t, b.BlueprintAlice)
-	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-
-	psjResult := beginPartialStateJoin(t, deployment, alice)
-	defer psjResult.Destroy()
-
-	alice.Client.Timeout = 2 * time.Second
-	paths := []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "send", "m.room.message", "0"}
-	res := alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
-		"msgtype": "m.text",
-		"body":    "Hello world!",
-	}))
-	body := gjson.ParseBytes(client.ParseJSON(t, res))
-	eventID := body.Get("event_id").Str
-	t.Logf("Alice sent event event ID %s", eventID)
-}
-
-// a request to (client-side) /members?at= should block until the (federation) /state request completes
-// TODO(faster_joins): also need to test /state, and /members without an `at`, which follow a different path
-func TestMembersRequestBlocksDuringPartialStateJoin(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
-	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-
-	psjResult := beginPartialStateJoin(t, deployment, alice)
-	defer psjResult.Destroy()
-
-	// we need a sync token to pass to the `at` param.
-	syncToken := alice.MustSyncUntil(t,
-		client.SyncReq{
-			Filter: buildLazyLoadingSyncFilter(),
-		},
-		client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
-	)
-	t.Logf("Alice successfully synced")
-
-	// Fire off a goroutine to send the request, and write the response back to a channel.
-	clientMembersRequestResponseChan := make(chan *http.Response)
-	defer close(clientMembersRequestResponseChan)
-	go func() {
-		queryParams := url.Values{}
-		queryParams.Set("at", syncToken)
-		clientMembersRequestResponseChan <- alice.MustDoFunc(
-			t,
-			"GET",
-			[]string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "members"},
-			client.WithQueries(queryParams),
+		// check that the state includes both charlie and derek.
+		matcher := match.JSONCheckOffAllowUnwanted("state.events",
+			[]interface{}{
+				"m.room.member|" + psjResult.Server.UserID("charlie"),
+				"m.room.member|" + psjResult.Server.UserID("derek"),
+			}, func(result gjson.Result) interface{} {
+				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
+			}, nil,
 		)
-	}()
+		if err := matcher([]byte(roomRes.Raw)); err != nil {
+			t.Errorf("Did not find expected state events in /sync response: %s", err)
 
-	// release the federation /state response
-	psjResult.FinishStateRequest()
+		}
+	})
 
-	// the client-side /members request should now complete, with a response that includes charlie and derek.
-	select {
-	case <-time.After(1 * time.Second):
-		t.Fatalf("client-side /members request did not complete")
-	case res := <-clientMembersRequestResponseChan:
-		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONCheckOff("chunk",
-					[]interface{}{
-						"m.room.member|" + alice.UserID,
-						"m.room.member|" + psjResult.Server.UserID("charlie"),
-						"m.room.member|" + psjResult.Server.UserID("derek"),
-					}, func(result gjson.Result) interface{} {
-						return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
-					}, nil),
+	// when Alice does a lazy-loading sync, she should see the room immediately
+	t.Run("CanLazyLoadingSyncDuringPartialStateJoin", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		alice.MustSyncUntil(t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(),
 			},
-		})
-	}
+			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
+		)
+		t.Logf("Alice successfully synced")
+	})
+
+	// we should be able to send events in the room, during the resync
+	t.Run("CanSendEventsDuringPartialStateJoin", func(t *testing.T) {
+		t.Skip("Cannot yet send events during resync")
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		alice.Client.Timeout = 2 * time.Second
+		paths := []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "send", "m.room.message", "0"}
+		res := alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Hello world!",
+		}))
+		body := gjson.ParseBytes(client.ParseJSON(t, res))
+		eventID := body.Get("event_id").Str
+		t.Logf("Alice sent event event ID %s", eventID)
+	})
+
+	// a request to (client-side) /members?at= should block until the (federation) /state request completes
+	// TODO(faster_joins): also need to test /state, and /members without an `at`, which follow a different path
+	t.Run("MembersRequestBlocksDuringPartialStateJoin", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		// we need a sync token to pass to the `at` param.
+		syncToken := alice.MustSyncUntil(t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(),
+			},
+			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
+		)
+		t.Logf("Alice successfully synced")
+
+		// Fire off a goroutine to send the request, and write the response back to a channel.
+		clientMembersRequestResponseChan := make(chan *http.Response)
+		defer close(clientMembersRequestResponseChan)
+		go func() {
+			queryParams := url.Values{}
+			queryParams.Set("at", syncToken)
+			clientMembersRequestResponseChan <- alice.MustDoFunc(
+				t,
+				"GET",
+				[]string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "members"},
+				client.WithQueries(queryParams),
+			)
+		}()
+
+		// release the federation /state response
+		psjResult.FinishStateRequest()
+
+		// the client-side /members request should now complete, with a response that includes charlie and derek.
+		select {
+		case <-time.After(1 * time.Second):
+			t.Fatalf("client-side /members request did not complete")
+		case res := <-clientMembersRequestResponseChan:
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONCheckOff("chunk",
+						[]interface{}{
+							"m.room.member|" + alice.UserID,
+							"m.room.member|" + psjResult.Server.UserID("charlie"),
+							"m.room.member|" + psjResult.Server.UserID("derek"),
+						}, func(result gjson.Result) interface{} {
+							return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
+						}, nil),
+				},
+			})
+		}
+	})
 }
 
 // buildLazyLoadingSyncFilter constructs a json-marshalled filter suitable the 'Filter' field of a client.SyncReq
