@@ -919,95 +919,17 @@ func TestImportHistoricalMessages(t *testing.T) {
 				})
 			})
 
-			t.Run("Historical messages show up for remote federated homeserver even when the homeserver is missing the part of the timeline where the marker was sent and it paginates before it occured", func(t *testing.T) {
-				t.Parallel()
+			// We're testing to make sure historical messages show up for a remote
+			// federated homeserver even when the homeserver is missing the part of
+			// the timeline where the marker events were sent and it paginates before
+			// they occured to see if the history is available. Making sure the
+			// homeserver processes all of the markers from the current state instead
+			// of just when it sees them in the timeline.
+			testHistoricalMessagesAppearForRemoteHomeserverWhenMissingPartOfTimelineWithMarker := func(t *testing.T, numBatches int) {
+				t.Helper()
 
 				roomID := as.CreateRoom(t, createPublicRoomOpts)
 				alice.JoinRoom(t, roomID, nil)
-
-				eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
-				eventIdBefore := eventIDsBefore[0]
-				timeAfterEventBefore := time.Now()
-
-				eventIDsAfter := createMessagesInRoom(t, alice, roomID, 3, "eventIDsAfter")
-				eventIDAfter := eventIDsAfter[0]
-
-				// Join the room from a remote homeserver before the historical messages were sent
-				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
-
-				// Make sure all of the events have been backfilled for the remote user
-				// before we leave the room
-				fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
-					if ev.Get("event_id").Str == eventIdBefore {
-						return true
-					}
-
-					return false
-				})
-
-				// Leave before the historical messages are imported
-				remoteCharlie.LeaveRoom(t, roomID)
-
-				batchSendRes := batchSendHistoricalMessages(
-					t,
-					as,
-					roomID,
-					eventIdBefore,
-					"",
-					createJoinStateEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore),
-					createMessageEventsForBatchSendRequest([]string{virtualUserID}, timeAfterEventBefore, 2),
-					// Status
-					200,
-				)
-				batchSendResBody := client.ParseJSON(t, batchSendRes)
-				historicalEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")
-				baseInsertionEventID := client.GetJSONFieldStr(t, batchSendResBody, "base_insertion_event_id")
-
-				// Send the marker event which lets remote homeservers know there are
-				// some historical messages back at the given insertion event. We
-				// purposely use the local user Alice here as remoteCharlie isn't even
-				// in the room at this point in time and even if they were, the purpose
-				// of this test is to make sure the remote-join will pick up the state,
-				// not our backfill here.
-				sendMarkerAndEnsureBackfilled(t, as, alice, roomID, baseInsertionEventID)
-
-				// Add some events after the marker so that remoteCharlie doesn't see the marker
-				createMessagesInRoom(t, alice, roomID, 3, "eventIDFiller")
-
-				// Join the room from a remote homeserver after the historical messages were sent
-				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
-
-				// From the remote user, make a /context request for eventIDAfter to get
-				// pagination token before the marker event
-				contextRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventIDAfter}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"limit": []string{"0"},
-				}))
-				contextResResBody := client.ParseJSON(t, contextRes)
-				paginationTokenBeforeMarker := client.GetJSONFieldStr(t, contextResResBody, "end")
-
-				// Start the /messages request from that pagination token which
-				// jumps/skips over the marker event in the timeline. This is the key
-				// part of the test. We want to make sure that new marker state can be
-				// injested and processed to reveal the imported history after a
-				// remote-join without paginating and backfilling over the spot in the
-				// timeline with the marker event.
-				//
-				// We don't want to use `validateBatchSendRes(t, remoteCharlie, roomID,
-				// batchSendRes, false)` here because it tests against the full message
-				// response and we need to skip past the marker in the timeline.
-				paginateUntilMessageCheckOff(t, remoteCharlie, roomID, paginationTokenBeforeMarker, historicalEventIDs, []string{})
-			})
-
-			t.Run("Historical messages show up for remote federated homeserver even when the homeserver is missing the part of the timeline where multiple marker events were sent and it paginates before they occured", func(t *testing.T) {
-				t.Parallel()
-
-				roomID := as.CreateRoom(t, createPublicRoomOpts)
-				alice.JoinRoom(t, roomID, nil)
-
-				// Anything above 1 here should be sufficient to test whether we can
-				// follow the state and previous state all the way up to injest all of
-				// the marker events along the way
-				numBatches := 2
 
 				eventIDsBefore := createMessagesInRoom(t, alice, roomID, numBatches, "eventIDsBefore")
 				timeAfterEventBefore := time.Now()
@@ -1086,6 +1008,24 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// batchSendRes, false)` here because it tests against the full message
 				// response and we need to skip past the marker in the timeline.
 				paginateUntilMessageCheckOff(t, remoteCharlie, roomID, paginationTokenBeforeMarker, expectedEventIDs, []string{})
+			}
+
+			t.Run("Historical messages show up for remote federated homeserver even when the homeserver is missing the part of the timeline where the marker was sent and it paginates before it occured", func(t *testing.T) {
+				t.Parallel()
+
+				testHistoricalMessagesAppearForRemoteHomeserverWhenMissingPartOfTimelineWithMarker(t, 1)
+			})
+
+			t.Run("Historical messages show up for remote federated homeserver even when the homeserver is missing the part of the timeline where multiple marker events were sent and it paginates before they occured", func(t *testing.T) {
+				t.Parallel()
+
+				testHistoricalMessagesAppearForRemoteHomeserverWhenMissingPartOfTimelineWithMarker(
+					t,
+					// Anything above 1 here should be sufficient to test whether we can
+					// follow the state and previous state all the way up to injest all of
+					// the marker events along the way
+					2,
+				)
 			})
 		})
 
