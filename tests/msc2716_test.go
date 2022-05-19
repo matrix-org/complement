@@ -1022,8 +1022,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				testHistoricalMessagesAppearForRemoteHomeserverWhenMissingPartOfTimelineWithMarker(
 					t,
 					// Anything above 1 here should be sufficient to test whether we can
-					// follow the state and previous state all the way up to injest all of
-					// the marker events along the way
+					// process all of the current state to injest all of the marker events
 					2,
 				)
 			})
