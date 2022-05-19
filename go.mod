@@ -10,7 +10,7 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/gorilla/mux v1.8.0
 	github.com/matrix-org/gomatrix v0.0.0-20210324163249-be2af5ef2e16
-	github.com/matrix-org/gomatrixserverlib v0.0.0-20220310124155-116ed5cc1bfa
+	github.com/matrix-org/gomatrixserverlib v0.0.0-20220519174812-8904a93b5a99
 	github.com/matrix-org/util v0.0.0-20200807132607-55161520e1d4
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.8.1
@@ -18,7 +18,6 @@ require (
 	github.com/tidwall/sjson v1.2.4
 	golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70 // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
-	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5 // indirect
 	gonum.org/v1/plot v0.10.0
 	google.golang.org/genproto v0.0.0-20220211171837-173942840c17 // indirect
 	maunium.net/go/mautrix v0.8.3
