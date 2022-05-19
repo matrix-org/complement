@@ -1435,8 +1435,10 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 			markerInsertionContentField: insertionEventID,
 		},
 	}
-	// We can't use as.SendEventSynced(...) because application services can't use the /sync API
-	markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", markerEvent.Type}, client.WithJSONBody(t, markerEvent.Content))
+	// Marker events should have unique state_key so they all show up in the current state to process.
+	unique_state_key := getTxnID("marker_state_key")
+	// We can't use as.SendEventSynced(...) because application services can't use the /sync API.
+	markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", markerEvent.Type, unique_state_key}, client.WithJSONBody(t, markerEvent.Content))
 	markerSendBody := client.ParseJSON(t, markerSendRes)
 	markerEventID = client.GetJSONFieldStr(t, markerSendBody, "event_id")
 
