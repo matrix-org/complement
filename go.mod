@@ -14,12 +14,10 @@ require (
 	github.com/matrix-org/util v0.0.0-20200807132607-55161520e1d4
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.8.1
-	github.com/tidwall/gjson v1.14.0
+	github.com/tidwall/gjson v1.14.1
 	github.com/tidwall/sjson v1.2.4
-	golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70 // indirect
-	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
 	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5 // indirect
 	gonum.org/v1/plot v0.10.0
 	google.golang.org/genproto v0.0.0-20220211171837-173942840c17 // indirect
-	maunium.net/go/mautrix v0.8.3
+	maunium.net/go/mautrix v0.11.0
 )
