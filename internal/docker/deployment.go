@@ -54,8 +54,7 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 	}
 	deviceID := dep.DeviceIDs[userID]
 	if deviceID == "" && userID != "" {
-		t.Fatalf("Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, userID)
-		return nil
+		t.Logf("WARNING: Deployment.Client - HS name '%s' - user ID '%s' - deviceID not found", hsName, userID)
 	}
 	return &client.CSAPI{
 		UserID:           userID,
