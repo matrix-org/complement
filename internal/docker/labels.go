@@ -50,3 +50,13 @@ func labelsForApplicationServices(hs b.Homeserver) map[string]string {
 	}
 	return labels
 }
+
+func deviceIDsFromLabels(labels map[string]string) map[string]string {
+	userIDToToken := make(map[string]string)
+	for k, v := range labels {
+		if strings.HasPrefix(k, "device_id") {
+			userIDToToken[strings.TrimPrefix(k, "device_id")] = v
+		}
+	}
+	return userIDToToken
+}
