@@ -90,14 +90,16 @@ func TestRoomsInvite(t *testing.T) {
 				"preset": "private_chat",
 			})
 
+			aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			alice.InviteRoom(t, roomID, bob.UserID)
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			alice.LeaveRoom(t, roomID)
+			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomID))
 			bob.LeaveRoom(t, roomID)
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+			bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncLeftFrom(bob.UserID, roomID))
 			// sytest: Invited user can reject local invite after originator leaves
 			// Bob should not see an invite when syncing
-			res, _ := bob.MustSync(t, client.SyncReq{})
+			res, _ := bob.MustSync(t, client.SyncReq{Since: bobSince})
 			// we filter on the specific roomID, since we run in parallel
 			if res.Get("rooms.invite." + client.GjsonEscape(roomID)).Exists() {
 				t.Fatalf("rooms.invite should not exist: %+v", res.Get("rooms.invite").Raw)
@@ -110,12 +112,13 @@ func TestRoomsInvite(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
-
+			aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			alice.InviteRoom(t, roomID, charlie.UserID)
-			charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(charlie.UserID, roomID))
+			charlieSince := charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(charlie.UserID, roomID))
 			alice.LeaveRoom(t, roomID)
+			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomID))
 			charlie.LeaveRoom(t, roomID)
-			charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, roomID))
+			charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncLeftFrom(charlie.UserID, roomID))
 		})
 
 		// sytest: Users cannot invite themselves to a room
