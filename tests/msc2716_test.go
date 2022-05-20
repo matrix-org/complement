@@ -1240,7 +1240,7 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 	}
 
 	for {
-		if time.Since(start) > 200*c.SyncUntilTimeout {
+		if time.Since(start) > c.SyncUntilTimeout {
 			t.Fatalf(
 				"paginateUntilMessageCheckOff timed out. %s",
 				generateErrorMesssageInfo(),
