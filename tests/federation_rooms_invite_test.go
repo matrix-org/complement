@@ -12,6 +12,7 @@ import (
 
 func TestFederationRoomsInvite(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
