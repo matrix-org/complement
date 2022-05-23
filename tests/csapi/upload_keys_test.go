@@ -126,6 +126,35 @@ func TestUploadKey(t *testing.T) {
 				},
 			})
 		})
+
+		// sytest: Can claim one time key using POST
+		t.Run("Can claim one time key using POST", func(t *testing.T) {
+			reqBody := client.WithJSONBody(t, map[string]interface{}{
+				"one_time_keys": map[string]interface{}{
+					alice.UserID: map[string]string{
+						alice.DeviceID: "signed_curve25519",
+					},
+				},
+			})
+			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+			otksField := "one_time_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
+			must.MatchResponse(t, resp, match.HTTPResponse{
+				StatusCode: http.StatusOK,
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual(otksField, gjson.JSON),
+					match.JSONKeyEqual(otksField, oneTimeKeys),
+				},
+			})
+
+			// there should be no OTK left now
+			resp = alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+			must.MatchResponse(t, resp, match.HTTPResponse{
+				StatusCode: http.StatusOK,
+				JSON: []match.JSON{
+					match.JSONKeyMissing("one_time_keys." + client.GjsonEscape(alice.UserID)),
+				},
+			})
+		})
 	})
 }
 
@@ -168,7 +197,7 @@ func generateKeys(t *testing.T, user *client.CSAPI, otkCount uint) (map[string]i
 		signature, _ = account.SignJSON(keyMap)
 
 		keyMap["signatures"] = map[string]interface{}{
-			user.UserID: map[string]string{
+			user.UserID: map[string]interface{}{
 				ed25519KeyID: signature,
 			},
 		}
