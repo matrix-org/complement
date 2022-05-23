@@ -13,7 +13,7 @@ import (
 	"maunium.net/go/mautrix/crypto/olm"
 )
 
-func TestOneTimeKeys(t *testing.T) {
+func TestFederationKeyUploadQuery(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -21,22 +21,23 @@ func TestOneTimeKeys(t *testing.T) {
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
 	deviceKeys, oneTimeKeys := generateKeys(t, alice, 1)
+	// Upload keys
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"device_keys":   deviceKeys,
+		"one_time_keys": oneTimeKeys,
+	})
+	resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+	must.MatchResponse(t, resp, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON: []match.JSON{
+			match.JSONKeyEqual("one_time_key_counts.signed_curve25519", float64(1)),
+		},
+	})
+
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: Can claim remote one time key using POST
 		t.Run("Can claim remote one time key using POST", func(t *testing.T) {
-			// Upload keys
-			reqBody := client.WithJSONBody(t, map[string]interface{}{
-				"device_keys":   deviceKeys,
-				"one_time_keys": oneTimeKeys,
-			})
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
-			must.MatchResponse(t, resp, match.HTTPResponse{
-				StatusCode: http.StatusOK,
-				JSON: []match.JSON{
-					match.JSONKeyEqual("one_time_key_counts.signed_curve25519", float64(1)),
-				},
-			})
-
+			t.Parallel()
 			// check keys on remote server
 			reqBody = client.WithJSONBody(t, map[string]interface{}{
 				"one_time_keys": map[string]interface{}{
@@ -61,6 +62,28 @@ func TestOneTimeKeys(t *testing.T) {
 				StatusCode: http.StatusOK,
 				JSON: []match.JSON{
 					match.JSONKeyMissing("one_time_keys." + client.GjsonEscape(alice.UserID)),
+				},
+			})
+		})
+
+		// sytest: Can query remote device keys using POST
+		t.Run("Can query remote device keys using POST", func(t *testing.T) {
+			t.Parallel()
+			reqBody := client.WithJSONBody(t, map[string]interface{}{
+				"device_keys": map[string]interface{}{
+					alice.UserID: []string{},
+				},
+			})
+			resp = bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
+			deviceKeysField := "device_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
+
+			must.MatchResponse(t, resp, match.HTTPResponse{
+				StatusCode: http.StatusOK,
+				JSON: []match.JSON{
+					match.JSONKeyTypeEqual(deviceKeysField, gjson.JSON),
+					match.JSONKeyEqual(deviceKeysField+".algorithms", deviceKeys["algorithms"]),
+					match.JSONKeyEqual(deviceKeysField+".keys", deviceKeys["keys"]),
+					match.JSONKeyEqual(deviceKeysField+".signatures", deviceKeys["signatures"]),
 				},
 			})
 		})
