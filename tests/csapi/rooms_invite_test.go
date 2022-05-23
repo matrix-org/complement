@@ -12,12 +12,11 @@ import (
 )
 
 func TestRoomsInvite(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: Can invite users to invite-only rooms
@@ -57,32 +56,6 @@ func TestRoomsInvite(t *testing.T) {
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
 
-		// sytest: Invited user can reject invite over federation
-		t.Run("Invited user can reject invite over federation", func(t *testing.T) {
-			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"preset": "private_chat",
-			})
-			alice.InviteRoom(t, roomID, charlie.UserID)
-			charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(charlie.UserID, roomID))
-			charlie.LeaveRoom(t, roomID)
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, roomID))
-		})
-
-		// sytest: Invited user can reject invite over federation several times
-		t.Run("Invited user can reject invite over federation several times", func(t *testing.T) {
-			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"preset": "private_chat",
-			})
-			for i := 0; i < 3; i++ {
-				alice.InviteRoom(t, roomID, charlie.UserID)
-				charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(charlie.UserID, roomID))
-				charlie.LeaveRoom(t, roomID)
-				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, roomID))
-			}
-		})
-
 		// sytest: Invited user can reject invite for empty room
 		t.Run("Invited user can reject invite for empty room", func(t *testing.T) {
 			t.Parallel()
@@ -104,21 +77,6 @@ func TestRoomsInvite(t *testing.T) {
 			if res.Get("rooms.invite." + client.GjsonEscape(roomID)).Exists() {
 				t.Fatalf("rooms.invite should not exist: %+v", res.Get("rooms.invite").Raw)
 			}
-		})
-
-		// sytest: Invited user can reject invite over federation for empty room
-		t.Run("Invited user can reject invite over federation for empty room", func(t *testing.T) {
-			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"preset": "private_chat",
-			})
-			aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-			alice.InviteRoom(t, roomID, charlie.UserID)
-			charlieSince := charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(charlie.UserID, roomID))
-			alice.LeaveRoom(t, roomID)
-			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomID))
-			charlie.LeaveRoom(t, roomID)
-			charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncLeftFrom(charlie.UserID, roomID))
 		})
 
 		// sytest: Users cannot invite themselves to a room
@@ -168,20 +126,6 @@ func TestRoomsInvite(t *testing.T) {
 			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			res, _ := bob.MustSync(t, client.SyncReq{})
-			verifyState(t, res, roomID, alice)
-		})
-
-		// sytest: Remote invited user can see room metadata
-		t.Run("Remote invited user can see room metadata", func(t *testing.T) {
-			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"preset": "private_chat",
-				"name":   "Invites room",
-			})
-
-			alice.InviteRoom(t, roomID, charlie.UserID)
-			charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(charlie.UserID, roomID))
-			res, _ := charlie.MustSync(t, client.SyncReq{})
 			verifyState(t, res, roomID, alice)
 		})
 
@@ -243,6 +187,5 @@ func verifyState(t *testing.T, res gjson.Result, roomID string, cl *client.CSAPI
 				match.JSONKeyEqual(field, eventContent),
 			},
 		})
-
 	}
 }
