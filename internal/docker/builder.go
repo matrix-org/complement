@@ -304,6 +304,11 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			}
 		}
 
+		deviceIDs := runner.DeviceIDs(res.homeserver.Name)
+		for userID, deviceID := range deviceIDs {
+			labels["device_id"+userID] = deviceID
+		}
+
 		// Combine the labels for tokens and application services
 		asLabels := labelsForApplicationServices(res.homeserver)
 		for k, v := range asLabels {

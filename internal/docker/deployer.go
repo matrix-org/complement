@@ -369,6 +369,7 @@ func deployImage(
 		ContainerID:         containerID,
 		AccessTokens:        tokensFromLabels(inspect.Config.Labels),
 		ApplicationServices: asIDToRegistrationFromLabels(inspect.Config.Labels),
+		DeviceIDs:           deviceIDsFromLabels(inspect.Config.Labels),
 	}
 	if lastErr != nil {
 		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
