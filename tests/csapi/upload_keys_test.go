@@ -68,7 +68,7 @@ func TestUploadKey(t *testing.T) {
 					"device_id": alice.DeviceID,
 				},
 			})
-			resp := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+			resp := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusBadRequest,
 			})
