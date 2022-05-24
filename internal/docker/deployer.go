@@ -456,6 +456,40 @@ func waitForContainer(ctx context.Context, docker *client.Client, hsDep *Homeser
 	return iterCount, lastErr
 }
 
+// Restart a deployment.
+func (dep *Deployment) Restart() error {
+	ctx := context.Background()
+
+	for _, hsDep := range dep.HS {
+		err := dep.Deployer.Docker.ContainerStop(ctx, hsDep.ContainerID, &dep.Config.SpawnHSTimeout)
+		if err != nil {
+			return fmt.Errorf("failed to restart container %s: %s", hsDep.ContainerID, err)
+		}
+
+		// Remove the container from the network. If we don't do this,
+		// (re)starting the container fails with an error like
+		// "Error response from daemon: endpoint with name complement_fed_1_fed.alice.hs1_1 already exists in network complement_fed_alice".
+		err = dep.Deployer.Docker.NetworkDisconnect(ctx, dep.Deployer.networkID, hsDep.ContainerID, false)
+		if err != nil {
+			return fmt.Errorf("failed to restart container %s: %s", hsDep.ContainerID, err)
+		}
+
+		err = dep.Deployer.Docker.ContainerStart(ctx, hsDep.ContainerID, types.ContainerStartOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to restart container %s: %s", hsDep.ContainerID, err)
+		}
+
+		// Wait for the container to be ready.
+		stopTime := time.Now().Add(dep.Config.SpawnHSTimeout)
+		_, err = waitForContainer(ctx, dep.Deployer.Docker, &hsDep, stopTime)
+		if err != nil {
+			return fmt.Errorf("failed to restart container %s: %s", hsDep.ContainerID, err)
+		}
+	}
+
+	return nil
+}
+
 // RoundTripper is a round tripper that maps https://hs1 to the federation port of the container
 // e.g https://localhost:35352
 type RoundTripper struct {
