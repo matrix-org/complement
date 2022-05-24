@@ -100,6 +100,21 @@ func (r *Runner) AccessTokens(hsDomain string) map[string]string {
 	return res
 }
 
+// DeviceIDs returns the device ids for all users who were created on the given HS domain.
+// Returns a map of user_id => device_id
+func (r *Runner) DeviceIDs(hsDomain string) map[string]string {
+	res := make(map[string]string)
+	r.lookup.Range(func(k, v interface{}) bool {
+		key := k.(string)
+		val := v.(string)
+		if strings.HasPrefix(key, "device_@") && strings.HasSuffix(key, ":"+hsDomain) {
+			res[strings.TrimPrefix(key, "device_")] = val
+		}
+		return true
+	})
+	return res
+}
+
 // Load a previously stored value from RunInstructions
 func (r *Runner) GetStoredValue(opts RunOpts, key string) string {
 	fullKey := opts.StoreNamespace + key
@@ -541,7 +556,8 @@ func instructionRegister(hs b.Homeserver, user b.User) instruction {
 		accessToken: "",
 		body:        body,
 		storeResponse: map[string]string{
-			"user_@" + user.Localpart + ":" + hs.Name: ".access_token",
+			"user_@" + user.Localpart + ":" + hs.Name:   ".access_token",
+			"device_@" + user.Localpart + ":" + hs.Name: ".device_id",
 		},
 	}
 }
@@ -581,7 +597,8 @@ func instructionLogin(hs b.Homeserver, user b.User) instruction {
 		accessToken: "",
 		body:        body,
 		storeResponse: map[string]string{
-			"user_@" + user.Localpart + ":" + hs.Name: ".access_token",
+			"user_@" + user.Localpart + ":" + hs.Name:   ".access_token",
+			"device_@" + user.Localpart + ":" + hs.Name: ".device_id",
 		},
 	}
 }

@@ -72,6 +72,7 @@ type SyncReq struct {
 type CSAPI struct {
 	UserID      string
 	AccessToken string
+	DeviceID    string
 	BaseURL     string
 	Client      *http.Client
 	// how long are we willing to wait for MustSyncUntil.... calls
@@ -298,7 +299,7 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 
 //RegisterUser will register the user with given parameters and
 // return user ID & access token, and fail the test on network error
-func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken string) {
+func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"auth": map[string]string{
@@ -316,12 +317,13 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 
 	userID = gjson.GetBytes(body, "user_id").Str
 	accessToken = gjson.GetBytes(body, "access_token").Str
-	return userID, accessToken
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	return userID, accessToken, deviceID
 }
 
 // RegisterSharedSecret registers a new account with a shared secret via HMAC
 // See https://github.com/matrix-org/synapse/blob/e550ab17adc8dd3c48daf7fedcd09418a73f524b/synapse/_scripts/register_new_matrix_user.py#L40
-func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bool) (userID, password string) {
+func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bool) (userID, accessToken, deviceID string) {
 	resp := c.DoFunc(t, "GET", []string{"_synapse", "admin", "v1", "register"})
 	if resp.StatusCode != 200 {
 		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
@@ -354,7 +356,10 @@ func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bo
 	}
 	resp = c.MustDoFunc(t, "POST", []string{"_synapse", "admin", "v1", "register"}, WithJSONBody(t, reqBody))
 	body = must.ParseJSON(t, resp.Body)
-	return gjson.GetBytes(body, "user_id").Str, gjson.GetBytes(body, "access_token").Str
+	userID = gjson.GetBytes(body, "user_id").Str
+	accessToken = gjson.GetBytes(body, "access_token").Str
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	return userID, accessToken, deviceID
 }
 
 // GetCapbabilities queries the server's capabilities
