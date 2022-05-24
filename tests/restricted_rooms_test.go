@@ -1,6 +1,4 @@
 // Tests MSC3083, joining restricted rooms based on membership in another room.
-//go:build !dendrite_blacklist
-// +build !dendrite_blacklist
 
 package tests
 
@@ -15,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverName string) {
@@ -201,6 +200,8 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 // A server will do a remote join for a local user if it is unable to to issue
 // joins in a restricted room it is already participating in.
 func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // requires more debugging
+
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 
@@ -322,6 +323,8 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 // * hs2 joins the room
 // * hs3 attempts to join via hs2 (should fail) and hs1 (should work)
 func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // requires more debugging
+
 	deployment := Deploy(t, b.Blueprint{
 		Name: "federation_three_homeservers",
 		Homeservers: []b.Homeserver{
