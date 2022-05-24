@@ -20,9 +20,11 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -197,6 +199,11 @@ func deployImage(
 		"SERVER_NAME=" + hsName,
 	}
 
+	port1, port2, err := allocateHostPorts()
+	if err != nil {
+		return nil, err
+	}
+
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image: imageID,
 		Env:   env,
@@ -212,12 +219,14 @@ func deployImage(
 		PortBindings: nat.PortMap{
 			nat.Port("8008/tcp"): []nat.PortBinding{
 				{
-					HostIP: "127.0.0.1",
+					HostIP:   "127.0.0.1",
+					HostPort: strconv.Itoa(port1),
 				},
 			},
 			nat.Port("8448/tcp"): []nat.PortBinding{
 				{
-					HostIP: "127.0.0.1",
+					HostIP:   "127.0.0.1",
+					HostPort: strconv.Itoa(port2),
 				},
 			},
 		},
@@ -327,6 +336,39 @@ func deployImage(
 		}
 	}
 	return d, nil
+}
+
+// Picks two free ports on localhost. Does not reserve them in any way.
+// The returned ports must be used before the next call to `allocateHostPorts`,
+// otherwise the same pair of ports may be returned.
+func allocateHostPorts() (int, int, error) {
+	localhost_any_port := net.TCPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: 0,
+	}
+
+	listener1, err := net.ListenTCP("tcp", &localhost_any_port)
+	if err != nil {
+		return 0, 0, err
+	}
+	listener2, err := net.ListenTCP("tcp", &localhost_any_port)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	port1 := listener1.Addr().(*net.TCPAddr).Port
+	port2 := listener2.Addr().(*net.TCPAddr).Port
+
+	err = listener1.Close()
+	if err != nil {
+		return 0, 0, err
+	}
+	err = listener2.Close()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return port1, port2, nil
 }
 
 func copyToContainer(docker *client.Client, containerID, path string, data []byte) error {
