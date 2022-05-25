@@ -134,6 +134,33 @@ func (r *ServerRoom) MustHaveMembershipForUser(t *testing.T, userID, wantMembers
 	}
 }
 
+// ServersInRoom gets all servers currently joined to the room
+func (r *ServerRoom) ServersInRoom() (servers []string) {
+	serverSet := make(map[string]struct{})
+
+	for _, ev := range r.State {
+		if ev.Type() != "m.room.member" {
+			continue
+		}
+		membership, err := ev.Membership()
+		if err != nil || membership != "join" {
+			continue
+		}
+		_, server, err := gomatrixserverlib.SplitID('@', *ev.StateKey())
+		if err != nil {
+			continue
+		}
+
+		serverSet[string(server)] = struct{}{}
+	}
+
+	for server := range serverSet {
+		servers = append(servers, server)
+	}
+
+	return
+}
+
 func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLevelContent) {
 	c.Defaults()
 	c.Events = map[string]int64{
