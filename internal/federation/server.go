@@ -119,6 +119,11 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	return srv
 }
 
+// Room returns the given room
+func (s *Server) Room(roomID string) *ServerRoom {
+	return s.rooms[roomID]
+}
+
 // Return the server name of this federation server. Only valid AFTER calling Listen() - doing so
 // before will produce an error.
 //
