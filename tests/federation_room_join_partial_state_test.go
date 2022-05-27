@@ -212,8 +212,8 @@ func TestPartialStateJoin(t *testing.T) {
 			syncResponseChan <- response
 		}()
 
-		// wait for the state_ids request to arrive
-		psjResult.AwaitStateIdsRequest(t)
+		// we expect another state_ids request to arrive.
+		// we'd do another AwaitStateIdsRequest, except it's single-use.
 
 		// the client-side requests should still be waiting
 		select {
