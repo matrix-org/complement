@@ -89,7 +89,18 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 				"display_name": displayName,
 			})
 			alice.MustDoFunc(t, http.MethodPut, []string{"_matrix", "client", "v3", "devices", alice.DeviceID}, body)
-
+			// wait for bob to receive the displayname change
+			bob.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+				devicesChanged := topLevelSyncJSON.Get("device_lists.changed")
+				if devicesChanged.Exists() {
+					for _, userID := range devicesChanged.Array() {
+						if userID.Str == alice.UserID {
+							return nil
+						}
+					}
+				}
+				return fmt.Errorf("no device_lists found")
+			})
 			reqBody = client.WithJSONBody(t, map[string]interface{}{
 				"device_keys": map[string]interface{}{
 					alice.UserID: []string{},
