@@ -218,15 +218,15 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// we expect a /state_ids request from hs2 after it joins the room
 		// we will respond to the request with garbage
-		requestReceivedWaiter := NewWaiter()
-		sendResponseWaiter := NewWaiter()
+		fedStateIdsRequestReceivedWaiter := NewWaiter()
+		fedStateIdsSendResponseWaiter := NewWaiter()
 		server.Mux().Handle(
 			fmt.Sprintf("/_matrix/federation/v1/state_ids/%s", roomID),
 			http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				queryParams := req.URL.Query()
 				t.Logf("Incoming state_ids request for event %s in room %s", queryParams["event_id"], roomID)
-				requestReceivedWaiter.Finish()
-				sendResponseWaiter.Waitf(t, 60*time.Second, "Waiting for /state request")
+				fedStateIdsRequestReceivedWaiter.Finish()
+				fedStateIdsSendResponseWaiter.Waitf(t, 60*time.Second, "Waiting for /state request")
 				t.Logf("Replying to /state_ids request with invalid response")
 
 				w.WriteHeader(200)
@@ -247,7 +247,7 @@ func TestPartialStateJoin(t *testing.T) {
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
 
 		// wait until hs2 starts syncing state
-		requestReceivedWaiter.Waitf(t, 5*time.Second, "Waiting for /state_ids request")
+		fedStateIdsRequestReceivedWaiter.Waitf(t, 5*time.Second, "Waiting for /state_ids request")
 
 		syncResponseChan := make(chan gjson.Result)
 		defer close(syncResponseChan)
@@ -264,7 +264,7 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 
 		// reply to hs2 with a bogus /state_ids response
-		sendResponseWaiter.Finish()
+		fedStateIdsSendResponseWaiter.Finish()
 
 		// charlie's /sync request should now complete, with the new room
 		var syncRes gjson.Result
