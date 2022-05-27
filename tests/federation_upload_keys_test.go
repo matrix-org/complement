@@ -3,14 +3,16 @@ package tests
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
+
+	"github.com/tidwall/gjson"
+	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/gjson"
-	"maunium.net/go/mautrix/crypto/olm"
 )
 
 func TestFederationKeyUploadQuery(t *testing.T) {
@@ -30,7 +32,19 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 	must.MatchResponse(t, resp, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONKeyEqual("one_time_key_counts.signed_curve25519", float64(1)),
+			match.JSONMapEach("one_time_key_counts", func(k, v gjson.Result) error {
+				keyCount := 0
+				for key := range oneTimeKeys {
+					// check that the returned algorithms -> key count matches those we uploaded
+					if strings.HasPrefix(key, k.Str) {
+						keyCount++
+					}
+				}
+				if int(v.Float()) != keyCount {
+					return fmt.Errorf("expected %d one time keys, got %d", keyCount, int(v.Float()))
+				}
+				return nil
+			}),
 		},
 	})
 
@@ -69,7 +83,14 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 		// sytest: Can query remote device keys using POST
 		t.Run("Can query remote device keys using POST", func(t *testing.T) {
 			t.Parallel()
-			reqBody := client.WithJSONBody(t, map[string]interface{}{
+
+			displayName := "My new displayname"
+			body := client.WithJSONBody(t, map[string]interface{}{
+				"display_name": displayName,
+			})
+			alice.MustDoFunc(t, http.MethodPut, []string{"_matrix", "client", "v3", "devices", alice.DeviceID}, body)
+
+			reqBody = client.WithJSONBody(t, map[string]interface{}{
 				"device_keys": map[string]interface{}{
 					alice.UserID: []string{},
 				},
@@ -84,6 +105,7 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 					match.JSONKeyEqual(deviceKeysField+".algorithms", deviceKeys["algorithms"]),
 					match.JSONKeyEqual(deviceKeysField+".keys", deviceKeys["keys"]),
 					match.JSONKeyEqual(deviceKeysField+".signatures", deviceKeys["signatures"]),
+					match.JSONKeyEqual(deviceKeysField+".unsigned.device_display_name", displayName),
 				},
 			})
 		})

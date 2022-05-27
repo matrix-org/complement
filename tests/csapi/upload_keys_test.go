@@ -3,15 +3,17 @@ package csapi_tests
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
+
+	"github.com/tidwall/gjson"
+	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/complement/runtime"
-	"github.com/tidwall/gjson"
-	"maunium.net/go/mautrix/crypto/olm"
 )
 
 func TestUploadKey(t *testing.T) {
@@ -33,7 +35,19 @@ func TestUploadKey(t *testing.T) {
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
 				JSON: []match.JSON{
-					match.JSONKeyEqual("one_time_key_counts.signed_curve25519", float64(1)),
+					match.JSONMapEach("one_time_key_counts", func(k, v gjson.Result) error {
+						keyCount := 0
+						for key := range oneTimeKeys {
+							// check that the returned algorithms -> key count matches those we uploaded
+							if strings.HasPrefix(key, k.Str) {
+								keyCount++
+							}
+						}
+						if int(v.Float()) != keyCount {
+							return fmt.Errorf("expected %d one time keys, got %d", keyCount, int(v.Float()))
+						}
+						return nil
+					}),
 				},
 			})
 		})
@@ -42,6 +56,7 @@ func TestUploadKey(t *testing.T) {
 		t.Run("Rejects invalid device keys", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite, runtime.Synapse) // Dendrite doesn't pass, Synapse has it blacklisted
 			t.Parallel()
+			// algorithms, keys and signatures are required fields, but missing
 			reqBody := client.WithJSONBody(t, map[string]interface{}{
 				"device_keys": map[string]interface{}{
 					"user_id":   bob.UserID,
