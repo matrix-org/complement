@@ -45,6 +45,7 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		Type:       "m.room.member",
 		StateKey:   &userID,
 		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
+		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
 	}
 	err := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
 	if err != nil {
