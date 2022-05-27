@@ -23,8 +23,10 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -197,6 +199,14 @@ func deployImage(
 
 	env := []string{
 		"SERVER_NAME=" + hsName,
+	}
+	if cfg.EnvVarsPropagatePrefix != "" {
+		for _, ev := range os.Environ() {
+			if strings.HasPrefix(ev, cfg.EnvVarsPropagatePrefix) {
+				env = append(env, strings.TrimPrefix(ev, cfg.EnvVarsPropagatePrefix))
+			}
+		}
+		log.Printf("Sharing %v host environment variables with container", env)
 	}
 
 	port1, port2, err := allocateHostPorts()
