@@ -4,6 +4,7 @@ package match
 type HTTPResponse struct {
 	StatusCode int
 	Headers    map[string]string
+	HeadersRE  map[string]string
 	JSON       []JSON
 }
 

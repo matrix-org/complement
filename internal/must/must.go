@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -97,11 +98,18 @@ func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byt
 			t.Fatalf("MatchResponse got status %d want %d - %s", res.StatusCode, m.StatusCode, contextStr)
 		}
 	}
-	if m.Headers != nil {
-		for name, val := range m.Headers {
-			if res.Header.Get(name) != val {
-				t.Fatalf("MatchResponse got %s: %s want %s - %s", name, res.Header.Get(name), val, contextStr)
-			}
+	for name, val := range m.Headers {
+		if res.Header.Get(name) != val {
+			t.Fatalf("MatchResponse got %s: %s want %s - %s", name, res.Header.Get(name), val, contextStr)
+		}
+	}
+	for name, pat := range m.HeadersRE {
+		ok, err := regexp.MatchString(pat, res.Header.Get(name))
+		if err != nil {
+			t.Fatalf("MatchResponse header pattern %s %s: %v - %s", name, pat, err, contextStr)
+		}
+		if !ok {
+			t.Fatalf("MatchResponse got %s: %s want match %s - %s", name, res.Header.Get(name), pat, contextStr)
 		}
 	}
 	if m.JSON != nil {
