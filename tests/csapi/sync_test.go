@@ -183,9 +183,9 @@ func TestSync(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
-			sendMessages(t, alice, roomID, "alice message 1-", 4)
+			sendMessages(t, alice, roomID, "m.room.message", "alice message 1-", 4)
 			_, nextBatch := bob.MustSync(t, client.SyncReq{Filter: filterBob})
-			sendMessages(t, alice, roomID, "alice message 2-", 4)
+			sendMessages(t, alice, roomID, "m.room.message", "alice message 2-", 4)
 			bob.JoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			res, _ := bob.MustSync(t, client.SyncReq{Filter: filterBob, Since: nextBatch})
@@ -233,7 +233,7 @@ func TestSync(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-			sendMessages(t, alice, roomID, "dummy message", 1)
+			sendMessages(t, alice, roomID, "m.room.message", "dummy message", 1)
 			_, nextBatch = alice.MustSync(t, client.SyncReq{Since: nextBatch})
 			bob.JoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
@@ -254,18 +254,21 @@ func TestSync(t *testing.T) {
 	})
 }
 
-func sendMessages(t *testing.T, client *client.CSAPI, roomID string, prefix string, count int) {
+func sendMessages(t *testing.T, client *client.CSAPI, roomID string, msgType string, prefix string, count int) []string {
 	t.Helper()
+	eventIDs := make([]string, 0, count)
 	for i := 0; i < count; i++ {
-		client.SendEventSynced(t, roomID, b.Event{
+		eventID := client.SendEventSynced(t, roomID, b.Event{
 			Sender: client.UserID,
-			Type:   "m.room.message",
+			Type:   msgType,
 			Content: map[string]interface{}{
 				"body":    fmt.Sprintf("%s%d", prefix, i),
 				"msgtype": "m.text",
 			},
 		})
+		eventIDs = append(eventIDs, eventID)
 	}
+	return eventIDs
 }
 
 func checkJoinFieldsExist(t *testing.T, res gjson.Result, roomID string) {
