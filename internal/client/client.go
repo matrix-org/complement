@@ -169,6 +169,10 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
 	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
+	if e.TransactionID != nil {
+		c.txnID--
+		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, *e.TransactionID}
+	}
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}

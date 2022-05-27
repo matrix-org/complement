@@ -91,10 +91,11 @@ type ApplicationService struct {
 }
 
 type Event struct {
-	Type     string
-	Sender   string
-	StateKey *string
-	Content  map[string]interface{}
+	Type          string
+	Sender        string
+	StateKey      *string
+	Content       map[string]interface{}
+	TransactionID *string
 
 	/* The following fields are ignored in blueprints as clients are unable to set them.
 	 * They are used with federation.Server.
