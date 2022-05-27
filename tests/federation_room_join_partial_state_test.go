@@ -214,7 +214,7 @@ func TestPartialStateJoin(t *testing.T) {
 		defer cancelListener()
 
 		// join complement to the public room
-		server.MustJoinRoom(t, deployment, "hs1", roomID, server.UserID("bob"))
+		room := server.MustJoinRoom(t, deployment, "hs1", roomID, server.UserID("bob"))
 
 		// we expect a /state_ids request from hs2 after it joins the room
 		// we will respond to the request with garbage
@@ -242,7 +242,6 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// and let hs1 know that charlie has joined,
 		// otherwise hs1 will refuse /state_ids requests
-		room := server.Room(roomID)
 		member_event := room.CurrentState("m.room.member", charlie.UserID).JSON()
 		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{member_event}, nil)
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
