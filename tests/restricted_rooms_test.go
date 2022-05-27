@@ -33,7 +33,7 @@ func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverNam
 
 // Creates two rooms on room version 8 and sets the second room to have
 // restricted join rules with allow set to the first room.
-func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.CSAPI, string, string) {
+func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment, roomVersion string, joinRule string) (*client.CSAPI, string, string) {
 	t.Helper()
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -47,13 +47,13 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 	room := alice.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
-		"room_version": "8",
+		"room_version": roomVersion,
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.join_rules",
 				"state_key": "",
 				"content": map[string]interface{}{
-					"join_rule": "restricted",
+					"join_rule": joinRule,
 					"allow": []map[string]interface{}{
 						{
 							"type":    "m.room_membership",
@@ -69,7 +69,7 @@ func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment) (*client.C
 	return alice, allowed_room, room
 }
 
-func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, allowed_room string, room string) {
+func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, allowed_room string, room string, joinRule string) {
 	t.Helper()
 
 	t.Run("Join should fail initially", func(t *testing.T) {
@@ -141,7 +141,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 				Sender:   alice.UserID,
 				StateKey: &emptyStateKey,
 				Content: map[string]interface{}{
-					"join_rule": "restricted",
+					"join_rule": joinRule,
 					"allow":     []string{"invalid"},
 				},
 			},
@@ -157,7 +157,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 				Sender:   alice.UserID,
 				StateKey: &emptyStateKey,
 				Content: map[string]interface{}{
-					"join_rule": "restricted",
+					"join_rule": joinRule,
 					"allow":     "invalid",
 				},
 			},
@@ -173,13 +173,13 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.
-	alice, allowed_room, room := setupRestrictedRoom(t, deployment)
+	alice, allowed_room, room := setupRestrictedRoom(t, deployment, "8", "restricted")
 
 	// Create a second user on the same homeserver.
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	// Execute the checks.
-	checkRestrictedRoom(t, alice, bob, allowed_room, room)
+	checkRestrictedRoom(t, alice, bob, allowed_room, room, "restricted")
 }
 
 // Test joining a room with join rules restricted to membership in another room.
@@ -188,18 +188,22 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.
-	alice, allowed_room, room := setupRestrictedRoom(t, deployment)
+	alice, allowed_room, room := setupRestrictedRoom(t, deployment, "8", "restricted")
 
 	// Create a second user on a different homeserver.
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
 	// Execute the checks.
-	checkRestrictedRoom(t, alice, bob, allowed_room, room)
+	checkRestrictedRoom(t, alice, bob, allowed_room, room, "restricted")
 }
 
 // A server will do a remote join for a local user if it is unable to to issue
 // joins in a restricted room it is already participating in.
 func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
+	doTestRestrictedRoomsRemoteJoinLocalUser(t, "8", "restricted")
+}
+
+func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, joinRule string) {
 	runtime.SkipIf(t, runtime.Dendrite) // requires more debugging
 
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
@@ -218,13 +222,13 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 	room := charlie.CreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
-		"room_version": "8",
+		"room_version": roomVersion,
 		"initial_state": []map[string]interface{}{
 			{
 				"type":      "m.room.join_rules",
 				"state_key": "",
 				"content": map[string]interface{}{
-					"join_rule": "restricted",
+					"join_rule": joinRule,
 					"allow": []map[string]interface{}{
 						{
 							"type":    "m.room_membership",
@@ -323,6 +327,10 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 // * hs2 joins the room
 // * hs3 attempts to join via hs2 (should fail) and hs1 (should work)
 func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
+	doTestRestrictedRoomsRemoteJoinFailOver(t, "8", "restricted")
+}
+
+func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, joinRule string) {
 	runtime.SkipIf(t, runtime.Dendrite) // requires more debugging
 
 	deployment := Deploy(t, b.Blueprint{
@@ -360,7 +368,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.
-	alice, allowed_room, room := setupRestrictedRoom(t, deployment)
+	alice, allowed_room, room := setupRestrictedRoom(t, deployment, roomVersion, joinRule)
 
 	// Raise the power level so that only alice can invite.
 	state_key := ""
