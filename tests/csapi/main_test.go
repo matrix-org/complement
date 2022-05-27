@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 // It will construct the blueprint if it doesn't already exist in the docker image cache.
 // This function is the main setup function for all tests as it provides a deployment with
 // which tests can interact with.
-func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
+func Deploy(t *testing.T, blueprint b.Blueprint, opts ...DeployOpt) *docker.Deployment {
 	t.Helper()
 	timeStartBlueprint := time.Now()
 	if complementBuilder == nil {
@@ -64,6 +64,9 @@ func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	if err != nil {
 		t.Fatalf("Deploy: NewDeployer returned error %s", err)
 	}
+	for _, opt := range opts {
+		opt.applyDeployer(d)
+	}
 	timeStartDeploy := time.Now()
 	dep, err := d.Deploy(context.Background(), blueprint.Name)
 	if err != nil {
@@ -71,6 +74,23 @@ func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	}
 	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy))
 	return dep
+}
+
+type DeployOpt interface {
+	applyDeployer(*docker.Deployer)
+}
+
+type deployOptFunc func(*docker.Deployer)
+
+func (opt deployOptFunc) applyDeployer(d *docker.Deployer) {
+	opt(d)
+}
+
+// WithEnv adds environment variable assignments like `"key=value"`.
+func WithEnv(env ...string) DeployOpt {
+	return deployOptFunc(func(d *docker.Deployer) {
+		d.Env = env
+	})
 }
 
 // nolint:unused

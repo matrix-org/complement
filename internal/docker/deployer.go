@@ -46,6 +46,7 @@ const (
 type Deployer struct {
 	DeployNamespace string
 	Docker          *client.Client
+	Env             []string // key=value
 	Counter         int
 	networkID       string
 	debugLogging    bool
@@ -114,7 +115,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		// TODO: Make CSAPI port configurable
 		deployment, err := deployImage(
 			d.Docker, img.ID, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
-			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config,
+			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config, d.Env,
 		)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
@@ -168,6 +169,7 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 func deployImage(
 	docker *client.Client, imageID string, containerName, pkgNamespace, blueprintName, hsName string,
 	asIDToRegistrationMap map[string]string, contextStr, networkID string, cfg *config.Complement,
+	env []string,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -193,9 +195,9 @@ func deployImage(
 		log.Printf("Using host mounts: %+v", mounts)
 	}
 
-	env := []string{
+	env = append([]string{
 		"SERVER_NAME=" + hsName,
-	}
+	}, env...)
 
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image: imageID,
