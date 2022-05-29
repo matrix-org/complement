@@ -10,6 +10,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -250,6 +251,121 @@ func TestSync(t *testing.T) {
 			// There should be no new presence events
 			res, _ := alice.MustSync(t, client.SyncReq{Since: nextBatch})
 			usersInPresenceEvents(t, res.Get("presence"), []string{})
+		})
+
+		t.Run("sync should succeed even if the sync token points to a redaction of an unknown event", func(t *testing.T) {
+			// this is a regression test for https://github.com/matrix-org/synapse/issues/12864
+			//
+			// The idea here is that we need a sync token which points to a redaction
+			// for an event which doesn't exist. Such a redaction may not be served to
+			// the client. This can lead to server bugs when the server tries to fetch
+			// the event corresponding to the sync token.
+			//
+			// The C-S API does not permit us to generate such a redaction event, so
+			// we have to poke it in from a federated server.
+			//
+			// The situation is complicated further by the very fact that we
+			// cannot see the faulty redaction, and therefore cannot tell whether
+			// our sync token includes it or not. The normal trick here would be
+			// to send another (regular) event as a sentinel, and then if that sentinel
+			// is returned by /sync, we can be sure the faulty event has also been
+			// processed. However, that doesn't work here, because doing so will mean
+			// that the sync token points to the sentinel rather than the redaction,
+			// negating the whole point of the test.
+			//
+			// Instead, as a rough proxy, we send a sentinel in a *different* room.
+			// There is no guarantee that the target server will process the events
+			// in the order we send them, but in practice it seems to get close
+			// enough.
+
+			t.Parallel()
+
+			// alice creates two rooms, which charlie (on our test server) joins
+			srv := federation.NewServer(t, deployment,
+				federation.HandleKeyRequests(),
+				federation.HandleTransactionRequests(nil, nil),
+			)
+			cancel := srv.Listen()
+			defer cancel()
+
+			charlie := srv.UserID("charlie")
+
+			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			serverRoom := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+
+			roomID_2 := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			serverRoom_2 := srv.MustJoinRoom(t, deployment, "hs1", roomID_2, charlie)
+
+			// charlie creates a bogus redaction, which he sends out, followed by
+			// a good event - in another room - to act as a sentinel. It's not
+			// guaranteed, but hopefully if the sentinel is received, so was the
+			// redaction.
+			redactionEvent := srv.MustCreateEvent(t, serverRoom, b.Event{
+				Type:    "m.room.redaction",
+				Sender:  charlie,
+				Content: map[string]interface{}{},
+				Redacts: "$12345",
+			})
+			serverRoom.AddEvent(redactionEvent)
+			t.Logf("Created redaction event %s", redactionEvent.EventID())
+			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON()}, nil)
+
+			sentinelEvent := srv.MustCreateEvent(t, serverRoom_2, b.Event{
+				Type:    "m.room.test",
+				Sender:  charlie,
+				Content: map[string]interface{}{"body": "1234"},
+			})
+			serverRoom_2.AddEvent(sentinelEvent)
+			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON(), sentinelEvent.JSON()}, nil)
+
+			// wait for the sentinel to arrive
+			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID_2, sentinelEvent.EventID()))
+
+			// one more sync, to get the latest sync token
+			_, nextBatch = alice.MustSync(t, client.SyncReq{Since: nextBatch})
+
+			// charlie sends another batch of events to force a gappy sync
+			pdus := make([]json.RawMessage, 0, 11)
+			var lastSentEventId string
+			for i := 0; i < 11; i++ {
+				ev := srv.MustCreateEvent(t, serverRoom, b.Event{
+					Type:    "m.room.message",
+					Sender:  charlie,
+					Content: map[string]interface{}{},
+				})
+				serverRoom.AddEvent(ev)
+				pdus = append(pdus, ev.JSON())
+				lastSentEventId = ev.EventID()
+			}
+			srv.MustSendTransaction(t, deployment, "hs1", pdus, nil)
+			t.Logf("Sent filler events, with final event %s", lastSentEventId)
+
+			// sync, starting from the same ?since each time, until the final message turns up.
+			// This is basically an inlining of MustSyncUntil, with the key difference that we
+			// keep the same ?since each time, instead of incrementally syncing on each pass.
+			numResponsesReturned := 0
+			start := time.Now()
+			for {
+				if time.Since(start) > alice.SyncUntilTimeout {
+					t.Fatalf("%s: timed out after %v. Seen %d /sync responses", alice.UserID, time.Since(start), numResponsesReturned)
+				}
+				syncResponse, _ := alice.MustSync(t, client.SyncReq{Filter: filterID, Since: nextBatch})
+				numResponsesReturned += 1
+				timeline := syncResponse.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline")
+				timelineEvents := timeline.Get("events").Array()
+				lastEventIdInSync := timelineEvents[len(timelineEvents)-1].Get("event_id").String()
+
+				t.Logf("Iteration %d: /sync returned %d events, with final event %s", numResponsesReturned, len(timelineEvents), lastEventIdInSync)
+				if lastEventIdInSync == lastSentEventId {
+					// check we actually got a gappy sync - else this test isn't testing the right thing
+					if !timeline.Get("limited").Bool() {
+						t.Fatalf("Not a gappy sync after redaction")
+					}
+					break
+				}
+			}
+
+			// that's it - we successfully did a gappy sync.
 		})
 	})
 }

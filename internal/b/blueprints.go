@@ -110,6 +110,9 @@ type Event struct {
 	// The prev events of the event if we want to override or falsify them.
 	// If it is left at nil, MustCreateEvent will populate it automatically based on the forward extremities.
 	PrevEvents interface{}
+
+	// If this is a redaction, the event that it redacts
+	Redacts string
 }
 
 func MustValidate(bp Blueprint) Blueprint {
