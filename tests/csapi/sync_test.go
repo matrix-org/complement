@@ -290,51 +290,49 @@ func TestSync(t *testing.T) {
 
 			charlie := srv.UserID("charlie")
 
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			serverRoom := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+			redactionRoomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			redactionRoom := srv.MustJoinRoom(t, deployment, "hs1", redactionRoomID, charlie)
 
-			roomID_2 := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			serverRoom_2 := srv.MustJoinRoom(t, deployment, "hs1", roomID_2, charlie)
+			sentinelRoomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			sentinelRoom := srv.MustJoinRoom(t, deployment, "hs1", sentinelRoomID, charlie)
 
 			// charlie creates a bogus redaction, which he sends out, followed by
 			// a good event - in another room - to act as a sentinel. It's not
 			// guaranteed, but hopefully if the sentinel is received, so was the
 			// redaction.
-			redactionEvent := srv.MustCreateEvent(t, serverRoom, b.Event{
+			redactionEvent := srv.MustCreateEvent(t, redactionRoom, b.Event{
 				Type:    "m.room.redaction",
 				Sender:  charlie,
 				Content: map[string]interface{}{},
 				Redacts: "$12345",
 			})
-			serverRoom.AddEvent(redactionEvent)
+			redactionRoom.AddEvent(redactionEvent)
 			t.Logf("Created redaction event %s", redactionEvent.EventID())
 			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON()}, nil)
 
-			sentinelEvent := srv.MustCreateEvent(t, serverRoom_2, b.Event{
+			sentinelEvent := srv.MustCreateEvent(t, sentinelRoom, b.Event{
 				Type:    "m.room.test",
 				Sender:  charlie,
 				Content: map[string]interface{}{"body": "1234"},
 			})
-			serverRoom_2.AddEvent(sentinelEvent)
+			sentinelRoom.AddEvent(sentinelEvent)
 			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 			// wait for the sentinel to arrive
-			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID_2, sentinelEvent.EventID()))
+			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(sentinelRoomID, sentinelEvent.EventID()))
 
-			// one more sync, to get the latest sync token
-			_, nextBatch = alice.MustSync(t, client.SyncReq{Since: nextBatch})
-
-			// charlie sends another batch of events to force a gappy sync
-			pdus := make([]json.RawMessage, 0, 11)
+			// charlie sends another batch of events to force a gappy sync.
+			// We have to send 11 events to force a gap, since we use a filter with a timeline limit of 10 events.
+			pdus := make([]json.RawMessage, 11)
 			var lastSentEventId string
-			for i := 0; i < 11; i++ {
-				ev := srv.MustCreateEvent(t, serverRoom, b.Event{
+			for i := range pdus {
+				ev := srv.MustCreateEvent(t, redactionRoom, b.Event{
 					Type:    "m.room.message",
 					Sender:  charlie,
 					Content: map[string]interface{}{},
 				})
-				serverRoom.AddEvent(ev)
-				pdus = append(pdus, ev.JSON())
+				redactionRoom.AddEvent(ev)
+				pdus[i] = ev.JSON()
 				lastSentEventId = ev.EventID()
 			}
 			srv.MustSendTransaction(t, deployment, "hs1", pdus, nil)
@@ -349,9 +347,10 @@ func TestSync(t *testing.T) {
 				if time.Since(start) > alice.SyncUntilTimeout {
 					t.Fatalf("%s: timed out after %v. Seen %d /sync responses", alice.UserID, time.Since(start), numResponsesReturned)
 				}
+				// sync, using a filter with a limit smaller than the number of PDUs we sent.
 				syncResponse, _ := alice.MustSync(t, client.SyncReq{Filter: filterID, Since: nextBatch})
 				numResponsesReturned += 1
-				timeline := syncResponse.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline")
+				timeline := syncResponse.Get("rooms.join." + client.GjsonEscape(redactionRoomID) + ".timeline")
 				timelineEvents := timeline.Get("events").Array()
 				lastEventIdInSync := timelineEvents[len(timelineEvents)-1].Get("event_id").String()
 
