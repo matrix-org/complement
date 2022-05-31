@@ -214,7 +214,7 @@ func TestPartialStateJoin(t *testing.T) {
 		defer cancelListener()
 
 		// join complement to the public room
-		room := server.MustJoinRoom(t, deployment, "hs1", roomID, server.UserID("bob"))
+		room := server.MustJoinRoom(t, deployment, "hs1", roomID, server.UserID("david"))
 
 		// we expect a /state_ids request from hs2 after it joins the room
 		// we will respond to the request with garbage
@@ -226,7 +226,7 @@ func TestPartialStateJoin(t *testing.T) {
 				queryParams := req.URL.Query()
 				t.Logf("Incoming state_ids request for event %s in room %s", queryParams["event_id"], roomID)
 				fedStateIdsRequestReceivedWaiter.Finish()
-				fedStateIdsSendResponseWaiter.Waitf(t, 60*time.Second, "Waiting for /state request")
+				fedStateIdsSendResponseWaiter.Wait(t, 60*time.Second)
 				t.Logf("Replying to /state_ids request with invalid response")
 
 				w.WriteHeader(200)
