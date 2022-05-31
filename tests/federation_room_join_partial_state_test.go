@@ -207,7 +207,7 @@ func TestPartialStateJoin(t *testing.T) {
 					t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
 				},
 				// hs1 may send us presence when alice syncs
-				func(e gomatrixserverlib.EDU) {},
+				nil,
 			),
 		)
 		cancelListener := server.Listen()
