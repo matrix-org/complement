@@ -10,12 +10,14 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/matrix-org/gomatrix"
 	"io/ioutil"
 	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -213,7 +215,12 @@ func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment
 // SendFederationRequest signs and sends an arbitrary federation request from this server.
 //
 // The requests will be routed according to the deployment map in `deployment`.
-func (s *Server) SendFederationRequest(deployment *docker.Deployment, req gomatrixserverlib.FederationRequest, resBody interface{}) error {
+func (s *Server) SendFederationRequest(
+	t *testing.T,
+	deployment *docker.Deployment,
+	req gomatrixserverlib.FederationRequest,
+	resBody interface{},
+) error {
 	if err := req.Sign(gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
 		return err
 	}
@@ -224,7 +231,20 @@ func (s *Server) SendFederationRequest(deployment *docker.Deployment, req gomatr
 	}
 
 	httpClient := gomatrixserverlib.NewClient(gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}))
-	return httpClient.DoRequestAndParseResponse(context.Background(), httpReq, resBody)
+
+	start := time.Now()
+	err = httpClient.DoRequestAndParseResponse(context.Background(), httpReq, resBody)
+
+	var outcome string
+	if respError, ok := err.(gomatrix.RespError); ok {
+		outcome = respError.ErrCode
+	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
+		outcome = strconv.Itoa(httpError.Code)
+	} else if err == nil {
+		outcome = "2xx (no error)"
+	}
+	t.Logf("%s %s%s => %s (%s)", req.Method(), req.Destination(), req.RequestURI(), outcome, time.Since(start))
+	return err
 }
 
 // MustCreateEvent will create and sign a new latest event for the given room.
