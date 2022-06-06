@@ -36,6 +36,21 @@ options will work, so to just run 1 named test and include a timeout for the tes
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests/...
 ```
 
+### Potential conflict with firewall software
+
+The homeserver in the test image needs to be able to make requests to the mock
+homeserver hosted by Complement itself, which may be blocked by firewall
+software. This will manifest with a subset of the tests (mostly those to do
+with federation) inexplicably failing.
+
+To solve this, you will need to configure your firewall to allow such requests.
+
+If you are using [ufw](https://code.launchpad.net/ufw), this can be done with:
+
+```sh
+sudo ufw allow in on in_br-+
+```
+
 ### Running against Dendrite
 
 For instance, for Dendrite:
