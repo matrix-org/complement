@@ -183,6 +183,100 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 	})
 
+	// test a second partial-state join while a first is still syncing state.
+	t.Run("SecondJoinDuringPartialStateJoin", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		bob := deployment.RegisterUser(t, "hs1", "bob", "password", false)
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		// Alice has now joined the room, and the server is syncing the state in the background.
+
+		// attempts to sync should now block. Fire off a goroutine to try it.
+		aliceSyncResponseChan := make(chan gjson.Result)
+		defer close(aliceSyncResponseChan)
+		go func() {
+			response, _ := alice.MustSync(t, client.SyncReq{})
+			aliceSyncResponseChan <- response
+		}()
+
+		// wait for the state_ids request to arrive
+		psjResult.AwaitStateIdsRequest(t)
+
+		// the client-side requests should still be waiting
+		select {
+		case <-aliceSyncResponseChan:
+			t.Fatalf("Alice's sync completed before state resync complete")
+		default:
+		}
+
+		// now make bob join the room.
+		bob.JoinRoom(t, psjResult.ServerRoom.RoomID, []string{psjResult.Server.ServerName()})
+
+		// attempts to sync should now block. Fire off a goroutine to try it.
+		bobSyncResponseChan := make(chan gjson.Result)
+		defer close(bobSyncResponseChan)
+		go func() {
+			response, _ := bob.MustSync(t, client.SyncReq{})
+			bobSyncResponseChan <- response
+		}()
+
+		// the client-side requests should still be waiting
+		select {
+		case <-bobSyncResponseChan:
+			t.Fatalf("Bob's sync completed before state resync complete")
+		default:
+		}
+
+		// release the federation /state response
+		psjResult.FinishStateRequest()
+
+		// the /sync request should now complete, with the new room
+		var aliceSyncRes gjson.Result
+		select {
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Alice's /sync request request did not complete")
+		case aliceSyncRes = <-aliceSyncResponseChan:
+		}
+
+		// the /sync request should now complete, with the new room
+		var bobSyncRes gjson.Result
+		select {
+		case <-time.After(1 * time.Second):
+			t.Fatalf("Bob's /sync request request did not complete")
+		case bobSyncRes = <-bobSyncResponseChan:
+		}
+
+		aliceRoomRes := aliceSyncRes.Get("rooms.join." + client.GjsonEscape(psjResult.ServerRoom.RoomID))
+		if !aliceRoomRes.Exists() {
+			t.Fatalf("Alice's /sync completed without join to new room\n")
+		}
+
+		bobRoomRes := bobSyncRes.Get("rooms.join." + client.GjsonEscape(psjResult.ServerRoom.RoomID))
+		if !bobRoomRes.Exists() {
+			t.Fatalf("Bob's /sync completed without join to new room\n")
+		}
+
+		// check that the state includes both charlie and derek.
+		matcher := match.JSONCheckOffAllowUnwanted("state.events",
+			[]interface{}{
+				"m.room.member|" + psjResult.Server.UserID("charlie"),
+				"m.room.member|" + psjResult.Server.UserID("derek"),
+			}, func(result gjson.Result) interface{} {
+				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
+			}, nil,
+		)
+		if err := matcher([]byte(aliceRoomRes.Raw)); err != nil {
+			t.Errorf("Did not find expected state events in Alice's /sync response: %s", err)
+		}
+		if err := matcher([]byte(bobRoomRes.Raw)); err != nil {
+			t.Errorf("Did not find expected state events in Bob's /sync response: %s", err)
+		}
+	})
+
 	// test that a partial-state join can fall back to other homeservers when re-syncing
 	// partial state.
 	t.Run("PartialStateJoinSyncsUsingOtherHomeservers", func(t *testing.T) {
