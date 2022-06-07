@@ -48,7 +48,7 @@ To solve this, you will need to configure your firewall to allow such requests.
 If you are using [ufw](https://code.launchpad.net/ufw), this can be done with:
 
 ```sh
-sudo ufw allow in on in_br-+
+sudo ufw allow in on br-+
 ```
 
 ### Running against Dendrite
