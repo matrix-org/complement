@@ -177,7 +177,7 @@ func deployImage(
 	var err error
 
 	if runtime.GOOS == "linux" {
-		// Ensure that the homservers under test can contact the host, so they can
+		// Ensure that the homeservers under test can contact the host, so they can
 		// interact with a complement-controlled test server.
 		// Note: this feature of docker landed in Docker 20.10,
 		// see https://github.com/moby/moby/pull/40007 
