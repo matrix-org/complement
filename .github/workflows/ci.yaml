@@ -86,6 +86,7 @@ jobs:
         # Build the base Synapse dockerfile and then build a Complement-specific image from that base.
       - run: |
           docker build -t matrixdotorg/synapse:latest -f docker/Dockerfile .
+          docker build -t matrixdotorg/synapse-workers:latest -f docker/Dockerfile-workers .
           docker build -t homeserver -f docker/complement/Dockerfile docker/complement
         if: ${{ matrix.homeserver == 'Synapse' }}
         working-directory: homeserver
