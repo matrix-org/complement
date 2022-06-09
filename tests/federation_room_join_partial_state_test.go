@@ -281,7 +281,7 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 	})
 
-	// test a sync while re-syncing partial state, followed by completion of state syncing,
+	// test a lazy-load-members sync while re-syncing partial state, followed by completion of state syncing,
 	// followed by a gappy sync. the gappy sync should include the correct member state,
 	// since it was not sent on the previous sync.
 	t.Run("GappySyncAfterPartialStateSynced", func(t *testing.T) {
