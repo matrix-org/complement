@@ -151,13 +151,23 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 	for _, hsDep := range dep.HS {
 		if printServerLogs {
+			// If we want the logs we gracefully stop the containers to allow
+			// the logs to be flushed.
+			x := 1 * time.Second
+			err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, &x)
+			if err != nil {
+				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
+			}
+
 			printLogs(d.Docker, hsDep.ContainerID, hsDep.ContainerID)
+		} else {
+			err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
+			if err != nil {
+				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
+			}
 		}
-		err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
-		if err != nil {
-			log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
-		}
-		err = d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
+
+		err := d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
 			Force: true,
 		})
 		if err != nil {
