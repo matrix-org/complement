@@ -153,8 +153,8 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 		if printServerLogs {
 			// If we want the logs we gracefully stop the containers to allow
 			// the logs to be flushed.
-			x := 1 * time.Second
-			err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, &x)
+			timeout := 1 * time.Second
+			err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, &timeout)
 			if err != nil {
 				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
 			}
