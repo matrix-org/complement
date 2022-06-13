@@ -96,9 +96,9 @@ For example, for Dendrite on Linux with the default location of `$GOPATH`, do a 
 ```shellsession
 $ git clone https://github.com/matrix-org/dendrite ../dendrite
 $ (cd ../dendrite && docker build -t complement-dendrite-local -f build/scripts/ComplementLocal.Dockerfile .)
-$ mkdir -p /tmp/complement-$LOGNAME/go-build
+$ mkdir -p ../complement-go-build-cache
 $ export COMPLEMENT_BASE_IMAGE=complement-dendrite-local
-$ export COMPLEMENT_HOST_MOUNTS="$PWD/../dendrite:/dendrite:ro;$HOME/go:/go:ro;/tmp/complement-$LOGNAME/go-build:/root/.cache/go-build"
+$ export COMPLEMENT_HOST_MOUNTS="$PWD/../dendrite:/dendrite:ro;$HOME/go:/go:ro;$PWD/../complement-go-build-cache:/root/.cache/go-build"
 ```
 
 Then simply use `go test` to compile and test your locally checked out Dendrite:
