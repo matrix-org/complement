@@ -362,16 +362,16 @@ func deployImage(
 // The returned ports must be used before the next call to `allocateHostPorts`,
 // otherwise the same pair of ports may be returned.
 func allocateHostPorts() (int, int, error) {
-	localhost_any_port := net.TCPAddr{
+	localhostAnyPort := net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
 		Port: 0,
 	}
 
-	listener1, err := net.ListenTCP("tcp", &localhost_any_port)
+	listener1, err := net.ListenTCP("tcp", &localhostAnyPort)
 	if err != nil {
 		return 0, 0, err
 	}
-	listener2, err := net.ListenTCP("tcp", &localhost_any_port)
+	listener2, err := net.ListenTCP("tcp", &localhostAnyPort)
 	if err != nil {
 		return 0, 0, err
 	}
