@@ -9,6 +9,8 @@ import (
 )
 
 // tests/10apidoc/37room-receipts.pl
+
+// sytest: POST /rooms/:room_id/receipt can create receipts
 func TestRoomReceipts(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
@@ -16,7 +18,6 @@ func TestRoomReceipts(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
-	// sytest: POST /rooms/:room_id/receipt can create receipts
 	eventID := ""
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
 		if result.Get("type").Str == "m.room.member" {
@@ -31,6 +32,7 @@ func TestRoomReceipts(t *testing.T) {
 	alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
 }
 
+// sytest: POST /rooms/:room_id/read_markers can create read marker
 func TestRoomReadMarkers(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
@@ -38,7 +40,6 @@ func TestRoomReadMarkers(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
-	// sytest: POST /rooms/:room_id/read_markers can create read marker
 	eventID := ""
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
 		if result.Get("type").Str == "m.room.member" {
