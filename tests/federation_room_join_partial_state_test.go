@@ -1,3 +1,4 @@
+//go:build faster_joins
 // +build faster_joins
 
 // This file contains tests for joining rooms over federation, with the
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -99,7 +101,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		alice.MustSyncUntil(t,
 			client.SyncReq{
-				Filter: buildLazyLoadingSyncFilter(),
+				Filter: buildLazyLoadingSyncFilter(nil),
 			},
 			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
 		)
@@ -140,7 +142,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// we need a sync token to pass to the `at` param.
 		syncToken := alice.MustSyncUntil(t,
 			client.SyncReq{
-				Filter: buildLazyLoadingSyncFilter(),
+				Filter: buildLazyLoadingSyncFilter(nil),
 			},
 			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
 		)
@@ -335,15 +337,111 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Fatalf("/sync completed without join to new room\n")
 		}
 	})
+
+	// test a lazy-load-members sync while re-syncing partial state, followed by completion of state syncing,
+	// followed by a gappy sync. the gappy sync should include the correct member state,
+	// since it was not sent on the previous sync.
+	t.Run("GappySyncAfterPartialStateSynced", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		// get a sync token before state syncing finishes.
+		syncToken := alice.MustSyncUntil(t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
+		)
+		t.Logf("Alice successfully synced")
+
+		// wait for partial state to finish syncing,
+		// by waiting for the room to show up in a regular /sync.
+		psjResult.AwaitStateIdsRequest(t)
+		psjResult.FinishStateRequest()
+		alice.MustSyncUntil(t,
+			client.SyncReq{},
+			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
+		)
+
+		// make derek send two messages into the room.
+		// we will do a gappy sync after, which will only pick up the last message.
+		var lastEventID string
+		for i := 0; i < 2; i++ {
+			event := psjResult.Server.MustCreateEvent(t, psjResult.ServerRoom, b.Event{
+				Type:   "m.room.message",
+				Sender: psjResult.Server.UserID("derek"),
+				Content: map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    "Message " + strconv.Itoa(i),
+				},
+			})
+			lastEventID = event.EventID()
+			psjResult.ServerRoom.AddEvent(event)
+			psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+		}
+
+		// wait for the events to come down a regular /sync.
+		alice.MustSyncUntil(t,
+			client.SyncReq{},
+			client.SyncTimelineHasEventID(psjResult.ServerRoom.RoomID, lastEventID),
+		)
+
+		// now do a gappy sync using the sync token from before.
+		syncRes, _ := alice.MustSync(t,
+			client.SyncReq{
+				Since: syncToken,
+				Filter: buildLazyLoadingSyncFilter(map[string]interface{}{
+					"limit": 1,
+				}),
+			},
+		)
+
+		// check that the state includes derek.
+		roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(psjResult.ServerRoom.RoomID))
+		if !roomRes.Exists() {
+			t.Fatalf("/sync completed without join to new room\n")
+		}
+		t.Logf("gappy /sync response for %s: %s", psjResult.ServerRoom.RoomID, roomRes)
+
+		timelineMatcher := match.JSONCheckOff("timeline.events",
+			[]interface{}{lastEventID},
+			func(result gjson.Result) interface{} {
+				return result.Map()["event_id"].Str
+			}, nil,
+		)
+		stateMatcher := match.JSONCheckOffAllowUnwanted("state.events",
+			[]interface{}{
+				"m.room.member|" + psjResult.Server.UserID("derek"),
+			}, func(result gjson.Result) interface{} {
+				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
+			}, nil,
+		)
+		if err := timelineMatcher([]byte(roomRes.Raw)); err != nil {
+			t.Errorf("Unexpected timeline events found in gappy /sync response: %s", err)
+		}
+		if err := stateMatcher([]byte(roomRes.Raw)); err != nil {
+			t.Errorf("Did not find derek's m.room.member event in gappy /sync response: %s", err)
+		}
+	})
 }
 
 // buildLazyLoadingSyncFilter constructs a json-marshalled filter suitable the 'Filter' field of a client.SyncReq
-func buildLazyLoadingSyncFilter() string {
+func buildLazyLoadingSyncFilter(timelineOptions map[string]interface{}) string {
+	timelineFilter := map[string]interface{}{
+		"lazy_load_members": true,
+	}
+
+	for k, v := range timelineOptions {
+		timelineFilter[k] = v
+	}
+
 	j, _ := json.Marshal(map[string]interface{}{
 		"room": map[string]interface{}{
-			"timeline": map[string]interface{}{
-				"lazy_load_members": true,
-			},
+			"timeline": timelineFilter,
 			"state": map[string]interface{}{
 				"lazy_load_members": true,
 			},
