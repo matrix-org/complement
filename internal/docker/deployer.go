@@ -78,7 +78,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	dep := &Deployment{
 		Deployer:      d,
 		BlueprintName: blueprintName,
-		HS:            make(map[string]HomeserverDeployment),
+		HS:            make(map[string]*HomeserverDeployment),
 		Config:        d.config,
 	}
 	images, err := d.Docker.ImageList(ctx, types.ImageListOptions{
@@ -127,7 +127,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		}
 		mu.Lock()
 		d.log("%s -> %s (%s)\n", contextStr, deployment.BaseURL, deployment.ContainerID)
-		dep.HS[hsName] = *deployment
+		dep.HS[hsName] = deployment
 		mu.Unlock()
 		return nil
 	}
@@ -469,7 +469,7 @@ func (dep *Deployment) Restart() error {
 
 		// Wait for the container to be ready.
 		stopTime := time.Now().Add(dep.Config.SpawnHSTimeout)
-		_, err = waitForContainer(ctx, dep.Deployer.Docker, &hsDep, stopTime)
+		_, err = waitForContainer(ctx, dep.Deployer.Docker, hsDep, stopTime)
 		if err != nil {
 			return fmt.Errorf("failed to restart container %s: %s", hsDep.ContainerID, err)
 		}

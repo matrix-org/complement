@@ -16,7 +16,7 @@ type Deployment struct {
 	// The name of the deployed blueprint
 	BlueprintName string
 	// A map of HS name to a HomeserverDeployment
-	HS     map[string]HomeserverDeployment
+	HS     map[string]*HomeserverDeployment
 	Config *config.Complement
 }
 
