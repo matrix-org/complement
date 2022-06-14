@@ -100,3 +100,17 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 	client.DeviceID = deviceID
 	return client
 }
+
+// Restart a deployment.
+func (dep *Deployment) Restart(t *testing.T) error {
+	t.Helper()
+	for _, hsDep := range dep.HS {
+		err := dep.Deployer.Restart(hsDep, dep.Config)
+		if err != nil {
+			t.Errorf("Deployment.Restart: %s", err)
+			return err
+		}
+	}
+
+	return nil
+}
