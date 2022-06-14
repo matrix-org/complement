@@ -7,7 +7,7 @@ Complement is a black box integration testing framework for Matrix homeservers.
 
 ## Running
 
-You need to have Go and Docker installed, as well as `libolm3` and `libolm-dev`. Then:
+You need to have Go and Docker >= 20.10 installed, as well as `libolm3` and `libolm-dev`. Then:
 
 ```
 $ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl go test -v ./tests/...
