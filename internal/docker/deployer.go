@@ -198,6 +198,12 @@ func (d *Deployer) Restart(hsDep *HomeserverDeployment, cfg *config.Complement) 
 	}
 
 	// Wait for the container to be ready.
+	baseURL, fedBaseURL, err := waitForPorts(ctx, d.Docker, hsDep.ContainerID)
+	if err != nil {
+		return fmt.Errorf("Restart: Failed to restart container %s: %s", hsDep.ContainerID, err)
+	}
+	hsDep.SetEndpoints(baseURL, fedBaseURL)
+
 	stopTime := time.Now().Add(cfg.SpawnHSTimeout)
 	_, err = waitForContainer(ctx, d.Docker, hsDep, stopTime)
 	if err != nil {

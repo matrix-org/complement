@@ -31,6 +31,16 @@ type HomeserverDeployment struct {
 	CSAPIClients        []*client.CSAPI
 }
 
+// Updates the client and federation base URLs of the homeserver deployment.
+func (hsDep *HomeserverDeployment) SetEndpoints(baseURL string, fedBaseURL string) {
+	hsDep.BaseURL = baseURL
+	hsDep.FedBaseURL = fedBaseURL
+
+	for _, client := range hsDep.CSAPIClients {
+		client.BaseURL = baseURL
+	}
+}
+
 // Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
 // will print container logs before killing the container.
 func (d *Deployment) Destroy(t *testing.T) {
