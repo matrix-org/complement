@@ -200,7 +200,7 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.AwaitStateIdsRequest(t)
 
 		// restart the homeserver
-		err := deployment.Restart()
+		err := deployment.Restart(t)
 		if err != nil {
 			t.Errorf("Failed to restart homeserver: %s", err)
 		}
