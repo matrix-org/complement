@@ -301,26 +301,13 @@ func deployImage(
 		log.Printf("%s: Started container %s", contextStr, containerID)
 	}
 
-	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
-	var inspect types.ContainerJSON
-	var baseURL, fedBaseURL string
-	inspectStartTime := time.Now()
-	for time.Since(inspectStartTime) < time.Second {
-		inspect, err = docker.ContainerInspect(ctx, containerID)
-		if err != nil {
-			return stubDeployment, err
-		}
-		if inspect.State != nil && !inspect.State.Running {
-			// the container exited, bail out with a container ID for logs
-			return stubDeployment, fmt.Errorf("container is not running, state=%v", inspect.State.Status)
-		}
-		baseURL, fedBaseURL, err = endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
-		if err == nil {
-			break
-		}
-	}
+	baseURL, fedBaseURL, err := waitForPorts(ctx, docker, containerID)
 	if err != nil {
 		return stubDeployment, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
+	}
+	inspect, err := docker.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return stubDeployment, err
 	}
 	for vol := range inspect.Config.Volumes {
 		log.Printf(
@@ -374,6 +361,28 @@ func copyToContainer(docker *client.Client, containerID, path string, data []byt
 		return fmt.Errorf("copyToContainer: failed to copy: %s", err)
 	}
 	return nil
+}
+
+// Waits until a homeserver container has NAT ports assigned and returns its clientside API URL and federation API URL.
+func waitForPorts(ctx context.Context, docker *client.Client, containerID string) (baseURL string, fedBaseURL string, err error) {
+	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
+	var inspect types.ContainerJSON
+	inspectStartTime := time.Now()
+	for time.Since(inspectStartTime) < time.Second {
+		inspect, err = docker.ContainerInspect(ctx, containerID)
+		if err != nil {
+			return "", "", err
+		}
+		if inspect.State != nil && !inspect.State.Running {
+			// the container exited, bail out with a container ID for logs
+			return "", "", fmt.Errorf("container is not running, state=%v", inspect.State.Status)
+		}
+		baseURL, fedBaseURL, err = endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
+		if err == nil {
+			break
+		}
+	}
+	return baseURL, fedBaseURL, nil
 }
 
 // Waits until a homeserver deployment is ready to serve requests.
