@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/matrix-org/gomatrix"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -23,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/matrix-org/gomatrix"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/util"
 
@@ -425,6 +425,7 @@ func (s *Server) Listen() (cancel func()) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	s.serverName += fmt.Sprintf(":%d", port)
 	s.listening = true
+	s.t.Logf("Complement federation server started at %s", s.serverName)
 
 	go func() {
 		defer ln.Close()
