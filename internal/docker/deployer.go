@@ -151,13 +151,23 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 	for _, hsDep := range dep.HS {
 		if printServerLogs {
+			// If we want the logs we gracefully stop the containers to allow
+			// the logs to be flushed.
+			timeout := 1 * time.Second
+			err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, &timeout)
+			if err != nil {
+				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
+			}
+
 			printLogs(d.Docker, hsDep.ContainerID, hsDep.ContainerID)
+		} else {
+			err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
+			if err != nil {
+				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
+			}
 		}
-		err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
-		if err != nil {
-			log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
-		}
-		err = d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
+
+		err := d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
 			Force: true,
 		})
 		if err != nil {
@@ -177,10 +187,11 @@ func deployImage(
 	var err error
 
 	if runtime.GOOS == "linux" {
-		// By default docker for linux does not expose this, so do it now.
-		// When https://github.com/moby/moby/pull/40007 lands in Docker 20, we should
-		// change this to be  `host.docker.internal:host-gateway`
-		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
+		// Ensure that the homeservers under test can contact the host, so they can
+		// interact with a complement-controlled test server.
+		// Note: this feature of docker landed in Docker 20.10,
+		// see https://github.com/moby/moby/pull/40007 
+		extraHosts = []string{"host.docker.internal:host-gateway"}
 	}
 
 	for _, m := range cfg.HostMounts {

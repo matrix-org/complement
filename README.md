@@ -7,7 +7,7 @@ Complement is a black box integration testing framework for Matrix homeservers.
 
 ## Running
 
-You need to have Go and Docker installed, as well as `libolm3` and `libolm-dev`. Then:
+You need to have Go and Docker >= 20.10 installed, as well as `libolm3` and `libolm-dev`. Then:
 
 ```
 $ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl go test -v ./tests/...
@@ -34,6 +34,21 @@ A full list of config options can be found [in the config file](./internal/confi
 options will work, so to just run 1 named test and include a timeout for the test run:
 ```
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests/...
+```
+
+### Potential conflict with firewall software
+
+The homeserver in the test image needs to be able to make requests to the mock
+homeserver hosted by Complement itself, which may be blocked by firewall
+software. This will manifest with a subset of the tests (mostly those to do
+with federation) inexplicably failing.
+
+To solve this, you will need to configure your firewall to allow such requests.
+
+If you are using [ufw](https://code.launchpad.net/ufw), this can be done with:
+
+```sh
+sudo ufw allow in on br-+
 ```
 
 ### Running against Dendrite
@@ -88,20 +103,24 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 
 If you want to write Complement tests _and_ hack on a homeserver implementation at the same time it can be very awkward
 to have to `docker build` the image all the time. To resolve this, Complement support "host mounts" which mount a directory
-from the host to the container. This is set via `COMPLEMENT_HOST_MOUNTS`:
+from the host to the container. This is set via `COMPLEMENT_HOST_MOUNTS`, on the form `HOST:CONTAINER[:ro][;...]` where
+`:ro` makes the mount read-only.
 
+For example, for Dendrite on Linux with the default location of `$GOPATH`, do a one-time setup:
+
+```shellsession
+$ git clone https://github.com/matrix-org/dendrite ../dendrite
+$ (cd ../dendrite && docker build -t complement-dendrite-local -f build/scripts/ComplementLocal.Dockerfile .)
+$ mkdir -p ../complement-go-build-cache
+$ export COMPLEMENT_BASE_IMAGE=complement-dendrite-local
+$ export COMPLEMENT_HOST_MOUNTS="$PWD/../dendrite:/dendrite:ro;$HOME/go:/go:ro;$PWD/../complement-go-build-cache:/root/.cache/go-build"
 ```
-COMPLEMENT_HOST_MOUNTS='/my/local/dir:/container/dir;/another/local/dir:/container/dir2:ro'
 
-which is:
-  - /my/local/dir:/container/dir
-  - /another/local/dir:/container/dir2:ro
+Then simply use `go test` to compile and test your locally checked out Dendrite:
 
-which is of the form:
-  - HOST:CONTAINER[:ro] where :ro makes the mount read-only.
+```shellsession
+$ go test -v ./tests/...
 ```
-
-For example, for Dendrite: `COMPLEMENT_HOST_MOUNTS='/your/local/dendrite:/dendrite:ro;/your/go/path:/go:ro'`.
 
 ### Getting prettier output
 

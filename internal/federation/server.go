@@ -285,6 +285,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		PrevEvents: prevEvents,
 		Unsigned:   unsigned,
 		AuthEvents: ev.AuthEvents,
+		Redacts:    ev.Redacts,
 	}
 	if eb.AuthEvents == nil {
 		var stateNeeded gomatrixserverlib.StateNeeded

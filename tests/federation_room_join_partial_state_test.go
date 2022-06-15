@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -99,7 +100,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		alice.MustSyncUntil(t,
 			client.SyncReq{
-				Filter: buildLazyLoadingSyncFilter(),
+				Filter: buildLazyLoadingSyncFilter(nil),
 			},
 			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
 		)
@@ -140,7 +141,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// we need a sync token to pass to the `at` param.
 		syncToken := alice.MustSyncUntil(t,
 			client.SyncReq{
-				Filter: buildLazyLoadingSyncFilter(),
+				Filter: buildLazyLoadingSyncFilter(nil),
 			},
 			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
 		)
@@ -182,15 +183,208 @@ func TestPartialStateJoin(t *testing.T) {
 			})
 		}
 	})
+
+	// test that a partial-state join can fall back to other homeservers when re-syncing
+	// partial state.
+	t.Run("PartialStateJoinSyncsUsingOtherHomeservers", func(t *testing.T) {
+		// set up 3 homeservers: hs1, hs2 and complement
+		deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		charlie := deployment.Client(t, "hs2", "@charlie:hs2")
+
+		// create a public room
+		roomID := alice.CreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+		})
+
+		// create the complement homeserver
+		server := federation.NewServer(t, deployment,
+			federation.HandleKeyRequests(),
+			federation.HandlePartialStateMakeSendJoinRequests(),
+			federation.HandleEventRequests(),
+			federation.HandleTransactionRequests(
+				func(e *gomatrixserverlib.Event) {
+					t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
+				},
+				// hs1 may send us presence when alice syncs
+				nil,
+			),
+		)
+		cancelListener := server.Listen()
+		defer cancelListener()
+
+		// join complement to the public room
+		room := server.MustJoinRoom(t, deployment, "hs1", roomID, server.UserID("david"))
+
+		// we expect a /state_ids request from hs2 after it joins the room
+		// we will respond to the request with garbage
+		fedStateIdsRequestReceivedWaiter := NewWaiter()
+		fedStateIdsSendResponseWaiter := NewWaiter()
+		server.Mux().Handle(
+			fmt.Sprintf("/_matrix/federation/v1/state_ids/%s", roomID),
+			http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				queryParams := req.URL.Query()
+				t.Logf("Incoming state_ids request for event %s in room %s", queryParams["event_id"], roomID)
+				fedStateIdsRequestReceivedWaiter.Finish()
+				fedStateIdsSendResponseWaiter.Wait(t, 60*time.Second)
+				t.Logf("Replying to /state_ids request with invalid response")
+
+				w.WriteHeader(200)
+
+				if _, err := w.Write([]byte("{}")); err != nil {
+					t.Errorf("Error writing to request: %v", err)
+				}
+			}),
+		).Methods("GET")
+
+		// join charlie on hs2 to the room, via the complement homeserver
+		charlie.JoinRoom(t, roomID, []string{server.ServerName()})
+
+		// and let hs1 know that charlie has joined,
+		// otherwise hs1 will refuse /state_ids requests
+		member_event := room.CurrentState("m.room.member", charlie.UserID).JSON()
+		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{member_event}, nil)
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
+
+		// wait until hs2 starts syncing state
+		fedStateIdsRequestReceivedWaiter.Waitf(t, 5*time.Second, "Waiting for /state_ids request")
+
+		syncResponseChan := make(chan gjson.Result)
+		defer close(syncResponseChan)
+		go func() {
+			response, _ := charlie.MustSync(t, client.SyncReq{})
+			syncResponseChan <- response
+		}()
+
+		// the client-side requests should still be waiting
+		select {
+		case <-syncResponseChan:
+			t.Fatalf("hs2 sync completed before state resync complete")
+		default:
+		}
+
+		// reply to hs2 with a bogus /state_ids response
+		fedStateIdsSendResponseWaiter.Finish()
+
+		// charlie's /sync request should now complete, with the new room
+		var syncRes gjson.Result
+		select {
+		case <-time.After(1 * time.Second):
+			t.Fatalf("hs2 /sync request request did not complete")
+		case syncRes = <-syncResponseChan:
+		}
+
+		roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(roomID))
+		if !roomRes.Exists() {
+			t.Fatalf("hs2 /sync completed without join to new room\n")
+		}
+	})
+
+	// test a lazy-load-members sync while re-syncing partial state, followed by completion of state syncing,
+	// followed by a gappy sync. the gappy sync should include the correct member state,
+	// since it was not sent on the previous sync.
+	t.Run("GappySyncAfterPartialStateSynced", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		// get a sync token before state syncing finishes.
+		syncToken := alice.MustSyncUntil(t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
+		)
+		t.Logf("Alice successfully synced")
+
+		// wait for partial state to finish syncing,
+		// by waiting for the room to show up in a regular /sync.
+		psjResult.AwaitStateIdsRequest(t)
+		psjResult.FinishStateRequest()
+		alice.MustSyncUntil(t,
+			client.SyncReq{},
+			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
+		)
+
+		// make derek send two messages into the room.
+		// we will do a gappy sync after, which will only pick up the last message.
+		var lastEventID string
+		for i := 0; i < 2; i++ {
+			event := psjResult.Server.MustCreateEvent(t, psjResult.ServerRoom, b.Event{
+				Type:   "m.room.message",
+				Sender: psjResult.Server.UserID("derek"),
+				Content: map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    "Message " + strconv.Itoa(i),
+				},
+			})
+			lastEventID = event.EventID()
+			psjResult.ServerRoom.AddEvent(event)
+			psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+		}
+
+		// wait for the events to come down a regular /sync.
+		alice.MustSyncUntil(t,
+			client.SyncReq{},
+			client.SyncTimelineHasEventID(psjResult.ServerRoom.RoomID, lastEventID),
+		)
+
+		// now do a gappy sync using the sync token from before.
+		syncRes, _ := alice.MustSync(t,
+			client.SyncReq{
+				Since: syncToken,
+				Filter: buildLazyLoadingSyncFilter(map[string]interface{}{
+					"limit": 1,
+				}),
+			},
+		)
+
+		// check that the state includes derek.
+		roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(psjResult.ServerRoom.RoomID))
+		if !roomRes.Exists() {
+			t.Fatalf("/sync completed without join to new room\n")
+		}
+		t.Logf("gappy /sync response for %s: %s", psjResult.ServerRoom.RoomID, roomRes)
+
+		timelineMatcher := match.JSONCheckOff("timeline.events",
+			[]interface{}{lastEventID},
+			func(result gjson.Result) interface{} {
+				return result.Map()["event_id"].Str
+			}, nil,
+		)
+		stateMatcher := match.JSONCheckOffAllowUnwanted("state.events",
+			[]interface{}{
+				"m.room.member|" + psjResult.Server.UserID("derek"),
+			}, func(result gjson.Result) interface{} {
+				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
+			}, nil,
+		)
+		if err := timelineMatcher([]byte(roomRes.Raw)); err != nil {
+			t.Errorf("Unexpected timeline events found in gappy /sync response: %s", err)
+		}
+		if err := stateMatcher([]byte(roomRes.Raw)); err != nil {
+			t.Errorf("Did not find derek's m.room.member event in gappy /sync response: %s", err)
+		}
+	})
 }
 
 // buildLazyLoadingSyncFilter constructs a json-marshalled filter suitable the 'Filter' field of a client.SyncReq
-func buildLazyLoadingSyncFilter() string {
+func buildLazyLoadingSyncFilter(timelineOptions map[string]interface{}) string {
+	timelineFilter := map[string]interface{}{
+		"lazy_load_members": true,
+	}
+
+	for k, v := range timelineOptions {
+		timelineFilter[k] = v
+	}
+
 	j, _ := json.Marshal(map[string]interface{}{
 		"room": map[string]interface{}{
-			"timeline": map[string]interface{}{
-				"lazy_load_members": true,
-			},
+			"timeline": timelineFilter,
 			"state": map[string]interface{}{
 				"lazy_load_members": true,
 			},

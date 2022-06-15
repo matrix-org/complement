@@ -24,6 +24,7 @@ jobs:
           go test ./internal/... 
 
   complement:
+    name: Complement (${{ matrix.homeserver }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false # ensure if synapse fails we keep running dendrite and vice-versa
@@ -31,9 +32,11 @@ jobs:
         include:
           - homeserver: Synapse
             tags: synapse_blacklist msc3083 msc3787 faster_joins
+            env: "COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
 
           - homeserver: Dendrite
             tags: msc2836 dendrite_blacklist
+            env: ""
 
     steps:
       - uses: actions/checkout@v2 # Checkout complement
@@ -86,6 +89,7 @@ jobs:
         # Build the base Synapse dockerfile and then build a Complement-specific image from that base.
       - run: |
           docker build -t matrixdotorg/synapse:latest -f docker/Dockerfile .
+          docker build -t matrixdotorg/synapse-workers:latest -f docker/Dockerfile-workers .
           docker build -t homeserver -f docker/complement/Dockerfile docker/complement
         if: ${{ matrix.homeserver == 'Synapse' }}
         working-directory: homeserver
@@ -100,7 +104,7 @@ jobs:
 
       - run: |
           set -o pipefail &&
-          go test -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
+          ${{ matrix.env }} go test -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         name: Run Complement Tests
         env:
