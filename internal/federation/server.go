@@ -240,7 +240,6 @@ func (s *Server) SendFederationRequest(
 		outcome = respError.ErrCode
 	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
 		outcome = strconv.Itoa(httpError.Code)
-		t.Logf("%s %s%s => %s (%s)", req.Method(), req.Destination(), req.RequestURI(), httpError.Code, time.Since(start))
 	} else if err == nil {
 		outcome = "2xx (no error)"
 	}
