@@ -181,7 +181,7 @@ func (d *Deployer) Restart(hsDep *HomeserverDeployment, cfg *config.Complement) 
 	ctx := context.Background()
 	err := d.Docker.ContainerStop(ctx, hsDep.ContainerID, &cfg.SpawnHSTimeout)
 	if err != nil {
-		return fmt.Errorf("Restart: Failed to restart container %s: %s", hsDep.ContainerID, err)
+		return fmt.Errorf("Restart: Failed to stop container %s: %s", hsDep.ContainerID, err)
 	}
 
 	// Remove the container from the network. If we don't do this,
@@ -189,18 +189,18 @@ func (d *Deployer) Restart(hsDep *HomeserverDeployment, cfg *config.Complement) 
 	// "Error response from daemon: endpoint with name complement_fed_1_fed.alice.hs1_1 already exists in network complement_fed_alice".
 	err = d.Docker.NetworkDisconnect(ctx, d.networkID, hsDep.ContainerID, false)
 	if err != nil {
-		return fmt.Errorf("Restart: Failed to restart container %s: %s", hsDep.ContainerID, err)
+		return fmt.Errorf("Restart: Failed to disconnect container %s: %s", hsDep.ContainerID, err)
 	}
 
 	err = d.Docker.ContainerStart(ctx, hsDep.ContainerID, types.ContainerStartOptions{})
 	if err != nil {
-		return fmt.Errorf("Restart: Failed to restart container %s: %s", hsDep.ContainerID, err)
+		return fmt.Errorf("Restart: Failed to start container %s: %s", hsDep.ContainerID, err)
 	}
 
 	// Wait for the container to be ready.
 	baseURL, fedBaseURL, err := waitForPorts(ctx, d.Docker, hsDep.ContainerID)
 	if err != nil {
-		return fmt.Errorf("Restart: Failed to restart container %s: %s", hsDep.ContainerID, err)
+		return fmt.Errorf("Restart: Failed to get ports for container %s: %s", hsDep.ContainerID, err)
 	}
 	hsDep.SetEndpoints(baseURL, fedBaseURL)
 
