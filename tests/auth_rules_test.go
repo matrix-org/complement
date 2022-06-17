@@ -202,3 +202,62 @@ func TestCreateEventCannotHaveParentEvents(t *testing.T) {
 		})
 	})
 }
+
+func TestInboundFederationRejectsEventsWithDuplicatedAuthEvents(t *testing.T) {
+	// Rule 2.1 in the auth rules (https://spec.matrix.org/v1.3/rooms/v9/#authorization-rules) says:
+	//
+	// Reject if event has auth_events that ... have duplicate entries for a given type and state_key pair
+	//
+	// We create such an event, and check it gets rejected
+
+	var membershipEvent1, membershipEvent2 *gomatrixserverlib.Event
+
+	testBadEvent(t, func(badEvent bool, deployment *docker.Deployment, srv *federation.Server, room *federation.ServerRoom) *gomatrixserverlib.Event {
+		charlie := srv.UserID("charlie")
+
+		// have charlie send a second membership event (but hang onto the existing one first)
+		if membershipEvent1 == nil {
+			membershipEvent1 = room.CurrentState("m.room.member", charlie)
+		}
+		if membershipEvent2 == nil {
+			membershipEvent2 = srv.MustCreateEvent(t, room, b.Event{
+				Type:     "m.room.member",
+				StateKey: &charlie,
+				Sender:   charlie,
+				Content: map[string]interface{}{
+					"membership":   "join",
+					"test_content": "test",
+				},
+			})
+			room.AddEvent(membershipEvent2)
+			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{
+				membershipEvent2.JSON(),
+			}, nil)
+		}
+
+		var authEvents []*gomatrixserverlib.Event
+		if badEvent {
+			// create a regular event which refers to both membership events rules
+			authEvents = []*gomatrixserverlib.Event{
+				room.CurrentState("m.room.create", ""),
+				room.CurrentState("m.room.power_levels", ""),
+				membershipEvent1, membershipEvent2,
+			}
+		} else {
+			// just use the current membership event
+			authEvents = []*gomatrixserverlib.Event{
+				room.CurrentState("m.room.create", ""),
+				room.CurrentState("m.room.power_levels", ""),
+				membershipEvent2,
+			}
+		}
+		event := srv.MustCreateEvent(t, room, b.Event{
+			Type:       "m.room.message",
+			Sender:     charlie,
+			Content:    map[string]interface{}{"body": "event"},
+			AuthEvents: room.EventIDsOrReferences(authEvents),
+		})
+		room.AddEvent(event)
+		return event
+	})
+}
