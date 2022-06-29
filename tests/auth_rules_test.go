@@ -203,6 +203,11 @@ func TestCreateEventCannotHaveParentEvents(t *testing.T) {
 	})
 }
 
+/*******************************************************************************
+ *
+ * Tests for auth events (rules 2.1 and 2.2)
+ */
+
 func TestInboundFederationRejectsEventsWithDuplicatedAuthEvents(t *testing.T) {
 	// Rule 2.1 in the auth rules (https://spec.matrix.org/v1.3/rooms/v9/#authorization-rules) says:
 	//
@@ -251,6 +256,43 @@ func TestInboundFederationRejectsEventsWithDuplicatedAuthEvents(t *testing.T) {
 				membershipEvent2,
 			}
 		}
+		event := srv.MustCreateEvent(t, room, b.Event{
+			Type:       "m.room.message",
+			Sender:     charlie,
+			Content:    map[string]interface{}{"body": "event"},
+			AuthEvents: room.EventIDsOrReferences(authEvents),
+		})
+		room.AddEvent(event)
+		return event
+	})
+}
+
+func TestInboundFederationRejectsEventsWithExcessAuthEvents(t *testing.T) {
+	// Rule 2.2 in the auth rules (https://spec.matrix.org/v1.3/rooms/v9/#authorization-rules) says:
+	//
+	// Reject if event has auth_events that ... have entries whose type and state_key don’t
+	// match those specified by the auth events selection algorithm described in the server specification.
+	//
+	// We create such an event, and check it gets rejected
+
+	testBadEvent(t, func(badEvent bool, deployment *docker.Deployment, srv *federation.Server, room *federation.ServerRoom) *gomatrixserverlib.Event {
+		charlie := srv.UserID("charlie")
+
+		var authEvents []*gomatrixserverlib.Event
+
+		// normally we need the create, PLs, and membership events.
+		authEvents = []*gomatrixserverlib.Event{
+			room.CurrentState("m.room.create", ""),
+			room.CurrentState("m.room.power_levels", ""),
+			room.CurrentState("m.room.member", charlie),
+		}
+
+		// for the bad event, include the join rules too
+		if badEvent {
+			authEvents = append(authEvents,
+				room.CurrentState("m.room.join_rules", ""))
+		}
+
 		event := srv.MustCreateEvent(t, room, b.Event{
 			Type:       "m.room.message",
 			Sender:     charlie,
