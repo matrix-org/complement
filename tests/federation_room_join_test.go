@@ -522,3 +522,28 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 func typeAndStateKeyForEvent(result gjson.Result) string {
 	return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
 }
+
+func TestJoinFederatedRoomFromApplicationServiceUser(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
+	defer deployment.Destroy(t)
+
+	// Create the application service bridge user that is able to import historical messages
+	asUserID := "@the-bridge-user:hs1"
+	as := deployment.Client(t, "hs1", asUserID)
+
+	// Create the federated user which will fetch the messages from a remote homeserver
+	remoteUserID := "@charlie:hs2"
+	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+
+	t.Run("join remote federated room as application service user", func(t *testing.T) {
+		//t.Parallel()
+		// Create the room from a remote homeserver
+		roomID := remoteCharlie.CreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"name":   "hs2 room",
+		})
+
+		// Join the AS to the remote federated room (without a profile set)
+		as.JoinRoom(t, roomID, []string{"hs2"})
+	})
+}
