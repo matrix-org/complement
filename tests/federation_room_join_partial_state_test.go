@@ -128,6 +128,58 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Logf("Alice sent event event ID %s", eventID)
 	})
 
+	// we should be able to receive events over federation during the resync
+	t.Run("CanReceiveEventsDuringPartialStateJoin", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(psjResult.Server)
+
+		// derek sends an event in the room
+		event := psjResult.Server.MustCreateEvent(t, psjResult.ServerRoom, b.Event{
+			Type:   "m.room.message",
+			Sender: psjResult.Server.UserID("derek"),
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "Message",
+			},
+		})
+		psjResult.ServerRoom.AddEvent(event)
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+		t.Logf("Derek sent event event ID %s", event.EventID())
+
+		// give Derek's event a chance to land, otherwise we will race with the faster-join completing.
+		// TODO: find a better way to do this. Or hope it will be fixed by https://github.com/matrix-org/synapse/issues/13007
+		time.Sleep(time.Second)
+
+		/* TODO: check that a lazy-loading sync can see the event. Currently this doesn't work, because /sync blocks.
+		 * https://github.com/matrix-org/synapse/issues/13146
+		alice.MustSyncUntil(t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncTimelineHasEventID(psjResult.ServerRoom.RoomID, event.EventID()),
+		)
+		*/
+
+		// allow the partial join to complete
+		psjResult.FinishStateRequest()
+		alice.MustSyncUntil(t,
+			client.SyncReq{},
+			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
+		)
+
+		// and check that alice can see the event
+		eventRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "event", event.EventID()})
+		eventResBody := client.ParseJSON(t, eventRes)
+		t.Logf("/event response for %s: %s", event.EventID(), eventResBody)
+	})
+
 	// a request to (client-side) /members?at= should block until the (federation) /state request completes
 	// TODO(faster_joins): also need to test /state, and /members without an `at`, which follow a different path
 	t.Run("MembersRequestBlocksDuringPartialStateJoin", func(t *testing.T) {
