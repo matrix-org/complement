@@ -124,8 +124,12 @@ func (r *ServerRoom) AuthChainForEvents(events []*gomatrixserverlib.Event) (chai
 				continue
 			}
 			chainMap[evID] = true
-			chain = append(chain, eventsByID[evID])
-			queue = append(queue, eventsByID[evID])
+			event, ok := eventsByID[evID]
+			if !ok {
+				panic(fmt.Sprintf("AuthChainForEvents: event %s refers to unknown event %s in auth events", ev.EventID(), evID))
+			}
+			chain = append(chain, event)
+			queue = append(queue, event)
 		}
 	}
 
