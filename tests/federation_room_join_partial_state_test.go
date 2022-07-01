@@ -478,6 +478,13 @@ func beginPartialStateJoin(t *testing.T, deployment *docker.Deployment, joiningU
 		federation.HandleKeyRequests(),
 		federation.HandlePartialStateMakeSendJoinRequests(),
 		federation.HandleEventRequests(),
+		federation.HandleTransactionRequests(
+			func(e *gomatrixserverlib.Event) {
+				t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
+			},
+			// the homeserver under test may send us presence when the joining user syncs
+			nil,
+		),
 	)
 	result.cancelListener = result.Server.Listen()
 
