@@ -45,6 +45,7 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		Type:       "m.room.member",
 		StateKey:   &userID,
 		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
+		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
 	}
 	err := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
 	if err != nil {
@@ -128,11 +129,11 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	authEvents := room.AuthChainForEvents(stateEvents)
 
+	// get servers in room *before* the join event
+	serversInRoom := room.ServersInRoom()
+
 	// insert the join event into the room state
 	room.AddEvent(event)
-
-	// servers in room: just us. TODO(faster_joins): this may not be correct
-	serversInRoom := []string{s.serverName}
 
 	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{

@@ -248,7 +248,8 @@ func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
 // In the unlikely event that you need ordering on your checks, call MustSyncUntil multiple times
 // with a single checker, and reuse the returned since token, as in the "Incremental sync" example.
 //
-// Will time out after CSAPI.SyncUntilTimeout. Returns the latest since token used.
+// Will time out after CSAPI.SyncUntilTimeout. Returns the `next_batch` token from the final
+// response.
 func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheckOpt) string {
 	t.Helper()
 	start := time.Now()
