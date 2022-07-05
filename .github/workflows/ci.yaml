@@ -100,12 +100,12 @@ jobs:
 
       - run: |
           set -o pipefail
-          while :; do
+          #while :; do
             ${{ matrix.env }} go test -v -json -tags "${{ matrix.tags }}" -run TestRestrictedRoomsLocalJoin ./tests/... 2>&1 | gotestfmt | tee /tmp/xxx
-            if grep FAIL /tmp/xxx; then
-              break
-            fi
-          done
+            #if grep FAIL /tmp/xxx; then
+            #  break
+            #fi
+          #done
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         name: Run Complement Tests
         env:
