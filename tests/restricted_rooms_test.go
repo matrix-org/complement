@@ -79,6 +79,8 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 	t.Run("Join should succeed when joined to allowed room", func(t *testing.T) {
 		// Join the allowed room, attempt to join the room again, which now should succeed.
 		bob.JoinRoom(t, allowed_room, []string{"hs1"})
+		// Sync until the room is actually joined before joining the restricted room.
+		bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, allowed_room))
 		bob.JoinRoom(t, room, []string{"hs1"})
 
 		// Joining the same room again should work fine (e.g. to change your display name).
