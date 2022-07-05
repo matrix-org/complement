@@ -32,11 +32,7 @@ jobs:
         include:
           - homeserver: Synapse
             tags: synapse_blacklist msc3083 msc3787 faster_joins
-            env: "COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
-
-          - homeserver: Dendrite
-            tags: msc2836 dendrite_blacklist
-            env: ""
+            env: "COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite WORKERS=1 POSTGRES=1"
 
     steps:
       - uses: actions/checkout@v2 # Checkout complement
@@ -103,8 +99,13 @@ jobs:
         working-directory: homeserver
 
       - run: |
-          set -o pipefail &&
-          ${{ matrix.env }} go test -v -json -tags "${{ matrix.tags }}" ./tests/... 2>&1 | gotestfmt
+          set -o pipefail
+          while :; do
+            ${{ matrix.env }} go test -v -json -tags "${{ matrix.tags }}" -run TestRestrictedRoomsLocalJoin ./tests/... 2>&1 | gotestfmt | tee /tmp/xxx
+            if grep FAIL /tmp/xxx; then
+              break
+            fi
+          done
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         name: Run Complement Tests
         env:
