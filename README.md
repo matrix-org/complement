@@ -36,6 +36,11 @@ options will work, so to just run 1 named test and include a timeout for the tes
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests/...
 ```
 
+If you need to pass environment variables to the image under test, you can:
+1. define a pass-through prefix with e.g. `COMPLEMENT_SHARE_ENV_PREFIX=PASS_`; then
+2. prefix the desired environment variables with that prefix; e.g. `PASS_SYNAPSE_COMPLEMENT_USE_WORKERS=true`.
+
+
 ### Potential conflict with firewall software
 
 The homeserver in the test image needs to be able to make requests to the mock

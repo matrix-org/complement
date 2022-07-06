@@ -184,6 +184,62 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 	})
 
+	// test that a partial-state join continues syncing state after a restart
+	// the same as SyncBlocksDuringPartialStateJoin, with a restart in the middle
+	t.Run("PartialStateJoinContinuesAfterRestart", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		// Alice has now joined the room, and the server is syncing the state in the background.
+
+		// wait for the state_ids request to arrive
+		psjResult.AwaitStateIdsRequest(t)
+
+		// restart the homeserver
+		err := deployment.Restart(t)
+		if err != nil {
+			t.Errorf("Failed to restart homeserver: %s", err)
+		}
+
+		// attempts to sync should block. Fire off a goroutine to try it.
+		syncResponseChan := make(chan gjson.Result)
+		defer close(syncResponseChan)
+		go func() {
+			response, _ := alice.MustSync(t, client.SyncReq{})
+			syncResponseChan <- response
+		}()
+
+		// we expect another state_ids request to arrive.
+		// we'd do another AwaitStateIdsRequest, except it's single-use.
+
+		// the client-side requests should still be waiting
+		select {
+		case <-syncResponseChan:
+			t.Fatalf("Sync completed before state resync complete")
+		default:
+		}
+
+		// release the federation /state response
+		psjResult.FinishStateRequest()
+
+		// the /sync request should now complete, with the new room
+		var syncRes gjson.Result
+		select {
+		case <-time.After(1 * time.Second):
+			t.Fatalf("/sync request request did not complete")
+		case syncRes = <-syncResponseChan:
+		}
+
+		roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(psjResult.ServerRoom.RoomID))
+		if !roomRes.Exists() {
+			t.Fatalf("/sync completed without join to new room\n")
+		}
+	})
+
 	// test that a partial-state join can fall back to other homeservers when re-syncing
 	// partial state.
 	t.Run("PartialStateJoinSyncsUsingOtherHomeservers", func(t *testing.T) {
@@ -422,6 +478,13 @@ func beginPartialStateJoin(t *testing.T, deployment *docker.Deployment, joiningU
 		federation.HandleKeyRequests(),
 		federation.HandlePartialStateMakeSendJoinRequests(),
 		federation.HandleEventRequests(),
+		federation.HandleTransactionRequests(
+			func(e *gomatrixserverlib.Event) {
+				t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
+			},
+			// the homeserver under test may send us presence when the joining user syncs
+			nil,
+		),
 	)
 	result.cancelListener = result.Server.Listen()
 
