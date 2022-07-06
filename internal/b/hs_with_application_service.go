@@ -11,6 +11,10 @@ var BlueprintHSWithApplicationService = MustValidate(Blueprint{
 					Localpart:   "@alice",
 					DisplayName: "Alice",
 				},
+				{
+					Localpart:   "@bob",
+					DisplayName: "Bob",
+				},
 			},
 			ApplicationServices: []ApplicationService{
 				{
