@@ -16,7 +16,6 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
@@ -227,10 +226,8 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 		t.Fatalf("mustCheckEventisReturnedForTime: /timestamp_to_event request failed with status=%d", timestampToEventRes.StatusCode)
 	}
 
-	debugMessageList := getDebugMessageListFromMessagesResponse(t, c, roomID, expectedEventId, actualEventId, givenTimestamp)
-	fmt.Fprintf(logrus.StandardLogger().Out, debugMessageList)
-
 	if actualEventId != expectedEventId {
+		debugMessageList := getDebugMessageListFromMessagesResponse(t, c, roomID, expectedEventId, actualEventId, givenTimestamp)
 		t.Fatalf(
 			"Want %s given %s but got %s\n%s",
 			decorateStringWithAnsiColor(expectedEventId, AnsiColorGreen),
