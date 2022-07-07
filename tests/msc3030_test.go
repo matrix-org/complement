@@ -141,7 +141,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				as.JoinRoom(t, roomID, []string{"hs1"})
 
 				// Import a message in the room before the room was created. We have to
-				// use the application service user because they are the only ones
+				// use an application service user because they are the only ones
 				// allowed to use the `?ts` query parameter.
 				importTime := time.Date(2022, 01, 03, 0, 0, 0, 0, time.Local)
 				importTimestamp := makeTimestampFromTime(importTime)
