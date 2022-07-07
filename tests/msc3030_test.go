@@ -20,7 +20,7 @@ import (
 )
 
 func TestJumpToDateEndpoint(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
 	// Create the normal user which will send messages in the room
@@ -30,6 +30,10 @@ func TestJumpToDateEndpoint(t *testing.T) {
 	// Create the federated user which will fetch the messages from a remote homeserver
 	remoteUserID := "@charlie:hs2"
 	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+
+	// Create the application service bridge user that can use the ?ts query parameter
+	asUserID := "@the-bridge-user:hs1"
+	as := deployment.Client(t, "hs1", asUserID)
 
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("should find event after given timestmap", func(t *testing.T) {
@@ -126,6 +130,38 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				roomID, _, eventB := createTestRoom(t, alice)
 				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
+			})
+
+			t.Run("when looking backwards before the room was created, should be able to find event that was imported", func(t *testing.T) {
+				t.Parallel()
+				timeBeforeRoomCreation := time.Now()
+				roomID, _, _ := createTestRoom(t, alice)
+
+				// Join from the application service bridge user
+				as.JoinRoom(t, roomID, []string{"hs1"})
+
+				// Import a message in the room before the room was created. We have to
+				// use an application service user because they are the only one
+				// allowed to use the `?ts` query parameter.
+				importTime := time.Date(2022, 01, 03, 0, 0, 0, 0, time.Local)
+				importTimestamp := makeTimestampFromTime(importTime)
+				timestampString := strconv.FormatInt(importTimestamp, 10)
+				// We can't use as.SendEventSynced(...) because application services can't use the /sync API
+				sendRes := as.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", "m.room.message", getTxnID("findEventBeforeCreation-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
+					"body":    "old imported event",
+					"msgtype": "m.text",
+				}), client.WithQueries(url.Values{
+					"ts": []string{timestampString},
+				}))
+				sendBody := client.ParseJSON(t, sendRes)
+				importedEventID := client.GetJSONFieldStr(t, sendBody, "event_id")
+				// Make sure the imported event has reached the homeserver
+				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+					return ev.Get("event_id").Str == importedEventID
+				}))
+
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, timeBeforeRoomCreation, "b", importedEventID)
 			})
 		})
 	})
