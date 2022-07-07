@@ -1,0 +1,40 @@
+services:
+  registry:
+    image: docker.io/library/registry:2
+    volumes:
+      - registry:/var/lib/registry/
+  dind:
+    depends_on:
+      - registry
+    image: complement-dind
+    build:
+      dockerfile: dockerfiles/dind.Dockerfile
+    privileged: true
+    entrypoint: dockerd
+    command:
+      - --tls=false
+      - --host=tcp://0.0.0.0:2375
+      - --storage-driver=overlay2
+      - --insecure-registry=registry:5000
+    volumes:
+      - dind-cache:/var/lib/docker
+      - complement:/root/complement
+  complement:
+    depends_on:
+      - dind
+    profiles:
+      - complement
+    image: complement
+    build:
+      dockerfile: dockerfiles/complement.Dockerfile
+    environment:
+      - DOCKER_HOST=tcp://dind:2375
+    volumes:
+      - complement:/root/complement
+networks:
+  default:
+    name: complement
+volumes:
+  registry:
+  dind-cache:
+  complement:

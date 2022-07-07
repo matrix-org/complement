@@ -7,3 +7,23 @@ duplication, we now point to dockerfiles in respective repositories rather than 
 
 - Dendrite: https://github.com/matrix-org/dendrite/blob/v0.8.2/build/scripts/Complement.Dockerfile
 - Synapse: https://github.com/matrix-org/synapse/blob/develop/docker/complement/Dockerfile
+
+# MessageHub
+Build:
+```
+docker compose build
+docker compose --profile complement build
+```
+
+Run:
+```
+docker compose run --rm complement
+```
+
+Example `complement/.env` file:
+```
+COMPLEMENT_BASE_IMAGE=registry:5000/complement-messagehub
+COMPLEMENT_DEBUG=1
+COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1
+COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=5
+```
