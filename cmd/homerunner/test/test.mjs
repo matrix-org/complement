@@ -17,7 +17,7 @@ const run = async () => {
     if (!hs1) {
         throw new Error("missing hs1 in response");
     }
-    const wantKeys = ["BaseURL", "FedBaseURL", "ContainerID", "AccessTokens", "DeviceIDs", "IDONOTEXIST"];
+    const wantKeys = ["BaseURL", "FedBaseURL", "ContainerID", "AccessTokens", "DeviceIDs"];
     wantKeys.forEach((k) => {
         if (!hs1[k]) {
             throw new Error("hs1 missing key: " + k);
