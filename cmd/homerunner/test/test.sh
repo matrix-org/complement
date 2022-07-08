@@ -13,7 +13,7 @@ trap "kill $HOMERUNNER_PID" EXIT
 
 # wait for homerunner to be listening, we want this endpoint to 404 instead of connrefused
 until [ \
-  "$(curl -s -w '%{http_code}' -o /dev/null "http://localhost:5544/idonotexist")" \
+  "$(curl -s -w '%{http_code}' -o /dev/null "http://localhost:${HOMERUNNER_PORT}/idonotexist")" \
   -eq 404 ]
 do
   echo 'Waiting for homerunner to start...'
