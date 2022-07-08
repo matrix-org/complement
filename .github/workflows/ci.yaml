@@ -26,7 +26,7 @@ jobs:
         run: |
           mkdir -p homeserver
           wget -O - "https://github.com/matrix-org/dendrite/archive/v0.8.8.tar.gz" | tar -xz --strip-components=1 -C homeserver
-          docker build -t complement-dendrite -f homeserver/build/scripts/Complement.Dockerfile .
+          (cd homeserver && docker build -t complement-dendrite -f build/scripts/Complement.Dockerfile .)
           ./cmd/homerunner/test/test.sh
 
 
