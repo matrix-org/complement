@@ -32,5 +32,10 @@ func Routes(rt *Runtime, cfg *Config) http.Handler {
 			},
 		))),
 	)
+	mux.Path("/health").Methods("GET").HandlerFunc(
+		func(res http.ResponseWriter, req *http.Request) {
+			res.WriteHeader(200)
+		},
+	)
 	return mux
 }
