@@ -1,7 +1,7 @@
 #!/bin/bash -eu
 
 export HOMERUNNER_PORT=5544
-export HOMERUNNER_SPAWN_HS_TIMEOUT_SECS=20
+export HOMERUNNER_SPAWN_HS_TIMEOUT_SECS=30
 
 # build and run homerunner
 go build ..
@@ -10,7 +10,15 @@ echo 'Running homerunner'
 HOMERUNNER_PID=$!
 # knife homerunner when this script finishes
 trap "kill $HOMERUNNER_PID" EXIT
-sleep 5 # wait for homerunner to be listening
+
+# wait for homerunner to be listening, we want this endpoint to 404 instead of connrefused
+until [ \
+  "$(curl -s -w '%{http_code}' -o /dev/null "http://localhost:5544/idonotexist")" \
+  -eq 404 ]
+do
+  echo 'Waiting for homerunner to start...'
+  sleep 1
+done
 
 # build and run the test
 echo 'Running tests'
