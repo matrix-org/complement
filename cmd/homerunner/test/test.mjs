@@ -8,7 +8,7 @@ const run = async () => {
         base_image_uri: "complement-dendrite",
         blueprint_name: "one_to_one_room",
     });
-    console.log(blueprint);
+    console.log("Client.create responded with", blueprint);
     // verify blueprint fields
     if (!blueprint.expires) {
         throw new Error("missing 'expires' key in response");
