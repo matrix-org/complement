@@ -525,3 +525,29 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 func typeAndStateKeyForEvent(result gjson.Result) string {
 	return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
 }
+
+func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // Dendrite doesn't read AS registration files from Complement yet
+	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
+	defer deployment.Destroy(t)
+
+	// Create the application service bridge user to try to join the room from
+	asUserID := "@the-bridge-user:hs1"
+	as := deployment.Client(t, "hs1", asUserID)
+
+	// Create the federated remote user which will create the room
+	remoteUserID := "@charlie:hs2"
+	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+
+	t.Run("join remote federated room as application service user", func(t *testing.T) {
+		//t.Parallel()
+		// Create the room from a remote homeserver
+		roomID := remoteCharlie.CreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"name":   "hs2 room",
+		})
+
+		// Join the AS bridge user to the remote federated room (without a profile set)
+		as.JoinRoom(t, roomID, []string{"hs2"})
+	})
+}
