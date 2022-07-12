@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -235,15 +234,11 @@ func (s *Server) SendFederationRequest(
 	start := time.Now()
 	err = httpClient.DoRequestAndParseResponse(context.Background(), httpReq, resBody)
 
-	var outcome string
-	if respError, ok := err.(gomatrix.RespError); ok {
-		outcome = respError.ErrCode
-	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
-		outcome = strconv.Itoa(httpError.Code)
+	if httpError, ok := err.(gomatrix.HTTPError); ok {
+		t.Logf("[SSAPI] %s %s%s => error(%d): %s (%s)", req.Method(), req.Destination(), req.RequestURI(), httpError.Code, err, time.Since(start))
 	} else if err == nil {
-		outcome = "2xx (no error)"
+		t.Logf("[SSAPI] %s %s%s => 2xx (%s)", req.Method(), req.Destination(), req.RequestURI(), time.Since(start))
 	}
-	t.Logf("%s %s%s => %s (%s)", req.Method(), req.Destination(), req.RequestURI(), outcome, time.Since(start))
 	return err
 }
 
