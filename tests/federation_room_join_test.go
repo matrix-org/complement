@@ -459,6 +459,9 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
+
+		// accept incoming presence transactions, etc
+		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
 	defer cancel()
