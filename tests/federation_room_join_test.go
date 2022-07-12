@@ -524,6 +524,7 @@ func typeAndStateKeyForEvent(result gjson.Result) string {
 }
 
 func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // Dendrite doesn't read AS registration files from Complement yet
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
