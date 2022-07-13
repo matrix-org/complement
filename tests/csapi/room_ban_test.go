@@ -59,7 +59,7 @@ func TestNotPresentUserCannotBanOthers(t *testing.T) {
 
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
-	res := charlie.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
+	res := charlie.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
 		"user_id": bob.UserID,
 		"reason":  "testing",
 	}))

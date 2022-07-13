@@ -11,21 +11,21 @@ import (
 )
 
 func setRoomAliasResp(t *testing.T, c *client.CSAPI, roomID, roomAlias string) *http.Response {
-	return c.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "directory", "room", roomAlias}, client.WithJSONBody(t, map[string]interface{}{
+	return c.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "directory", "room", roomAlias}, client.WithJSONBody(t, map[string]interface{}{
 		"room_id": roomID,
 	}))
 }
 
 func getRoomAliasResp(t *testing.T, c *client.CSAPI, roomAlias string) *http.Response {
-	return c.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "directory", "room", roomAlias})
+	return c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", roomAlias})
 }
 
 func deleteRoomAliasResp(t *testing.T, c *client.CSAPI, roomAlias string) *http.Response {
-	return c.DoFunc(t, "DELETE", []string{"_matrix", "client", "r0", "directory", "room", roomAlias})
+	return c.DoFunc(t, "DELETE", []string{"_matrix", "client", "v3", "directory", "room", roomAlias})
 }
 
 func listRoomAliasesResp(t *testing.T, c *client.CSAPI, roomID string) *http.Response {
-	return c.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "aliases"})
+	return c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "aliases"})
 }
 
 func setCanonicalAlias(t *testing.T, c *client.CSAPI, roomID string, roomAlias string, altAliases *[]string) *http.Response {
@@ -36,7 +36,7 @@ func setCanonicalAlias(t *testing.T, c *client.CSAPI, roomID string, roomAlias s
 		content["alt_aliases"] = altAliases
 	}
 
-	return c.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.canonical_alias"}, client.WithJSONBody(t, content))
+	return c.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.canonical_alias"}, client.WithJSONBody(t, content))
 }
 
 func TestRoomAlias(t *testing.T) {

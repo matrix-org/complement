@@ -25,7 +25,7 @@ func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverNam
 	res := c.DoFunc(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "r0", "join", roomIDOrAlias},
+		[]string{"_matrix", "client", "v3", "join", roomIDOrAlias},
 		client.WithQueries(query),
 	)
 	must.MatchFailure(t, res)
@@ -254,7 +254,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 	res := alice.DoFunc(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "r0", "rooms", room, "invite"},
+		[]string{"_matrix", "client", "v3", "rooms", room, "invite"},
 		client.WithJSONBody(t, body),
 	)
 	must.MatchResponse(t, res, match.HTTPResponse{
