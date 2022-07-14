@@ -118,7 +118,7 @@ func TestPartialStateJoin(t *testing.T) {
 		defer psjResult.Destroy()
 
 		alice.Client.Timeout = 2 * time.Second
-		paths := []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "send", "m.room.message", "0"}
+		paths := []string{"_matrix", "client", "v3", "rooms", psjResult.ServerRoom.RoomID, "send", "m.room.message", "0"}
 		res := alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Hello world!",
@@ -156,7 +156,7 @@ func TestPartialStateJoin(t *testing.T) {
 			clientMembersRequestResponseChan <- alice.MustDoFunc(
 				t,
 				"GET",
-				[]string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "members"},
+				[]string{"_matrix", "client", "v3", "rooms", psjResult.ServerRoom.RoomID, "members"},
 				client.WithQueries(queryParams),
 			)
 		}()

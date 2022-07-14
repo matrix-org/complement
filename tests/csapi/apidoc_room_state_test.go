@@ -24,7 +24,7 @@ func TestRoomState(t *testing.T) {
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.member", authedClient.UserID})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", authedClient.UserID})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyPresent("membership"),
@@ -42,7 +42,7 @@ func TestRoomState(t *testing.T) {
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.member", authedClient.UserID}, client.WithQueries(queryParams))
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", authedClient.UserID}, client.WithQueries(queryParams))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyPresent("sender"),
@@ -63,7 +63,7 @@ func TestRoomState(t *testing.T) {
 				"preset":          "public_chat",
 				"room_alias_name": "room_alias",
 			})
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.power_levels"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -86,7 +86,7 @@ func TestRoomState(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "joined_members"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "joined_members"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyPresent("joined"),
@@ -104,7 +104,7 @@ func TestRoomState(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "publicRooms"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"})
 			foundRoom := false
 
 			must.MatchResponse(t, res, match.HTTPResponse{
@@ -135,7 +135,7 @@ func TestRoomState(t *testing.T) {
 				"room_alias_name": "room_new",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "directory", "room", "#room_new:hs1"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", "#room_new:hs1"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -154,7 +154,7 @@ func TestRoomState(t *testing.T) {
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "joined_rooms"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "joined_rooms"})
 
 			foundRoom := false
 
@@ -186,7 +186,7 @@ func TestRoomState(t *testing.T) {
 				"name":       "room_name_test",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -208,9 +208,9 @@ func TestRoomState(t *testing.T) {
 				"name": "room_test_name",
 			})
 
-			_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"}, reqBody)
+			_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"}, reqBody)
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -229,7 +229,7 @@ func TestRoomState(t *testing.T) {
 				"topic":      "room_topic_test",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -251,9 +251,9 @@ func TestRoomState(t *testing.T) {
 				"topic": "room_test_topic",
 			})
 
-			_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"}, reqBody)
+			_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"}, reqBody)
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -281,7 +281,7 @@ func TestRoomState(t *testing.T) {
 				"m.room.topic":        true,
 			}
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -311,7 +311,7 @@ func TestRoomState(t *testing.T) {
 				},
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.create"})
+			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.create"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{

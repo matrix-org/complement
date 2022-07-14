@@ -24,7 +24,7 @@ func TestTyping(t *testing.T) {
 
 	token := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
-	alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
+	alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
 		"typing":  true,
 		"timeout": 10000,
 	}))

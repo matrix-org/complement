@@ -32,7 +32,7 @@ func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
 	alice := deployment.Client(t, "hs1", userID)
 
 	// make a new key backup
-	res := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "room_keys", "version"}, client.WithJSONBody(t, map[string]interface{}{
+	res := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "room_keys", "version"}, client.WithJSONBody(t, map[string]interface{}{
 		"algorithm": "m.megolm_backup.v1",
 		"auth_data": map[string]interface{}{
 			"foo": "bar",
@@ -123,7 +123,7 @@ func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
 			t.Run(fmt.Sprintf("%+v", tc.input), func(t *testing.T) {
 				t.Parallel()
 				// insert the key that will be tested against
-				alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "room_keys", "keys", roomID, tc.sessionID},
+				alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "room_keys", "keys", roomID, tc.sessionID},
 					client.WithQueries(map[string][]string{"version": {backupVersion}}), client.WithJSONBody(t, map[string]interface{}{
 						"first_message_index": tc.input.firstMessageIndex,
 						"forwarded_count":     tc.input.forwardedCount,
@@ -133,7 +133,7 @@ func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
 				)
 				// now check that each key in keysThatDontReplace do not replace this key
 				for _, testKey := range tc.keysThatDontReplace {
-					alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "room_keys", "keys", roomID, tc.sessionID},
+					alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "room_keys", "keys", roomID, tc.sessionID},
 						client.WithQueries(map[string][]string{"version": {backupVersion}}), client.WithJSONBody(t, map[string]interface{}{
 							"first_message_index": testKey.firstMessageIndex,
 							"forwarded_count":     testKey.forwardedCount,
@@ -141,7 +141,7 @@ func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
 							"session_data":        map[string]interface{}{"a": "b"},
 						}),
 					)
-					checkResp := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "room_keys", "keys", roomID, tc.sessionID},
+					checkResp := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "room_keys", "keys", roomID, tc.sessionID},
 						client.WithQueries(map[string][]string{"version": {backupVersion}}),
 					)
 					must.MatchResponse(t, checkResp, match.HTTPResponse{

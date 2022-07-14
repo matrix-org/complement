@@ -45,7 +45,7 @@ func TestRoomImageRoundtrip(t *testing.T) {
 		},
 	})
 
-	messages := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomId, "messages"}, client.WithQueries(url.Values{
+	messages := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomId, "messages"}, client.WithQueries(url.Values{
 		"filter": []string{`{"contains_url":true}`},
 		"dir":    []string{"b"},
 	}))
@@ -66,7 +66,7 @@ func TestMediaConfig(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "media", "r0", "config"})
+	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "media", "v3", "config"})
 
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{

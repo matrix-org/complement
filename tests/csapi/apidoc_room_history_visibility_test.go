@@ -16,7 +16,7 @@ import (
 // TODO most of this can be refactored into data-driven tests
 
 func fetchEvent(t *testing.T, c *client.CSAPI, roomId, eventId string) *http.Response {
-	return c.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomId, "event", eventId})
+	return c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomId, "event", eventId})
 }
 
 func createRoomWithVisibility(t *testing.T, c *client.CSAPI, visibility string) string {

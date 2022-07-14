@@ -91,7 +91,7 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 		query.Set("filename", fileName)
 	}
 	res := c.MustDoFunc(
-		t, "POST", []string{"_matrix", "media", "r0", "upload"},
+		t, "POST", []string{"_matrix", "media", "v3", "upload"},
 		WithRawBody(fileBody), WithContentType(contentType), WithQueries(query),
 	)
 	body := ParseJSON(t, res)
@@ -102,7 +102,7 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 	t.Helper()
 	origin, mediaId := SplitMxc(mxcUri)
-	res := c.MustDo(t, "GET", []string{"_matrix", "media", "r0", "download", origin, mediaId}, struct{}{})
+	res := c.MustDo(t, "GET", []string{"_matrix", "media", "v3", "download", origin, mediaId}, struct{}{})
 	contentType := res.Header.Get("Content-Type")
 	b, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -114,7 +114,7 @@ func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 // CreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
 func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, creationContent)
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, creationContent)
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "room_id")
 }
@@ -128,7 +128,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 		query.Add("server_name", serverName)
 	}
 	// join the room
-	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, WithQueries(query))
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias}, WithQueries(query))
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
@@ -142,7 +142,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 	t.Helper()
 	// leave the room
-	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
+	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"})
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
@@ -152,15 +152,15 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 	body := map[string]interface{}{
 		"user_id": userID,
 	}
-	c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
+	c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
 }
 
 func (c *CSAPI) GetGlobalAccountData(t *testing.T, eventType string) *http.Response {
-	return c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "user", c.UserID, "account_data", eventType})
+	return c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType})
 }
 
 func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map[string]interface{}) *http.Response {
-	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
+	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
@@ -168,9 +168,9 @@ func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map
 func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
-	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
 	if e.StateKey != nil {
-		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
+		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
 	res := c.MustDo(t, "PUT", paths, e.Content)
 	body := ParseJSON(t, res)
@@ -208,7 +208,7 @@ func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
 	if syncReq.SetPresence != "" {
 		query["set_presence"] = []string{syncReq.SetPresence}
 	}
-	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, WithQueries(query))
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "sync"}, WithQueries(query))
 	body := ParseJSON(t, res)
 	result := gjson.ParseBytes(body)
 	nextBatch := GetJSONFieldStr(t, body, "next_batch")
@@ -309,7 +309,7 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 		"username": localpart,
 		"password": password,
 	}
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, reqBody)
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "register"}, reqBody)
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -366,7 +366,7 @@ func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bo
 // GetCapbabilities queries the server's capabilities
 func (c *CSAPI) GetCapabilities(t *testing.T) []byte {
 	t.Helper()
-	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "capabilities"})
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("unable to read response body: %v", err)

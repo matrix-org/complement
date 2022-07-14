@@ -53,7 +53,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	alice.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "profile", alice.UserID, "displayname"},
+		[]string{"_matrix", "client", "v3", "profile", alice.UserID, "displayname"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"displayname": alicePublicName,
 		}),
@@ -69,7 +69,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := eve.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": alicePublicName,
 			}),
@@ -81,7 +81,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := eve.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": aliceUserID,
 			}),
@@ -93,7 +93,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := eve.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": alicePrivateName,
 			}),
@@ -105,7 +105,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := bob.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": alicePublicName,
 			}),
@@ -119,7 +119,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := bob.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": aliceUserID,
 			}),
@@ -148,7 +148,7 @@ func TestRoomSpecificUsernameChange(t *testing.T) {
 	alice.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "rooms", privateRoom, "state", "m.room.member", alice.UserID},
+		[]string{"_matrix", "client", "v3", "rooms", privateRoom, "state", "m.room.member", alice.UserID},
 		client.WithJSONBody(t, map[string]interface{}{
 			"displayname": alicePrivateName,
 			"membership":  "join",
@@ -177,7 +177,7 @@ func TestRoomSpecificUsernameAtJoin(t *testing.T) {
 	alice.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "rooms", privateRoom, "state", "m.room.member", alice.UserID},
+		[]string{"_matrix", "client", "v3", "rooms", privateRoom, "state", "m.room.member", alice.UserID},
 		client.WithJSONBody(t, map[string]interface{}{
 			"displayname": alicePrivateName,
 			"membership":  "join",
