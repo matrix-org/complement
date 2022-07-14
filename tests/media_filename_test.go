@@ -127,9 +127,9 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 	var path []string
 
 	if diffName != "" {
-		path = []string{"_matrix", "media", "r0", "download", origin, mediaId, diffName}
+		path = []string{"_matrix", "media", "v3", "download", origin, mediaId, diffName}
 	} else {
-		path = []string{"_matrix", "media", "r0", "download", origin, mediaId}
+		path = []string{"_matrix", "media", "v3", "download", origin, mediaId}
 	}
 
 	res := c.MustDoFunc(t, "GET", path)

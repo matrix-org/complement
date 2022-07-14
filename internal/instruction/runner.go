@@ -445,7 +445,7 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 			}
 			instrs = append(instrs, instruction{
 				method:        "POST",
-				path:          "/_matrix/client/r0/createRoom",
+				path:          "/_matrix/client/v3/createRoom",
 				accessToken:   "user_" + room.Creator,
 				body:          room.CreateRoom,
 				storeResponse: storeRes,
@@ -465,10 +465,10 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 				subs["$roomId"] = fmt.Sprintf(".room_ref_%s", room.Ref)
 			}
 			if event.StateKey != nil {
-				path = "/_matrix/client/r0/rooms/$roomId/state/$eventType/$stateKey"
+				path = "/_matrix/client/v3/rooms/$roomId/state/$eventType/$stateKey"
 				subs["$stateKey"] = *event.StateKey
 			} else {
-				path = "/_matrix/client/r0/rooms/$roomId/send/$eventType/$txnId"
+				path = "/_matrix/client/v3/rooms/$roomId/send/$eventType/$txnId"
 				subs["$txnId"] = fmt.Sprintf("%d", eventIndex)
 			}
 
@@ -479,23 +479,23 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 				if ok {
 					switch membership {
 					case "join":
-						path = "/_matrix/client/r0/join/$roomId"
+						path = "/_matrix/client/v3/join/$roomId"
 						method = "POST"
 
 						// Set server_name to the homeserver that created the room, as they're a pretty
 						// good candidate to join the room through
 						queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
 					case "leave":
-						path = "/_matrix/client/r0/rooms/$roomId/leave"
+						path = "/_matrix/client/v3/rooms/$roomId/leave"
 						method = "POST"
 						if *event.StateKey != event.Sender {
 							// it's a kick
-							path = "/_matrix/client/r0/rooms/$roomId/kick"
+							path = "/_matrix/client/v3/rooms/$roomId/kick"
 							method = "POST"
 							event.Content["user_id"] = *event.StateKey
 						}
 					case "invite":
-						path = "/_matrix/client/r0/rooms/$roomId/invite"
+						path = "/_matrix/client/v3/rooms/$roomId/invite"
 						method = "POST"
 						event.Content["user_id"] = *event.StateKey
 					}
@@ -509,7 +509,7 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 					ri := roomIndex
 					instrs = append(instrs, instruction{
 						method:        "PUT",
-						path:          "/_matrix/client/r0/directory/room/" + url.PathEscape(alias),
+						path:          "/_matrix/client/v3/directory/room/" + url.PathEscape(alias),
 						accessToken:   fmt.Sprintf("user_%s", event.Sender),
 						substitutions: subs,
 						queryParams:   queryParams,
@@ -552,7 +552,7 @@ func instructionRegister(hs b.Homeserver, user b.User) instruction {
 
 	return instruction{
 		method:      "POST",
-		path:        "/_matrix/client/r0/register",
+		path:        "/_matrix/client/v3/register",
 		accessToken: "",
 		body:        body,
 		storeResponse: map[string]string{
@@ -569,7 +569,7 @@ func instructionDisplayName(hs b.Homeserver, user b.User) instruction {
 	return instruction{
 		method: "PUT",
 		path: fmt.Sprintf(
-			"/_matrix/client/r0/profile/@%s:%s/displayname",
+			"/_matrix/client/v3/profile/@%s:%s/displayname",
 			user.Localpart, hs.Name,
 		),
 		accessToken: fmt.Sprintf("user_@%s:%s", user.Localpart, hs.Name),
@@ -593,7 +593,7 @@ func instructionLogin(hs b.Homeserver, user b.User) instruction {
 
 	return instruction{
 		method:      "POST",
-		path:        "/_matrix/client/r0/login",
+		path:        "/_matrix/client/v3/login",
 		accessToken: "",
 		body:        body,
 		storeResponse: map[string]string{
@@ -653,7 +653,7 @@ func instructionOneTimeKeyUpload(hs b.Homeserver, user b.User) instruction {
 	}
 	return instruction{
 		method:      "POST",
-		path:        "/_matrix/client/r0/keys/upload",
+		path:        "/_matrix/client/v3/keys/upload",
 		accessToken: fmt.Sprintf("user_@%s:%s", user.Localpart, hs.Name),
 		body: map[string]interface{}{
 			"device_keys":   deviceKeys,

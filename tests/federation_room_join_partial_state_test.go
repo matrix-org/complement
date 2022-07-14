@@ -118,7 +118,7 @@ func TestPartialStateJoin(t *testing.T) {
 		defer psjResult.Destroy()
 
 		alice.Client.Timeout = 2 * time.Second
-		paths := []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "send", "m.room.message", "0"}
+		paths := []string{"_matrix", "client", "v3", "rooms", psjResult.ServerRoom.RoomID, "send", "m.room.message", "0"}
 		res := alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Hello world!",
@@ -208,7 +208,7 @@ func TestPartialStateJoin(t *testing.T) {
 			clientMembersRequestResponseChan <- alice.MustDoFunc(
 				t,
 				"GET",
-				[]string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "members"},
+				[]string{"_matrix", "client", "v3", "rooms", psjResult.ServerRoom.RoomID, "members"},
 				client.WithQueries(queryParams),
 			)
 		}()
@@ -530,6 +530,13 @@ func beginPartialStateJoin(t *testing.T, deployment *docker.Deployment, joiningU
 		federation.HandleKeyRequests(),
 		federation.HandlePartialStateMakeSendJoinRequests(),
 		federation.HandleEventRequests(),
+		federation.HandleTransactionRequests(
+			func(e *gomatrixserverlib.Event) {
+				t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
+			},
+			// the homeserver under test may send us presence when the joining user syncs
+			nil,
+		),
 	)
 	result.cancelListener = result.Server.Listen()
 

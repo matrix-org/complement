@@ -43,7 +43,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	alice.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "user", alice.UserID, "account_data", "m.ignored_user_list"},
+		[]string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", "m.ignored_user_list"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"ignored_users": map[string]interface{}{
 				bob.UserID: map[string]interface{}{},
@@ -85,7 +85,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	response := alice.MustDoFunc(
 		t,
 		"GET",
-		[]string{"_matrix", "client", "r0", "sync"},
+		[]string{"_matrix", "client", "v3", "sync"},
 		client.WithQueries(queryParams),
 	)
 	bobRoomPath := "rooms.invite." + client.GjsonEscape(bobRoom)

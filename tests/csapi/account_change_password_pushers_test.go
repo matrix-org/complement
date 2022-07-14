@@ -37,13 +37,13 @@ func TestChangePasswordPushers(t *testing.T) {
 			"lang":                "en",
 		})
 
-		_ = sessionOptional.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
+		_ = sessionOptional.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "pushers", "set"}, reqBody)
 
 		changePassword(t, passwordClient, password1, password2)
 
 		pushersSize := 0
 
-		res := passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushers"})
+		res := passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushers"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
@@ -73,13 +73,13 @@ func TestChangePasswordPushers(t *testing.T) {
 			"lang":                "en",
 		})
 
-		_ = passwordClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "pushers", "set"}, reqBody)
+		_ = passwordClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "pushers", "set"}, reqBody)
 
 		changePassword(t, passwordClient, password2, password1)
 
 		pushersSize := 0
 
-		res := passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushers"})
+		res := passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushers"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{

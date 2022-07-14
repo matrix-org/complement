@@ -33,7 +33,7 @@ func LoadSyncData(hsURL, token, tempFile string) (json.RawMessage, error) {
 		attempts++
 		// Perform the sync
 		log.Println("Performing /sync...")
-		filterReq, err := http.NewRequest("GET", hsURL+"/_matrix/client/r0/sync?filter="+filterStr, nil)
+		filterReq, err := http.NewRequest("GET", hsURL+"/_matrix/client/v3/sync?filter="+filterStr, nil)
 		if err != nil {
 			log.Printf("failed to create sync request: %s\n", err)
 			continue

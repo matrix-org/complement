@@ -22,6 +22,13 @@ jobs:
       - name: "Run internal Complement tests"
         run: |
           go test ./internal/... 
+      - name: "Run Homerunner tests" # use a simple static dendrite image to sanity check homerunner works
+        run: |
+          mkdir -p homeserver
+          wget -O - "https://github.com/matrix-org/dendrite/archive/v0.8.8.tar.gz" | tar -xz --strip-components=1 -C homeserver
+          (cd homeserver && docker build -t complement-dendrite -f build/scripts/Complement.Dockerfile .)
+          (cd cmd/homerunner/test && ./test.sh)
+
 
   complement:
     name: Complement (${{ matrix.homeserver }})
