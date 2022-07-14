@@ -1,3 +1,4 @@
+//go:build faster_joins
 // +build faster_joins
 
 // This file contains tests for joining rooms over federation, with the
@@ -153,10 +154,6 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
 		t.Logf("Derek sent event event ID %s", event.EventID())
 
-		// give Derek's event a chance to land, otherwise we will race with the faster-join completing.
-		// TODO: find a better way to do this. Or hope it will be fixed by https://github.com/matrix-org/synapse/issues/13007
-		time.Sleep(time.Second)
-
 		/* TODO: check that a lazy-loading sync can see the event. Currently this doesn't work, because /sync blocks.
 		 * https://github.com/matrix-org/synapse/issues/13146
 		alice.MustSyncUntil(t,
@@ -167,6 +164,26 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 		*/
 
+		// still, Alice should be able to see the event with an /event request. We might have to try it a few times.
+		start := time.Now()
+		for {
+			if time.Since(start) > time.Second {
+				t.Fatalf("timeout waiting for received event to be visible")
+			}
+			res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "event", event.EventID()})
+			eventResBody := client.ParseJSON(t, res)
+			if res.StatusCode == 200 {
+				t.Logf("Successfully fetched received event %s", event.EventID())
+				break
+			}
+			if res.StatusCode == 404 && gjson.GetBytes(eventResBody, "errcode").String() == "M_NOT_FOUND" {
+				t.Logf("Fetching received event failed with M_NOT_FOUND; will retry")
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			t.Fatalf("GET /event failed with %d: %s", res.StatusCode, string(eventResBody))
+		}
+
 		// allow the partial join to complete
 		psjResult.FinishStateRequest()
 		alice.MustSyncUntil(t,
@@ -174,10 +191,26 @@ func TestPartialStateJoin(t *testing.T) {
 			client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
 		)
 
-		// and check that alice can see the event
-		eventRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "event", event.EventID()})
-		eventResBody := client.ParseJSON(t, eventRes)
-		t.Logf("/event response for %s: %s", event.EventID(), eventResBody)
+		// check the server's idea of the state at the event. We do this by making a `state_ids` request over federation
+		stateReq := gomatrixserverlib.NewFederationRequest("GET", "hs1",
+			fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
+				url.PathEscape(psjResult.ServerRoom.RoomID),
+				url.QueryEscape(event.EventID()),
+			),
+		)
+		var respStateIDs gomatrixserverlib.RespStateIDs
+		if err := psjResult.Server.SendFederationRequest(deployment, stateReq, &respStateIDs); err != nil {
+			t.Errorf("/state_ids request returned non-200: %s", err)
+			return
+		}
+		var gotState, expectedState []interface{}
+		for _, ev := range respStateIDs.StateEventIDs {
+			gotState = append(gotState, ev)
+		}
+		for _, ev := range psjResult.ServerRoom.AllCurrentState() {
+			expectedState = append(expectedState, ev.EventID())
+		}
+		must.CheckOffAll(t, gotState, expectedState)
 	})
 
 	// a request to (client-side) /members?at= should block until the (federation) /state request completes
