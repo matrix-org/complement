@@ -366,7 +366,7 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 			}
 		})
 
-		// Note: The spec says to use r0, but implementations rely on /v1 working for federation requests as a legacy
+		// Note: The spec says to use /v3, but implementations rely on /v1 and /r0 working for federation requests as a legacy
 		// route.
 		mediamux.Handle("/r0/download/{origin}/{mediaId}", downloadFn).Methods("GET")
 		mediamux.Handle("/v1/download/{origin}/{mediaId}", downloadFn).Methods("GET")
