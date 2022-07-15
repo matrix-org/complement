@@ -300,6 +300,55 @@ func HandleEventRequests() func(*Server) {
 	}
 }
 
+// HandleEventAuthRequests is an option which will process GET /_matrix/federation/v1/event_auth/{roomId}/{eventId}
+// requests universally when requested.
+func HandleEventAuthRequests() func(*Server) {
+	return func(srv *Server) {
+		srv.mux.Handle("/_matrix/federation/v1/event_auth/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			roomID := vars["roomID"]
+			eventID := vars["eventID"]
+
+			room, ok := srv.rooms[roomID]
+			if !ok {
+				srv.t.Logf("/event_auth request for unknown room ID %s", roomID)
+				w.WriteHeader(404)
+				w.Write([]byte("complement: HandleEventAuthRequests event_auth unknown room ID: " + roomID))
+				return
+			}
+
+			// find the event
+			var event *gomatrixserverlib.Event
+			for _, ev := range room.Timeline {
+				if ev.EventID() == eventID {
+					event = ev
+					break
+				}
+			}
+
+			if event == nil {
+				srv.t.Logf("/event_auth request for unknown event ID %s in room %s", eventID, roomID)
+				w.WriteHeader(404)
+				w.Write([]byte("complement: HandleEventAuthRequests event_auth unknown event ID: " + eventID))
+				return
+			}
+
+			authEvents := room.AuthChainForEvents([]*gomatrixserverlib.Event{event})
+			resp := gomatrixserverlib.RespEventAuth{
+				gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
+			}
+			respJSON, err := json.Marshal(resp)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte(fmt.Sprintf(`complement: failed to marshal JSON response: %s`, err)))
+				return
+			}
+			w.WriteHeader(200)
+			w.Write(respJSON)
+		}))
+	}
+}
+
 // HandleKeyRequests is an option which will process GET /_matrix/key/v2/server requests universally when requested.
 func HandleKeyRequests() func(*Server) {
 	return func(srv *Server) {
