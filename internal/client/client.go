@@ -142,7 +142,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 	t.Helper()
 	// leave the room
-	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"})
+	c.MustDoFuncWithRetries(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, 2)
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
@@ -451,6 +451,26 @@ func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...
 		t.Fatalf("CSAPI.MustDoFunc response return non-2xx code: %s - body: %s", res.Status, string(body))
 	}
 	return res
+}
+
+// MustDoFunc is the same as DoFunc but fails the test if the returned HTTP response code is not 2xx.
+func (c *CSAPI) MustDoFuncWithRetries(t *testing.T, method string, paths []string, maxRetries int, opts ...RequestOpt) *http.Response {
+	t.Helper()
+
+	for retry := range maxRetries {
+		res := c.DoFunc(t, method, paths, opts...)
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			defer res.Body.Close()
+			body, _ := ioutil.ReadAll(res.Body)
+			t.Errorf("CSAPI.MustDoFuncWithRetries response return non-2xx code: %s - body: %s", res.Status, string(body))
+
+			if retry < maxRetries {
+				continue
+			}
+			t.Fatalf("CSAPI.MustDoFuncWithRetries: Ran out of retries")
+		}
+		return res
+	}
 }
 
 // DoFunc performs an arbitrary HTTP request to the server. This function supports RequestOpts to set
