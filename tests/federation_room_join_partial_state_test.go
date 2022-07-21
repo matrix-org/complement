@@ -9,6 +9,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,9 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/util"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
@@ -720,6 +723,50 @@ func handleStateRequests(
 			}
 		}),
 	).Methods("GET")
+}
+
+// register a handler for `/get_missing_events` requests
+func handleGetMissingEventsRequests(
+	t *testing.T, srv *federation.Server, serverRoom *federation.ServerRoom,
+	eventsToReturn []*gomatrixserverlib.Event,
+) {
+	srv.Mux().HandleFunc("/_matrix/federation/v1/get_missing_events/{roomID}", func(w http.ResponseWriter, req *http.Request) {
+		roomID := mux.Vars(req)["roomID"]
+		if roomID != serverRoom.RoomID {
+			t.Fatalf("Received unexpected /get_missing_events request for room: %s", roomID)
+		}
+
+		body, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("unable to read request body: %v", err)
+		}
+		var getMissingEventsRequest struct {
+			EarliestEvents []string `json:"earliest_events"`
+			LatestEvents   []string `json:"latest_events"`
+			Limit          int      `json:"int"`
+			MinDepth       int      `json:"min_depth"`
+		}
+		err = json.Unmarshal(body, &getMissingEventsRequest)
+		if err != nil {
+			errResp := util.MessageResponse(400, err.Error())
+			w.WriteHeader(errResp.Code)
+			b, _ := json.Marshal(errResp.JSON)
+			w.Write(b)
+			return
+		}
+
+		t.Logf("Incoming get_missing_events request for prev events of %s in room %s", getMissingEventsRequest.LatestEvents, roomID)
+
+		// TODO: return events based on those requested
+		w.WriteHeader(200)
+		res := struct {
+			Events []*gomatrixserverlib.Event `json:"events"`
+		}{
+			Events: eventsToReturn,
+		}
+		responseBytes, _ := json.Marshal(&res)
+		w.Write(responseBytes)
+	}).Methods("POST")
 }
 
 func eventIDsFromEvents(he []*gomatrixserverlib.Event) []string {
