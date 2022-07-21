@@ -142,15 +142,7 @@ func TestPartialStateJoin(t *testing.T) {
 		federation.HandleEventAuthRequests()(psjResult.Server)
 
 		// derek sends an event in the room
-		event := psjResult.Server.MustCreateEvent(t, psjResult.ServerRoom, b.Event{
-			Type:   "m.room.message",
-			Sender: psjResult.Server.UserID("derek"),
-			Content: map[string]interface{}{
-				"msgtype": "m.text",
-				"body":    "Message",
-			},
-		})
-		psjResult.ServerRoom.AddEvent(event)
+		event := psjResult.CreateMessageEvent(t, "derek", nil)
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
 		t.Logf("Derek sent event event ID %s", event.EventID())
 
@@ -618,6 +610,28 @@ func (psj *partialStateJoinResult) Destroy() {
 	if psj.cancelListener != nil {
 		psj.cancelListener()
 	}
+}
+
+// send a message into the room without letting the homeserver under test know about it.
+func (psj *partialStateJoinResult) CreateMessageEvent(t *testing.T, senderLocalpart string, prevEventIDs []string) *gomatrixserverlib.Event {
+	var prevEvents interface{}
+	if prevEventIDs == nil {
+		prevEvents = nil
+	} else {
+		prevEvents = prevEventIDs
+	}
+
+	event := psj.Server.MustCreateEvent(t, psj.ServerRoom, b.Event{
+		Type:   "m.room.message",
+		Sender: psj.Server.UserID(senderLocalpart),
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Message",
+		},
+		PrevEvents: prevEvents,
+	})
+	psj.ServerRoom.AddEvent(event)
+	return event
 }
 
 // wait for a /state_ids request for the test room to arrive
