@@ -221,6 +221,43 @@ func TestPartialStateJoin(t *testing.T) {
 		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventB)
 	})
 
+	// we should be able to receive events with missing prevs over federation during the resync
+	t.Run("CanReceiveEventsWithMissingPrevWithHalfMissingPrevsDuringPartialStateJoin", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		// we construct the following event graph:
+		//         +---------+
+		//         v          \
+		// ... <-- M <-- A <-- B <-- C
+		//
+		// M is @alice:hs1's join event.
+		// A, B and C are regular m.room.messsage events sent by @derek from Complement.
+		//
+		// initially, hs1 only knows about event M.
+		// we send only event C to hs1.
+		eventM := psjResult.ServerRoom.CurrentState("m.room.member", alice.UserID)
+		eventA := psjResult.CreateMessageEvent(t, "derek", []string{eventM.EventID()})
+		eventB := psjResult.CreateMessageEvent(t, "derek", []string{eventA.EventID(), eventM.EventID()})
+		eventC := psjResult.CreateMessageEvent(t, "derek", []string{eventB.EventID()})
+		t.Logf("%s's m.room.member event is %s", *eventM.StateKey(), eventM.EventID())
+		t.Logf("Derek sent event A with ID %s", eventA.EventID())
+		t.Logf("Derek sent event B with ID %s", eventB.EventID())
+		t.Logf("Derek sent event C with ID %s", eventC.EventID())
+		psjResult.AllowStateRequestForEvent(eventA.EventID())
+
+		// the HS will make a /get_missing_events request for the missing prev event of event C,
+		// to which we respond with event B only.
+		handleGetMissingEventsRequests(t, psjResult.Server, psjResult.ServerRoom, []*gomatrixserverlib.Event{eventB})
+
+		// send event C to hs1
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventC)
+	})
+
 	// a request to (client-side) /members?at= should block until the (federation) /state request completes
 	// TODO(faster_joins): also need to test /state, and /members without an `at`, which follow a different path
 	t.Run("MembersRequestBlocksDuringPartialStateJoin", func(t *testing.T) {
