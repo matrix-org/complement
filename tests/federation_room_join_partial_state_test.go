@@ -9,6 +9,8 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/mux"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -510,6 +512,192 @@ func TestPartialStateJoin(t *testing.T) {
 		if err := stateMatcher([]byte(roomRes.Raw)); err != nil {
 			t.Errorf("Did not find derek's m.room.member event in gappy /sync response: %s", err)
 		}
+	})
+
+	// regression test for https://github.com/matrix-org/synapse/issues/13001
+	//
+	// There wass an edge case where, if we initially receive lots of events as outliers,
+	// and they then get de-outliered as partial state events,
+	t.Run("Resync works with many prev_events with partial state", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		psjResult := beginPartialStateJoin(t, deployment, alice)
+		defer psjResult.Destroy()
+
+		// Alice has now joined the room, and the server is syncing the state in the background.
+
+		// utility function to build a regular event in the test room
+		makeTimelineEvent := func(body string) *gomatrixserverlib.Event {
+			event := psjResult.Server.MustCreateEvent(t, psjResult.ServerRoom, b.Event{
+				Type:   "m.room.message",
+				Sender: psjResult.Server.UserID("charlie"),
+				Content: map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    body,
+				},
+			})
+			psjResult.ServerRoom.AddEvent(event)
+			t.Logf("Created event %s: %s", body, event.EventID())
+			return event
+		}
+
+		// utility function to wait for a given event to arrive at the remote server.
+		// This works simply by polling /event until we get a 200.
+		awaitEventArrival := func(eventID string) {
+			start := time.Now()
+			for time.Since(start) < 10*time.Second {
+				res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "event", eventID})
+				eventResBody := client.ParseJSON(t, res)
+				if res.StatusCode == 200 {
+					t.Logf("Alice successfully received event %s", eventID)
+					return
+				}
+				if res.StatusCode == 404 && gjson.GetBytes(eventResBody, "errcode").String() == "M_NOT_FOUND" {
+					t.Logf("Fetching event %s failed with M_NOT_FOUND; will retry", eventID)
+					time.Sleep(1000 * time.Millisecond)
+					continue
+				}
+				t.Fatalf("GET /event failed with %d: %s", res.StatusCode, string(eventResBody))
+			}
+			t.Fatalf("timeout waiting for event %s to be received", eventID)
+		}
+
+		// here's the first event which we *ought* to un-partial-state, but won't
+		lateEvent := makeTimelineEvent("late event")
+
+		// next, we want to create 100 outliers. So, charlie creates 100 state events, and
+		// then persuades the SUT to create a backwards extremity using those events as
+		// part of the room state.
+		outliers := make([]*gomatrixserverlib.Event, 100)
+		outlierEventIDs := make([]string, len(outliers))
+		for i := range outliers {
+			body := fmt.Sprintf("outlier event %d", i)
+			outliers[i] = psjResult.Server.MustCreateEvent(t, psjResult.ServerRoom, b.Event{
+				Type:     "outlier_state",
+				Sender:   psjResult.Server.UserID("charlie"),
+				StateKey: b.Ptr(fmt.Sprintf("state_%d", i)),
+				Content:  map[string]interface{}{"body": body},
+			})
+			psjResult.ServerRoom.AddEvent(outliers[i])
+			outlierEventIDs[i] = outliers[i].EventID()
+		}
+		t.Logf("Created outliers: %s ... %s", outliers[0].EventID(), outliers[len(outliers)-1].EventID())
+
+		// a couple of regular timeline events to pull in the outliers... Note that these are persisted with *full*
+		// state rather than becoming partial state events.
+		timelineEvent1 := makeTimelineEvent("timeline event 1")
+		timelineEvent2 := makeTimelineEvent("timeline event 2")
+
+		// dedicated get_missing_event handler for timelineEvent2.
+		// we grudgingly return a single event.
+		psjResult.Server.Mux().Handle("/_matrix/federation/v1/get_missing_events/{roomID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			roomID := vars["roomID"]
+
+			// Unmarshal the request body into an object
+			content, _ := ioutil.ReadAll(req.Body)
+			var request gomatrixserverlib.MissingEvents
+			if err := json.Unmarshal(content, &request); err != nil {
+				t.Fatalf("get_missing_events: Unable to unmarshal request body: %s", err.Error())
+			}
+
+			t.Logf("Got get_missing_events request in %s: %#v", roomID, request)
+			if roomID != psjResult.ServerRoom.RoomID {
+				t.Fatalf("get_missing_events for wrong room: got %s, want %s", roomID, psjResult.ServerRoom.RoomID)
+			}
+
+			if request.LatestEvents[0] != timelineEvent2.EventID() {
+				t.Fatalf("get_missing_events for wrong event: got %v, want %s", request.LatestEvents, timelineEvent2.EventID())
+			}
+
+			// return timelineEvent1
+			jsonb, _ := json.Marshal(gomatrixserverlib.RespMissingEvents{
+				Events: gomatrixserverlib.EventJSONs{timelineEvent1.JSON()},
+			})
+			w.WriteHeader(200)
+			w.Write(jsonb)
+			t.Logf("Processed get_missing_events request: returned event %s", timelineEvent1.EventID())
+		}))
+
+		// dedicated state_ids and state handlers for timelineEvent1's prev event (ie, the last outlier event)
+		psjResult.Server.Mux().NewRoute().Methods("GET").Path(
+			fmt.Sprintf("/_matrix/federation/v1/state_ids/%s", psjResult.ServerRoom.RoomID),
+		).Queries("event_id", outliers[len(outliers)-1].EventID()).Handler(
+			http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				queryParams := req.URL.Query()
+				t.Logf("Incoming state_ids request for last outlier event %s", queryParams["event_id"])
+				jsonb, _ := json.Marshal(gomatrixserverlib.RespStateIDs{
+					AuthEventIDs:  eventIDsFromEvents(psjResult.ServerRoom.AuthChain()),
+					StateEventIDs: eventIDsFromEvents(psjResult.ServerRoom.AllCurrentState()),
+				})
+				w.WriteHeader(200)
+				w.Write(jsonb)
+			}),
+		)
+		psjResult.Server.Mux().NewRoute().Methods("GET").Path(
+			fmt.Sprintf("/_matrix/federation/v1/state/%s", psjResult.ServerRoom.RoomID),
+		).Queries("event_id", outliers[len(outliers)-1].EventID()).Handler(
+			http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				queryParams := req.URL.Query()
+				t.Logf("Incoming state request for last outlier event %s", queryParams["event_id"])
+				jsonb, _ := json.Marshal(gomatrixserverlib.RespState{
+					AuthEvents:  gomatrixserverlib.NewEventJSONsFromEvents(psjResult.ServerRoom.AuthChain()),
+					StateEvents: gomatrixserverlib.NewEventJSONsFromEvents(psjResult.ServerRoom.AllCurrentState()),
+				})
+				w.WriteHeader(200)
+				w.Write(jsonb)
+			}),
+		)
+
+		// now, send over the most recent event, which will make the server get_missing_events
+		// (we will send timelineEvent1), and then request state (we will send all the outliers).
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{timelineEvent2.JSON()}, nil)
+
+		t.Logf("Charlie sent timeline event 2")
+		// wait for it to become visible, which implies that all the outliers have been pulled in.
+		awaitEventArrival(timelineEvent2.EventID())
+
+		// now we send over all the other events in the gap.
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{lateEvent.JSON()}, nil)
+		t.Logf("Charlie sent late event")
+
+		for i := 0; i < len(outliers); {
+			var transactionEvents []json.RawMessage
+			// a transaction can contain max 50 events
+			for j := i; j < i+50 && j < len(outliers); j++ {
+				transactionEvents = append(transactionEvents, outliers[j].JSON())
+			}
+			psjResult.Server.MustSendTransaction(t, deployment, "hs1", transactionEvents, nil)
+			t.Logf("Charlie sent %d ex-outliers", len(transactionEvents))
+			i += len(transactionEvents)
+		}
+
+		// wait for the last outlier to arrive
+		awaitEventArrival(outliers[len(outliers)-1].EventID())
+
+		// release the federation /state response
+		psjResult.FinishStateRequest()
+
+		// alice should be able to sync the room. We can't use SyncJoinedTo here because that looks for the
+		// membership event in the response (which we won't see, because all of the outlier events).
+		// instead let's just check for the presence of the room in the timeline
+		alice.MustSyncUntil(t,
+			client.SyncReq{},
+			func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+				key := "rooms.join." + client.GjsonEscape(psjResult.ServerRoom.RoomID) + ".timeline.events"
+				array := topLevelSyncJSON.Get(key)
+				if !array.Exists() {
+					return fmt.Errorf("Key %s does not exist", key)
+				}
+				if !array.IsArray() {
+					return fmt.Errorf("Key %s exists but it isn't an array", key)
+				}
+				return nil
+			},
+		)
+		t.Logf("Alice successfully synced")
 	})
 }
 
