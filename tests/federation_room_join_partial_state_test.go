@@ -250,11 +250,14 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Logf("Derek created event A with ID %s", eventA.EventID())
 		t.Logf("Derek created event B with ID %s", eventB.EventID())
 		t.Logf("Derek created event C with ID %s", eventC.EventID())
-		psjResult.AllowStateRequestForEvent(eventA.EventID())
 
 		// the HS will make a /get_missing_events request for the missing prev event of event C,
 		// to which we respond with event B only.
 		handleGetMissingEventsRequests(t, psjResult.Server, psjResult.ServerRoom, []*gomatrixserverlib.Event{eventB})
+
+		// dedicated state_ids and state handlers for event A
+		handleStateIdsRequests(t, psjResult.Server, psjResult.ServerRoom, eventA.EventID(), psjResult.ServerRoom.AllCurrentState(), nil, nil)
+		handleStateRequests(t, psjResult.Server, psjResult.ServerRoom, eventA.EventID(), psjResult.ServerRoom.AllCurrentState(), nil, nil)
 
 		// send event C to hs1
 		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventC)
