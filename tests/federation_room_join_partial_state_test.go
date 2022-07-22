@@ -516,7 +516,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// regression test for https://github.com/matrix-org/synapse/issues/13001
 	//
-	// There wass an edge case where, if we initially receive lots of events as outliers,
+	// There was an edge case where, if we initially receive lots of events as outliers,
 	// and they then get de-outliered as partial state events,
 	t.Run("Resync works with many prev_events with partial state", func(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
