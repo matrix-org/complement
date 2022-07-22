@@ -152,8 +152,8 @@ func TestPartialStateJoin(t *testing.T) {
 		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
 	})
 
-	// we should be able to receive events with missing prevs over federation during the resync
-	t.Run("CanReceiveEventsWithMissingPrevDuringPartialStateJoin", func(t *testing.T) {
+	// we should be able to receive events with a missing prev event over federation during the resync
+	t.Run("CanReceiveEventsWithMissingParentsDuringPartialStateJoin", func(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -186,8 +186,8 @@ func TestPartialStateJoin(t *testing.T) {
 		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventB)
 	})
 
-	// we should be able to receive events with partially missing prevs over federation during the resync
-	t.Run("CanReceiveEventsWithHalfMissingPrevsDuringPartialStateJoin", func(t *testing.T) {
+	// we should be able to receive events with partially missing prev events over federation during the resync
+	t.Run("CanReceiveEventsWithHalfMissingParentsDuringPartialStateJoin", func(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -222,8 +222,9 @@ func TestPartialStateJoin(t *testing.T) {
 		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventB)
 	})
 
-	// we should be able to receive events with missing prevs over federation during the resync
-	t.Run("CanReceiveEventsWithMissingPrevWithHalfMissingPrevsDuringPartialStateJoin", func(t *testing.T) {
+	// we should be able to receive events with a missing prev event, with half missing prev events,
+	// over federation during the resync
+	t.Run("CanReceiveEventsWithHalfMissingGrandparentsDuringPartialStateJoin", func(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
