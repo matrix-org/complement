@@ -1,0 +1,2 @@
+# Automatically request reviews from the synapse-core and dendrite-core teams when a pull request comes in.
+* @matrix-org/synapse-core @matrix-org/dendrite-core
