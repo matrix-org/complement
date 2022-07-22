@@ -607,6 +607,8 @@ func testReceiveEventDuringPartialStateJoin(
 	//   * block because the homeserver does not have full state at the last event
 	//   * or 403 because the homeserver does not have full state yet and does not consider the
 	//     Complement homeserver to be in the room
+	// Synapse's behaviour will likely change once https://github.com/matrix-org/synapse/issues/13288
+	// is resolved.
 
 	type StateIDsResult struct {
 		RespStateIDs gomatrixserverlib.RespStateIDs
