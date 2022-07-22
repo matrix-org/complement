@@ -632,6 +632,8 @@ func testReceiveEventDuringPartialStateJoin(
 	select {
 	case <-time.After(1 * time.Second):
 		t.Logf("/state_ids request for event %s blocked as expected", event.EventID())
+		// read from the channel and discard the result, so that the goroutine above doesn't block
+		// indefinitely on the send
 		defer func() { <-stateIdsResultChan }()
 		break
 	case stateIDsResult := <-stateIdsResultChan:
