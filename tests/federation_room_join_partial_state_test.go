@@ -145,9 +145,10 @@ func TestPartialStateJoin(t *testing.T) {
 		// the HS will make an /event_auth request for the event
 		federation.HandleEventAuthRequests()(psjResult.Server)
 
-		// derek sends an event in the room
 		event := psjResult.CreateMessageEvent(t, "derek", nil)
-		t.Logf("Derek sent event event ID %s", event.EventID())
+		t.Logf("Derek created event with ID %s", event.EventID())
+
+		// derek sends an event in the room
 		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
 	})
 
@@ -164,7 +165,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// ... <-- M <-- A <-- B
 		//
 		// M is @alice:hs1's join event.
-		// A and B are regular m.room.messsage events sent by @derek from Complement.
+		// A and B are regular m.room.messsage events created by @derek on the Complement homeserver.
 		//
 		// initially, hs1 only knows about event M.
 		// we send only event B to hs1.
@@ -172,8 +173,8 @@ func TestPartialStateJoin(t *testing.T) {
 		eventA := psjResult.CreateMessageEvent(t, "derek", []string{eventM.EventID()})
 		eventB := psjResult.CreateMessageEvent(t, "derek", []string{eventA.EventID()})
 		t.Logf("%s's m.room.member event is %s", *eventM.StateKey(), eventM.EventID())
-		t.Logf("Derek sent event A with ID %s", eventA.EventID())
-		t.Logf("Derek sent event B with ID %s", eventB.EventID())
+		t.Logf("Derek created event A with ID %s", eventA.EventID())
+		t.Logf("Derek created event B with ID %s", eventB.EventID())
 
 		// the HS will make an /event_auth request for event A
 		federation.HandleEventAuthRequests()(psjResult.Server)
@@ -200,7 +201,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// ... <-- M <-- A <-- B
 		//
 		// M is @alice:hs1's join event.
-		// A and B are regular m.room.messsage events sent by @derek from Complement.
+		// A and B are regular m.room.messsage events created by @derek on the Complement homeserver.
 		//
 		// initially, hs1 only knows about event M.
 		// we send only event B to hs1.
@@ -208,8 +209,8 @@ func TestPartialStateJoin(t *testing.T) {
 		eventA := psjResult.CreateMessageEvent(t, "derek", []string{eventM.EventID()})
 		eventB := psjResult.CreateMessageEvent(t, "derek", []string{eventA.EventID(), eventM.EventID()})
 		t.Logf("%s's m.room.member event is %s", *eventM.StateKey(), eventM.EventID())
-		t.Logf("Derek sent event A with ID %s", eventA.EventID())
-		t.Logf("Derek sent event B with ID %s", eventB.EventID())
+		t.Logf("Derek created event A with ID %s", eventA.EventID())
+		t.Logf("Derek created event B with ID %s", eventB.EventID())
 
 		// the HS will make an /event_auth request for event A
 		federation.HandleEventAuthRequests()(psjResult.Server)
@@ -236,7 +237,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// ... <-- M <-- A <-- B <-- C
 		//
 		// M is @alice:hs1's join event.
-		// A, B and C are regular m.room.messsage events sent by @derek from Complement.
+		// A, B and C are regular m.room.messsage events created by @derek on the Complement homeserver.
 		//
 		// initially, hs1 only knows about event M.
 		// we send only event C to hs1.
@@ -245,9 +246,9 @@ func TestPartialStateJoin(t *testing.T) {
 		eventB := psjResult.CreateMessageEvent(t, "derek", []string{eventA.EventID(), eventM.EventID()})
 		eventC := psjResult.CreateMessageEvent(t, "derek", []string{eventB.EventID()})
 		t.Logf("%s's m.room.member event is %s", *eventM.StateKey(), eventM.EventID())
-		t.Logf("Derek sent event A with ID %s", eventA.EventID())
-		t.Logf("Derek sent event B with ID %s", eventB.EventID())
-		t.Logf("Derek sent event C with ID %s", eventC.EventID())
+		t.Logf("Derek created event A with ID %s", eventA.EventID())
+		t.Logf("Derek created event B with ID %s", eventB.EventID())
+		t.Logf("Derek created event C with ID %s", eventC.EventID())
 		psjResult.AllowStateRequestForEvent(eventA.EventID())
 
 		// the HS will make a /get_missing_events request for the missing prev event of event C,
