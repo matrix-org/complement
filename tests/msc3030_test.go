@@ -16,6 +16,8 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 )
 
@@ -162,6 +164,36 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, timeBeforeRoomCreation, "b", importedEventID)
+			})
+
+			t.Run("can paginate after getting remote event from timestamp to event endpoint", func(t *testing.T) {
+				t.Parallel()
+				roomID, eventA, eventB := createTestRoom(t, alice)
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
+
+				// Get a pagination token from eventB
+				contextRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"limit": []string{"0"},
+				}))
+				contextResResBody := client.ParseJSON(t, contextRes)
+				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
+
+				// Paginate backwards from eventB
+				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+					"from":  []string{paginationToken},
+				}))
+
+				// Make sure both messages are visible
+				must.MatchResponse(t, messagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONCheckOffAllowUnwanted("chunk", []interface{}{eventA.EventID, eventB.EventID}, func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						}, nil),
+					},
+				})
 			})
 		})
 	})
