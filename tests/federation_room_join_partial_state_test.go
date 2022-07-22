@@ -603,8 +603,13 @@ func testReceiveEventDuringPartialStateJoin(
 	//   * block because the homeserver does not have full state at the last event
 	//   * or 403 because the homeserver does not have full state yet and does not consider the
 	//     Complement homeserver to be in the room
-	stateIdsResponseChan := make(chan *gomatrixserverlib.RespStateIDs)
-	defer close(stateIdsResponseChan)
+
+	type StateIDsResult struct {
+		RespStateIDs gomatrixserverlib.RespStateIDs
+		Error        error
+	}
+	stateIdsResultChan := make(chan StateIDsResult)
+	defer close(stateIdsResultChan)
 	go func() {
 		stateReq := gomatrixserverlib.NewFederationRequest("GET", "hs1",
 			fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
@@ -614,26 +619,26 @@ func testReceiveEventDuringPartialStateJoin(
 		)
 		var respStateIDs gomatrixserverlib.RespStateIDs
 		if err := psjResult.Server.SendFederationRequest(deployment, stateReq, &respStateIDs); err != nil {
-			httpErr, ok := err.(gomatrix.HTTPError)
-			t.Logf("%v", httpErr)
-			if ok && httpErr.Code == 403 {
-				stateIdsResponseChan <- nil
-				return
-			}
-			t.Errorf("/state_ids request returned non-200: %s", err)
-			return
+			stateIdsResultChan <- StateIDsResult{Error: err}
+		} else {
+			stateIdsResultChan <- StateIDsResult{RespStateIDs: respStateIDs}
 		}
-		stateIdsResponseChan <- &respStateIDs
 	}()
 
 	select {
 	case <-time.After(1 * time.Second):
 		t.Logf("/state_ids request for event %s blocked as expected", event.EventID())
-		defer func() { <-stateIdsResponseChan }()
+		defer func() { <-stateIdsResultChan }()
 		break
-	case respStateIDs := <-stateIdsResponseChan:
-		if respStateIDs == nil {
-			t.Logf("/state_ids request for event %s returned 403 as expected", event.EventID())
+	case stateIDsResult := <-stateIdsResultChan:
+		if stateIDsResult.Error != nil {
+			httpErr, ok := stateIDsResult.Error.(gomatrix.HTTPError)
+			t.Logf("%v", httpErr)
+			if ok && httpErr.Code == 403 {
+				t.Logf("/state_ids request for event %s returned 403 as expected", event.EventID())
+			} else {
+				t.Errorf("/state_ids request returned non-200: %s", stateIDsResult.Error)
+			}
 		} else {
 			// since we have not yet given the homeserver the full state at the join event and allowed
 			// the partial join to complete, it can't possibly know the full state at the last event.
