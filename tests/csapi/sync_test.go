@@ -316,6 +316,7 @@ func TestSync(t *testing.T) {
 				Content: map[string]interface{}{"body": "1234"},
 			})
 			sentinelRoom.AddEvent(sentinelEvent)
+			t.Logf("Created sentinel event %s", sentinelEvent.EventID())
 			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 			// wait for the sentinel to arrive
@@ -343,6 +344,7 @@ func TestSync(t *testing.T) {
 			// keep the same ?since each time, instead of incrementally syncing on each pass.
 			numResponsesReturned := 0
 			start := time.Now()
+			t.Logf("Will sync with since=%s", nextBatch)
 			for {
 				if time.Since(start) > alice.SyncUntilTimeout {
 					t.Fatalf("%s: timed out after %v. Seen %d /sync responses", alice.UserID, time.Since(start), numResponsesReturned)
