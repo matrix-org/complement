@@ -854,7 +854,7 @@ func handleStateIdsRequests(
 			if sendResponseWaiter != nil {
 				sendResponseWaiter.Waitf(t, 60*time.Second, "Waiting for /state_ids request")
 			}
-			t.Logf("Replying to /state_ids request")
+			t.Logf("Replying to /state_ids request for event %s", queryParams["event_id"])
 
 			res := gomatrixserverlib.RespStateIDs{
 				AuthEventIDs:  eventIDsFromEvents(serverRoom.AuthChainForEvents(roomState)),
