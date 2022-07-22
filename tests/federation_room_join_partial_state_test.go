@@ -568,7 +568,7 @@ func TestPartialStateJoin(t *testing.T) {
 		lateEvent := makeTimelineEvent("late event")
 
 		// next, we want to create 100 outliers. So, charlie creates 100 state events, and
-		// then persuades the SUT to create a backwards extremity using those events as
+		// then persuades the system under test to create a backwards extremity using those events as
 		// part of the room state.
 		outliers := make([]*gomatrixserverlib.Event, 100)
 		outlierEventIDs := make([]string, len(outliers))
