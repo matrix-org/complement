@@ -330,7 +330,7 @@ func TestRoomState(t *testing.T) {
 				StatusCode: http.StatusForbidden,
 				JSON: []match.JSON{
 					match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
-					match.JSONKeyEqual("error", "Getting joined members after leaving room is forbidden."),
+					match.JSONKeyEqual("error", "Getting joined members after leaving is forbidden."),
 				},
 			})
 		})
