@@ -1,6 +1,7 @@
 package csapi_tests
 
 import (
+	"net/http"
 	"net/url"
 	"testing"
 
@@ -317,6 +318,19 @@ func TestRoomState(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONKeyPresent("m\\.federate"),
 					match.JSONKeyEqual("m\\.federate", false),
+				},
+			})
+		})
+		t.Run("GET /rooms/:room_id/joined_members test to ensure user cannot request joined_members after leaving room", func(t *testing.T) {
+			t.Parallel()
+			roomID := authedClient.CreateRoom(t, map[string]interface{}{})
+			authedClient.LeaveRoom(t, roomID)
+			res := authedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "joined_members"})
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: http.StatusForbidden,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
+					match.JSONKeyEqual("error", "Getting joined members after leaving room is forbidden."),
 				},
 			})
 		})
