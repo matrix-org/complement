@@ -606,7 +606,8 @@ func testReceiveEventDuringPartialStateJoin(
 	//   * or 403 because the homeserver does not have full state yet and does not consider the
 	//     Complement homeserver to be in the room
 	// Synapse's behaviour will likely change once https://github.com/matrix-org/synapse/issues/13288
-	// is resolved.
+	// is resolved. For now, we use this to check whether Synapse has calculated the partial state
+	// flag for the last event correctly.
 
 	stateReq := gomatrixserverlib.NewFederationRequest("GET", "hs1",
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
