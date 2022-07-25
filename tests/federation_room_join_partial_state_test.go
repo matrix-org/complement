@@ -583,24 +583,20 @@ func testReceiveEventDuringPartialStateJoin(
 	*/
 
 	// still, Alice should be able to see the event with an /event request. We might have to try it a few times.
-	start := time.Now()
-	for {
-		if time.Since(start) > time.Second {
-			t.Fatalf("timeout waiting for received event to be visible")
-		}
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "event", event.EventID()})
-		eventResBody := client.ParseJSON(t, res)
-		if res.StatusCode == 200 {
-			t.Logf("Successfully fetched received event %s", event.EventID())
-			break
-		}
-		if res.StatusCode == 404 && gjson.GetBytes(eventResBody, "errcode").String() == "M_NOT_FOUND" {
-			t.Logf("Fetching received event failed with M_NOT_FOUND; will retry")
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		t.Fatalf("GET /event failed with %d: %s", res.StatusCode, string(eventResBody))
-	}
+	alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "event", event.EventID()},
+		client.WithRetryUntil(time.Second, func(res *http.Response) bool {
+			if res.StatusCode == 200 {
+				return true
+			}
+			eventResBody := client.ParseJSON(t, res)
+			if res.StatusCode == 404 && gjson.GetBytes(eventResBody, "errcode").String() == "M_NOT_FOUND" {
+				return false
+			}
+			t.Fatalf("GET /event failed with %d: %s", res.StatusCode, string(eventResBody))
+			return false
+		}),
+	)
+	t.Logf("Successfully fetched received event %s", event.EventID())
 
 	// fire off a /state_ids request for the last event.
 	// it must either:
