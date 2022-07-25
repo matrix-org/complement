@@ -354,16 +354,22 @@ func TestSync(t *testing.T) {
 				numResponsesReturned += 1
 				timeline := syncResponse.Get("rooms.join." + client.GjsonEscape(redactionRoomID) + ".timeline")
 				timelineEvents := timeline.Get("events").Array()
-				lastEventIdInSync := timelineEvents[len(timelineEvents)-1].Get("event_id").String()
 
-				t.Logf("Iteration %d: /sync returned %d events, with final event %s", numResponsesReturned, len(timelineEvents), lastEventIdInSync)
-				if lastEventIdInSync == lastSentEventId {
-					// check we actually got a gappy sync - else this test isn't testing the right thing
-					if !timeline.Get("limited").Bool() {
-						t.Fatalf("Not a gappy sync after redaction")
+				if len(timelineEvents) > 0 {
+					lastEventIdInSync := timelineEvents[len(timelineEvents)-1].Get("event_id").String()
+					t.Logf("Iteration %d: /sync returned %d events, with final event %s", numResponsesReturned, len(timelineEvents), lastEventIdInSync)
+
+					if lastEventIdInSync == lastSentEventId {
+						// check we actually got a gappy sync - else this test isn't testing the right thing
+						if !timeline.Get("limited").Bool() {
+							t.Fatalf("Not a gappy sync after redaction")
+						}
+						break
 					}
-					break
+				} else {
+					t.Logf("Iteration %d: /sync returned %d events", numResponsesReturned, len(timelineEvents))
 				}
+
 			}
 
 			// that's it - we successfully did a gappy sync.
