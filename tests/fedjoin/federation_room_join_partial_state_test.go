@@ -26,6 +26,7 @@ import (
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/internal/waiter"
 )
 
 func TestPartialStateJoin(t *testing.T) {
@@ -539,8 +540,8 @@ type partialStateJoinResult struct {
 	cancelListener                   func()
 	Server                           *federation.Server
 	ServerRoom                       *federation.ServerRoom
-	fedStateIdsRequestReceivedWaiter *Waiter
-	fedStateIdsSendResponseWaiter    *Waiter
+	fedStateIdsRequestReceivedWaiter *waiter.Waiter
+	fedStateIdsSendResponseWaiter    *waiter.Waiter
 }
 
 // beginPartialStateJoin spins up a room on a complement server,
@@ -650,7 +651,7 @@ func (psj *partialStateJoinResult) FinishStateRequest() {
 func handleStateIdsRequests(
 	t *testing.T, srv *federation.Server, serverRoom *federation.ServerRoom,
 	eventID string, roomState []*gomatrixserverlib.Event,
-	requestReceivedWaiter *Waiter, sendResponseWaiter *Waiter,
+	requestReceivedWaiter *waiter.Waiter, sendResponseWaiter *waiter.Waiter,
 ) {
 	srv.Mux().NewRoute().Methods("GET").Path(
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s", serverRoom.RoomID),
@@ -690,7 +691,7 @@ func handleStateIdsRequests(
 func handleStateRequests(
 	t *testing.T, srv *federation.Server, serverRoom *federation.ServerRoom,
 	eventID string, roomState []*gomatrixserverlib.Event,
-	requestReceivedWaiter *Waiter, sendResponseWaiter *Waiter,
+	requestReceivedWaiter *waiter.Waiter, sendResponseWaiter *waiter.Waiter,
 ) {
 	srv.Mux().NewRoute().Methods("GET").Path(
 		fmt.Sprintf("/_matrix/federation/v1/state/%s", serverRoom.RoomID),
