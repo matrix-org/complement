@@ -461,18 +461,7 @@ func TestPartialStateJoin(t *testing.T) {
 		})
 
 		// create the complement homeserver
-		server := federation.NewServer(t, deployment,
-			federation.HandleKeyRequests(),
-			federation.HandlePartialStateMakeSendJoinRequests(),
-			federation.HandleEventRequests(),
-			federation.HandleTransactionRequests(
-				func(e *gomatrixserverlib.Event) {
-					t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
-				},
-				// hs1 may send us presence when alice syncs
-				nil,
-			),
-		)
+		server := createTestServer(t, deployment)
 		cancelListener := server.Listen()
 		defer cancelListener()
 
