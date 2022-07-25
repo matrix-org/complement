@@ -321,7 +321,7 @@ func TestRoomState(t *testing.T) {
 				},
 			})
 		})
-		t.Run("GET /rooms/:room_id/joined_members test to ensure user cannot request joined_members after leaving room", func(t *testing.T) {
+		t.Run("GET /rooms/:room_id/joined_members is forbidden after leaving room", func(t *testing.T) {
 			t.Parallel()
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{})
 			authedClient.LeaveRoom(t, roomID)
