@@ -8,6 +8,7 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/internal/waiter"
 
 	"github.com/matrix-org/gomatrixserverlib"
 )
@@ -33,7 +34,7 @@ func TestEventAuth(t *testing.T) {
 
 	// create a remote homeserver which will make the /event_auth request
 	var joinRuleEvent *gomatrixserverlib.Event
-	waiter := NewWaiter()
+	wait := waiter.New()
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
@@ -42,7 +43,7 @@ func TestEventAuth(t *testing.T) {
 			func(ev *gomatrixserverlib.Event) {
 				if jr, _ := ev.JoinRule(); jr == "invite" {
 					joinRuleEvent = ev
-					waiter.Finish()
+					wait.Finish()
 				}
 			},
 			nil,
@@ -72,7 +73,7 @@ func TestEventAuth(t *testing.T) {
 			"join_rule": "invite",
 		},
 	})
-	waiter.Wait(t, 1*time.Second) // wait for the join rule to make it to the complement server
+	wait.Wait(t, 1*time.Second) // wait for the join rule to make it to the complement server
 
 	getEventAuth := func(t *testing.T, eventID string, wantAuthEventIDs []string) {
 		t.Helper()

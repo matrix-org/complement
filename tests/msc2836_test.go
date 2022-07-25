@@ -261,7 +261,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	t.Logf("D: %s", eventD.EventID())
 
 	// we expect to be called with event D, and will return D,C,B,A
-	waiter := NewWaiter()
+	waiter := waiter.New()
 	srv.Mux().HandleFunc("/_matrix/federation/unstable/event_relationships", func(w http.ResponseWriter, req *http.Request) {
 		defer waiter.Finish()
 		must.MatchRequest(t, req, match.HTTPRequest{

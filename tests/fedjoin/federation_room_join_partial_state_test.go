@@ -360,8 +360,8 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// we expect a /state_ids request from hs2 after it joins the room
 		// we will respond to the request with garbage
-		fedStateIdsRequestReceivedWaiter := NewWaiter()
-		fedStateIdsSendResponseWaiter := NewWaiter()
+		fedStateIdsRequestReceivedWaiter := waiter.New()
+		fedStateIdsSendResponseWaiter := waiter.New()
 		server.Mux().Handle(
 			fmt.Sprintf("/_matrix/federation/v1/state_ids/%s", roomID),
 			http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -574,8 +574,8 @@ func beginPartialStateJoin(t *testing.T, deployment *docker.Deployment, joiningU
 	result.cancelListener = result.Server.Listen()
 
 	// some things for orchestration
-	result.fedStateIdsRequestReceivedWaiter = NewWaiter()
-	result.fedStateIdsSendResponseWaiter = NewWaiter()
+	result.fedStateIdsRequestReceivedWaiter = waiter.New()
+	result.fedStateIdsSendResponseWaiter = waiter.New()
 
 	// create the room on the complement server, with charlie and derek as members
 	roomVer := joiningUser.GetDefaultRoomVersion(t)

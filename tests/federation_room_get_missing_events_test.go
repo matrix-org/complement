@@ -17,6 +17,7 @@ import (
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/internal/waiter"
 )
 
 // TODO:
@@ -237,9 +238,9 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	})
 	room.AddEvent(sentEvent)
 
-	waiter := NewWaiter()
+	wait := waiter.New()
 	onGetMissingEvents = func(w http.ResponseWriter, req *http.Request) {
-		defer waiter.Finish()
+		defer wait.Finish()
 		must.MatchRequest(t, req, match.HTTPRequest{
 			JSON: []match.JSON{
 				match.JSONKeyEqual("earliest_events", []interface{}{latestEvent.EventID()}),
@@ -267,7 +268,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 			sentEvent.JSON(),
 		},
 	})
-	waiter.Wait(t, 5*time.Second)
+	wait.Wait(t, 5*time.Second)
 	must.NotError(t, "SendTransaction errored", err)
 	if len(resp.PDUs) != 1 {
 		t.Fatalf("got %d errors, want 1", len(resp.PDUs))
@@ -290,7 +291,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	})
 	room.AddEvent(message3)
 
-	waiter = NewWaiter()
+	wait = waiter.New()
 	onGetMissingEvents = func(w http.ResponseWriter, req *http.Request) {
 		must.MatchRequest(t, req, match.HTTPRequest{
 			JSON: []match.JSON{
@@ -298,7 +299,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 				match.JSONKeyEqual("latest_events", []interface{}{message3.EventID()}),
 			},
 		})
-		defer waiter.Finish()
+		defer wait.Finish()
 
 		// we don't really care what we return here, so just return an empty body.
 		w.WriteHeader(200)
@@ -312,5 +313,5 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 			message3.JSON(),
 		},
 	})
-	waiter.Wait(t, 5*time.Second)
+	wait.Wait(t, 5*time.Second)
 }

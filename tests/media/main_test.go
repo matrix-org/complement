@@ -1,4 +1,4 @@
-package csapi_tests
+package tests
 
 import (
 	"context"
@@ -26,7 +26,7 @@ var complementBuilder *docker.Builder
 // It will clean up any old containers/images/networks from the previous run, then run the tests, then clean up
 // again. No blueprints are made at this point as they are lazily made on demand.
 func TestMain(m *testing.M) {
-	cfg := config.NewConfigFromEnvVars("csapi", "")
+	cfg := config.NewConfigFromEnvVars("media", "")
 	log.Printf("config: %+v", cfg)
 	builder, err := docker.NewBuilder(cfg)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/internal/waiter"
 )
 
 // TODO:
@@ -24,7 +25,7 @@ func TestOutboundFederationSend(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	waiter := NewWaiter()
+	waiter := waiter.New()
 	wantEventType := "m.room.message"
 
 	// create a remote homeserver

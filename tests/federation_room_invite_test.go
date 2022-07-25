@@ -8,6 +8,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/internal/waiter"
 )
 
 // This test ensures that invite rejections are correctly sent out over federation.
@@ -23,7 +24,7 @@ func TestFederationRejectInvite(t *testing.T) {
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
 
 	// we'll awaken this Waiter when we receive a membership event for Charlie
-	var waiter *Waiter
+	var w *waiter.Waiter
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
@@ -33,8 +34,8 @@ func TestFederationRejectInvite(t *testing.T) {
 				sk = *ev.StateKey()
 			}
 			t.Logf("Received PDU %s/%s", ev.Type(), sk)
-			if waiter != nil && ev.Type() == "m.room.member" && ev.StateKeyEquals(charlie.UserID) {
-				waiter.Finish()
+			if w != nil && ev.Type() == "m.room.member" && ev.StateKeyEquals(charlie.UserID) {
+				w.Finish()
 			}
 		}, nil),
 	)
@@ -48,14 +49,14 @@ func TestFederationRejectInvite(t *testing.T) {
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, delia)
 
 	// Alice invites Charlie; Delia should see the invite
-	waiter = NewWaiter()
+	w = waiter.New()
 	alice.InviteRoom(t, roomID, charlie.UserID)
-	waiter.Wait(t, 5*time.Second)
+	w.Wait(t, 5*time.Second)
 	room.MustHaveMembershipForUser(t, charlie.UserID, "invite")
 
 	// Charlie rejects the invite; Delia should see the rejection.
-	waiter = NewWaiter()
+	w = waiter.New()
 	charlie.LeaveRoom(t, roomID)
-	waiter.Wait(t, 5*time.Second)
+	w.Wait(t, 5*time.Second)
 	room.MustHaveMembershipForUser(t, charlie.UserID, "leave")
 }

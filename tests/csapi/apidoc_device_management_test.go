@@ -1,12 +1,14 @@
 package csapi_tests
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -244,4 +246,26 @@ func TestDeviceManagement(t *testing.T) {
 			StatusCode: 404,
 		})
 	})
+}
+
+func createSession(t *testing.T, deployment *docker.Deployment, userID, password string) (deviceID string, authedClient *client.CSAPI) {
+	authedClient = deployment.Client(t, "hs1", "")
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"identifier": map[string]interface{}{
+			"type": "m.id.user",
+			"user": userID,
+		},
+		"type":     "m.login.password",
+		"password": password,
+	})
+	res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+
+	authedClient.UserID = gjson.GetBytes(body, "user_id").Str
+	authedClient.AccessToken = gjson.GetBytes(body, "access_token").Str
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	return deviceID, authedClient
 }
