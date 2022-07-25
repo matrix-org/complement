@@ -7,9 +7,11 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -606,50 +608,30 @@ func testReceiveEventDuringPartialStateJoin(
 	// Synapse's behaviour will likely change once https://github.com/matrix-org/synapse/issues/13288
 	// is resolved.
 
-	type StateIDsResult struct {
-		RespStateIDs gomatrixserverlib.RespStateIDs
-		Error        error
-	}
-	stateIdsResultChan := make(chan StateIDsResult)
-	defer close(stateIdsResultChan)
-	go func() {
-		stateReq := gomatrixserverlib.NewFederationRequest("GET", "hs1",
-			fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
-				url.PathEscape(psjResult.ServerRoom.RoomID),
-				url.QueryEscape(event.EventID()),
-			),
-		)
-		var respStateIDs gomatrixserverlib.RespStateIDs
-		if err := psjResult.Server.SendFederationRequest(deployment, stateReq, &respStateIDs); err != nil {
-			stateIdsResultChan <- StateIDsResult{Error: err}
+	stateReq := gomatrixserverlib.NewFederationRequest("GET", "hs1",
+		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
+			url.PathEscape(psjResult.ServerRoom.RoomID),
+			url.QueryEscape(event.EventID()),
+		),
+	)
+	var respStateIDs gomatrixserverlib.RespStateIDs
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err := psjResult.Server.SendFederationRequest(ctx, deployment, stateReq, &respStateIDs)
+	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			t.Logf("/state_ids request for event %s blocked as expected", event.EventID())
+		} else if httpErr, ok := err.(gomatrix.HTTPError); ok && httpErr.Code == 403 {
+			t.Logf("/state_ids request for event %s returned 403 as expected", event.EventID())
 		} else {
-			stateIdsResultChan <- StateIDsResult{RespStateIDs: respStateIDs}
+			t.Errorf("/state_ids request returned non-200: %s", err)
 		}
-	}()
-
-	select {
-	case <-time.After(1 * time.Second):
-		t.Logf("/state_ids request for event %s blocked as expected", event.EventID())
-		// read from the channel and discard the result, so that the goroutine above doesn't block
-		// indefinitely on the send
-		defer func() { <-stateIdsResultChan }()
-		break
-	case stateIDsResult := <-stateIdsResultChan:
-		if stateIDsResult.Error != nil {
-			httpErr, ok := stateIDsResult.Error.(gomatrix.HTTPError)
-			t.Logf("%v", httpErr)
-			if ok && httpErr.Code == 403 {
-				t.Logf("/state_ids request for event %s returned 403 as expected", event.EventID())
-			} else {
-				t.Errorf("/state_ids request returned non-200: %s", stateIDsResult.Error)
-			}
-		} else {
-			// since we have not yet given the homeserver the full state at the join event and allowed
-			// the partial join to complete, it can't possibly know the full state at the last event.
-			// While it may be possible for the response to be correct by some accident of state res,
-			// the homeserver is still wrong in spirit.
-			t.Fatalf("/state_ids request for event %s did not block when it should have", event.EventID())
-		}
+	} else {
+		// since we have not yet given the homeserver the full state at the join event and allowed
+		// the partial join to complete, it can't possibly know the full state at the last event.
+		// While it may be possible for the response to be correct by some accident of state res,
+		// the homeserver is still wrong in spirit.
+		t.Fatalf("/state_ids request for event %s did not block when it should have", event.EventID())
 	}
 
 	// allow the partial join to complete
@@ -660,14 +642,13 @@ func testReceiveEventDuringPartialStateJoin(
 	)
 
 	// check the server's idea of the state at the event. We do this by making a `state_ids` request over federation
-	stateReq := gomatrixserverlib.NewFederationRequest("GET", "hs1",
+	stateReq = gomatrixserverlib.NewFederationRequest("GET", "hs1",
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
 			url.PathEscape(psjResult.ServerRoom.RoomID),
 			url.QueryEscape(event.EventID()),
 		),
 	)
-	var respStateIDs gomatrixserverlib.RespStateIDs
-	if err := psjResult.Server.SendFederationRequest(deployment, stateReq, &respStateIDs); err != nil {
+	if err := psjResult.Server.SendFederationRequest(context.Background(), deployment, stateReq, &respStateIDs); err != nil {
 		t.Errorf("/state_ids request returned non-200: %s", err)
 		return
 	}
