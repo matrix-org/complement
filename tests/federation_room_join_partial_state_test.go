@@ -634,34 +634,10 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		// dedicated state_ids and state handlers for timelineEvent1's prev event (ie, the last outlier event)
-		psjResult.Server.Mux().NewRoute().Methods("GET").Path(
-			fmt.Sprintf("/_matrix/federation/v1/state_ids/%s", psjResult.ServerRoom.RoomID),
-		).Queries("event_id", outliers[len(outliers)-1].EventID()).Handler(
-			http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				queryParams := req.URL.Query()
-				t.Logf("Incoming state_ids request for last outlier event %s", queryParams["event_id"])
-				jsonb, _ := json.Marshal(gomatrixserverlib.RespStateIDs{
-					AuthEventIDs:  eventIDsFromEvents(psjResult.ServerRoom.AuthChain()),
-					StateEventIDs: eventIDsFromEvents(psjResult.ServerRoom.AllCurrentState()),
-				})
-				w.WriteHeader(200)
-				w.Write(jsonb)
-			}),
-		)
-		psjResult.Server.Mux().NewRoute().Methods("GET").Path(
-			fmt.Sprintf("/_matrix/federation/v1/state/%s", psjResult.ServerRoom.RoomID),
-		).Queries("event_id", outliers[len(outliers)-1].EventID()).Handler(
-			http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				queryParams := req.URL.Query()
-				t.Logf("Incoming state request for last outlier event %s", queryParams["event_id"])
-				jsonb, _ := json.Marshal(gomatrixserverlib.RespState{
-					AuthEvents:  gomatrixserverlib.NewEventJSONsFromEvents(psjResult.ServerRoom.AuthChain()),
-					StateEvents: gomatrixserverlib.NewEventJSONsFromEvents(psjResult.ServerRoom.AllCurrentState()),
-				})
-				w.WriteHeader(200)
-				w.Write(jsonb)
-			}),
-		)
+		handleStateIdsRequests(t, psjResult.Server, psjResult.ServerRoom, outliers[len(outliers)-1].EventID(),
+			psjResult.ServerRoom.AllCurrentState(), nil, nil)
+		handleStateRequests(t, psjResult.Server, psjResult.ServerRoom, outliers[len(outliers)-1].EventID(),
+			psjResult.ServerRoom.AllCurrentState(), nil, nil)
 
 		// now, send over the most recent event, which will make the server get_missing_events
 		// (we will send timelineEvent1), and then request state (we will send all the outliers).
