@@ -580,21 +580,6 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice has now joined the room, and the server is syncing the state in the background.
 
-		// utility function to build a regular event in the test room
-		makeTimelineEvent := func(body string) *gomatrixserverlib.Event {
-			event := psjResult.Server.MustCreateEvent(t, psjResult.ServerRoom, b.Event{
-				Type:   "m.room.message",
-				Sender: psjResult.Server.UserID("charlie"),
-				Content: map[string]interface{}{
-					"msgtype": "m.text",
-					"body":    body,
-				},
-			})
-			psjResult.ServerRoom.AddEvent(event)
-			t.Logf("Created event %s: %s", body, event.EventID())
-			return event
-		}
-
 		// utility function to wait for a given event to arrive at the remote server.
 		// This works simply by polling /event until we get a 200.
 		awaitEventArrival := func(eventID string) {
@@ -617,7 +602,7 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 
 		// here's the first event which we *ought* to un-partial-state, but won't
-		lateEvent := makeTimelineEvent("late event")
+		lateEvent := psjResult.CreateMessageEvent(t, "charlie", nil)
 
 		// next, we want to create 100 outliers. So, charlie creates 100 state events, and
 		// then persuades the system under test to create a backwards extremity using those events as
@@ -639,8 +624,8 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// a couple of regular timeline events to pull in the outliers... Note that these are persisted with *full*
 		// state rather than becoming partial state events.
-		timelineEvent1 := makeTimelineEvent("timeline event 1")
-		timelineEvent2 := makeTimelineEvent("timeline event 2")
+		timelineEvent1 := psjResult.CreateMessageEvent(t, "charlie", nil)
+		timelineEvent2 := psjResult.CreateMessageEvent(t, "charlie", nil)
 
 		// dedicated get_missing_event handler for timelineEvent2.
 		// we grudgingly return a single event.
