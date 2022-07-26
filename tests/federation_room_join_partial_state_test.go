@@ -629,34 +629,9 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// dedicated get_missing_event handler for timelineEvent2.
 		// we grudgingly return a single event.
-		psjResult.Server.Mux().Handle("/_matrix/federation/v1/get_missing_events/{roomID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			vars := mux.Vars(req)
-			roomID := vars["roomID"]
-
-			// Unmarshal the request body into an object
-			content, _ := ioutil.ReadAll(req.Body)
-			var request gomatrixserverlib.MissingEvents
-			if err := json.Unmarshal(content, &request); err != nil {
-				t.Fatalf("get_missing_events: Unable to unmarshal request body: %s", err.Error())
-			}
-
-			t.Logf("Got get_missing_events request in %s: %#v", roomID, request)
-			if roomID != psjResult.ServerRoom.RoomID {
-				t.Fatalf("get_missing_events for wrong room: got %s, want %s", roomID, psjResult.ServerRoom.RoomID)
-			}
-
-			if request.LatestEvents[0] != timelineEvent2.EventID() {
-				t.Fatalf("get_missing_events for wrong event: got %v, want %s", request.LatestEvents, timelineEvent2.EventID())
-			}
-
-			// return timelineEvent1
-			jsonb, _ := json.Marshal(gomatrixserverlib.RespMissingEvents{
-				Events: gomatrixserverlib.EventJSONs{timelineEvent1.JSON()},
-			})
-			w.WriteHeader(200)
-			w.Write(jsonb)
-			t.Logf("Processed get_missing_events request: returned event %s", timelineEvent1.EventID())
-		}))
+		handleGetMissingEventsRequests(t, psjResult.Server, psjResult.ServerRoom,
+			[]string{timelineEvent2.EventID()}, []*gomatrixserverlib.Event{timelineEvent1},
+		)
 
 		// dedicated state_ids and state handlers for timelineEvent1's prev event (ie, the last outlier event)
 		psjResult.Server.Mux().NewRoute().Methods("GET").Path(
