@@ -569,8 +569,9 @@ func TestPartialStateJoin(t *testing.T) {
 	// regression test for https://github.com/matrix-org/synapse/issues/13001
 	//
 	// There was an edge case where, if we initially receive lots of events as outliers,
-	// and they then get de-outliered as partial state events,
-	t.Run("Resync works with many prev_events with partial state", func(t *testing.T) {
+	// and they then get de-outliered as partial state events, we would get stuck in
+	// an infinite loop of de-partial-stating.
+	t.Run("Resync completes even when events arrive before their prev_events", func(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -582,24 +583,6 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// utility function to wait for a given event to arrive at the remote server.
 		// This works simply by polling /event until we get a 200.
-		awaitEventArrival := func(eventID string) {
-			start := time.Now()
-			for time.Since(start) < 10*time.Second {
-				res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "event", eventID})
-				eventResBody := client.ParseJSON(t, res)
-				if res.StatusCode == 200 {
-					t.Logf("Alice successfully received event %s", eventID)
-					return
-				}
-				if res.StatusCode == 404 && gjson.GetBytes(eventResBody, "errcode").String() == "M_NOT_FOUND" {
-					t.Logf("Fetching event %s failed with M_NOT_FOUND; will retry", eventID)
-					time.Sleep(1000 * time.Millisecond)
-					continue
-				}
-				t.Fatalf("GET /event failed with %d: %s", res.StatusCode, string(eventResBody))
-			}
-			t.Fatalf("timeout waiting for event %s to be received", eventID)
-		}
 
 		// here's the first event which we *ought* to un-partial-state, but won't
 		lateEvent := psjResult.CreateMessageEvent(t, "charlie", nil)
@@ -645,7 +628,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Logf("Charlie sent timeline event 2")
 		// wait for it to become visible, which implies that all the outliers have been pulled in.
-		awaitEventArrival(timelineEvent2.EventID())
+		awaitEventArrival(t, time.Second, alice, psjResult.ServerRoom.RoomID, timelineEvent2.EventID())
 
 		// now we send over all the other events in the gap.
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{lateEvent.JSON()}, nil)
@@ -663,7 +646,7 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 
 		// wait for the last outlier to arrive
-		awaitEventArrival(outliers[len(outliers)-1].EventID())
+		awaitEventArrival(t, 10*time.Second, alice, psjResult.ServerRoom.RoomID, outliers[len(outliers)-1].EventID())
 
 		// release the federation /state response
 		psjResult.FinishStateRequest()
@@ -698,31 +681,7 @@ func testReceiveEventDuringPartialStateJoin(
 	// send the event to the homeserver
 	psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
 
-	/* TODO: check that a lazy-loading sync can see the event. Currently this doesn't work, because /sync blocks.
-	 * https://github.com/matrix-org/synapse/issues/13146
-	alice.MustSyncUntil(t,
-		client.SyncReq{
-			Filter: buildLazyLoadingSyncFilter(nil),
-		},
-		client.SyncTimelineHasEventID(psjResult.ServerRoom.RoomID, event.EventID()),
-	)
-	*/
-
-	// still, Alice should be able to see the event with an /event request. We might have to try it a few times.
-	alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", psjResult.ServerRoom.RoomID, "event", event.EventID()},
-		client.WithRetryUntil(time.Second, func(res *http.Response) bool {
-			if res.StatusCode == 200 {
-				return true
-			}
-			eventResBody := client.ParseJSON(t, res)
-			if res.StatusCode == 404 && gjson.GetBytes(eventResBody, "errcode").String() == "M_NOT_FOUND" {
-				return false
-			}
-			t.Fatalf("GET /event failed with %d: %s", res.StatusCode, string(eventResBody))
-			return false
-		}),
-	)
-	t.Logf("Successfully fetched received event %s", event.EventID())
+	awaitEventArrival(t, time.Second, alice, psjResult.ServerRoom.RoomID, event.EventID())
 
 	// fire off a /state_ids request for the last event.
 	// it must either:
@@ -785,6 +744,35 @@ func testReceiveEventDuringPartialStateJoin(
 		expectedState = append(expectedState, ev.EventID())
 	}
 	must.CheckOffAll(t, gotState, expectedState)
+}
+
+// awaitEventArrival waits for alice to be able to see a given event
+func awaitEventArrival(t *testing.T, timeout time.Duration, alice *client.CSAPI, roomID string, eventID string) {
+	/* TODO: check that a lazy-loading sync can see the event. Currently this doesn't work, because /sync blocks.
+	 * https://github.com/matrix-org/synapse/issues/13146
+	alice.MustSyncUntil(t,
+		client.SyncReq{
+			Filter: buildLazyLoadingSyncFilter(nil),
+		},
+		client.SyncTimelineHasEventID(roomID, eventID),
+	)
+	*/
+
+	// still, Alice should be able to see the event with an /event request. We might have to try it a few times.
+	alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "event", eventID},
+		client.WithRetryUntil(timeout, func(res *http.Response) bool {
+			if res.StatusCode == 200 {
+				return true
+			}
+			eventResBody := client.ParseJSON(t, res)
+			if res.StatusCode == 404 && gjson.GetBytes(eventResBody, "errcode").String() == "M_NOT_FOUND" {
+				return false
+			}
+			t.Fatalf("GET /event failed with %d: %s", res.StatusCode, string(eventResBody))
+			return false
+		}),
+	)
+	t.Logf("Alice successfully received event %s", eventID)
 }
 
 // buildLazyLoadingSyncFilter constructs a json-marshalled filter suitable the 'Filter' field of a client.SyncReq
