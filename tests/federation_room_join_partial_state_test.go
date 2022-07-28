@@ -734,6 +734,78 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 		t.Logf("Alice successfully synced")
 	})
+
+	// test that any rejected events that are sent during the partial-state phase
+	// do not suddenly become un-rejected during the resync
+	t.Run("Rejected events remain rejected after resync", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(server)
+
+		// derek sends a state event, despite not having permission to send state. This should be rejected.
+		badStateEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			Type:     "m.room.test",
+			StateKey: b.Ptr(""),
+			Sender:   server.UserID("derek"),
+			Content: map[string]interface{}{
+				"body": "bad state event",
+			},
+		})
+		// add to the timeline, but not the state (so that when testReceiveEventDuringPartialStateJoin checks the state,
+		// it doesn't expect to see this)
+		serverRoom.Timeline = append(serverRoom.Timeline, badStateEvent)
+		serverRoom.Depth = badStateEvent.Depth()
+		serverRoom.ForwardExtremities = []string{badStateEvent.EventID()}
+		t.Logf("derek created bad state event %s", badStateEvent.EventID())
+
+		// we also create a regular event which should be accepted, to act as a sentinel
+		sentinelEvent := psjResult.CreateMessageEvent(t, "charlie", nil)
+		serverRoom.AddEvent(sentinelEvent)
+		t.Logf("charlie created sentinel event %s", sentinelEvent.EventID())
+
+		server.MustSendTransaction(t, deployment, "hs1",
+			[]json.RawMessage{badStateEvent.JSON(), sentinelEvent.JSON()}, nil)
+
+		// wait for the sentinel event to be visible
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, sentinelEvent.EventID())
+
+		// ... and check that the bad state event is *not* visible
+		must.MatchResponse(t,
+			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badStateEvent.EventID()}),
+			match.HTTPResponse{
+				StatusCode: 404,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
+				},
+			},
+		)
+
+		// one more (non-state) event, for testReceiveEventDuringPartialStateJoin
+		event := psjResult.CreateMessageEvent(t, "charlie", nil)
+		t.Logf("charlie created regular timeline event %s", event.EventID())
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
+
+		// check that the bad state event is *still* not visible
+		must.MatchResponse(t,
+			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badStateEvent.EventID()}),
+			match.HTTPResponse{
+				StatusCode: 404,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
+				},
+			},
+		)
+	})
 }
 
 // test reception of an event over federation during a resync
@@ -1025,6 +1097,9 @@ func handleStateRequests(
 			if sendResponseWaiter != nil {
 				sendResponseWaiter.Waitf(t, 60*time.Second, "Waiting for /state request")
 			}
+
+			t.Logf("Replying to /state request for event %s", queryParams["event_id"])
+
 			res := gomatrixserverlib.RespState{
 				AuthEvents:  gomatrixserverlib.NewEventJSONsFromEvents(serverRoom.AuthChainForEvents(roomState)),
 				StateEvents: gomatrixserverlib.NewEventJSONsFromEvents(roomState),
@@ -1037,6 +1112,7 @@ func handleStateRequests(
 			}
 		}),
 	)
+	t.Logf("Registered /state handler for event %s", eventID)
 }
 
 // register a handler for `/get_missing_events` requests
