@@ -345,6 +345,11 @@ func TestSync(t *testing.T) {
 			numResponsesReturned := 0
 			start := time.Now()
 			t.Logf("Will sync with since=%s", nextBatch)
+
+			// This part of the test is flaky for workerised Synapse with the default 5 second timeout,
+			// so bump it up to 10 seconds.
+			alice.SyncUntilTimeout = 10 * time.Second
+
 			for {
 				if time.Since(start) > alice.SyncUntilTimeout {
 					t.Fatalf("%s: timed out after %v. Seen %d /sync responses", alice.UserID, time.Since(start), numResponsesReturned)
