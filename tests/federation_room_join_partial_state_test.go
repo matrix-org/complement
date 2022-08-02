@@ -806,6 +806,128 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 		)
 	})
+
+	// when the server is in the middle of a partial state join, it should not accept
+	// /make_join because it can't give a full answer.
+	t.Run("DoesntAnswerMakeJoinDuringPartialJoin", func(t *testing.T) {
+		// In this test, we have 3 homeservers:
+		//   hs1 (the server under test) with @alice:hs1
+		//     This is the server that will be in the middle of a partial join.
+		//   testServer1 (a Complement test server) with @bob:<server name>
+		//     This is the server that created the room originally.
+		//   testServer2 (another Complement test server) with @charlie:<server name>
+		//     This is the server that will try to make a join via testServer1.
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		testServer1 := createTestServer(t, deployment)
+		cancel := testServer1.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, testServer1, alice.GetDefaultRoomVersion(t))
+		roomID := serverRoom.RoomID
+		psjResult := beginPartialStateJoin(t, testServer1, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// The partial join is now in progress.
+		// Let's have a new test server rock up and ask to join the room by making a
+		// /make_join request.
+
+		testServer2 := createTestServer(t, deployment)
+		cancel2 := testServer2.Listen()
+		defer cancel2()
+
+		fedClient2 := testServer2.FederationClient(deployment)
+
+		// charlie sends a make_join
+		_, err := fedClient2.MakeJoin(context.Background(), "hs1", roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
+
+		if err == nil {
+			t.Errorf("MakeJoin returned 200, want 404")
+		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
+			t.Logf("MakeJoin => %d/%s", httpError.Code, string(httpError.Contents))
+			if httpError.Code != 404 {
+				t.Errorf("expected 404, got %d", httpError.Code)
+			}
+			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
+			if errcode != "M_NOT_FOUND" {
+				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
+			}
+		} else {
+			t.Errorf("MakeJoin: non-HTTPError: %v", err)
+		}
+	})
+
+	// when the server is in the middle of a partial state join, it should not accept
+	// /send_join because it can't give a full answer.
+	t.Run("DoesntAnswerSendJoinDuringPartialJoin", func(t *testing.T) {
+		// In this test, we have 3 homeservers:
+		//   hs1 (the server under test) with @alice:hs1
+		//     This is the server that will be in the middle of a partial join.
+		//   testServer1 (a Complement test server) with @charlie:<server name>
+		//     This is the server that will create the room originally.
+		//   testServer2 (another Complement test server) with @daniel:<server name>
+		//     This is the server that will try to join the room via hs2,
+		//     but only after using hs1 to /make_join (as otherwise we have no way
+		//     of being able to build a request to /send_join)
+		//
+		// We use a blueprint with two servers rather than using two test servers
+		// because Complement test servers can't send requests to each other
+		// (their names only resolve within docker containers)
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		testServer1 := createTestServer(t, deployment)
+		cancel := testServer1.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, testServer1, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, testServer1, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// hs1's partial join is now in progress.
+		// Let's have a test server rock up and ask to /send_join in the room via hs1.
+		// To do that, we need to /make_join first.
+		// Asking hs1 to /make_join won't work, because it should reject that request.
+		// To work around that, we /make_join via hs2.
+
+		testServer2 := createTestServer(t, deployment)
+		cancel2 := testServer2.Listen()
+		defer cancel2()
+
+		fedClient2 := testServer2.FederationClient(deployment)
+
+		// Manually /make_join via testServer1.
+		// This is permissible because testServer1 is fully joined to the room.
+		// We can't actually use /make_join because host.docker.internal doesn't resolve,
+		// so compute it without making any requests:
+		makeJoinResp, errs := federation.MakeRespMakeJoin(testServer1, serverRoom, testServer2.UserID("daniel"))
+		if errs != "" {
+			t.Fatalf("MakeRespMakeJoin failed : %s", errs)
+		}
+
+		// charlie then tries to /send_join via the homeserver under test
+		joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv, makeJoinResp.RoomVersion)
+		must.NotError(t, "JoinEvent.Build", err)
+
+		// SendJoin should return a 404 because the homeserver under test has not
+		// finished its partial join.
+		_, err = fedClient2.SendJoin(context.Background(), "hs1", joinEvent)
+		if err == nil {
+			t.Errorf("SendJoin returned 200, want 404")
+		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
+			t.Logf("SendJoin => %d/%s", httpError.Code, string(httpError.Contents))
+			if httpError.Code != 404 {
+				t.Errorf("expected 404, got %d", httpError.Code)
+			}
+			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
+			if errcode != "M_NOT_FOUND" {
+				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
+			}
+		} else {
+			t.Errorf("SendJoin: non-HTTPError: %v", err)
+		}
+	})
 }
 
 // test reception of an event over federation during a resync
