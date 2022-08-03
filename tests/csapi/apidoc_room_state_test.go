@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+
+	"net/http"
 )
 
 func TestRoomState(t *testing.T) {
@@ -105,26 +108,31 @@ func TestRoomState(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"})
-			foundRoom := false
+			authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
+				client.WithRetryUntil(time.Second, func(res *http.Response) bool {
+					foundRoom := false
 
-			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONKeyPresent("chunk"),
-					match.JSONArrayEach("chunk", func(val gjson.Result) error {
-						gotRoomID := val.Get("room_id").Str
-						if gotRoomID == roomID {
-							foundRoom = true
-							return nil
-						}
-						return nil
-					}),
-				},
-			})
+					must.MatchResponse(t, res, match.HTTPResponse{
+						JSON: []match.JSON{
+							match.JSONKeyPresent("chunk"),
+							match.JSONArrayEach("chunk", func(val gjson.Result) error {
+								gotRoomID := val.Get("room_id").Str
+								if gotRoomID == roomID {
+									foundRoom = true
+									return nil
+								}
+								return nil
+							}),
+						},
+					})
 
-			if !foundRoom {
-				t.Errorf("failed to find room with id: %s", roomID)
-			}
+					if !foundRoom {
+						t.Logf("failed to find room with id: %s", roomID)
+					}
+
+					return foundRoom
+				}),
+			)
 		})
 		// sytest: GET /directory/room/:room_alias yields room ID
 		t.Run("GET /directory/room/:room_alias yields room ID", func(t *testing.T) {
