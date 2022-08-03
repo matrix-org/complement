@@ -1,7 +1,6 @@
 package csapi_tests
 
 import (
-	"net/http"
 	"net/url"
 	"testing"
 	"time"
