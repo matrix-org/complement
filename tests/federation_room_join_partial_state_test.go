@@ -806,6 +806,232 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 		)
 	})
+
+	t.Run("State accepted incorrectly", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(server)
+
+		// create the room on the complement server, with charlie as the founder, and derek as a user with permission
+		// to send state. He later leaves.
+		roomVer := alice.GetDefaultRoomVersion(t)
+		charlie := server.UserID("charlie")
+		derek := server.UserID("derek")
+		initialRoomEvents := federation.InitialRoomEvents(roomVer, charlie)
+		// update the users map in the PL event
+		for _, ev := range initialRoomEvents {
+			if ev.Type == "m.room.power_levels" {
+				ev.Content["users"] = map[string]int64{charlie: 100, derek: 50}
+			}
+		}
+		serverRoom := server.MustMakeRoom(t, roomVer, initialRoomEvents)
+
+		// derek joins
+		derekJoinEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			Type:     "m.room.member",
+			StateKey: &derek,
+			Sender:   derek,
+			Content: map[string]interface{}{
+				"membership": "join",
+			},
+		})
+		serverRoom.AddEvent(derekJoinEvent)
+
+		// ... and leaves again
+		derekLeaveEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			Type:     "m.room.member",
+			StateKey: &derek,
+			Sender:   derek,
+			Content: map[string]interface{}{
+				"membership": "leave",
+			},
+		})
+		serverRoom.AddEvent(derekLeaveEvent)
+
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// derek now sends a state event with auth_events that say he was in the room. It will be
+		// accepted during the faster join, but should then ultimately be rejected.
+		badStateEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			Type:     "m.room.test",
+			StateKey: b.Ptr(""),
+			Sender:   derek,
+			Content: map[string]interface{}{
+				"body": "bad state event",
+			},
+			AuthEvents: serverRoom.EventIDsOrReferences([]*gomatrixserverlib.Event{
+				serverRoom.CurrentState("m.room.create", ""),
+				serverRoom.CurrentState("m.room.power_levels", ""),
+				derekJoinEvent,
+			}),
+		})
+		// add to the timeline, but not the state (so that when testReceiveEventDuringPartialStateJoin checks the state,
+		// it doesn't expect to see this)
+		serverRoom.Timeline = append(serverRoom.Timeline, badStateEvent)
+		serverRoom.Depth = badStateEvent.Depth()
+		serverRoom.ForwardExtremities = []string{badStateEvent.EventID()}
+		t.Logf("derek created bad state event %s with auth events %#v", badStateEvent.EventID(), badStateEvent.AuthEventIDs())
+		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{badStateEvent.JSON()}, nil)
+
+		// the bad state event should be visible at this point
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, badStateEvent.EventID())
+
+		// now finish up the partial join.
+		event := psjResult.CreateMessageEvent(t, "charlie", nil)
+		t.Logf("charlie created regular timeline event %s", event.EventID())
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
+
+		// the bad state event should now *not* be visible
+		must.MatchResponse(t,
+			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badStateEvent.EventID()}),
+			match.HTTPResponse{
+				StatusCode: 404,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
+				},
+			},
+		)
+	})
+
+	t.Run("State rejected incorrectly", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(server)
+
+		// create the room on the complement server, with charlie as the founder, derek as a user with permission
+		// to kick users, and elsie as a bystander who has permission to send state.
+		roomVer := alice.GetDefaultRoomVersion(t)
+		charlie := server.UserID("charlie")
+		derek := server.UserID("derek")
+		elsie := server.UserID("elsie")
+		initialRoomEvents := federation.InitialRoomEvents(roomVer, charlie)
+		// update the users map in the PL event
+		for _, ev := range initialRoomEvents {
+			if ev.Type == "m.room.power_levels" {
+				ev.Content["users"] = map[string]int64{charlie: 100, derek: 100, elsie: 50}
+			}
+		}
+		serverRoom := server.MustMakeRoom(t, roomVer, initialRoomEvents)
+
+		// derek joins
+		derekJoinEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			Type:     "m.room.member",
+			StateKey: &derek,
+			Sender:   derek,
+			Content:  map[string]interface{}{"membership": "join"},
+		})
+		serverRoom.AddEvent(derekJoinEvent)
+
+		// ... and leaves again
+		derekLeaveEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			Type:     "m.room.member",
+			StateKey: &derek,
+			Sender:   derek,
+			Content:  map[string]interface{}{"membership": "leave"},
+		})
+		serverRoom.AddEvent(derekLeaveEvent)
+
+		// Elsie joins
+		elsieJoinEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			Type:     "m.room.member",
+			StateKey: &elsie,
+			Sender:   elsie,
+			Content:  map[string]interface{}{"membership": "join"},
+		})
+		serverRoom.AddEvent(elsieJoinEvent)
+
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// Derek now kicks Elsie, with auth_events that say he was in the room. It will be
+		// accepted during the faster join, but should then ultimately be rejected.
+		badKickEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			Type:     "m.room.member",
+			StateKey: &elsie,
+			Sender:   derek,
+			Content:  map[string]interface{}{"membership": "leave"},
+			AuthEvents: serverRoom.EventIDsOrReferences([]*gomatrixserverlib.Event{
+				serverRoom.CurrentState("m.room.create", ""),
+				serverRoom.CurrentState("m.room.power_levels", ""),
+				derekJoinEvent,
+				elsieJoinEvent,
+			}),
+		})
+		// add to the timeline, but not the state (so that when testReceiveEventDuringPartialStateJoin checks the state,
+		// it doesn't expect to see this)
+		serverRoom.Timeline = append(serverRoom.Timeline, badKickEvent)
+		serverRoom.Depth = badKickEvent.Depth()
+		serverRoom.ForwardExtremities = []string{badKickEvent.EventID()}
+		t.Logf("derek created bad kick event %s with auth events %#v", badKickEvent.EventID(), badKickEvent.AuthEventIDs())
+
+		// elsie sends some state. This should be rejected during the faster join, but ultimately accepted.
+		rejectedStateEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			Type:     "m.room.test",
+			StateKey: b.Ptr(""),
+			Sender:   elsie,
+			Content:  map[string]interface{}{"body": "rejected state"},
+			AuthEvents: serverRoom.EventIDsOrReferences([]*gomatrixserverlib.Event{
+				serverRoom.CurrentState("m.room.create", ""),
+				serverRoom.CurrentState("m.room.power_levels", ""),
+				elsieJoinEvent,
+			}),
+		})
+		serverRoom.AddEvent(rejectedStateEvent)
+		t.Logf("elsie created state event %s", rejectedStateEvent.EventID())
+
+		// we also create a regular event which should be accepted, to act as a sentinel
+		sentinelEvent := psjResult.CreateMessageEvent(t, "charlie", nil)
+		serverRoom.AddEvent(sentinelEvent)
+		t.Logf("charlie created sentinel event %s", sentinelEvent.EventID())
+
+		server.MustSendTransaction(t, deployment, "hs1",
+			[]json.RawMessage{badKickEvent.JSON(), rejectedStateEvent.JSON(), sentinelEvent.JSON()}, nil)
+
+		// the bad kick event should be visible at this point
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, badKickEvent.EventID())
+
+		// ... but the rejected state event should not.
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, sentinelEvent.EventID())
+		must.MatchResponse(t,
+			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", rejectedStateEvent.EventID()}),
+			match.HTTPResponse{
+				StatusCode: 404,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
+				},
+			},
+		)
+
+		// now finish up the partial join.
+		event := psjResult.CreateMessageEvent(t, "charlie", nil)
+		t.Logf("charlie created regular timeline event %s", event.EventID())
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
+
+		// the bad kick event should now *not* be visible
+		must.MatchResponse(t,
+			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badKickEvent.EventID()}),
+			match.HTTPResponse{
+				StatusCode: 404,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
+				},
+			},
+		)
+	})
+
 }
 
 // test reception of an event over federation during a resync
