@@ -46,12 +46,8 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 	}
 
 	// Send it
-	res := map[string]interface{}{
-		"event":        makeJoinResp.JoinEvent,
-		"room_version": makeJoinResp.RoomVersion,
-	}
 	w.WriteHeader(200)
-	b, _ := json.Marshal(res)
+	b, _ := json.Marshal(makeJoinResp)
 	w.Write(b)
 }
 
