@@ -39,9 +39,9 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 	}
 
 	makeJoinResp, err := MakeRespMakeJoin(s, room, userID)
-	if err != "" {
+	if err != nil {
 		w.WriteHeader(500)
-		w.Write([]byte(err))
+		w.Write([]byte(fmt.Sprintf("complement: HandleMakeSendJoinRequests %s", err)))
 		return
 	}
 
@@ -57,7 +57,7 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 // MakeRespMakeJoin makes the response for a /make_join request, without verifying any signatures
 // or dealing with HTTP responses itself.
-func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeJoin, err string) {
+func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeJoin, err error) {
 	// Generate a join event
 	builder := gomatrixserverlib.EventBuilder{
 		Sender:     userID,
@@ -67,14 +67,14 @@ func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp gomatrix
 		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
 		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
 	}
-	err2 := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
-	if err2 != nil {
-		err = "complement: HandleMakeSendJoinRequests make_join cannot set membership content: " + err2.Error()
+	err = builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
+	if err != nil {
+		err = fmt.Errorf("make_join cannot set membership content: %w", err)
 		return
 	}
-	stateNeeded, err2 := gomatrixserverlib.StateNeededForEventBuilder(&builder)
-	if err2 != nil {
-		err = "complement: HandleMakeSendJoinRequests make_join cannot calculate auth_events: " + err2.Error()
+	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
+	if err != nil {
+		err = fmt.Errorf("make_join cannot calculate auth_events: %w", err)
 		return
 	}
 	builder.AuthEvents = room.AuthEvents(stateNeeded)

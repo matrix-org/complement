@@ -901,9 +901,9 @@ func TestPartialStateJoin(t *testing.T) {
 		// This is permissible because testServer1 is fully joined to the room.
 		// We can't actually use /make_join because host.docker.internal doesn't resolve,
 		// so compute it without making any requests:
-		makeJoinResp, errs := federation.MakeRespMakeJoin(testServer1, serverRoom, testServer2.UserID("daniel"))
-		if errs != "" {
-			t.Fatalf("MakeRespMakeJoin failed : %s", errs)
+		makeJoinResp, err := federation.MakeRespMakeJoin(testServer1, serverRoom, testServer2.UserID("daniel"))
+		if err != nil {
+			t.Fatalf("MakeRespMakeJoin failed : %s", err)
 		}
 
 		// charlie then tries to /send_join via the homeserver under test
