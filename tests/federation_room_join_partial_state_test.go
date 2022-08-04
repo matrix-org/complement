@@ -871,9 +871,6 @@ func TestPartialStateJoin(t *testing.T) {
 		//     but only after using hs1 to /make_join (as otherwise we have no way
 		//     of being able to build a request to /send_join)
 		//
-		// We use a blueprint with two servers rather than using two test servers
-		// because Complement test servers can't send requests to each other
-		// (their names only resolve within docker containers)
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
