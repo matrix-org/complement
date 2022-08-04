@@ -431,7 +431,7 @@ func waitForContainer(ctx context.Context, docker *client.Client, hsDep *Homeser
 		iterCount += 1
 		if time.Now().After(stopTime) {
 			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
-			break
+			return
 		}
 		inspect, err := docker.ContainerInspect(ctx, hsDep.ContainerID)
 		if err != nil {
