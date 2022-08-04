@@ -809,7 +809,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// when the server is in the middle of a partial state join, it should not accept
 	// /make_join because it can't give a full answer.
-	t.Run("DoesntAnswerMakeJoinDuringPartialJoin", func(t *testing.T) {
+	t.Run("Rejects make_join during partial join", func(t *testing.T) {
 		// In this test, we have 3 homeservers:
 		//   hs1 (the server under test) with @alice:hs1
 		//     This is the server that will be in the middle of a partial join.
@@ -860,7 +860,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// when the server is in the middle of a partial state join, it should not accept
 	// /send_join because it can't give a full answer.
-	t.Run("DoesntAnswerSendJoinDuringPartialJoin", func(t *testing.T) {
+	t.Run("Rejects send_join during partial join", func(t *testing.T) {
 		// In this test, we have 3 homeservers:
 		//   hs1 (the server under test) with @alice:hs1
 		//     This is the server that will be in the middle of a partial join.
