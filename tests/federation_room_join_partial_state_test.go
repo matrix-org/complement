@@ -1147,7 +1147,7 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Fatalf("MakeRespMakeJoin failed : %s", err)
 		}
 
-		// charlie then tries to /send_join via the homeserver under test
+		// daniel then tries to /send_join via the homeserver under test
 		joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv, makeJoinResp.RoomVersion)
 		must.NotError(t, "JoinEvent.Build", err)
 
