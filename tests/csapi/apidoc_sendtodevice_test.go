@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
-	"github.com/tidwall/gjson"
 )
 
 func TestSendToDevice(t *testing.T) {
@@ -170,8 +171,8 @@ func TestSendToDevice(t *testing.T) {
 }
 
 func verifyToDeviceResp(t *testing.T, user *client.CSAPI, checks []match.JSON, wantMessageCount int64) client.SyncCheckOpt {
-	t.Helper()
 	return func(userID string, syncResp gjson.Result) error {
+		t.Helper()
 		toDevice := syncResp.Get("to_device.events")
 		if !toDevice.Exists() {
 			if wantMessageCount > 0 && len(toDevice.Array()) == 0 {
@@ -179,7 +180,7 @@ func verifyToDeviceResp(t *testing.T, user *client.CSAPI, checks []match.JSON, w
 			}
 		}
 		if count := len(toDevice.Array()); int64(count) != wantMessageCount {
-			return fmt.Errorf("(%s - %s) expected %d to_device.events, got %d - %v", user.UserID, user.DeviceID, wantMessageCount, count, toDevice.Raw)
+			t.Fatalf("(%s - %s) expected %d to_device.events, got %d - %v", user.UserID, user.DeviceID, wantMessageCount, count, toDevice.Raw)
 		}
 		for _, message := range toDevice.Array() {
 			for _, check := range checks {
