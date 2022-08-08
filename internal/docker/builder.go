@@ -380,9 +380,15 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
+	var baseImageURI string
+	if hs.BaseImageURI == nil {
+		baseImageURI = d.Config.BaseImageURI
+	} else {
+		baseImageURI = *hs.BaseImageURI
+	}
 
 	return deployImage(
-		d.Docker, d.Config.BaseImageURI, fmt.Sprintf("complement_%s", contextStr),
+		d.Docker, baseImageURI, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
 		networkID, d.Config,
 	)
