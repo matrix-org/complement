@@ -16,6 +16,8 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 )
 
@@ -147,7 +149,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				importTimestamp := makeTimestampFromTime(importTime)
 				timestampString := strconv.FormatInt(importTimestamp, 10)
 				// We can't use as.SendEventSynced(...) because application services can't use the /sync API
-				sendRes := as.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", "m.room.message", getTxnID("findEventBeforeCreation-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
+				sendRes := as.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("findEventBeforeCreation-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
 					"body":    "old imported event",
 					"msgtype": "m.text",
 				}), client.WithQueries(url.Values{
@@ -162,6 +164,36 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, timeBeforeRoomCreation, "b", importedEventID)
+			})
+
+			t.Run("can paginate after getting remote event from timestamp to event endpoint", func(t *testing.T) {
+				t.Parallel()
+				roomID, eventA, eventB := createTestRoom(t, alice)
+				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
+
+				// Get a pagination token from eventB
+				contextRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"limit": []string{"0"},
+				}))
+				contextResResBody := client.ParseJSON(t, contextRes)
+				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
+
+				// Paginate backwards from eventB
+				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+					"dir":   []string{"b"},
+					"limit": []string{"100"},
+					"from":  []string{paginationToken},
+				}))
+
+				// Make sure both messages are visible
+				must.MatchResponse(t, messagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONCheckOffAllowUnwanted("chunk", []interface{}{eventA.EventID, eventB.EventID}, func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						}, nil),
+					},
+				})
 			})
 		})
 	})
@@ -241,7 +273,7 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, roomID string, expectedEventId string, actualEventId string, givenTimestamp int64) string {
 	t.Helper()
 
-	messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+	messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		// The events returned will be from the newest -> oldest since we're going backwards
 		"dir":   []string{"b"},
 		"limit": []string{"100"},

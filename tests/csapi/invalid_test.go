@@ -34,7 +34,7 @@ func TestJson(t *testing.T) {
 			}
 
 			for _, testCase := range testCases {
-				res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
+				res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
 
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,
@@ -56,7 +56,7 @@ func TestJson(t *testing.T) {
 			}
 
 			for _, testCase := range testCases {
-				res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
+				res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
 
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,
@@ -177,7 +177,7 @@ func TestFilter(t *testing.T) {
 	filters := getFilters()
 
 	for _, filter := range filters {
-		res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "user", alice.UserID, "filter"}, client.WithJSONBody(t, filter))
+		res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "user", alice.UserID, "filter"}, client.WithJSONBody(t, filter))
 
 		if res.StatusCode >= 500 || res.StatusCode < 400 {
 			t.Errorf("Expected 4XX status code, got %d for testing filter %s", res.StatusCode, filter)
@@ -205,7 +205,7 @@ func TestEvent(t *testing.T) {
 				"body":    strings.Repeat("and they dont stop coming ", 2700), // 2700 * 26 == 70200
 			}
 
-			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", "m.room.message", "1"}, client.WithJSONBody(t, event))
+			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "1"}, client.WithJSONBody(t, event))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 413,
@@ -219,7 +219,7 @@ func TestEvent(t *testing.T) {
 				"body": strings.Repeat("Dormammu, I've Come To Bargain.\n", 2200), // 2200 * 32 == 70400
 			}
 
-			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "marvel.universe.fate"}, client.WithJSONBody(t, stateEvent))
+			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "marvel.universe.fate"}, client.WithJSONBody(t, stateEvent))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 413,

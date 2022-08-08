@@ -316,6 +316,7 @@ func TestSync(t *testing.T) {
 				Content: map[string]interface{}{"body": "1234"},
 			})
 			sentinelRoom.AddEvent(sentinelEvent)
+			t.Logf("Created sentinel event %s", sentinelEvent.EventID())
 			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 			// wait for the sentinel to arrive
@@ -343,6 +344,12 @@ func TestSync(t *testing.T) {
 			// keep the same ?since each time, instead of incrementally syncing on each pass.
 			numResponsesReturned := 0
 			start := time.Now()
+			t.Logf("Will sync with since=%s", nextBatch)
+
+			// This part of the test is flaky for workerised Synapse with the default 5 second timeout,
+			// so bump it up to 10 seconds.
+			alice.SyncUntilTimeout = 10 * time.Second
+
 			for {
 				if time.Since(start) > alice.SyncUntilTimeout {
 					t.Fatalf("%s: timed out after %v. Seen %d /sync responses", alice.UserID, time.Since(start), numResponsesReturned)
@@ -352,16 +359,22 @@ func TestSync(t *testing.T) {
 				numResponsesReturned += 1
 				timeline := syncResponse.Get("rooms.join." + client.GjsonEscape(redactionRoomID) + ".timeline")
 				timelineEvents := timeline.Get("events").Array()
-				lastEventIdInSync := timelineEvents[len(timelineEvents)-1].Get("event_id").String()
 
-				t.Logf("Iteration %d: /sync returned %d events, with final event %s", numResponsesReturned, len(timelineEvents), lastEventIdInSync)
-				if lastEventIdInSync == lastSentEventId {
-					// check we actually got a gappy sync - else this test isn't testing the right thing
-					if !timeline.Get("limited").Bool() {
-						t.Fatalf("Not a gappy sync after redaction")
+				if len(timelineEvents) > 0 {
+					lastEventIdInSync := timelineEvents[len(timelineEvents)-1].Get("event_id").String()
+					t.Logf("Iteration %d: /sync returned %d events, with final event %s", numResponsesReturned, len(timelineEvents), lastEventIdInSync)
+
+					if lastEventIdInSync == lastSentEventId {
+						// check we actually got a gappy sync - else this test isn't testing the right thing
+						if !timeline.Get("limited").Bool() {
+							t.Fatalf("Not a gappy sync after redaction")
+						}
+						break
 					}
-					break
+				} else {
+					t.Logf("Iteration %d: /sync returned %d events", numResponsesReturned, len(timelineEvents))
 				}
+
 			}
 
 			// that's it - we successfully did a gappy sync.

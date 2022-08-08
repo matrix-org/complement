@@ -25,7 +25,7 @@ func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverNam
 	res := c.DoFunc(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "r0", "join", roomIDOrAlias},
+		[]string{"_matrix", "client", "v3", "join", roomIDOrAlias},
 		client.WithQueries(query),
 	)
 	must.MatchFailure(t, res)
@@ -77,8 +77,29 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 	})
 
 	t.Run("Join should succeed when joined to allowed room", func(t *testing.T) {
-		// Join the allowed room, attempt to join the room again, which now should succeed.
+		// Join the allowed room.
 		bob.JoinRoom(t, allowed_room, []string{"hs1"})
+
+		// Confirm that we joined the allowed room by changing displayname and
+		// waiting for confirmation in the /sync response. (This is an attempt
+		// to mitigate race conditions between Synapse workers. We want to
+		// ensure that the worker serving the join to `room` knows we are joined
+		// to `allowed_room`.)
+		bob.SendEventSynced(
+			t,
+			allowed_room,
+			b.Event{
+				Type:     "m.room.member",
+				Sender:   bob.UserID,
+				StateKey: &bob.UserID,
+				Content: map[string]interface{}{
+					"membership":  "join",
+					"displayname": "Bobby",
+				},
+			},
+		)
+
+		// We should now be able to join the restricted room.
 		bob.JoinRoom(t, room, []string{"hs1"})
 
 		// Joining the same room again should work fine (e.g. to change your display name).
@@ -254,7 +275,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 	res := alice.DoFunc(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "r0", "rooms", room, "invite"},
+		[]string{"_matrix", "client", "v3", "rooms", room, "invite"},
 		client.WithJSONBody(t, body),
 	)
 	must.MatchResponse(t, res, match.HTTPResponse{

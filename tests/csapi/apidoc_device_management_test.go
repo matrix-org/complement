@@ -30,9 +30,9 @@ func TestDeviceManagement(t *testing.T) {
 			"device_id":                   deviceID,
 			"initial_device_display_name": "device display",
 		})
-		_ = unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
+		_ = unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
 
-		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "devices", deviceID})
+		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices", deviceID})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -45,7 +45,7 @@ func TestDeviceManagement(t *testing.T) {
 	// sytest: GET /device/{deviceId} gives a 404 for unknown devices
 	t.Run("GET /device/{deviceId} gives a 404 for unknown devices", func(t *testing.T) {
 
-		res := authedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "devices", "unknown_device"})
+		res := authedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices", "unknown_device"})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
@@ -66,13 +66,13 @@ func TestDeviceManagement(t *testing.T) {
 			"device_id":                   deviceIDSecond,
 			"initial_device_display_name": "device display",
 		})
-		_ = unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
+		_ = unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
 
 		wantDeviceIDs := map[string]bool{
 			deviceID:       true,
 			deviceIDSecond: true,
 		}
-		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "devices"})
+		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
@@ -97,9 +97,9 @@ func TestDeviceManagement(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"display_name": "new device display",
 		})
-		_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "devices", deviceID}, reqBody)
+		_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "devices", deviceID}, reqBody)
 
-		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "devices", deviceID})
+		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "devices", deviceID})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -114,7 +114,7 @@ func TestDeviceManagement(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"display_name": "new device display",
 		})
-		res := authedClient.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "devices", "unknown_device"}, reqBody)
+		res := authedClient.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "devices", "unknown_device"}, reqBody)
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,

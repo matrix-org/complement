@@ -80,7 +80,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 
 	queryParams := url.Values{}
 	queryParams.Set("server_name", "hs1")
-	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
+	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{
@@ -317,7 +317,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	res := alice.MustDoFunc(
 		t,
 		"GET",
-		[]string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.member", charlie},
+		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", charlie},
 	)
 	stateResp := client.ParseJSON(t, res)
 	membership := must.GetJSONFieldStr(t, stateResp, "membership")
@@ -385,7 +385,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		}
 
 		var res interface{}
-		err := srv.SendFederationRequest(deployment, req, &res)
+		err := srv.SendFederationRequest(context.Background(), deployment, req, &res)
 		if err == nil {
 			t.Errorf("send request returned 200")
 			return

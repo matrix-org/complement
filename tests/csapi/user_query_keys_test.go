@@ -20,7 +20,7 @@ func TestKeysQueryWithDeviceIDAsObjectFails(t *testing.T) {
 
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
-	res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "keys", "query"},
+	res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"device_keys": map[string]interface{}{
 				"@bob:hs1": map[string]bool{
