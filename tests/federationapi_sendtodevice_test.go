@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -153,6 +154,7 @@ func TestSendToDevice(t *testing.T) {
 			txnID := strconv.Itoa(10 + i)
 			alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "sendToDevice", "m.room_key_request", txnID}, reqBody)
 		}
+		time.Sleep(time.Millisecond * 100) // Wait a bit for the server to process all messages
 
 		verifyOrdering := func() match.JSON {
 			var i int64
