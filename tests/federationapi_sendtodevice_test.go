@@ -30,7 +30,6 @@ func TestSendToDevice(t *testing.T) {
 		match.JSONKeyEqual("content.request_id", "1"),
 	}
 
-	// sytest: Can recv a device message using /sync
 	t.Run("Can recv a device message using /sync", func(t *testing.T) {
 		// Create a m.room_key_request sendToDevice message
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
@@ -54,7 +53,6 @@ func TestSendToDevice(t *testing.T) {
 		bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, verifyToDeviceResp(t, bob, checks, 0))
 	})
 
-	// sytest: Can send a to-device message to two users which both receive it using /sync
 	t.Run("Can send a to-device message to two users which both receive it using /sync", func(t *testing.T) {
 		// Create a m.room_key_request sendToDevice message
 		// Bob will get a message directly to the device, while Charlie will get the message on all devices
