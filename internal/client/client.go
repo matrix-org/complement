@@ -195,6 +195,16 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	return eventID
 }
 
+// SendToDevice sends an event of type `eventType` to `userID`'s device `deviceID` with `content`.
+func (c *CSAPI) SendToDevice(t *testing.T, eventType, userID, deviceID string, content map[string]interface{}) *http.Response {
+	return c.MustDoFunc(t, "PUT",
+		[]string{"_matrix", "client", "v3", "sendToDevice", eventType, strconv.Itoa(c.txnID)},
+		WithJSONBody(t, map[string]map[string]interface{}{
+			"messages": {
+				userID: map[string]interface{}{deviceID: content},
+			}}))
+}
+
 // Perform a single /sync request with the given request options. To sync until something happens,
 // see `MustSyncUntil`.
 //
@@ -793,6 +803,18 @@ func SyncRoomAccountDataHas(roomID string, check func(gjson.Result) bool) SyncCh
 			return nil
 		}
 		return fmt.Errorf("SyncRoomAccountDataHas(%s): %s", roomID, err)
+    }
+}
+
+// Calls the `check` function for each to-device event, and returns with
+// success if the `check` function returns true for at least one event.
+func SyncToDeviceHas(check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(topLevelSyncJSON, "to_device.events", check)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncToDeviceHas: %s", err)
 	}
 }
 
