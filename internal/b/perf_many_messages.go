@@ -45,7 +45,16 @@ var BlueprintPerfManyMessages = MustValidate(Blueprint{
 							},
 							Sender: "@bob",
 						},
-					}, manyMessages([]string{"@alice", "@bob"}, 7000)...),
+					}, manyMessages([]string{"@alice", "@bob"}, 200)...),
+				},
+			},
+		},
+		{
+			Name: "hs2",
+			Users: []User{
+				{
+					Localpart:   "@charlie",
+					DisplayName: "Charlie",
 				},
 			},
 		},
