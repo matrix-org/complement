@@ -65,6 +65,17 @@ func TestPartialStateJoin(t *testing.T) {
 		return serverRoom
 	}
 
+	// getSyncToken gets the latest sync token
+	getSyncToken := func(t *testing.T, alice *client.CSAPI) string {
+		_, syncToken := alice.MustSync(t,
+			client.SyncReq{
+				Filter:        buildLazyLoadingSyncFilter(nil),
+				TimeoutMillis: "0",
+			},
+		)
+		return syncToken
+	}
+
 	// test that a regular /sync request made during a partial-state /send_join
 	// request blocks until the state is correctly synced.
 	t.Run("SyncBlocksDuringPartialStateJoin", func(t *testing.T) {
