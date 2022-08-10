@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -730,29 +729,16 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		// make derek send two messages into the room.
-		// we will do a gappy sync after, which will only pick up the last message.
-		var lastEventID string
-		for i := 0; i < 2; i++ {
-			event := server.MustCreateEvent(t, serverRoom, b.Event{
-				Type:   "m.room.message",
-				Sender: server.UserID("derek"),
-				Content: map[string]interface{}{
-					"msgtype": "m.text",
-					"body":    "Message " + strconv.Itoa(i),
-				},
-			})
-			lastEventID = event.EventID()
-			serverRoom.AddEvent(event)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
-		}
+		event1 := psjResult.CreateMessageEvent(t, "derek", nil)
+		event2 := psjResult.CreateMessageEvent(t, "derek", nil)
+		t.Logf("Derek created event 1 with ID %s", event1.EventID())
+		t.Logf("Derek created event 2 with ID %s", event2.EventID())
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event1.JSON(), event2.JSON()}, nil)
 
-		// wait for the events to come down a regular /sync.
-		alice.MustSyncUntil(t,
-			client.SyncReq{},
-			client.SyncTimelineHasEventID(serverRoom.RoomID, lastEventID),
-		)
+		// wait for the homeserver to persist the event.
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event2.EventID())
 
-		// now do a gappy sync using the sync token from before.
+		// do a gappy sync which only picks up the second message.
 		syncRes, _ := alice.MustSync(t,
 			client.SyncReq{
 				Since: syncToken,
@@ -763,30 +749,19 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		// check that the state includes derek.
-		roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID))
-		if !roomRes.Exists() {
-			t.Fatalf("/sync completed without join to new room\n")
+		err := client.SyncTimelineHasEventID(serverRoom.RoomID, event1.EventID())(alice.UserID, syncRes)
+		if err == nil {
+			t.Errorf("gappy /sync returned the first event unexpectedly")
 		}
-		t.Logf("gappy /sync response for %s: %s", serverRoom.RoomID, roomRes)
 
-		timelineMatcher := match.JSONCheckOff("timeline.events",
-			[]interface{}{lastEventID},
-			func(result gjson.Result) interface{} {
-				return result.Map()["event_id"].Str
-			}, nil,
-		)
-		stateMatcher := match.JSONCheckOffAllowUnwanted("state.events",
-			[]interface{}{
-				"m.room.member|" + server.UserID("derek"),
-			}, func(result gjson.Result) interface{} {
-				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
-			}, nil,
-		)
-		if err := timelineMatcher([]byte(roomRes.Raw)); err != nil {
-			t.Errorf("Unexpected timeline events found in gappy /sync response: %s", err)
+		err = client.SyncTimelineHasEventID(serverRoom.RoomID, event2.EventID())(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find event 2 in lazy-loading /sync response: %s", err)
 		}
-		if err := stateMatcher([]byte(roomRes.Raw)); err != nil {
-			t.Errorf("Did not find derek's m.room.member event in gappy /sync response: %s", err)
+
+		err = client.SyncStateHasStateKey(serverRoom.RoomID, "m.room.member", event2.Sender())(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event2.Sender(), err)
 		}
 	})
 
