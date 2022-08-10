@@ -31,7 +31,7 @@ func TestSendAndFetchMessage(t *testing.T) {
 	_, token := alice.MustSync(t, client.SyncReq{})
 
 	// first use the non-txn endpoint
-	alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "send", "m.room.message"}, client.WithJSONBody(t, map[string]interface{}{
+	alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    testMessage,
 	}))
@@ -45,7 +45,7 @@ func TestSendAndFetchMessage(t *testing.T) {
 	queryParams := url.Values{}
 	queryParams.Set("dir", "f")
 	queryParams.Set("from", token)
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -56,6 +56,24 @@ func TestSendAndFetchMessage(t *testing.T) {
 				return fmt.Errorf("did not find correct event")
 			}),
 		},
+	})
+}
+
+// With a non-existent room_id, GET /rooms/:room_id/messages returns 403
+// forbidden ("You aren't a member of the room").
+func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	roomID := "!does-not-exist:hs1"
+
+	// then request messages from the room
+	queryParams := url.Values{}
+	queryParams.Set("dir", "b")
+	res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: http.StatusForbidden,
 	})
 }
 
@@ -71,13 +89,13 @@ func TestSendMessageWithTxn(t *testing.T) {
 
 	const txnID = "lorem"
 
-	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", "m.room.message", txnID}, client.WithJSONBody(t, map[string]interface{}{
+	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", txnID}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "test",
 	}))
 	eventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", "m.room.message", txnID}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", txnID}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "test",
 	}))
@@ -148,7 +166,7 @@ func TestRoomMessagesLazyLoading(t *testing.T) {
 	queryParams.Set("filter", `{ "lazy_load_members" : true }`)
 	queryParams.Set("from", beforeToken)
 	queryParams.Set("to", afterToken)
-	res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -199,7 +217,7 @@ func TestRoomMessagesLazyLoadingLocalUser(t *testing.T) {
 	queryParams.Set("dir", "b")
 	queryParams.Set("filter", `{ "lazy_load_members" : true }`)
 	queryParams.Set("from", token)
-	res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{

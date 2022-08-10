@@ -98,7 +98,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 			body, _ := ioutil.ReadAll(req.Body)
 			t.Errorf("Server.UnexpectedRequestsAreErrors=true received unexpected request to server: %s %s\n%s", req.Method, req.URL.Path, string(body))
 		} else {
-			t.Logf("Server.UnexpectedRequestsAreErrors=false received unexpected request to server: %s %s", req.Method, req.URL.Path)
+			t.Logf("Server.UnexpectedRequestsAreErrors=false received unexpected request to server: %s %s - sending 404 which may cause the HS to backoff from Complement", req.Method, req.URL.Path)
 		}
 		w.WriteHeader(404)
 		w.Write([]byte("complement: federation server is not listening for this path"))
@@ -213,7 +213,7 @@ func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment
 // SendFederationRequest signs and sends an arbitrary federation request from this server.
 //
 // The requests will be routed according to the deployment map in `deployment`.
-func (s *Server) SendFederationRequest(deployment *docker.Deployment, req gomatrixserverlib.FederationRequest, resBody interface{}) error {
+func (s *Server) SendFederationRequest(ctx context.Context, deployment *docker.Deployment, req gomatrixserverlib.FederationRequest, resBody interface{}) error {
 	if err := req.Sign(gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
 		return err
 	}
@@ -224,7 +224,7 @@ func (s *Server) SendFederationRequest(deployment *docker.Deployment, req gomatr
 	}
 
 	httpClient := gomatrixserverlib.NewClient(gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}))
-	return httpClient.DoRequestAndParseResponse(context.Background(), httpReq, resBody)
+	return httpClient.DoRequestAndParseResponse(ctx, httpReq, resBody)
 }
 
 // MustCreateEvent will create and sign a new latest event for the given room.
@@ -263,6 +263,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		PrevEvents: prevEvents,
 		Unsigned:   unsigned,
 		AuthEvents: ev.AuthEvents,
+		Redacts:    ev.Redacts,
 	}
 	if eb.AuthEvents == nil {
 		var stateNeeded gomatrixserverlib.StateNeeded

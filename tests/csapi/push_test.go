@@ -20,12 +20,12 @@ func TestPushRuleCacheHealth(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "pushrules", "global", "sender", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
+	alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "sender", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
 		"actions": []string{"dont_notify"},
 	}))
 
 	// the extra "" is to make sure the submitted URL ends with a trailing slash
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushrules", ""})
+	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", ""})
 
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
@@ -33,7 +33,7 @@ func TestPushRuleCacheHealth(t *testing.T) {
 		},
 	})
 
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "pushrules", ""})
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", ""})
 
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{

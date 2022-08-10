@@ -164,7 +164,7 @@ func runTest(testName string, builder *docker.Builder, deployer *docker.Deployer
 		syncInstructions[i] = instruction.Instr{
 			UserID:  userID,
 			Method:  "GET",
-			Path:    "/_matrix/client/r0/sync",
+			Path:    "/_matrix/client/v3/sync",
 			Queries: map[string]string{"timeout": "0"},
 			Store: map[string]string{
 				userID: ".next_batch",
@@ -184,7 +184,7 @@ func runTest(testName string, builder *docker.Builder, deployer *docker.Deployer
 		syncInstructions = append(syncInstructions, instruction.Instr{
 			UserID: userID,
 			Method: "PUT",
-			Path:   fmt.Sprintf("/_matrix/client/r0/profile/%s/displayname", url.PathEscape(userID)),
+			Path:   fmt.Sprintf("/_matrix/client/v3/profile/%s/displayname", url.PathEscape(userID)),
 			Body: map[string]interface{}{
 				"displayname": fmt.Sprintf("Updated User %d", i),
 			},
@@ -203,7 +203,7 @@ func runTest(testName string, builder *docker.Builder, deployer *docker.Deployer
 		syncInstructions[i] = instruction.Instr{
 			UserID:  userID,
 			Method:  "GET",
-			Path:    "/_matrix/client/r0/sync",
+			Path:    "/_matrix/client/v3/sync",
 			Queries: map[string]string{"since": runner.GetStoredValue(runOpts, userID)},
 			Store: map[string]string{
 				userID: ".next_batch",

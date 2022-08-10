@@ -56,7 +56,7 @@ func TestServerNotices(t *testing.T) {
 		roomID = syncUntilInvite(t, alice)
 	})
 	t.Run("Alice cannot reject the invite", func(t *testing.T) {
-		res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
+		res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusForbidden,
 			JSON: []match.JSON{
@@ -69,7 +69,7 @@ func TestServerNotices(t *testing.T) {
 		queryParams := url.Values{}
 		queryParams.Set("dir", "b")
 		// check if we received the message
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 		msgRes := &msgResult{}
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusOK,

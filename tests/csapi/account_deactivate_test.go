@@ -45,7 +45,7 @@ func TestDeactivateAccount(t *testing.T) {
 			"type":     "m.login.password",
 			"password": password,
 		})
-		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
+		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 403,
 		})
@@ -62,7 +62,7 @@ func deactivateAccount(t *testing.T, authedClient *client.CSAPI, password string
 		},
 	})
 
-	res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "account", "deactivate"}, reqBody)
+	res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "account", "deactivate"}, reqBody)
 
 	return res
 }
