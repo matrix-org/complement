@@ -1001,19 +1001,26 @@ func testReceiveEventDuringPartialStateJoin(
 	must.CheckOffAll(t, gotState, expectedState)
 }
 
-// awaitEventArrival waits for alice to be able to see a given event
-func awaitEventArrival(t *testing.T, timeout time.Duration, alice *client.CSAPI, roomID string, eventID string) {
-	/* TODO: check that a lazy-loading sync can see the event. Currently this doesn't work, because /sync blocks.
-	 * https://github.com/matrix-org/synapse/issues/13146
-	alice.MustSyncUntil(t,
+// awaitEventViaSync waits for alice to be able to see a given event via an incremental lazy-loading
+// /sync and returns the new sync token after
+func awaitEventViaSync(t *testing.T, alice *client.CSAPI, roomID string, eventID string, syncToken string) string {
+	// check that a lazy-loading sync can see the event
+	syncToken = alice.MustSyncUntil(t,
 		client.SyncReq{
+			Since:  syncToken,
 			Filter: buildLazyLoadingSyncFilter(nil),
 		},
 		client.SyncTimelineHasEventID(roomID, eventID),
 	)
-	*/
 
-	// still, Alice should be able to see the event with an /event request. We might have to try it a few times.
+	t.Logf("Alice successfully received event %s via /sync", eventID)
+
+	return syncToken
+}
+
+// awaitEventArrival waits for alice to be able to see a given event via /event
+func awaitEventArrival(t *testing.T, timeout time.Duration, alice *client.CSAPI, roomID string, eventID string) {
+	// Alice should be able to see the event with an /event request. We might have to try it a few times.
 	alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "event", eventID},
 		client.WithRetryUntil(timeout, func(res *http.Response) bool {
 			if res.StatusCode == 200 {
