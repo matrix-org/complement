@@ -126,17 +126,14 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 
 		// check that the state includes both charlie and derek.
-		matcher := match.JSONCheckOffAllowUnwanted("state.events",
-			[]interface{}{
-				"m.room.member|" + server.UserID("charlie"),
-				"m.room.member|" + server.UserID("derek"),
-			}, func(result gjson.Result) interface{} {
-				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
-			}, nil,
-		)
-		if err := matcher([]byte(roomRes.Raw)); err != nil {
-			t.Errorf("Did not find expected state events in /sync response: %s", err)
+		err := client.SyncStateHasStateKey(serverRoom.RoomID, "m.room.member", server.UserID("charlie"))(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find %s's m.room.member event in /sync response: %s", server.UserID("charlie"), err)
+		}
 
+		err = client.SyncStateHasStateKey(serverRoom.RoomID, "m.room.member", server.UserID("derek"))(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find %s's m.room.member event in /sync response: %s", server.UserID("derek"), err)
 		}
 	})
 
