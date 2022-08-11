@@ -12,7 +12,7 @@ type testCryptoLogger struct {
 
 func (e testCryptoLogger) Error(message string, args ...interface{}) {
 	e.t.Helper()
-	e.t.Errorf("[%s] ERROR: "+fmt.Sprintf(message, args...), e.userID)
+	e.t.Logf("[%s] ERROR: "+fmt.Sprintf(message, args...), e.userID)
 }
 func (e testCryptoLogger) Warn(message string, args ...interface{}) {
 	e.t.Helper()
