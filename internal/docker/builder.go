@@ -181,9 +181,9 @@ func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
 		return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ImageList: %w", bprint.Name, err)
 	}
 	if len(images) == 0 {
-		err := d.ConstructBlueprint(bprint)
+		err = d.ConstructBlueprint(bprint)
 		if err != nil {
-			return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to build image: %w", bprint.Name, err)
+			return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ConstructBlueprint: %w", bprint.Name, err)
 		}
 	}
 	return nil
@@ -383,9 +383,15 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
+	var baseImageURI string
+	if hs.BaseImageURI == nil {
+		baseImageURI = d.Config.BaseImageURI
+	} else {
+		baseImageURI = *hs.BaseImageURI
+	}
 
 	return deployImage(
-		d.Docker, d.Config.BaseImageURI, fmt.Sprintf("complement_%s", contextStr),
+		d.Docker, baseImageURI, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
 		networkID, d.Config,
 	)
