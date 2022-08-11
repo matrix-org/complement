@@ -14,6 +14,7 @@ require (
 	github.com/matrix-org/gomatrix v0.0.0-20210324163249-be2af5ef2e16
 	github.com/matrix-org/gomatrixserverlib v0.0.0-20220526140030-dcfbb70ff32d
 	github.com/matrix-org/util v0.0.0-20200807132607-55161520e1d4
+	github.com/mattn/go-sqlite3 v1.14.14
 	github.com/moby/term v0.0.0-20210610120745-9d4ed1856297 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
