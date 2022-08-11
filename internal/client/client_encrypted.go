@@ -183,7 +183,7 @@ func (enc *CSAPIEncrypted) encryptedEventHandler() mautrix.EventHandler {
 	}
 }
 
-// Sync loops to keep syncing the client with the homeserver by calling the /sync endpoint.
+// Sync starts syncing with the configured homeserver, fails the test if an error occurs.
 func (enc *CSAPIEncrypted) Sync(t *testing.T) {
 	// Get the state store up to date
 	resp, err := enc.mautrix.SyncRequest(30000, "", "", true, event.PresenceOnline, context.TODO())
