@@ -14,13 +14,34 @@
 
 package b
 
+var manyUsersList = manyUsers(500)
+
+func makeEvents(homeserver string) []Event {
+	events := []Event{
+		{
+			Type:     "m.room.member",
+			StateKey: Ptr("@bob:hs1"),
+			Content: map[string]interface{}{
+				"membership": "join",
+			},
+			Sender: "@bob",
+		},
+	}
+	events = append(events, manJoinEvents(homeserver, manyUsersList)...)
+	events = append(events, manyMessages(getSendersFromUsers(manyUsersList), 1000)...)
+
+	//fmt.Printf("events made %d events=%+v", len(events), events)
+
+	return events
+}
+
 // BlueprintPerfManyMessages contains a homeserver with 2 users, who are joined to the same room with thousands of messages.
 var BlueprintPerfManyMessages = MustValidate(Blueprint{
 	Name: "perf_many_messages",
 	Homeservers: []Homeserver{
 		{
 			Name: "hs1",
-			Users: []User{
+			Users: append([]User{
 				{
 					Localpart:   "@alice",
 					DisplayName: "Alice",
@@ -29,23 +50,14 @@ var BlueprintPerfManyMessages = MustValidate(Blueprint{
 					Localpart:   "@bob",
 					DisplayName: "Bob",
 				},
-			},
+			}, manyUsersList...),
 			Rooms: []Room{
 				{
 					CreateRoom: map[string]interface{}{
 						"preset": "public_chat",
 					},
 					Creator: "@alice",
-					Events: append([]Event{
-						Event{
-							Type:     "m.room.member",
-							StateKey: Ptr("@bob:hs1"),
-							Content: map[string]interface{}{
-								"membership": "join",
-							},
-							Sender: "@bob",
-						},
-					}, manyMessages([]string{"@alice", "@bob"}, 200)...),
+					Events:  makeEvents("hs1"),
 				},
 			},
 		},

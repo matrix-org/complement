@@ -181,7 +181,10 @@ func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
 		return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ImageList: %w", bprint.Name, err)
 	}
 	if len(images) == 0 {
-		d.ConstructBlueprint(bprint)
+		err := d.ConstructBlueprint(bprint)
+		if err != nil {
+			return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to build image: %w", bprint.Name, err)
+		}
 	}
 	return nil
 }

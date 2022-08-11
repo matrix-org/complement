@@ -83,22 +83,3 @@ func memberships(count int) []Event {
 
 	return events
 }
-
-func manyUsers(count int) []User {
-	users := make([]User, count)
-
-	for i := 0; i < count; i++ {
-		localPart := fmt.Sprintf("@alice_%d", i)
-		displayName := fmt.Sprintf("Alice %d", i)
-		deviceID := fmt.Sprintf("ALICEDEVICE%d", i)
-
-		users[i] = User{
-			Localpart:   localPart,
-			DisplayName: displayName,
-			OneTimeKeys: 50,
-			DeviceID:    Ptr(deviceID),
-		}
-	}
-
-	return users
-}

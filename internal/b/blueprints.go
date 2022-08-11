@@ -236,3 +236,47 @@ func manyMessages(senders []string, count int) []Event {
 	}
 	return evs
 }
+
+func manJoinEvents(homeserver string, users []User) []Event {
+	evs := make([]Event, len(users))
+	for i := 0; i < len(users); i++ {
+		user := users[i]
+		evs[i] = Event{
+			Type:     "m.room.member",
+			StateKey: Ptr(fmt.Sprintf("%s:%s", user.Localpart, homeserver)),
+			Content: map[string]interface{}{
+				"membership": "join",
+			},
+			Sender: user.Localpart,
+		}
+	}
+	return evs
+}
+
+func manyUsers(count int) []User {
+	users := make([]User, count)
+
+	for i := 0; i < count; i++ {
+		localPart := fmt.Sprintf("@user_%d", i)
+		displayName := fmt.Sprintf("User %d", i)
+		deviceID := fmt.Sprintf("USERDEVICE%d", i)
+
+		users[i] = User{
+			Localpart:   localPart,
+			DisplayName: displayName,
+			OneTimeKeys: 50,
+			DeviceID:    Ptr(deviceID),
+		}
+	}
+
+	return users
+}
+
+func getSendersFromUsers(users []User) []string {
+	senders := make([]string, len(users))
+	for i := 0; i < len(users); i++ {
+		senders[i] = users[i].Localpart
+	}
+
+	return senders
+}

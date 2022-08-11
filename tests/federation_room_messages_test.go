@@ -13,7 +13,6 @@ import (
 func TestMessagesOverFederation(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintPerfManyMessages)
 	defer deployment.Destroy(t)
-	defer time.Sleep(30 * time.Second)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
