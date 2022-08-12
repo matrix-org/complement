@@ -14,7 +14,7 @@
 
 package b
 
-var manyUsersList = manyUsers(500)
+var manyUsersList = manyUsers(1000)
 
 func makeEvents(homeserver string) []Event {
 	events := []Event{
@@ -28,7 +28,7 @@ func makeEvents(homeserver string) []Event {
 		},
 	}
 	events = append(events, manJoinEvents(homeserver, manyUsersList)...)
-	events = append(events, manyMessages(getSendersFromUsers(manyUsersList), 1000)...)
+	events = append(events, manyMessages(getSendersFromUsers(manyUsersList), 1400)...)
 
 	//fmt.Printf("events made %d events=%+v", len(events), events)
 

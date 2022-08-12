@@ -124,16 +124,17 @@ func (d *Builder) removeImages() error {
 			d.log("Not cleaning up image with tags: %v", img.RepoTags)
 			continue
 		}
-		bprintName := img.Labels["complement_blueprint"]
+		//bprintName := img.Labels["complement_blueprint"]
+		contextStr := img.Labels[complementLabel]
 		keep := false
 		for _, keepBprint := range d.Config.KeepBlueprints {
-			if bprintName == keepBprint {
+			if contextStr == keepBprint {
 				keep = true
 				break
 			}
 		}
 		if keep {
-			d.log("Keeping image created from blueprint %s", bprintName)
+			d.log("Keeping image created from blueprint %s", contextStr)
 			continue
 		}
 		_, err = d.Docker.ImageRemove(context.Background(), img.ID, types.ImageRemoveOptions{
@@ -180,8 +181,24 @@ func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
 	if err != nil {
 		return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ImageList: %w", bprint.Name, err)
 	}
-	if len(images) == 0 {
-		err = d.ConstructBlueprint(bprint)
+
+	var missingHomeservers []b.Homeserver
+	for _, homeserver := range bprint.Homeservers {
+		found := false
+		for _, image := range images {
+			if image.Labels["complement_hs_name"] == homeserver.Name {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			missingHomeservers = append(missingHomeservers, homeserver)
+		}
+	}
+
+	if len(images) < len(bprint.Homeservers) {
+		err = d.ConstructBlueprint(bprint, missingHomeservers)
 		if err != nil {
 			return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ConstructBlueprint: %w", bprint.Name, err)
 		}
@@ -189,8 +206,8 @@ func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
 	return nil
 }
 
-func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
-	errs := d.construct(bprint)
+func (d *Builder) ConstructBlueprint(bprint b.Blueprint, homeserversToConstruct []b.Homeserver) error {
+	errs := d.construct(bprint, homeserversToConstruct)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			d.log("could not construct blueprint: %s", err)
@@ -237,7 +254,7 @@ func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
 }
 
 // construct all Homeservers sequentially then commits them
-func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
+func (d *Builder) construct(bprint b.Blueprint, homeserversToConstruct []b.Homeserver) (errs []error) {
 	d.log("Constructing blueprint '%s'", bprint.Name)
 
 	networkID, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
@@ -246,8 +263,8 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 	}
 
 	runner := instruction.NewRunner(bprint.Name, d.Config.BestEffort, d.Config.DebugLoggingEnabled)
-	results := make([]result, len(bprint.Homeservers))
-	for i, hs := range bprint.Homeservers {
+	results := make([]result, len(homeserversToConstruct))
+	for i, hs := range homeserversToConstruct {
 		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
 		if res.err != nil {
 			errs = append(errs, res.err)
