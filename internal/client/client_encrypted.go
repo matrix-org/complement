@@ -25,7 +25,6 @@ type CSAPIEncrypted struct {
 }
 
 type EncryptedEventResponse struct {
-	Event *event.Event
 	Body  string
 	Error error
 }
