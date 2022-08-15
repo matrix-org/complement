@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 	"maunium.net/go/mautrix"
@@ -24,6 +25,7 @@ type CSAPIEncrypted struct {
 }
 
 type EncryptedEventResponse struct {
+	Event *event.Event
 	Body  string
 	Error error
 }
@@ -84,7 +86,7 @@ func MustCreateEncryptedClient(t *testing.T, csapi *CSAPI, opts ...ClientOption)
 		olmMachine: olmMachine,
 		mautrix:    cl,
 		stateStore: stateStore,
-		encChan:    make(chan EncryptedEventResponse, 1),
+		encChan:    make(chan EncryptedEventResponse),
 	}
 
 	// Accept all incoming verification requests
@@ -164,8 +166,21 @@ func (enc *CSAPIEncrypted) SendEncryptedMessageSynced(
 	return eventID
 }
 
-func (enc *CSAPIEncrypted) EncryptedMessage() chan EncryptedEventResponse {
-	return enc.encChan
+// MustSyncUntilEncryptedMessage waits for an encrypted message to come down sync.
+// Blocks until either a message is received or a timeout is reached.
+// Fails the test if the message can't be decrypted or the timeout is reached.
+// Returns the decrypted message body.
+func (enc *CSAPIEncrypted) MustSyncUntilEncryptedMessage(t *testing.T) string {
+	select {
+	case msg := <-enc.encChan:
+		if msg.Error != nil {
+			t.Fatal(msg.Error)
+		}
+		return msg.Body
+	case <-time.After(time.Second * 5):
+		t.Fatal(fmt.Errorf("timed out waiting for encrypted event"))
+	}
+	return ""
 }
 
 // encryptedEventHandler handles encrypted message events. Sends the output EncryptedEventResponse to the created channel.
@@ -176,7 +191,6 @@ func (enc *CSAPIEncrypted) encryptedEventHandler() mautrix.EventHandler {
 		if err != nil {
 			resp.Error = err
 		} else {
-			fmt.Printf("Decrypted: %+v\n", decrypted.Content.AsMessage())
 			resp.Body = decrypted.Content.AsMessage().Body
 		}
 		enc.encChan <- resp
@@ -184,6 +198,7 @@ func (enc *CSAPIEncrypted) encryptedEventHandler() mautrix.EventHandler {
 }
 
 // Sync starts syncing with the configured homeserver, fails the test if an error occurs.
+// This is a blocking call, so needs to be started in a go routine.
 func (enc *CSAPIEncrypted) Sync(t *testing.T) {
 	// Get the state store up to date
 	resp, err := enc.mautrix.SyncRequest(30000, "", "", true, event.PresenceOnline, context.TODO())
@@ -200,6 +215,7 @@ func (enc *CSAPIEncrypted) Sync(t *testing.T) {
 	}
 }
 
+// StopSync stops any currently running sync jobs.
 func (enc *CSAPIEncrypted) StopSync() {
 	enc.mautrix.StopSync()
 }

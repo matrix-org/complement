@@ -3,7 +3,6 @@ package csapi_tests
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
@@ -54,20 +53,11 @@ func TestEncryption(t *testing.T) {
 
 	// Wait for an encrypted event with Bob
 	t.Log("Waiting for encrypted event")
-	select {
-	case res := <-encBob.EncryptedMessage():
-		if res.Error != nil {
-			t.Fatal(res.Error)
-		}
-		gotBody := res.Body
-		if !reflect.DeepEqual(wantBody, gotBody) {
-			t.Fatalf("Expected\n%+v\ngot\n%+v\n", wantBody, gotBody)
-		}
+	msg := encBob.MustSyncUntilEncryptedMessage(t)
 
-		t.Logf("Successfully decrypted message: %s", gotBody)
-
-	case <-time.After(time.Second * 5):
-		t.Fatalf("timed out waiting for encrypted event")
+	if !reflect.DeepEqual(wantBody, msg) {
+		t.Fatalf("Expected\n%+v\ngot\n%+v\n", wantBody, msg)
 	}
 
+	t.Logf("Successfully decrypted message: %s", msg)
 }
