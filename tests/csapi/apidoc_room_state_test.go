@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 
 	"net/http"
 )
@@ -329,6 +330,7 @@ func TestRoomState(t *testing.T) {
 			})
 		})
 		t.Run("GET /rooms/:room_id/joined_members is forbidden after leaving room", func(t *testing.T) {
+			runtime.SkipIf(t, runtime.Dendrite) // https://github.com/matrix-org/complement/pull/424
 			t.Parallel()
 			roomID := authedClient.CreateRoom(t, map[string]interface{}{})
 			authedClient.LeaveRoom(t, roomID)
