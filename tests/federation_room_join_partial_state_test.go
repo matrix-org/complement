@@ -424,6 +424,10 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 		)
 
+		if !syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID) + ".timeline.limited").Bool() {
+			t.Errorf("/sync response was not gappy")
+		}
+
 		err := client.SyncTimelineHas(serverRoom.RoomID, func(ev gjson.Result) bool {
 			return ev.Get("event_id").Str == event1.EventID()
 		})(alice.UserID, syncRes)
