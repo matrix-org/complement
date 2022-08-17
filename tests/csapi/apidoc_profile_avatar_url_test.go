@@ -20,7 +20,7 @@ func TestProfileAvatarURL(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"avatar_url": avatarURL,
 		})
-		res := authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "avatar_url"}, reqBody)
+		res := authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "profile", authedClient.UserID, "avatar_url"}, reqBody)
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
@@ -29,7 +29,7 @@ func TestProfileAvatarURL(t *testing.T) {
 
 	// sytest: GET /profile/:user_id/avatar_url publicly accessible
 	t.Run("GET /profile/:user_id/avatar_url publicly accessible", func(t *testing.T) {
-		res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "profile", authedClient.UserID, "avatar_url"})
+		res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "profile", authedClient.UserID, "avatar_url"})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,

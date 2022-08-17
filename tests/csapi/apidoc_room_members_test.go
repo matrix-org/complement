@@ -25,7 +25,7 @@ func TestRoomMembers(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "join"})
+			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "join"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -46,7 +46,7 @@ func TestRoomMembers(t *testing.T) {
 				"room_alias_name": "room_alias_random",
 			})
 
-			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", "#room_alias_random:hs1"})
+			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", "#room_alias_random:hs1"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -66,7 +66,7 @@ func TestRoomMembers(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", roomID})
+			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -173,7 +173,7 @@ func TestRoomMembers(t *testing.T) {
 				"room_alias_name": "room_alias_random2",
 			})
 			joinBody := client.WithJSONBody(t, map[string]string{"foo": "bar"})
-			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", "#room_alias_random2:hs1"}, joinBody)
+			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", "#room_alias_random2:hs1"}, joinBody)
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{

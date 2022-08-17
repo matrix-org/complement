@@ -172,7 +172,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				t.Fatalf("Expected eventID list should be length 15 but saw %d: %s", len(expectedEventIDOrder), expectedEventIDOrder)
 			}
 
-			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			messagesRes := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
 				"limit": []string{"100"},
 			}))
@@ -408,7 +408,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			})
 
 			txnId := getTxnID("duplicateinsertion-txn")
-			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEventType, txnId}, client.WithJSONBody(t, map[string]interface{}{
+			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", insertionEventType, txnId}, client.WithJSONBody(t, map[string]interface{}{
 				nextBatchIDContentField: "same",
 				historicalContentField:  true,
 			}))
@@ -637,7 +637,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// order isn't quite perfect when a remote federated homeserver gets
 				// backfilled.
 				// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
-				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 				}))
@@ -672,7 +672,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				}
 				// We can't use as.SendEventSynced(...) because application services can't use the /sync API
 				txnId := getTxnID("sendInsertionAndEnsureBackfilled-txn")
-				insertionSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "send", insertionEvent.Type, txnId}, client.WithJSONBody(t, insertionEvent.Content))
+				insertionSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", insertionEvent.Type, txnId}, client.WithJSONBody(t, insertionEvent.Content))
 				insertionSendBody := client.ParseJSON(t, insertionSendRes)
 				insertionEventID := client.GetJSONFieldStr(t, insertionSendBody, "event_id")
 				// Make sure the insertion event has reached the homeserver
@@ -718,7 +718,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// order isn't quite perfect when a remote federated homeserver gets
 				// backfilled.
 				// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
-				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 				}))
@@ -748,7 +748,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				createMessagesInRoom(t, alice, roomID, 10, "eventIDsAfter")
 
 				// Mimic scrollback just through the latest messages
-				remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir": []string{"b"},
 					// Limited so we can only see a portion of the latest messages
 					"limit": []string{"5"},
@@ -774,7 +774,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 					t.Fatalf("Expected %d event_ids in the response that correspond to the %d events we sent in the request but saw %d: %s", numMessagesSent, numMessagesSent, len(historicalEventIDs), historicalEventIDs)
 				}
 
-				beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 				}))
@@ -811,7 +811,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// order isn't quite perfect when a remote federated homeserver gets
 				// backfilled.
 				// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
-				remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 				}))
@@ -843,7 +843,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 
 				// Mimic scrollback to all of the messages
 				// scrollbackMessagesRes
-				remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 				}))
@@ -869,7 +869,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 					t.Fatalf("Expected %d event_ids in the response that correspond to the %d events we sent in the request but saw %d: %s", numMessagesSent, numMessagesSent, len(historicalEventIDs), historicalEventIDs)
 				}
 
-				beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				beforeMarkerMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 				}))
@@ -904,7 +904,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// order isn't quite perfect when a remote federated homeserver gets
 				// backfilled.
 				// validateBatchSendRes(t, remoteCharlie, roomID, batchSendRes, false)
-				remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				remoteMessagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 				}))
@@ -991,7 +991,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 
 				// From the remote user, make a /context request for eventIDAfter to get
 				// pagination token before the marker event
-				contextRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventIDAfter}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				contextRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "context", eventIDAfter}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"limit": []string{"0"},
 				}))
 				contextResResBody := client.ParseJSON(t, contextRes)
@@ -1173,7 +1173,7 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", checkCounter)
 		}
 
-		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 			"dir":   []string{"b"},
 			"limit": []string{"100"},
 		}))
@@ -1247,7 +1247,7 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 			)
 		}
 
-		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 			"dir":   []string{"b"},
 			"limit": []string{"100"},
 			"from":  []string{messageResEnd},
@@ -1343,7 +1343,7 @@ func ensureVirtualUserRegistered(t *testing.T, c *client.CSAPI, virtualUserLocal
 	res := c.DoFunc(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "r0", "register"},
+		[]string{"_matrix", "client", "v3", "register"},
 		client.WithJSONBody(t, map[string]interface{}{"type": "m.login.application_service", "username": virtualUserLocalpart}),
 		client.WithContentType("application/json"),
 	)
@@ -1377,7 +1377,7 @@ func sendMarkerAndEnsureBackfilled(t *testing.T, as *client.CSAPI, c *client.CSA
 	// Marker events should have unique state_key so they all show up in the current state to process.
 	unique_state_key := getTxnID("marker_state_key")
 	// We can't use as.SendEventSynced(...) because application services can't use the /sync API.
-	markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "rooms", roomID, "state", markerEvent.Type, unique_state_key}, client.WithJSONBody(t, markerEvent.Content))
+	markerSendRes := as.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", markerEvent.Type, unique_state_key}, client.WithJSONBody(t, markerEvent.Content))
 	markerSendBody := client.ParseJSON(t, markerSendRes)
 	markerEventID = client.GetJSONFieldStr(t, markerSendBody, "event_id")
 
@@ -1505,7 +1505,7 @@ func redactEventID(t *testing.T, c *client.CSAPI, roomID, eventID string, expect
 	redactionRes := c.DoFunc(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "rooms", roomID, "redact", eventID, txnID},
+		[]string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, txnID},
 		client.WithJSONBody(t, map[string]interface{}{"reason": "chaos"}),
 		client.WithContentType("application/json"),
 	)
@@ -1591,7 +1591,7 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 
 	// Make sure the historical events appear in scrollback without jumping back
 	// in time specifically.
-	fullMessagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+	fullMessagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		"dir":   []string{"b"},
 		"limit": []string{"100"},
 	}))
@@ -1607,7 +1607,7 @@ func validateBatchSendRes(t *testing.T, c *client.CSAPI, roomID string, batchSen
 	// Validate state after we paginate `/messages` to avoid any potential 404 if
 	// the server hasn't backfilled here yet
 	if validateState {
-		contextRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", expectedEventIDOrder[0]}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		contextRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "context", expectedEventIDOrder[0]}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 			"limit": []string{"0"},
 		}))
 

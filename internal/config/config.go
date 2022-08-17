@@ -22,14 +22,15 @@ type HostMount struct {
 }
 
 type Complement struct {
-	BaseImageURI          string
-	BaseImageArgs         []string
-	DebugLoggingEnabled   bool
-	AlwaysPrintServerLogs bool
-	BestEffort            bool
-	SpawnHSTimeout        time.Duration
-	KeepBlueprints        []string
-	HostMounts            []HostMount
+	BaseImageURI           string
+	BaseImageArgs          []string
+	DebugLoggingEnabled    bool
+	AlwaysPrintServerLogs  bool
+	BestEffort             bool
+	EnvVarsPropagatePrefix string
+	SpawnHSTimeout         time.Duration
+	KeepBlueprints         []string
+	HostMounts             []HostMount
 	// The namespace for all complement created blueprints and deployments
 	PackageNamespace string
 	// Certificate Authority generated values for this run of complement. Homeservers will use this
@@ -47,6 +48,7 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	cfg.BaseImageArgs = strings.Split(os.Getenv("COMPLEMENT_BASE_IMAGE_ARGS"), " ")
 	cfg.DebugLoggingEnabled = os.Getenv("COMPLEMENT_DEBUG") == "1"
 	cfg.AlwaysPrintServerLogs = os.Getenv("COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS") == "1"
+	cfg.EnvVarsPropagatePrefix = os.Getenv("COMPLEMENT_SHARE_ENV_PREFIX")
 	cfg.SpawnHSTimeout = time.Duration(parseEnvWithDefault("COMPLEMENT_SPAWN_HS_TIMEOUT_SECS", 30)) * time.Second
 	if os.Getenv("COMPLEMENT_VERSION_CHECK_ITERATIONS") != "" {
 		fmt.Fprintln(os.Stderr, "Deprecated: COMPLEMENT_VERSION_CHECK_ITERATIONS will be removed in a later version. Use COMPLEMENT_SPAWN_HS_TIMEOUT_SECS instead which does the same thing and is clearer.")
