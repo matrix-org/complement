@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 
 	"net/http"
 )
@@ -325,6 +326,19 @@ func TestRoomState(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONKeyPresent("m\\.federate"),
 					match.JSONKeyEqual("m\\.federate", false),
+				},
+			})
+		})
+		t.Run("GET /rooms/:room_id/joined_members is forbidden after leaving room", func(t *testing.T) {
+			runtime.SkipIf(t, runtime.Dendrite) // https://github.com/matrix-org/complement/pull/424
+			t.Parallel()
+			roomID := authedClient.CreateRoom(t, map[string]interface{}{})
+			authedClient.LeaveRoom(t, roomID)
+			res := authedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "joined_members"})
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: http.StatusForbidden,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
 				},
 			})
 		})
