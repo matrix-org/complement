@@ -1150,6 +1150,66 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Errorf("SendJoin: non-HTTPError: %v", err)
 		}
 	})
+
+	// test that a /joined_members request made during a partial-state /send_join
+	// request blocks until the state is correctly synced.
+	t.Run("joined_members blocks during partial state join", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// Alice has now joined the room, and the server is syncing the state in the background.
+
+		// attempts to sync should now block. Fire off a goroutine to try it.
+		jmResponseChan := make(chan *http.Response)
+		defer close(jmResponseChan)
+		go func() {
+			response := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "joined_members"})
+			jmResponseChan <- response
+		}()
+
+		// wait for the state_ids request to arrive
+		psjResult.AwaitStateIdsRequest(t)
+
+		// the client-side requests should still be waiting
+		select {
+		case <-jmResponseChan:
+			t.Fatalf("/joined_members completed before state resync complete. Expected it to block.")
+		default:
+		}
+
+		// release the federation /state response
+		psjResult.FinishStateRequest()
+
+		// the /joined_members request should now complete, with the new room
+		var jmRes *http.Response
+		select {
+		case <-time.After(1 * time.Second):
+			t.Fatalf("/joined_members request request did not complete. Expected it to complete.")
+		case jmRes = <-jmResponseChan:
+		}
+
+		derekUserID := client.GjsonEscape(server.UserID("derek"))
+
+		must.MatchResponse(t, jmRes, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyPresent("joined"),
+				match.JSONKeyPresent("joined." + alice.UserID),
+				match.JSONKeyPresent("joined." + alice.UserID + ".display_name"),
+				match.JSONKeyPresent("joined." + alice.UserID + ".avatar_url"),
+				match.JSONKeyPresent("joined." + derekUserID),
+				match.JSONKeyPresent("joined." + derekUserID + ".display_name"),
+				match.JSONKeyPresent("joined." + derekUserID + ".avatar_url"),
+			},
+		})
+	})
 }
 
 // test reception of an event over federation during a resync
