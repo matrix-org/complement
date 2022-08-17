@@ -370,7 +370,9 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 		)
 
-		err := client.SyncStateHasStateKey(serverRoom.RoomID, "m.room.member", event.Sender())(alice.UserID, syncRes)
+		err := client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event.Sender()
+		})(alice.UserID, syncRes)
 		if err != nil {
 			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.Sender(), err)
 		}
@@ -422,17 +424,23 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 		)
 
-		err := client.SyncTimelineHasEventID(serverRoom.RoomID, event1.EventID())(alice.UserID, syncRes)
+		err := client.SyncTimelineHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("event_id").Str == event1.EventID()
+		})(alice.UserID, syncRes)
 		if err == nil {
 			t.Errorf("gappy /sync returned the first event unexpectedly")
 		}
 
-		err = client.SyncTimelineHasEventID(serverRoom.RoomID, event2.EventID())(alice.UserID, syncRes)
+		err = client.SyncTimelineHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("event_id").Str == event2.EventID()
+		})(alice.UserID, syncRes)
 		if err != nil {
 			t.Errorf("Did not find event 2 in lazy-loading /sync response: %s", err)
 		}
 
-		err = client.SyncStateHasStateKey(serverRoom.RoomID, "m.room.member", event2.Sender())(alice.UserID, syncRes)
+		err = client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event2.Sender()
+		})(alice.UserID, syncRes)
 		if err != nil {
 			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event2.Sender(), err)
 		}
@@ -480,7 +488,9 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 		)
 
-		err := client.SyncStateHasStateKey(serverRoom.RoomID, "m.room.member", event.Sender())(alice.UserID, syncRes)
+		err := client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event.Sender()
+		})(alice.UserID, syncRes)
 		if err != nil {
 			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.Sender(), err)
 		}
