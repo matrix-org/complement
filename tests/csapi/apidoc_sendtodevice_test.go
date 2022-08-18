@@ -2,15 +2,15 @@ package csapi_tests
 
 import (
 	"fmt"
-	"strconv"
+	"net/http"
 	"testing"
-	"time"
 
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
 )
 
 func TestSendToDevice(t *testing.T) {
@@ -33,20 +33,14 @@ func TestSendToDevice(t *testing.T) {
 	// sytest: Can recv a device message using /sync
 	t.Run("Can recv a device message using /sync", func(t *testing.T) {
 		// Create a m.room_key_request sendToDevice message
-		reqBody := client.WithJSONBody(t, map[string]interface{}{
-			"messages": map[string]interface{}{
-				bob.UserID: map[string]interface{}{
-					bob.DeviceID: map[string]interface{}{
-						"action":               "request",
-						"requesting_device_id": alice.DeviceID,
-						"request_id":           "1",
-					},
-				},
-			},
-		})
-		txnID := "1"
+		reqBody := map[string]interface{}{
+			"action":               "request",
+			"requesting_device_id": alice.DeviceID,
+			"request_id":           "1",
+		}
 		// sytest: Can send a message directly to a device using PUT /sendToDevice
-		alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "sendToDevice", "m.room_key_request", txnID}, reqBody)
+		sendResp := alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
+		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
 
 		// verify the results from /sync
 		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, verifyToDeviceResp(t, bob, checks, 1))
@@ -58,26 +52,16 @@ func TestSendToDevice(t *testing.T) {
 	t.Run("Can send a to-device message to two users which both receive it using /sync", func(t *testing.T) {
 		// Create a m.room_key_request sendToDevice message
 		// Bob will get a message directly to the device, while Charlie will get the message on all devices
-		reqBody := client.WithJSONBody(t, map[string]interface{}{
-			"messages": map[string]interface{}{
-				bob.UserID: map[string]interface{}{
-					bob.DeviceID: map[string]interface{}{
-						"action":               "request",
-						"requesting_device_id": alice.DeviceID,
-						"request_id":           "1",
-					},
-				},
-				charlie.UserID: map[string]interface{}{
-					"*": map[string]interface{}{
-						"action":               "request",
-						"requesting_device_id": alice.DeviceID,
-						"request_id":           "1",
-					},
-				},
-			},
-		})
-		txnID := "2"
-		alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "sendToDevice", "m.room_key_request", txnID}, reqBody)
+		reqBody := map[string]interface{}{
+			"action":               "request",
+			"requesting_device_id": alice.DeviceID,
+			"request_id":           "1",
+		}
+
+		sendResp := alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
+		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
+		sendResp = alice.SendToDevice(t, "m.room_key_request", charlie.UserID, "*", reqBody)
+		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
 
 		// verify the results from /sync
 		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, verifyToDeviceResp(t, bob, checks, 1))
@@ -89,21 +73,15 @@ func TestSendToDevice(t *testing.T) {
 
 	t.Run("sendToDevice messages are not sent multiple times", func(t *testing.T) {
 		// Create a m.room_key_request sendToDevice message
-		reqBody := client.WithJSONBody(t, map[string]interface{}{
-			"messages": map[string]interface{}{
-				bob.UserID: map[string]interface{}{
-					bob.DeviceID: map[string]interface{}{
-						"action":               "request",
-						"requesting_device_id": alice.DeviceID,
-						"request_id":           "2",
-					},
-				},
-			},
-		})
+		reqBody := map[string]interface{}{
+			"action":               "request",
+			"requesting_device_id": alice.DeviceID,
+			"request_id":           "2",
+		}
 		checks = append(checks[:len(checks)-1], match.JSONKeyEqual("content.request_id", "2"))
 
-		txnID := "3"
-		alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "sendToDevice", "m.room_key_request", txnID}, reqBody)
+		sendResp := alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
+		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
 
 		// Do an intialSync, we should receive one event
 		bob.MustSyncUntil(t, client.SyncReq{}, verifyToDeviceResp(t, bob, checks, 1))
@@ -115,8 +93,8 @@ func TestSendToDevice(t *testing.T) {
 		nextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, verifyToDeviceResp(t, bob, checks, 0))
 
 		// send another toDevice event
-		txnID = "4"
-		alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "sendToDevice", "m.room_key_request", txnID}, reqBody)
+		sendResp = alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
+		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
 
 		// Advance the sync token, we should get one event
 		t.Logf("Syncing with %s", nextBatch)
@@ -137,37 +115,36 @@ func TestSendToDevice(t *testing.T) {
 	})
 
 	t.Run("sendToDevice messages are ordered by arrival", func(t *testing.T) {
-		for i := 0; i < 10; i++ {
+		var wantCount int64 = 10
+		for i := 0; i < int(wantCount); i++ {
 			// Create a m.room_key_request sendToDevice message
-			reqBody := client.WithJSONBody(t, map[string]interface{}{
-				"messages": map[string]interface{}{
-					bob.UserID: map[string]interface{}{
-						bob.DeviceID: map[string]interface{}{
-							"action":               "request",
-							"requesting_device_id": alice.DeviceID,
-							"request_id":           i,
-						},
-					},
-				},
-			})
-			time.Sleep(time.Millisecond * 100) // Wait a bit for the server to process all messages
-
-			txnID := strconv.Itoa(10 + i)
-			alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "sendToDevice", "m.room_key_request", txnID}, reqBody)
-		}
-
-		verifyOrdering := func() match.JSON {
-			var i int64
-			return func(body []byte) error {
-				if gotID := gjson.GetBytes(body, "content.request_id").Int(); gotID != i {
-					return fmt.Errorf("expected request_id to be %d, got %d", i, gotID)
-				}
-				i++
-				return nil
+			reqBody := map[string]interface{}{
+				"action":               "request",
+				"requesting_device_id": alice.DeviceID,
+				"request_id":           i,
 			}
-		}()
+			sendResp := alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
+			must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
+		}
+		var i int64
+		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncToDeviceHas(
+			func(msg gjson.Result) bool {
+				gotReqID := msg.Get("content.request_id").Int()
+				if gotReqID == i {
+					i++ // we have the next request ID, look for another
+				} else {
+					// if we see any other request ID, whine about it e.g out-of-order requests
+					t.Errorf("unexpected to-device request_id: %d, want %d", gotReqID, i)
+				}
+				return i == wantCount // terminate when we have seen all requests in order
+			},
+		))
 
-		bob.MustSyncUntil(t, client.SyncReq{}, verifyToDeviceResp(t, bob, []match.JSON{verifyOrdering}, 10))
+		// Sync again to verify there are no more events
+		syncResp, _ := bob.MustSync(t, client.SyncReq{Since: nextBatch})
+		if syncResp.Get("to_device.events").Exists() {
+			t.Fatal("expected there to be no more to_device.events")
+		}
 	})
 
 }
