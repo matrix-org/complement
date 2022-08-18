@@ -828,6 +828,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
@@ -898,12 +899,12 @@ func TestPartialStateJoin(t *testing.T) {
 		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{badStateEvent.JSON()}, nil)
 
 		// the bad state event should be visible at this point
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, badStateEvent.EventID())
+		syncToken = awaitEventViaSync(t, alice, serverRoom.RoomID, badStateEvent.EventID(), syncToken)
 
 		// now finish up the partial join.
 		event := psjResult.CreateMessageEvent(t, "charlie", nil)
 		t.Logf("charlie created regular timeline event %s", event.EventID())
-		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event, syncToken)
 
 		// the bad state event should now *not* be visible
 		must.MatchResponse(t,
@@ -921,6 +922,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
@@ -1018,10 +1020,10 @@ func TestPartialStateJoin(t *testing.T) {
 			[]json.RawMessage{badKickEvent.JSON(), rejectedStateEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 		// the bad kick event should be visible at this point
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, badKickEvent.EventID())
+		awaitEventViaSync(t, alice, serverRoom.RoomID, badKickEvent.EventID(), syncToken)
 
 		// ... but the rejected state event should not.
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, sentinelEvent.EventID())
+		syncToken = awaitEventViaSync(t, alice, serverRoom.RoomID, sentinelEvent.EventID(), syncToken)
 		must.MatchResponse(t,
 			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", rejectedStateEvent.EventID()}),
 			match.HTTPResponse{
@@ -1035,7 +1037,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// now finish up the partial join.
 		event := psjResult.CreateMessageEvent(t, "charlie", nil)
 		t.Logf("charlie created regular timeline event %s", event.EventID())
-		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event, syncToken)
 
 		// the bad kick event should now *not* be visible
 		must.MatchResponse(t,
