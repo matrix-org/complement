@@ -196,13 +196,10 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 }
 
 // SendToDevice sends an event of type `eventType` to `userID`'s device `deviceID` with `content`.
-func (c *CSAPI) SendToDevice(t *testing.T, eventType, userID, deviceID string, content map[string]interface{}) *http.Response {
-	return c.MustDoFunc(t, "PUT",
-		[]string{"_matrix", "client", "v3", "sendToDevice", eventType, strconv.Itoa(c.txnID)},
-		WithJSONBody(t, map[string]map[string]interface{}{
-			"messages": {
-				userID: map[string]interface{}{deviceID: content},
-			}}))
+func (c *CSAPI) SendToDevice(t *testing.T, eventType string, content RequestOpt) *http.Response {
+	t.Helper()
+	c.txnID++
+	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "sendToDevice", eventType, strconv.Itoa(c.txnID)}, content)
 }
 
 // Perform a single /sync request with the given request options. To sync until something happens,
