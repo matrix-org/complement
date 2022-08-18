@@ -38,37 +38,48 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	makeJoinResp, err := MakeRespMakeJoin(s, room, userID)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte(fmt.Sprintf("complement: HandleMakeSendJoinRequests %s", err)))
+		return
+	}
+
+	// Send it
+	w.WriteHeader(200)
+	b, _ := json.Marshal(makeJoinResp)
+	w.Write(b)
+}
+
+// MakeRespMakeJoin makes the response for a /make_join request, without verifying any signatures
+// or dealing with HTTP responses itself.
+func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeJoin, err error) {
 	// Generate a join event
 	builder := gomatrixserverlib.EventBuilder{
 		Sender:     userID,
-		RoomID:     roomID,
+		RoomID:     room.RoomID,
 		Type:       "m.room.member",
 		StateKey:   &userID,
 		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
 		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
 	}
-	err := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
+	err = builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
 	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot set membership content: " + err.Error()))
+		err = fmt.Errorf("make_join cannot set membership content: %w", err)
 		return
 	}
 	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
 	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot calculate auth_events: " + err.Error()))
+		err = fmt.Errorf("make_join cannot calculate auth_events: %w", err)
 		return
 	}
 	builder.AuthEvents = room.AuthEvents(stateNeeded)
 
-	// Send it
-	res := map[string]interface{}{
-		"event":        builder,
-		"room_version": room.Version,
+	resp = gomatrixserverlib.RespMakeJoin{
+		RoomVersion: room.Version,
+		JoinEvent:   builder,
 	}
-	w.WriteHeader(200)
-	b, _ := json.Marshal(res)
-	w.Write(b)
+	return
 }
 
 // SendJoinRequestsHandler is the http.Handler implementation for the send_join part of
@@ -134,6 +145,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	// insert the join event into the room state
 	room.AddEvent(event)
+	log.Printf("Received send-join of event %s", event.EventID())
 
 	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
