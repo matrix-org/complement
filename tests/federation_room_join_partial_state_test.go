@@ -1229,7 +1229,6 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 		})
 	})
-}
 
 	// when the server is in the middle of a partial state join, it should not accept
 	// /make_knock because it can't give a full answer.

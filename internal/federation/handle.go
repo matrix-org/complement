@@ -84,7 +84,7 @@ func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp gomatrix
 
 // MakeRespMakeKnock makes the response for a /make_knock request, without verifying any signatures
 // or dealing with HTTP responses itself.
-func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeJoin, err error) {
+func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeKnock, err error) {
 	// Generate a knock event
 	builder := gomatrixserverlib.EventBuilder{
 		Sender:     userID,
