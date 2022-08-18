@@ -30,37 +30,59 @@ func TestSendToDevice(t *testing.T) {
 		match.JSONKeyEqual("content.request_id", "1"),
 	}
 
+	mustSendToDevice := sendToDevice(t)
+
 	// sytest: Can recv a device message using /sync
 	t.Run("Can recv a device message using /sync", func(t *testing.T) {
-		// Create a m.room_key_request sendToDevice message
-		reqBody := map[string]interface{}{
-			"action":               "request",
-			"requesting_device_id": alice.DeviceID,
-			"request_id":           "1",
-		}
 		// sytest: Can send a message directly to a device using PUT /sendToDevice
-		sendResp := alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
-		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
+		i := mustSendToDevice(alice, bob.UserID, bob.DeviceID)
+		var wantCount int64 = 1
 
-		// verify the results from /sync
-		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, verifyToDeviceResp(t, bob, checks, 1))
-		// clear previously received sendToDevice events
-		bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, verifyToDeviceResp(t, bob, checks, 0))
+		i -= wantCount
+		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncToDeviceHas(
+			func(msg gjson.Result) bool {
+				gotReqID := msg.Get("content.request_id").Int()
+				if gotReqID == i {
+					i++ // we have the next request ID, look for another
+				} else {
+					// if we see any other request ID, whine about it e.g out-of-order requests
+					t.Errorf("unexpected to-device request_id: %d, want %d", gotReqID, i)
+				}
+				return i == wantCount // terminate when we have seen all requests in order
+			},
+		))
+
+		// Sync again to verify there are no more events.
+		// This also removes sendToDevice events sent in this test case.
+		syncResp, _ := bob.MustSync(t, client.SyncReq{Since: nextBatch})
+		if syncResp.Get("to_device.events").Exists() {
+			t.Fatal("expected there to be no more to_device.events")
+		}
 	})
 
 	// sytest: Can send a to-device message to two users which both receive it using /sync
 	t.Run("Can send a to-device message to two users which both receive it using /sync", func(t *testing.T) {
-		// Create a m.room_key_request sendToDevice message
 		// Bob will get a message directly to the device, while Charlie will get the message on all devices
-		reqBody := map[string]interface{}{
-			"action":               "request",
-			"requesting_device_id": alice.DeviceID,
-			"request_id":           "1",
-		}
+		reqBody := client.WithJSONBody(t, map[string]map[string]interface{}{
+			"messages": {
+				bob.UserID: map[string]interface{}{
+					bob.DeviceID: map[string]interface{}{
+						"action":               "request",
+						"requesting_device_id": alice.DeviceID,
+						"request_id":           "1",
+					},
+				},
+				charlie.UserID: map[string]interface{}{
+					"*": map[string]interface{}{
+						"action":               "request",
+						"requesting_device_id": alice.DeviceID,
+						"request_id":           "1",
+					},
+				},
+			},
+		})
 
-		sendResp := alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
-		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
-		sendResp = alice.SendToDevice(t, "m.room_key_request", charlie.UserID, "*", reqBody)
+		sendResp := alice.SendToDevice(t, "m.room_key_request", reqBody)
 		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
 
 		// verify the results from /sync
@@ -73,14 +95,20 @@ func TestSendToDevice(t *testing.T) {
 
 	t.Run("sendToDevice messages are not sent multiple times", func(t *testing.T) {
 		// Create a m.room_key_request sendToDevice message
-		reqBody := map[string]interface{}{
-			"action":               "request",
-			"requesting_device_id": alice.DeviceID,
-			"request_id":           "2",
-		}
+		reqBody := client.WithJSONBody(t, map[string]map[string]interface{}{
+			"messages": {
+				bob.UserID: map[string]interface{}{
+					bob.DeviceID: map[string]interface{}{
+						"action":               "request",
+						"requesting_device_id": alice.DeviceID,
+						"request_id":           "2",
+					},
+				},
+			},
+		})
 		checks = append(checks[:len(checks)-1], match.JSONKeyEqual("content.request_id", "2"))
 
-		sendResp := alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
+		sendResp := alice.SendToDevice(t, "m.room_key_request", reqBody)
 		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
 
 		// Do an intialSync, we should receive one event
@@ -93,7 +121,7 @@ func TestSendToDevice(t *testing.T) {
 		nextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, verifyToDeviceResp(t, bob, checks, 0))
 
 		// send another toDevice event
-		sendResp = alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
+		sendResp = alice.SendToDevice(t, "m.room_key_request", reqBody)
 		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
 
 		// Advance the sync token, we should get one event
@@ -116,17 +144,13 @@ func TestSendToDevice(t *testing.T) {
 
 	t.Run("sendToDevice messages are ordered by arrival", func(t *testing.T) {
 		var wantCount int64 = 10
-		for i := 0; i < int(wantCount); i++ {
-			// Create a m.room_key_request sendToDevice message
-			reqBody := map[string]interface{}{
-				"action":               "request",
-				"requesting_device_id": alice.DeviceID,
-				"request_id":           i,
-			}
-			sendResp := alice.SendToDevice(t, "m.room_key_request", bob.UserID, bob.DeviceID, reqBody)
-			must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
-		}
+
 		var i int64
+		for j := 0; j < int(wantCount); j++ {
+			i = mustSendToDevice(alice, bob.UserID, bob.DeviceID)
+		}
+		i -= wantCount
+
 		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncToDeviceHas(
 			func(msg gjson.Result) bool {
 				gotReqID := msg.Get("content.request_id").Int()
@@ -147,6 +171,28 @@ func TestSendToDevice(t *testing.T) {
 		}
 	})
 
+}
+
+func sendToDevice(t *testing.T) func(sender *client.CSAPI, userID, deviceID string) int64 {
+	var reqID int64 = 0
+	return func(sender *client.CSAPI, userID, deviceID string) int64 {
+		// Create a m.room_key_request sendToDevice message
+		reqBody := client.WithJSONBody(t, map[string]map[string]interface{}{
+			"messages": {
+				userID: map[string]interface{}{
+					deviceID: map[string]interface{}{
+						"action":               "request",
+						"requesting_device_id": sender.DeviceID,
+						"request_id":           reqID,
+					},
+				},
+			},
+		})
+		sendResp := sender.SendToDevice(t, "m.room_key_request", reqBody)
+		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
+		reqID++
+		return reqID
+	}
 }
 
 func verifyToDeviceResp(t *testing.T, user *client.CSAPI, checks []match.JSON, wantMessageCount int64) client.SyncCheckOpt {
