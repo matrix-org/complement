@@ -195,6 +195,16 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	return eventID
 }
 
+// SendToDevice sends an event of type `eventType` to `userID`'s device `deviceID` with `content`.
+func (c *CSAPI) SendToDevice(t *testing.T, eventType, userID, deviceID string, content map[string]interface{}) *http.Response {
+	return c.MustDoFunc(t, "PUT",
+		[]string{"_matrix", "client", "v3", "sendToDevice", eventType, strconv.Itoa(c.txnID)},
+		WithJSONBody(t, map[string]map[string]interface{}{
+			"messages": {
+				userID: map[string]interface{}{deviceID: content},
+			}}))
+}
+
 // Perform a single /sync request with the given request options. To sync until something happens,
 // see `MustSyncUntil`.
 //
@@ -232,24 +242,27 @@ func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
 // check functions return no error. Returns the final/latest since token.
 //
 // Initial /sync example: (no since token)
-//   bob.InviteRoom(t, roomID, alice.UserID)
-//   alice.JoinRoom(t, roomID, nil)
-//   alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+//
+//	bob.InviteRoom(t, roomID, alice.UserID)
+//	alice.JoinRoom(t, roomID, nil)
+//	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 //
 // Incremental /sync example: (test controls since token)
-//    since := alice.MustSyncUntil(t, client.SyncReq{TimeoutMillis: "0"}) // get a since token
-//    bob.InviteRoom(t, roomID, alice.UserID)
-//    since = alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncInvitedTo(alice.UserID, roomID))
-//    alice.JoinRoom(t, roomID, nil)
-//    alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncJoinedTo(alice.UserID, roomID))
+//
+//	since := alice.MustSyncUntil(t, client.SyncReq{TimeoutMillis: "0"}) // get a since token
+//	bob.InviteRoom(t, roomID, alice.UserID)
+//	since = alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncInvitedTo(alice.UserID, roomID))
+//	alice.JoinRoom(t, roomID, nil)
+//	alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncJoinedTo(alice.UserID, roomID))
 //
 // Checking multiple parts of /sync:
-//    alice.MustSyncUntil(
-//        t, client.SyncReq{},
-//        client.SyncJoinedTo(alice.UserID, roomID),
-//        client.SyncJoinedTo(alice.UserID, roomID2),
-//        client.SyncJoinedTo(alice.UserID, roomID3),
-//    )
+//
+//	alice.MustSyncUntil(
+//	    t, client.SyncReq{},
+//	    client.SyncJoinedTo(alice.UserID, roomID),
+//	    client.SyncJoinedTo(alice.UserID, roomID2),
+//	    client.SyncJoinedTo(alice.UserID, roomID3),
+//	)
 //
 // Check functions are unordered and independent. Once a check function returns true it is removed
 // from the list of checks and won't be called again.
@@ -311,7 +324,7 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 	}
 }
 
-//RegisterUser will register the user with given parameters and
+// RegisterUser will register the user with given parameters and
 // return user ID & access token, and fail the test on network error
 func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
@@ -482,12 +495,13 @@ func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...
 //
 // Fails the test if an HTTP request could not be made or if there was a network error talking to the
 // server. To do assertions on the HTTP response, see the `must` package. For example:
-//    must.MatchResponse(t, res, match.HTTPResponse{
-//    	StatusCode: 400,
-//    	JSON: []match.JSON{
-//    		match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
-//    	},
-//    })
+//
+//	must.MatchResponse(t, res, match.HTTPResponse{
+//		StatusCode: 400,
+//		JSON: []match.JSON{
+//			match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
+//		},
+//	})
 func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
 	for i := range paths {
@@ -793,6 +807,18 @@ func SyncRoomAccountDataHas(roomID string, check func(gjson.Result) bool) SyncCh
 			return nil
 		}
 		return fmt.Errorf("SyncRoomAccountDataHas(%s): %s", roomID, err)
+	}
+}
+
+// Calls the `check` function for each to-device event, and returns with
+// success if the `check` function returns true for at least one event.
+func SyncToDeviceHas(check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(topLevelSyncJSON, "to_device.events", check)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncToDeviceHas: %s", err)
 	}
 }
 
