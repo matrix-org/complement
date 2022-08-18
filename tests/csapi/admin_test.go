@@ -65,6 +65,7 @@ func TestServerNotices(t *testing.T) {
 	})
 	t.Run("Alice can join the alert room", func(t *testing.T) {
 		alice.JoinRoom(t, roomID, []string{})
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, eventID))
 	})
 	t.Run("Alice can leave the alert room, after joining it", func(t *testing.T) {
