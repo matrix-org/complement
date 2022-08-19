@@ -4,6 +4,10 @@ import (
 	"net/http"
 	"testing"
 
+	"fmt"
+
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
@@ -16,6 +20,41 @@ func TestDeactivateAccount(t *testing.T) {
 	password := "superuser"
 	authedClient := deployment.RegisterUser(t, "hs1", "test_deactivate_user", password, false)
 	unauthedClient := deployment.Client(t, "hs1", "")
+
+	// Ensure that the first step, in which the client queries the server's user-interactive auth flows, returns
+	// at least one auth flow involving a password.
+	t.Run("Password flow is available", func(t *testing.T) {
+		reqBody := client.WithJSONBody(t, map[string]interface{}{})
+		res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "account", "deactivate"}, reqBody)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 401,
+			JSON: []match.JSON{
+				match.JSONArrayEach(
+					"flows",
+					func(flow gjson.Result) error {
+						stages := flow.Get("stages")
+						if !stages.IsArray() {
+							return fmt.Errorf("flows' stages is not an array.")
+						}
+						foundStage := false
+						for _, stage := range stages.Array() {
+							if stage.Type != gjson.String {
+								return fmt.Errorf("stage is not a string")
+							}
+							if stage.Str == "m.login.password" {
+								foundStage = true
+							}
+						}
+						if !foundStage {
+							return fmt.Errorf("No m.login.password stage found.")
+						}
+						return nil
+					},
+				),
+			},
+		})
+	})
+
 	// sytest: Can't deactivate account with wrong password
 	t.Run("Can't deactivate account with wrong password", func(t *testing.T) {
 		res := deactivateAccount(t, authedClient, "wrong_password")
