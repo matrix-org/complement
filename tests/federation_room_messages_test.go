@@ -35,7 +35,7 @@ func TestMessagesOverFederation(t *testing.T) {
 
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomWithManyMessages, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
-				"limit": []string{"100"},
+				"limit": []string{"500"},
 			}))
 			messagesResBody := client.ParseJSON(t, messagesRes)
 			eventIDs := client.GetJSONFieldStringArray(t, messagesResBody, "chunk")
@@ -43,6 +43,7 @@ func TestMessagesOverFederation(t *testing.T) {
 			logrus.WithFields(logrus.Fields{
 				"joinedRooms":          joinedRooms,
 				"roomWithManyMessages": roomWithManyMessages,
+				"eventIDsLength":       len(eventIDs),
 				"eventIDs":             eventIDs,
 			}).Error("asdf")
 
