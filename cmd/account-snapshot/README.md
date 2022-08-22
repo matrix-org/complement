@@ -23,7 +23,7 @@ Then run Homerunner in single-shot mode: (this will take hours or days depending
 ```
 HOMERUNNER_SNAPSHOT_BLUEPRINT=blueprint.json ./homerunner
 ```
-This will execute the blueprint and commit the resulting images so you can push them to docker hub/gitlab. IMPORTANT: Make sure to set `HOMERUNNER_KEEP_BLUEPRINTS=your-blueprint-name` when running homerunner subsequently or **it will clean up the image**.
+This will execute the blueprint and commit the resulting images so you can push them to docker hub/gitlab. IMPORTANT: Make sure to set `HOMERUNNER_KEEP_BLUEPRINTS=your-blueprint-name` (TODO: Update) when running homerunner subsequently or **it will clean up the image**.
 
 #### Limitations
 
