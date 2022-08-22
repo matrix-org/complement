@@ -1,7 +1,6 @@
 package csapi_tests
 
 import (
-	"fmt"
 	"net/http"
 	"testing"
 
@@ -21,43 +20,13 @@ func TestSendToDevice(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	charlie := deployment.RegisterUser(t, "hs1", "charlie", "$uperSecretPass", false)
 
-	// checks used to verify the sendToDevice messages are correct
-	checks := []match.JSON{
-		match.JSONKeyEqual("sender", alice.UserID),
-		match.JSONKeyEqual("type", "m.room_key_request"),
-		match.JSONKeyEqual("content.action", "request"),
-		match.JSONKeyEqual("content.requesting_device_id", alice.DeviceID),
-		match.JSONKeyEqual("content.request_id", "1"),
-	}
-
 	mustSendToDevice := sendToDevice(t)
 
 	// sytest: Can recv a device message using /sync
 	t.Run("Can recv a device message using /sync", func(t *testing.T) {
 		// sytest: Can send a message directly to a device using PUT /sendToDevice
 		i := mustSendToDevice(alice, bob.UserID, bob.DeviceID)
-		var wantCount int64 = 1
-
-		i -= wantCount
-		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncToDeviceHas(
-			func(msg gjson.Result) bool {
-				gotReqID := msg.Get("content.request_id").Int()
-				if gotReqID == i {
-					i++ // we have the next request ID, look for another
-				} else {
-					// if we see any other request ID, whine about it e.g out-of-order requests
-					t.Errorf("unexpected to-device request_id: %d, want %d", gotReqID, i)
-				}
-				return i == wantCount // terminate when we have seen all requests in order
-			},
-		))
-
-		// Sync again to verify there are no more events.
-		// This also removes sendToDevice events sent in this test case.
-		syncResp, _ := bob.MustSync(t, client.SyncReq{Since: nextBatch})
-		if syncResp.Get("to_device.events").Exists() {
-			t.Fatal("expected there to be no more to_device.events")
-		}
+		countSendToDeviceMessages(t, bob, client.SyncReq{}, i, 1, true)
 	})
 
 	// sytest: Can send a to-device message to two users which both receive it using /sync
@@ -69,14 +38,14 @@ func TestSendToDevice(t *testing.T) {
 					bob.DeviceID: map[string]interface{}{
 						"action":               "request",
 						"requesting_device_id": alice.DeviceID,
-						"request_id":           "1",
+						"request_id":           2,
 					},
 				},
 				charlie.UserID: map[string]interface{}{
 					"*": map[string]interface{}{
 						"action":               "request",
 						"requesting_device_id": alice.DeviceID,
-						"request_id":           "1",
+						"request_id":           2,
 					},
 				},
 			},
@@ -85,61 +54,38 @@ func TestSendToDevice(t *testing.T) {
 		sendResp := alice.SendToDevice(t, "m.room_key_request", reqBody)
 		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
 
-		// verify the results from /sync
-		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, verifyToDeviceResp(t, bob, checks, 1))
-		// clear previously received sendToDevice events
-		bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, verifyToDeviceResp(t, bob, checks, 0))
-		// Charlie syncs for the first time, so no need to clear events
-		charlie.MustSyncUntil(t, client.SyncReq{}, verifyToDeviceResp(t, charlie, checks, 1))
+		// Check that we received the expected request ID for both users
+		countSendToDeviceMessages(t, bob, client.SyncReq{}, 2, 1, true)
+		countSendToDeviceMessages(t, charlie, client.SyncReq{}, 2, 1, true)
 	})
 
 	t.Run("sendToDevice messages are not sent multiple times", func(t *testing.T) {
-		// Create a m.room_key_request sendToDevice message
-		reqBody := client.WithJSONBody(t, map[string]map[string]interface{}{
-			"messages": {
-				bob.UserID: map[string]interface{}{
-					bob.DeviceID: map[string]interface{}{
-						"action":               "request",
-						"requesting_device_id": alice.DeviceID,
-						"request_id":           "2",
-					},
-				},
-			},
-		})
-		checks = append(checks[:len(checks)-1], match.JSONKeyEqual("content.request_id", "2"))
-
-		sendResp := alice.SendToDevice(t, "m.room_key_request", reqBody)
-		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
+		wantReqID := mustSendToDevice(alice, bob.UserID, bob.DeviceID)
+		//sendResp := alice.SendToDevice(t, "m.room_key_request", reqBody)
+		//must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
 
 		// Do an intialSync, we should receive one event
-		bob.MustSyncUntil(t, client.SyncReq{}, verifyToDeviceResp(t, bob, checks, 1))
+		countSendToDeviceMessages(t, bob, client.SyncReq{}, wantReqID, 1, false)
 
 		// sync again, we should get the same event again, as we didn't advance "since"
-		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, verifyToDeviceResp(t, bob, checks, 1))
+		nextBatch := countSendToDeviceMessages(t, bob, client.SyncReq{}, wantReqID, 1, false)
 
 		// advance the next_batch, we shouldn't get an event
-		nextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, verifyToDeviceResp(t, bob, checks, 0))
+		syncResp, nextBatch := bob.MustSync(t, client.SyncReq{Since: nextBatch})
+		toDev := syncResp.Get("to_device.events")
+		if toDev.Exists() {
+			t.Fatalf("expected no toDevice events, got %d", len(toDev.Array()))
+		}
 
 		// send another toDevice event
-		sendResp = alice.SendToDevice(t, "m.room_key_request", reqBody)
-		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
+		wantReqID = mustSendToDevice(alice, bob.UserID, bob.DeviceID)
 
 		// Advance the sync token, we should get one event
-		t.Logf("Syncing with %s", nextBatch)
 		prevNextBatch := nextBatch
-		nextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, verifyToDeviceResp(t, bob, checks, 1))
+		countSendToDeviceMessages(t, bob, client.SyncReq{Since: nextBatch}, wantReqID, 1, false)
 
 		// act as if the sync "failed", so we're using the previous next batch
-		t.Logf("Syncing with %s", prevNextBatch)
-		bob.MustSyncUntil(t, client.SyncReq{Since: prevNextBatch}, verifyToDeviceResp(t, bob, checks, 1))
-
-		// advance since, to clear previously received events
-		t.Logf("Syncing with %s", nextBatch)
-		bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, verifyToDeviceResp(t, bob, checks, 0))
-
-		// since we advanced "since", this should return no events anymore
-		t.Logf("Syncing with %s", prevNextBatch)
-		bob.MustSyncUntil(t, client.SyncReq{Since: prevNextBatch}, verifyToDeviceResp(t, bob, checks, 0))
+		countSendToDeviceMessages(t, bob, client.SyncReq{Since: prevNextBatch}, wantReqID, 1, true)
 	})
 
 	t.Run("sendToDevice messages are ordered by arrival", func(t *testing.T) {
@@ -149,33 +95,47 @@ func TestSendToDevice(t *testing.T) {
 		for j := 0; j < int(wantCount); j++ {
 			i = mustSendToDevice(alice, bob.UserID, bob.DeviceID)
 		}
-		i -= wantCount
+		i = (i - wantCount) + 1
 
-		nextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncToDeviceHas(
-			func(msg gjson.Result) bool {
-				gotReqID := msg.Get("content.request_id").Int()
-				if gotReqID == i {
-					i++ // we have the next request ID, look for another
-				} else {
-					// if we see any other request ID, whine about it e.g out-of-order requests
-					t.Errorf("unexpected to-device request_id: %d, want %d", gotReqID, i)
-				}
-				return i == wantCount // terminate when we have seen all requests in order
-			},
-		))
-
-		// Sync again to verify there are no more events
-		syncResp, _ := bob.MustSync(t, client.SyncReq{Since: nextBatch})
-		if syncResp.Get("to_device.events").Exists() {
-			t.Fatal("expected there to be no more to_device.events")
-		}
+		countSendToDeviceMessages(t, bob, client.SyncReq{}, i, wantCount, true)
 	})
 
+}
+
+func countSendToDeviceMessages(t *testing.T, bob *client.CSAPI, req client.SyncReq, i int64, wantCount int64, withClear bool) (nextBatch string) {
+	t.Helper()
+	nextBatch = bob.MustSyncUntil(t, req, client.SyncToDeviceHas(
+		func(msg gjson.Result) bool {
+			t.Helper()
+			gotReqID := msg.Get("content.request_id").Int()
+			if gotReqID == i {
+				i++ // we have the next request ID, look for another
+				if i > wantCount {
+					return true
+				}
+			} else {
+				// if we see any other request ID, whine about it e.g out-of-order requests
+				t.Errorf("unexpected to-device request_id: %d, want %d", gotReqID, i)
+			}
+			return i == wantCount // terminate when we have seen all requests in order
+		},
+	))
+	if !withClear {
+		return nextBatch
+	}
+
+	// Sync again to verify there are no more events
+	syncResp, _ := bob.MustSync(t, client.SyncReq{Since: nextBatch})
+	if syncResp.Get("to_device.events").Exists() {
+		t.Fatal("expected there to be no more to_device.events")
+	}
+	return nextBatch
 }
 
 func sendToDevice(t *testing.T) func(sender *client.CSAPI, userID, deviceID string) int64 {
 	var reqID int64 = 0
 	return func(sender *client.CSAPI, userID, deviceID string) int64 {
+		reqID++
 		// Create a m.room_key_request sendToDevice message
 		reqBody := client.WithJSONBody(t, map[string]map[string]interface{}{
 			"messages": {
@@ -190,30 +150,6 @@ func sendToDevice(t *testing.T) func(sender *client.CSAPI, userID, deviceID stri
 		})
 		sendResp := sender.SendToDevice(t, "m.room_key_request", reqBody)
 		must.MatchResponse(t, sendResp, match.HTTPResponse{StatusCode: http.StatusOK})
-		reqID++
 		return reqID
-	}
-}
-
-func verifyToDeviceResp(t *testing.T, user *client.CSAPI, checks []match.JSON, wantMessageCount int64) client.SyncCheckOpt {
-	return func(userID string, syncResp gjson.Result) error {
-		t.Helper()
-		toDevice := syncResp.Get("to_device.events")
-		if !toDevice.Exists() {
-			if wantMessageCount > 0 && len(toDevice.Array()) == 0 {
-				return fmt.Errorf("no to_device.events found: %s", syncResp.Get("to_device").Raw)
-			}
-		}
-		if count := len(toDevice.Array()); int64(count) != wantMessageCount {
-			t.Fatalf("(%s - %s) expected %d to_device.events, got %d - %v", user.UserID, user.DeviceID, wantMessageCount, count, toDevice.Raw)
-		}
-		for _, message := range toDevice.Array() {
-			for _, check := range checks {
-				if err := check([]byte(message.Raw)); err != nil {
-					return fmt.Errorf("%v: %s", err, message.Raw)
-				}
-			}
-		}
-		return nil
 	}
 }
