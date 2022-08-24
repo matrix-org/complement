@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"testing"
 
-	"fmt"
-
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -26,33 +24,46 @@ func TestDeactivateAccount(t *testing.T) {
 	t.Run("Password flow is available", func(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{})
 		res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "account", "deactivate"}, reqBody)
-		must.MatchResponse(t, res, match.HTTPResponse{
+
+		rawBody := must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 401,
-			JSON: []match.JSON{
-				match.JSONArrayEach(
-					"flows",
-					func(flow gjson.Result) error {
-						stages := flow.Get("stages")
-						if !stages.IsArray() {
-							return fmt.Errorf("flows' stages is not an array.")
-						}
-						foundStage := false
-						for _, stage := range stages.Array() {
-							if stage.Type != gjson.String {
-								return fmt.Errorf("stage is not a string")
-							}
-							if stage.Str == "m.login.password" {
-								foundStage = true
-							}
-						}
-						if !foundStage {
-							return fmt.Errorf("No m.login.password stage found.")
-						}
-						return nil
-					},
-				),
-			},
 		})
+		body := gjson.ParseBytes(rawBody)
+
+		// Example: {"session":"wombat","flows":[{"stages":["m.login.password"]}],"params":{}}
+		t.Logf("Received JSON %s", body.String())
+
+		flowList, ok := body.Get("flows").Value().([]interface{})
+		if !ok {
+			t.Fatalf("flows is not a list")
+			return
+		}
+
+		foundPasswordStage := false
+
+		for _, flow := range flowList {
+			flowObject, ok := flow.(map[string]interface{})
+			stageList, ok := flowObject["stages"].([]interface{})
+			if !ok {
+				t.Fatalf("stages is not a list")
+				return
+			}
+
+			for _, stage := range stageList {
+				stageName, ok := stage.(string)
+				if !ok {
+					t.Fatalf("stage is not a string")
+					return
+				}
+				if stageName == "m.login.password" {
+					foundPasswordStage = true
+				}
+			}
+		}
+
+		if !foundPasswordStage {
+			t.Errorf("No m.login.password login stages found.")
+		}
 	})
 
 	// sytest: Can't deactivate account with wrong password
