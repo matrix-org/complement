@@ -354,9 +354,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 // construct this homeserver and execute its instructions, keeping the container alive.
 func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s.%s", d.Config.PackageNamespace, blueprintName, hs.Name)
-	baseImageURI := d.Config.BaseImageURIs[hs.Name]
-	hs.BaseImageURI = &baseImageURI
-	d.log("%s : constructing homeserver %s using baseimage %s...\n", contextStr, hs.Name, baseImageURI)
+	d.log("%s : constructing homeserver...\n", contextStr)
 
 	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
 	if err != nil {
@@ -389,7 +387,11 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 	var baseImageURI string
-	if hs.BaseImageURI == nil || *hs.BaseImageURI == "" {
+	// Use HS specific base image if defined
+	if uri, ok := d.Config.BaseImageURIs[hs.Name]; ok {
+		hs.BaseImageURI = &uri
+	}
+	if hs.BaseImageURI == nil {
 		baseImageURI = d.Config.BaseImageURI
 	} else {
 		baseImageURI = *hs.BaseImageURI
