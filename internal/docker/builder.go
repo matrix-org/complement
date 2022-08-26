@@ -355,7 +355,6 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s.%s", d.Config.PackageNamespace, blueprintName, hs.Name)
 	d.log("%s : constructing homeserver...\n", contextStr)
-
 	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
@@ -387,12 +386,12 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 	var baseImageURI string
-	// Use HS specific base image if defined
-	if uri, ok := d.Config.BaseImageURIs[hs.Name]; ok {
-		hs.BaseImageURI = &uri
-	}
 	if hs.BaseImageURI == nil {
 		baseImageURI = d.Config.BaseImageURI
+		// Use HS specific base image if defined
+		if uri, ok := d.Config.BaseImageURIs[hs.Name]; ok {
+			baseImageURI = uri
+		}
 	} else {
 		baseImageURI = *hs.BaseImageURI
 	}

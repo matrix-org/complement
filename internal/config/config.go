@@ -40,7 +40,7 @@ type Complement struct {
 	CAPrivateKey  *rsa.PrivateKey
 }
 
-var hsRegex = regexp.MustCompile(`COMPLEMENT_BASE_IMAGE_HS\d+=.+$`)
+var hsRegex = regexp.MustCompile(`COMPLEMENT_BASE_IMAGE_(.+)=(.+)$`)
 
 func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	cfg := &Complement{BaseImageURIs: map[string]string{}}
@@ -71,10 +71,11 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	}
 	// Parse HS specific base images
 	for _, env := range os.Environ() {
-		if hsRegex.MatchString(env) {
-			parts := strings.Split(env, "=")
-			hs := strings.ToLower(strings.TrimPrefix(parts[0], "COMPLEMENT_BASE_IMAGE_"))
-			cfg.BaseImageURIs[hs] = parts[1]
+		// FindStringSubmatch returns the complete match as well as the capture groups.
+		// In this case we expect there to be 3 matches.
+		if matches := hsRegex.FindStringSubmatch(env); len(matches) == 3 {
+			hs := matches[1]                   // first capture group; homeserver name
+			cfg.BaseImageURIs[hs] = matches[2] // second capture group; homeserver image
 		}
 	}
 
