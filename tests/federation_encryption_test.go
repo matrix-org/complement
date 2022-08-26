@@ -1,4 +1,4 @@
-package csapi_tests
+package tests
 
 import (
 	"reflect"
@@ -15,7 +15,7 @@ func TestEncryption(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
 	encAlice := client.MustCreateEncryptedClient(t, alice)
 	encBob := client.MustCreateEncryptedClient(t, bob)
