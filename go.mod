@@ -12,7 +12,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/gorilla/mux v1.8.0
 	github.com/matrix-org/gomatrix v0.0.0-20210324163249-be2af5ef2e16
-	github.com/matrix-org/gomatrixserverlib v0.0.0-20220526140030-dcfbb70ff32d
+	github.com/matrix-org/gomatrixserverlib v0.0.0-20220815094957-74b7ff4ae09c
 	github.com/matrix-org/util v0.0.0-20200807132607-55161520e1d4
 	github.com/mattn/go-sqlite3 v1.14.14
 	github.com/moby/term v0.0.0-20210610120745-9d4ed1856297 // indirect

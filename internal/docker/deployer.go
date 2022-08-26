@@ -227,7 +227,7 @@ func deployImage(
 		// Ensure that the homeservers under test can contact the host, so they can
 		// interact with a complement-controlled test server.
 		// Note: this feature of docker landed in Docker 20.10,
-		// see https://github.com/moby/moby/pull/40007 
+		// see https://github.com/moby/moby/pull/40007
 		extraHosts = []string{"host.docker.internal:host-gateway"}
 	}
 
@@ -423,9 +423,7 @@ func waitForPorts(ctx context.Context, docker *client.Client, containerID string
 }
 
 // Waits until a homeserver deployment is ready to serve requests.
-func waitForContainer(ctx context.Context, docker *client.Client, hsDep *HomeserverDeployment, stopTime time.Time) (iterCount int, err error) {
-	var lastErr error = nil
-
+func waitForContainer(ctx context.Context, docker *client.Client, hsDep *HomeserverDeployment, stopTime time.Time) (iterCount int, lastErr error) {
 	iterCount = 0
 
 	// If the container has a healthcheck, wait for it first
@@ -433,7 +431,7 @@ func waitForContainer(ctx context.Context, docker *client.Client, hsDep *Homeser
 		iterCount += 1
 		if time.Now().After(stopTime) {
 			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
-			break
+			return
 		}
 		inspect, err := docker.ContainerInspect(ctx, hsDep.ContainerID)
 		if err != nil {
@@ -477,8 +475,7 @@ func waitForContainer(ctx context.Context, docker *client.Client, hsDep *Homeser
 		lastErr = nil
 		break
 	}
-
-	return iterCount, lastErr
+	return
 }
 
 // RoundTripper is a round tripper that maps https://hs1 to the federation port of the container

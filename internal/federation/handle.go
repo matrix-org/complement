@@ -145,6 +145,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	// insert the join event into the room state
 	room.AddEvent(event)
+	log.Printf("Received send-join of event %s", event.EventID())
 
 	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
