@@ -110,6 +110,8 @@ jobs:
       - run: docker build -t homeserver -f build/scripts/Complement.Dockerfile .
         if: ${{ matrix.homeserver == 'Dendrite' }}
         working-directory: homeserver
+        env:
+          DOCKER_BUILDKIT: 1
 
       - run: |
           set -o pipefail &&
