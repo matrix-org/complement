@@ -41,7 +41,7 @@ func (ss *StateStore) IsEncrypted(roomID id.RoomID) bool {
 func (ss *StateStore) FindSharedRooms(userID id.UserID) []id.RoomID {
 	sharedRooms := make([]id.RoomID, 0)
 	for roomID, room := range ss.storer.Rooms {
-		if room.GetMembershipState(userID) == event.MembershipLeave {
+		if room.GetMembershipState(userID) == event.MembershipJoin {
 			sharedRooms = append(sharedRooms, roomID)
 		}
 	}
