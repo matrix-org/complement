@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	client "github.com/docker/docker/client"
+	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 
@@ -354,7 +354,10 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 // construct this homeserver and execute its instructions, keeping the container alive.
 func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
 	contextStr := fmt.Sprintf("%s.%s.%s", d.Config.PackageNamespace, blueprintName, hs.Name)
-	d.log("%s : constructing homeserver...\n", contextStr)
+	baseImageURI := d.Config.BaseImageURIs[hs.Name]
+	hs.BaseImageURI = &baseImageURI
+	d.log("%s : constructing homeserver %s using baseimage %s...\n", contextStr, hs.Name, baseImageURI)
+
 	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
@@ -386,7 +389,7 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 	var baseImageURI string
-	if hs.BaseImageURI == nil {
+	if hs.BaseImageURI == nil || *hs.BaseImageURI == "" {
 		baseImageURI = d.Config.BaseImageURI
 	} else {
 		baseImageURI = *hs.BaseImageURI
