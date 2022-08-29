@@ -63,6 +63,45 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			mustCheckEventisReturnedForTime(t, alice, roomID, eventB.AfterTimestamp, "f", "")
 		})
 
+		t.Run("should find next event topologically before given timestmap when all message timestamps are the same", func(t *testing.T) {
+			t.Parallel()
+			roomID, _, _ := createTestRoom(t, alice)
+
+			// Join from the application service bridge user so we can use to send
+			// some messages at a specific time.
+			as.JoinRoom(t, roomID, []string{"hs1"})
+
+			// Send a couple messages with the same timestamp after the other test
+			// messages in the room.
+			timeBeforeMessageCreation := time.Now()
+			sendMessageWithTimestamp(t, as, alice, roomID, timeBeforeMessageCreation, "messageWithSameTime1")
+			messageIDWithSameTime2 := sendMessageWithTimestamp(t, as, alice, roomID, timeBeforeMessageCreation, "messageWithSameTime2")
+
+			// Looking backwards from the time the messages were sent, we should find
+			// message2. A naive MSC3030 implementation that only sorts by timestamp,
+			// will probably return message1 since it's the first one in the database.
+			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeMessageCreation, "b", messageIDWithSameTime2)
+		})
+
+		t.Run("should find next event topologically after given timestmap when all message timestamps are the same", func(t *testing.T) {
+			t.Parallel()
+			roomID, _, _ := createTestRoom(t, alice)
+
+			// Join from the application service bridge user so we can use to send
+			// some messages at a specific time.
+			as.JoinRoom(t, roomID, []string{"hs1"})
+
+			// Send a couple messages with the same timestamp after the other test
+			// messages in the room.
+			timeBeforeMessageCreation := time.Now()
+			messageIDWithSameTime1 := sendMessageWithTimestamp(t, as, alice, roomID, timeBeforeMessageCreation, "messageWithSameTime1")
+			sendMessageWithTimestamp(t, as, alice, roomID, timeBeforeMessageCreation, "messageWithSameTime2")
+
+			// Looking forwards from the time the messages were sent, we should find
+			// message1.
+			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeMessageCreation, "f", messageIDWithSameTime1)
+		})
+
 		// Just a sanity check that we're not leaking anything from the `/timestamp_to_event` endpoint
 		t.Run("should not be able to query a private room you are not a member of", func(t *testing.T) {
 			t.Parallel()
@@ -139,28 +178,13 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				timeBeforeRoomCreation := time.Now()
 				roomID, _, _ := createTestRoom(t, alice)
 
-				// Join from the application service bridge user
+				// Join from the application service bridge user so we can use to send
+				// some messages at a specific time.
 				as.JoinRoom(t, roomID, []string{"hs1"})
 
-				// Import a message in the room before the room was created. We have to
-				// use an application service user because they are the only one
-				// allowed to use the `?ts` query parameter.
+				// Import a message in the room before the room was created
 				importTime := time.Date(2022, 01, 03, 0, 0, 0, 0, time.Local)
-				importTimestamp := makeTimestampFromTime(importTime)
-				timestampString := strconv.FormatInt(importTimestamp, 10)
-				// We can't use as.SendEventSynced(...) because application services can't use the /sync API
-				sendRes := as.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("findEventBeforeCreation-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
-					"body":    "old imported event",
-					"msgtype": "m.text",
-				}), client.WithQueries(url.Values{
-					"ts": []string{timestampString},
-				}))
-				sendBody := client.ParseJSON(t, sendRes)
-				importedEventID := client.GetJSONFieldStr(t, sendBody, "event_id")
-				// Make sure the imported event has reached the homeserver
-				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-					return ev.Get("event_id").Str == importedEventID
-				}))
+				importedEventID := sendMessageWithTimestamp(t, as, alice, roomID, importTime, "old imported event")
 
 				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, timeBeforeRoomCreation, "b", importedEventID)
@@ -235,6 +259,32 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 	eventB = &eventTime{EventID: eventBID, BeforeTimestamp: timeAfterEventA, AfterTimestamp: timeAfterEventB}
 
 	return roomID, eventA, eventB
+}
+
+func sendMessageWithTimestamp(t *testing.T, as *client.CSAPI, c *client.CSAPI, roomID string, messageTime time.Time, message string) (messageEventID string) {
+	t.Helper()
+
+	timestamp := makeTimestampFromTime(messageTime)
+	timestampString := strconv.FormatInt(timestamp, 10)
+	// We have to use an application service user because they are the only one
+	// allowed to use the `?ts` query parameter.
+	//
+	// We can't use as.SendEventSynced(...) because application services can't use
+	// the /sync API.
+	sendRes := as.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
+		"body":    message,
+		"msgtype": "m.text",
+	}), client.WithQueries(url.Values{
+		"ts": []string{timestampString},
+	}))
+	sendBody := client.ParseJSON(t, sendRes)
+	messageEventID = client.GetJSONFieldStr(t, sendBody, "event_id")
+	// Make sure the imported event has reached the homeserver
+	c.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+		return ev.Get("event_id").Str == messageEventID
+	}))
+
+	return
 }
 
 // Fetch event from /timestamp_to_event and ensure it matches the expectedEventId
