@@ -63,7 +63,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			mustCheckEventisReturnedForTime(t, alice, roomID, eventB.AfterTimestamp, "f", "")
 		})
 
-		t.Run("should find next event topologically before given timestmap when all message timestamps are the same", func(t *testing.T) {
+		t.Run("should find next event topologically before given timestamp when all message timestamps are the same", func(t *testing.T) {
 			t.Parallel()
 			roomID, _, _ := createTestRoom(t, alice)
 
@@ -78,7 +78,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			messageIDWithSameTime2 := sendMessageWithTimestamp(t, as, alice, roomID, timeBeforeMessageCreation, "messageWithSameTime2")
 
 			// Looking backwards from the time the messages were sent, we should find
-			// message2. A naive MSC3030 implementation that only sorts by timestamp,
+			// message2. A naive MSC3030 implementation that only sorts by timestamp
 			// will probably return message1 since it's the first one in the database.
 			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeMessageCreation, "b", messageIDWithSameTime2)
 		})
@@ -178,7 +178,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				timeBeforeRoomCreation := time.Now()
 				roomID, _, _ := createTestRoom(t, alice)
 
-				// Join from the application service bridge user so we can use to send
+				// Join from the application service bridge user so we can use it to send
 				// some messages at a specific time.
 				as.JoinRoom(t, roomID, []string{"hs1"})
 
