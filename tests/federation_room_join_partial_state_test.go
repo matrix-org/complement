@@ -1403,6 +1403,16 @@ func testReceiveEventDuringPartialStateJoin(
 		client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
 	)
 
+	// FIXME: if we try to do a /state_ids request immediately, it will race against update of the "current state", and
+	//   our request may be rejected due to https://github.com/matrix-org/synapse/issues/13288.
+	//   By way of a workaround, request a remote user's current membership, which should block until the current state
+	//   is updated.
+	alice.DoFunc(
+		t,
+		"GET",
+		[]string{"_matrix", "client", "v3", "rooms", psjResult.ServerRoom.RoomID, "state", "m.room.member", "@non-existent:remote"},
+	)
+	
 	// check the server's idea of the state at the event. We do this by making a `state_ids` request over federation
 	stateReq = gomatrixserverlib.NewFederationRequest("GET", "hs1",
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
