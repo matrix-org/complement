@@ -11,7 +11,7 @@ import (
 func TestEncryption(t *testing.T) {
 	emptyString := ""
 
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
