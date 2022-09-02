@@ -682,7 +682,10 @@ func SyncTimelineHasEventID(roomID string, eventID string) SyncCheckOpt {
 	})
 }
 
-// Check that the state for `roomID` has an event which passes the check function.
+// Check that the state section for `roomID` has an event which passes the check function.
+// Note that the state section of a sync response only contains the change in state up to the start
+// of the timeline and will not contain the entire state of the room for incremental or
+// `lazy_load_members` syncs.
 func SyncStateHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		err := loopArray(
@@ -693,21 +696,6 @@ func SyncStateHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 		}
 		return fmt.Errorf("SyncStateHas(%s): %s", roomID, err)
 	}
-}
-
-// Check that the state for `roomID` has an event which matches the event ID.
-func SyncStateHasEventID(roomID string, eventID string) SyncCheckOpt {
-	return SyncStateHas(roomID, func(ev gjson.Result) bool {
-		return ev.Get("event_id").Str == eventID
-	})
-}
-
-// Check that the state for `roomID` has an event which matches the state key.
-func SyncStateHasStateKey(roomID string, eventType string, stateKey string) SyncCheckOpt {
-	return SyncStateHas(roomID, func(ev gjson.Result) bool {
-		return ev.Get("type").Str == eventType &&
-			ev.Get("state_key").Str == stateKey
-	})
 }
 
 func SyncEphemeralHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
