@@ -82,6 +82,37 @@ func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp gomatrix
 	return
 }
 
+// MakeRespMakeKnock makes the response for a /make_knock request, without verifying any signatures
+// or dealing with HTTP responses itself.
+func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeKnock, err error) {
+	// Generate a knock event
+	builder := gomatrixserverlib.EventBuilder{
+		Sender:     userID,
+		RoomID:     room.RoomID,
+		Type:       "m.room.member",
+		StateKey:   &userID,
+		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
+		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
+	}
+	err = builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
+	if err != nil {
+		err = fmt.Errorf("make_knock cannot set membership content: %w", err)
+		return
+	}
+	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
+	if err != nil {
+		err = fmt.Errorf("make_knock cannot calculate auth_events: %w", err)
+		return
+	}
+	builder.AuthEvents = room.AuthEvents(stateNeeded)
+
+	resp = gomatrixserverlib.RespMakeKnock{
+		RoomVersion: room.Version,
+		KnockEvent:  builder,
+	}
+	return
+}
+
 // SendJoinRequestsHandler is the http.Handler implementation for the send_join part of
 // HandleMakeSendJoinRequests.
 //
