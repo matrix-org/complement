@@ -41,6 +41,7 @@ func TestDeactivateAccount(t *testing.T) {
 
 		foundPasswordStage := false
 
+	outer:
 		for _, flow := range flowList {
 			flowObject, ok := flow.(map[string]interface{})
 			stageList, ok := flowObject["stages"].([]interface{})
@@ -57,6 +58,7 @@ func TestDeactivateAccount(t *testing.T) {
 				}
 				if stageName == "m.login.password" {
 					foundPasswordStage = true
+					break outer
 				}
 			}
 		}
