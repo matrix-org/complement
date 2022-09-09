@@ -12,7 +12,7 @@ import (
 	"github.com/matrix-org/complement/internal/must"
 )
 
-func TestSendToDevice(t *testing.T) {
+func TestFederationSendToDevice(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -103,20 +103,19 @@ func TestSendToDevice(t *testing.T) {
 
 func countSendToDeviceMessages(t *testing.T, bob *client.CSAPI, req client.SyncReq, i int64, wantCount int64, withClear bool) (nextBatch string) {
 	t.Helper()
+	var count int64 = 0
 	nextBatch = bob.MustSyncUntil(t, req, client.SyncToDeviceHas(
 		func(msg gjson.Result) bool {
 			t.Helper()
 			gotReqID := msg.Get("content.request_id").Int()
 			if gotReqID == i {
 				i++ // we have the next request ID, look for another
-				if i > wantCount {
-					return true
-				}
+				count++
 			} else {
 				// if we see any other request ID, whine about it e.g out-of-order requests
 				t.Errorf("unexpected to-device request_id: %d, want %d", gotReqID, i)
 			}
-			return i == wantCount // terminate when we have seen all requests in order
+			return count == wantCount // terminate when we have seen all requests in order
 		},
 	))
 	if !withClear {
@@ -126,7 +125,7 @@ func countSendToDeviceMessages(t *testing.T, bob *client.CSAPI, req client.SyncR
 	// Sync again to verify there are no more events
 	syncResp, _ := bob.MustSync(t, client.SyncReq{Since: nextBatch})
 	if syncResp.Get("to_device.events").Exists() {
-		t.Fatal("expected there to be no more to_device.events")
+		t.Fatalf("expected there to be no more to_device.events, got %+v", syncResp.Get("to_device.events").Raw)
 	}
 	return nextBatch
 }
