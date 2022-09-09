@@ -693,6 +693,22 @@ func SyncTimelineHasEventID(roomID string, eventID string) SyncCheckOpt {
 	})
 }
 
+// Check that the state section for `roomID` has an event which passes the check function.
+// Note that the state section of a sync response only contains the change in state up to the start
+// of the timeline and will not contain the entire state of the room for incremental or
+// `lazy_load_members` syncs.
+func SyncStateHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncStateHas(%s): %s", roomID, err)
+	}
+}
+
 func SyncEphemeralHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		err := loopArray(

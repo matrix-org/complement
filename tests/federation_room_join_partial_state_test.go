@@ -65,6 +65,17 @@ func TestPartialStateJoin(t *testing.T) {
 		return serverRoom
 	}
 
+	// getSyncToken gets the latest sync token
+	getSyncToken := func(t *testing.T, alice *client.CSAPI) string {
+		_, syncToken := alice.MustSync(t,
+			client.SyncReq{
+				Filter:        buildLazyLoadingSyncFilter(nil),
+				TimeoutMillis: "0",
+			},
+		)
+		return syncToken
+	}
+
 	// test that a regular /sync request made during a partial-state /send_join
 	// request blocks until the state is correctly synced.
 	t.Run("SyncBlocksDuringPartialStateJoin", func(t *testing.T) {
@@ -182,6 +193,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -197,7 +209,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Logf("Derek created event with ID %s", event.EventID())
 
 		// derek sends an event in the room
-		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event, syncToken)
 	})
 
 	// we should be able to receive events with a missing prev event over federation during the resync
@@ -205,6 +217,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -236,7 +249,7 @@ func TestPartialStateJoin(t *testing.T) {
 			[]string{eventB.EventID()}, []*gomatrixserverlib.Event{eventA})
 
 		// send event B to hs1
-		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventB)
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventB, syncToken)
 	})
 
 	// we should be able to receive events with partially missing prev events over federation during the resync
@@ -244,6 +257,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -277,7 +291,7 @@ func TestPartialStateJoin(t *testing.T) {
 			[]string{eventB.EventID()}, []*gomatrixserverlib.Event{eventA})
 
 		// send event B to hs1
-		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventB)
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventB, syncToken)
 	})
 
 	// we should be able to receive events with a missing prev event, with half missing prev events,
@@ -286,6 +300,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -323,7 +338,170 @@ func TestPartialStateJoin(t *testing.T) {
 		handleStateRequests(t, server, serverRoom, eventA.EventID(), serverRoom.AllCurrentState(), nil, nil)
 
 		// send event C to hs1
-		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventC)
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventC, syncToken)
+	})
+
+	// initial sync must return memberships of event senders even when they aren't present in the
+	// partial room state.
+	t.Run("Lazy-loading initial sync includes remote memberships during partial state join", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(server)
+
+		// derek sends a message into the room.
+		event := psjResult.CreateMessageEvent(t, "derek", nil)
+		t.Logf("Derek created event with ID %s", event.EventID())
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+
+		// wait for the homeserver to persist the event.
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event.EventID())
+
+		// do a lazy-loading initial sync.
+		syncRes, _ := alice.MustSync(t,
+			client.SyncReq{
+				Since:  "",
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+		)
+
+		err := client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event.Sender()
+		})(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.Sender(), err)
+		}
+	})
+
+	// gappy sync must return memberships of event senders even when they aren't present in the
+	// partial room state.
+	t.Run("Lazy-loading gappy sync includes remote memberships during partial state join", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		syncToken = alice.MustSyncUntil(t,
+			client.SyncReq{
+				Since:  syncToken,
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(server)
+
+		// derek sends two messages into the room.
+		event1 := psjResult.CreateMessageEvent(t, "derek", nil)
+		event2 := psjResult.CreateMessageEvent(t, "derek", nil)
+		t.Logf("Derek created event 1 with ID %s", event1.EventID())
+		t.Logf("Derek created event 2 with ID %s", event2.EventID())
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event1.JSON(), event2.JSON()}, nil)
+
+		// wait for the homeserver to persist the event.
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event2.EventID())
+
+		// do a gappy sync which only picks up the second message.
+		syncRes, _ := alice.MustSync(t,
+			client.SyncReq{
+				Since: syncToken,
+				Filter: buildLazyLoadingSyncFilter(map[string]interface{}{
+					"limit": 1,
+				}),
+			},
+		)
+
+		if !syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID) + ".timeline.limited").Bool() {
+			t.Errorf("/sync response was not gappy")
+		}
+
+		err := client.SyncTimelineHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("event_id").Str == event1.EventID()
+		})(alice.UserID, syncRes)
+		if err == nil {
+			t.Errorf("gappy /sync returned the first event unexpectedly")
+		}
+
+		err = client.SyncTimelineHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("event_id").Str == event2.EventID()
+		})(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find event 2 in lazy-loading /sync response: %s", err)
+		}
+
+		err = client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event2.Sender()
+		})(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event2.Sender(), err)
+		}
+	})
+
+	// incremental sync must return memberships of event senders even when they aren't present in
+	// the partial room state.
+	t.Run("Lazy-loading incremental sync includes remote memberships during partial state join", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		syncToken = alice.MustSyncUntil(t,
+			client.SyncReq{
+				Since:  syncToken,
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(server)
+
+		// derek sends a message into the room.
+		event := psjResult.CreateMessageEvent(t, "derek", nil)
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+		t.Logf("Derek created event with ID %s", event.EventID())
+
+		// wait for the homeserver to persist the event.
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event.EventID())
+
+		// do an incremental sync.
+		syncRes, _ := alice.MustSync(t,
+			client.SyncReq{
+				Since:  syncToken,
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+		)
+
+		err := client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event.Sender()
+		})(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.Sender(), err)
+		}
 	})
 
 	// a request to (client-side) /members?at= should block until the (federation) /state request completes
@@ -635,6 +813,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -692,7 +871,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Logf("Charlie sent timeline event 2")
 		// wait for it to become visible, which implies that all the outliers have been pulled in.
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, timelineEvent2.EventID())
+		awaitEventViaSync(t, alice, serverRoom.RoomID, timelineEvent2.EventID(), syncToken)
 
 		// now we send over all the other events in the gap.
 		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{lateEvent.JSON()}, nil)
@@ -741,6 +920,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -777,7 +957,7 @@ func TestPartialStateJoin(t *testing.T) {
 			[]json.RawMessage{badStateEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 		// wait for the sentinel event to be visible
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, sentinelEvent.EventID())
+		syncToken = awaitEventViaSync(t, alice, serverRoom.RoomID, sentinelEvent.EventID(), syncToken)
 
 		// ... and check that the bad state event is *not* visible
 		must.MatchResponse(t,
@@ -793,7 +973,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// one more (non-state) event, for testReceiveEventDuringPartialStateJoin
 		event := psjResult.CreateMessageEvent(t, "charlie", nil)
 		t.Logf("charlie created regular timeline event %s", event.EventID())
-		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event, syncToken)
 
 		// check that the bad state event is *still* not visible
 		must.MatchResponse(t,
@@ -811,6 +991,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
@@ -881,12 +1062,12 @@ func TestPartialStateJoin(t *testing.T) {
 		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{badStateEvent.JSON()}, nil)
 
 		// the bad state event should be visible at this point
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, badStateEvent.EventID())
+		syncToken = awaitEventViaSync(t, alice, serverRoom.RoomID, badStateEvent.EventID(), syncToken)
 
 		// now finish up the partial join.
 		event := psjResult.CreateMessageEvent(t, "charlie", nil)
 		t.Logf("charlie created regular timeline event %s", event.EventID())
-		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event, syncToken)
 
 		// the bad state event should now *not* be visible
 		must.MatchResponse(t,
@@ -904,6 +1085,7 @@ func TestPartialStateJoin(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
@@ -1001,10 +1183,10 @@ func TestPartialStateJoin(t *testing.T) {
 			[]json.RawMessage{badKickEvent.JSON(), rejectedStateEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 		// the bad kick event should be visible at this point
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, badKickEvent.EventID())
+		awaitEventViaSync(t, alice, serverRoom.RoomID, badKickEvent.EventID(), syncToken)
 
 		// ... but the rejected state event should not.
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, sentinelEvent.EventID())
+		syncToken = awaitEventViaSync(t, alice, serverRoom.RoomID, sentinelEvent.EventID(), syncToken)
 		must.MatchResponse(t,
 			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", rejectedStateEvent.EventID()}),
 			match.HTTPResponse{
@@ -1018,7 +1200,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// now finish up the partial join.
 		event := psjResult.CreateMessageEvent(t, "charlie", nil)
 		t.Logf("charlie created regular timeline event %s", event.EventID())
-		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event)
+		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, event, syncToken)
 
 		// the bad kick event should now *not* be visible
 		must.MatchResponse(t,
@@ -1128,7 +1310,7 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Fatalf("MakeRespMakeJoin failed : %s", err)
 		}
 
-		// charlie then tries to /send_join via the homeserver under test
+		// daniel then tries to /send_join via the homeserver under test
 		joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv, makeJoinResp.RoomVersion)
 		must.NotError(t, "JoinEvent.Build", err)
 
@@ -1210,18 +1392,137 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 		})
 	})
+
+	// when the server is in the middle of a partial state join, it should not accept
+	// /make_knock because it can't give a full answer.
+	t.Run("Rejects make_knock during partial join", func(t *testing.T) {
+		// In this test, we have 3 homeservers:
+		//   hs1 (the server under test) with @alice:hs1
+		//     This is the server that will be in the middle of a partial join.
+		//   testServer1 (a Complement test server) with @bob:<server name>
+		//     This is the server that created the room originally.
+		//   testServer2 (another Complement test server) with @charlie:<server name>
+		//     This is the server that will try to make a knock via testServer1.
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		testServer1 := createTestServer(t, deployment)
+		cancel := testServer1.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, testServer1, alice.GetDefaultRoomVersion(t))
+		roomID := serverRoom.RoomID
+		psjResult := beginPartialStateJoin(t, testServer1, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// The partial join is now in progress.
+		// Let's have a new test server rock up and ask to join the room by making a
+		// /make_knock request.
+
+		testServer2 := createTestServer(t, deployment)
+		cancel2 := testServer2.Listen()
+		defer cancel2()
+
+		fedClient2 := testServer2.FederationClient(deployment)
+
+		// charlie sends a make_knock
+		_, err := fedClient2.MakeKnock(context.Background(), "hs1", roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
+
+		if err == nil {
+			t.Errorf("MakeKnock returned 200, want 404")
+		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
+			t.Logf("MakeKnock => %d/%s", httpError.Code, string(httpError.Contents))
+			if httpError.Code != 404 {
+				t.Errorf("expected 404, got %d", httpError.Code)
+			}
+			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
+			if errcode != "M_NOT_FOUND" {
+				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
+			}
+		} else {
+			t.Errorf("MakeKnock: non-HTTPError: %v", err)
+		}
+	})
+
+	// when the server is in the middle of a partial state join, it should not accept
+	// /send_knock because it can't give a full answer.
+	t.Run("Rejects send_knock during partial join", func(t *testing.T) {
+		// In this test, we have 3 homeservers:
+		//   hs1 (the server under test) with @alice:hs1
+		//     This is the server that will be in the middle of a partial join.
+		//   testServer1 (a Complement test server) with @charlie:<server name>
+		//     This is the server that will create the room originally.
+		//   testServer2 (another Complement test server) with @daniel:<server name>
+		//     This is the server that will try to knock on the room via hs2,
+		//     but only after using hs1 to /make_knock (as otherwise we have no way
+		//     of being able to build a request to /send_knock)
+		//
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		testServer1 := createTestServer(t, deployment)
+		cancel := testServer1.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, testServer1, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, testServer1, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// hs1's partial join is now in progress.
+		// Let's have a test server rock up and ask to /send_knock in the room via hs1.
+		// To do that, we need to /make_knock first.
+		// Asking hs1 to /make_knock won't work, because it should reject that request.
+		// To work around that, we /make_knock via hs2.
+
+		testServer2 := createTestServer(t, deployment)
+		cancel2 := testServer2.Listen()
+		defer cancel2()
+
+		fedClient2 := testServer2.FederationClient(deployment)
+
+		// Manually /make_knock via testServer1.
+		// This is permissible because testServer1 is fully joined to the room.
+		// We can't actually use /make_knock because host.docker.internal doesn't resolve,
+		// so compute it without making any requests:
+		makeKnockResp, err := federation.MakeRespMakeKnock(testServer1, serverRoom, testServer2.UserID("daniel"))
+		if err != nil {
+			t.Fatalf("MakeRespMakeKnock failed : %s", err)
+		}
+
+		// daniel then tries to /send_knock via the homeserver under test
+		knockEvent, err := makeKnockResp.KnockEvent.Build(time.Now(), gomatrixserverlib.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv, makeKnockResp.RoomVersion)
+		must.NotError(t, "KnockEvent.Build", err)
+
+		// SendKnock should return a 404 because the homeserver under test has not
+		// finished its partial join.
+		_, err = fedClient2.SendKnock(context.Background(), "hs1", knockEvent)
+		if err == nil {
+			t.Errorf("SendKnock returned 200, want 404")
+		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
+			t.Logf("SendKnock => %d/%s", httpError.Code, string(httpError.Contents))
+			if httpError.Code != 404 {
+				t.Errorf("expected 404, got %d", httpError.Code)
+			}
+			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
+			if errcode != "M_NOT_FOUND" {
+				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
+			}
+		} else {
+			t.Errorf("SendKnock: non-HTTPError: %v", err)
+		}
+	})
 }
 
 // test reception of an event over federation during a resync
 // sends the given event to the homeserver under test, checks that a client can see it and checks
-// the state at the event
+// the state at the event. returns the new sync token after the event.
 func testReceiveEventDuringPartialStateJoin(
-	t *testing.T, deployment *docker.Deployment, alice *client.CSAPI, psjResult partialStateJoinResult, event *gomatrixserverlib.Event,
-) {
+	t *testing.T, deployment *docker.Deployment, alice *client.CSAPI, psjResult partialStateJoinResult, event *gomatrixserverlib.Event, syncToken string,
+) string {
 	// send the event to the homeserver
 	psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
 
-	awaitEventArrival(t, time.Second, alice, psjResult.ServerRoom.RoomID, event.EventID())
+	syncToken = awaitEventViaSync(t, alice, psjResult.ServerRoom.RoomID, event.EventID(), syncToken)
 
 	// fire off a /state_ids request for the last event.
 	// it must either:
@@ -1265,6 +1566,16 @@ func testReceiveEventDuringPartialStateJoin(
 		client.SyncJoinedTo(alice.UserID, psjResult.ServerRoom.RoomID),
 	)
 
+	// FIXME: if we try to do a /state_ids request immediately, it will race against update of the "current state", and
+	//   our request may be rejected due to https://github.com/matrix-org/synapse/issues/13288.
+	//   By way of a workaround, request a remote user's current membership, which should block until the current state
+	//   is updated.
+	alice.DoFunc(
+		t,
+		"GET",
+		[]string{"_matrix", "client", "v3", "rooms", psjResult.ServerRoom.RoomID, "state", "m.room.member", "@non-existent:remote"},
+	)
+	
 	// check the server's idea of the state at the event. We do this by making a `state_ids` request over federation
 	stateReq = gomatrixserverlib.NewFederationRequest("GET", "hs1",
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
@@ -1274,7 +1585,7 @@ func testReceiveEventDuringPartialStateJoin(
 	)
 	if err := psjResult.Server.SendFederationRequest(context.Background(), deployment, stateReq, &respStateIDs); err != nil {
 		t.Errorf("/state_ids request returned non-200: %s", err)
-		return
+		return syncToken
 	}
 	var gotState, expectedState []interface{}
 	for _, ev := range respStateIDs.StateEventIDs {
@@ -1284,21 +1595,30 @@ func testReceiveEventDuringPartialStateJoin(
 		expectedState = append(expectedState, ev.EventID())
 	}
 	must.CheckOffAll(t, gotState, expectedState)
+
+	return syncToken
 }
 
-// awaitEventArrival waits for alice to be able to see a given event
-func awaitEventArrival(t *testing.T, timeout time.Duration, alice *client.CSAPI, roomID string, eventID string) {
-	/* TODO: check that a lazy-loading sync can see the event. Currently this doesn't work, because /sync blocks.
-	 * https://github.com/matrix-org/synapse/issues/13146
-	alice.MustSyncUntil(t,
+// awaitEventViaSync waits for alice to be able to see a given event via an incremental lazy-loading
+// /sync and returns the new sync token after
+func awaitEventViaSync(t *testing.T, alice *client.CSAPI, roomID string, eventID string, syncToken string) string {
+	// check that a lazy-loading sync can see the event
+	syncToken = alice.MustSyncUntil(t,
 		client.SyncReq{
+			Since:  syncToken,
 			Filter: buildLazyLoadingSyncFilter(nil),
 		},
 		client.SyncTimelineHasEventID(roomID, eventID),
 	)
-	*/
 
-	// still, Alice should be able to see the event with an /event request. We might have to try it a few times.
+	t.Logf("Alice successfully received event %s via /sync", eventID)
+
+	return syncToken
+}
+
+// awaitEventArrival waits for alice to be able to see a given event via /event
+func awaitEventArrival(t *testing.T, timeout time.Duration, alice *client.CSAPI, roomID string, eventID string) {
+	// Alice should be able to see the event with an /event request. We might have to try it a few times.
 	alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "event", eventID},
 		client.WithRetryUntil(timeout, func(res *http.Response) bool {
 			if res.StatusCode == 200 {
@@ -1312,7 +1632,7 @@ func awaitEventArrival(t *testing.T, timeout time.Duration, alice *client.CSAPI,
 			return false
 		}),
 	)
-	t.Logf("Alice successfully received event %s", eventID)
+	t.Logf("Alice successfully observed event %s via /event", eventID)
 }
 
 // buildLazyLoadingSyncFilter constructs a json-marshalled filter suitable the 'Filter' field of a client.SyncReq
