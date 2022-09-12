@@ -201,7 +201,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		bob.LeaveRoom(t, roomID)
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(bob.UserID, roomID))
 
-		// Check that Alice is notified
+		// Check that Alice is notified that she will no longer receive updates about Bob's devices
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
@@ -238,7 +238,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		alice.LeaveRoom(t, roomID)
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(alice.UserID, roomID))
 
-		// Check that Alice is notified
+		// Check that Alice is notified that she will no longer receive updates about Bob's devices
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
@@ -276,7 +276,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		bob.LeaveRoom(t, roomID)
 		bobNextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(bob.UserID, roomID))
 
-		// Check that Alice is notified
+		// Check that Alice is notified that she will no longer receive updates about Bob's devices
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
@@ -292,7 +292,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		bob.JoinRoom(t, roomID, []string{hsName})
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncJoinedTo(bob.UserID, roomID))
 
-		// Check that Alice is notified
+		// Check that Alice is notified that Bob's devices have a change
 		// Alice's homeserver must not return a cached device list for Bob.
 		alice.MustSyncUntil(
 			t,
