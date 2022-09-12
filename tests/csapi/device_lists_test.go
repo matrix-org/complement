@@ -29,6 +29,8 @@ func TestDeviceListUpdates(t *testing.T) {
 	// uploadNewKeys uploads a new set of keys for a given client.
 	// Returns a check function that can be passed to mustQueryKeys.
 	uploadNewKeys := func(t *testing.T, user *client.CSAPI) []match.JSON {
+		t.Helper()
+
 		account := olm.NewAccount()
 		ed25519Key, curve25519Key := account.IdentityKeys()
 
