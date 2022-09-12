@@ -303,6 +303,8 @@ func TestDeviceListUpdates(t *testing.T) {
 	}
 
 	// Create two homeservers
+	// The users and rooms in the blueprint won't be used.
+	// Each test creates their own Alice and Bob users.
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
