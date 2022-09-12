@@ -202,7 +202,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(bob.UserID, roomID))
 
 		// Check that Alice is notified that she will no longer receive updates about Bob's devices
-		alice.MustSyncUntil(
+		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
 			syncDeviceListsHas("left", bob.UserID),
@@ -214,6 +214,12 @@ func TestDeviceListUpdates(t *testing.T) {
 		// cached device list for Bob.
 		checkBobKeys = uploadNewKeys(t, bob)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
+
+		// Check that Alice is not notified about Bob's device update
+		syncResult, _ := alice.MustSync(t, client.SyncReq{Since: aliceNextBatch})
+		if syncDeviceListsHas("changed", bob.UserID)(alice.UserID, syncResult) == nil {
+			t.Fatalf("Alice was unexpectedly notified about Bob's device update even though they share no rooms")
+		}
 	}
 
 	// testLeave tests Alice leaving a room another user is in.
@@ -239,7 +245,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(alice.UserID, roomID))
 
 		// Check that Alice is notified that she will no longer receive updates about Bob's devices
-		alice.MustSyncUntil(
+		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
 			syncDeviceListsHas("left", bob.UserID),
@@ -251,6 +257,12 @@ func TestDeviceListUpdates(t *testing.T) {
 		// cached device list for Bob.
 		checkBobKeys = uploadNewKeys(t, bob)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
+
+		// Check that Alice is not notified about Bob's device update
+		syncResult, _ := alice.MustSync(t, client.SyncReq{Since: aliceNextBatch})
+		if syncDeviceListsHas("changed", bob.UserID)(alice.UserID, syncResult) == nil {
+			t.Fatalf("Alice was unexpectedly notified about Bob's device update even though they share no rooms")
+		}
 	}
 
 	// testOtherUserRejoin tests another user leaving and rejoining a room Alice is in.
