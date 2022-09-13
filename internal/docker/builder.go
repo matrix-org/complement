@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	client "github.com/docker/docker/client"
+	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 
@@ -277,6 +277,8 @@ func (d *Builder) construct(bprint b.Blueprint, homeserversToConstruct []b.Homes
 			}); delErr != nil {
 				d.log("%s: failed to remove container which failed to deploy: %s", res.contextStr, delErr)
 			}
+			// there is little point continuing to set up the remaining homeservers at this point
+			return
 		}
 		// kill the container
 		defer func(r result) {
@@ -403,6 +405,10 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	var baseImageURI string
 	if hs.BaseImageURI == nil {
 		baseImageURI = d.Config.BaseImageURI
+		// Use HS specific base image if defined
+		if uri, ok := d.Config.BaseImageURIs[hs.Name]; ok {
+			baseImageURI = uri
+		}
 	} else {
 		baseImageURI = *hs.BaseImageURI
 	}
