@@ -151,11 +151,12 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
-// LeaveRoom joins the room ID, else fails the test.
+// LeaveRoom leaves the room ID, else fails the test.
 func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 	t.Helper()
 	// leave the room
-	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"})
+	body := map[string]interface{}{}
+	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, WithJSONBody(t, body))
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
