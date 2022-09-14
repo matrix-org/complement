@@ -16,7 +16,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	roxy := deployment.RegisterUser(t, "hs1", "roxy", "pass", true)
+	roxy := deployment.RegisterUser(t, "hs1", "roxy", "verygoodpass", true)
 
 	waiter := NewWaiter()
 	wantEventType := "m.room.redaction"
