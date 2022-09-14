@@ -341,6 +341,169 @@ func TestPartialStateJoin(t *testing.T) {
 		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventC, syncToken)
 	})
 
+	// initial sync must return memberships of event senders even when they aren't present in the
+	// partial room state.
+	t.Run("Lazy-loading initial sync includes remote memberships during partial state join", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(server)
+
+		// derek sends a message into the room.
+		event := psjResult.CreateMessageEvent(t, "derek", nil)
+		t.Logf("Derek created event with ID %s", event.EventID())
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+
+		// wait for the homeserver to persist the event.
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event.EventID())
+
+		// do a lazy-loading initial sync.
+		syncRes, _ := alice.MustSync(t,
+			client.SyncReq{
+				Since:  "",
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+		)
+
+		err := client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event.Sender()
+		})(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.Sender(), err)
+		}
+	})
+
+	// gappy sync must return memberships of event senders even when they aren't present in the
+	// partial room state.
+	t.Run("Lazy-loading gappy sync includes remote memberships during partial state join", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		syncToken = alice.MustSyncUntil(t,
+			client.SyncReq{
+				Since:  syncToken,
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(server)
+
+		// derek sends two messages into the room.
+		event1 := psjResult.CreateMessageEvent(t, "derek", nil)
+		event2 := psjResult.CreateMessageEvent(t, "derek", nil)
+		t.Logf("Derek created event 1 with ID %s", event1.EventID())
+		t.Logf("Derek created event 2 with ID %s", event2.EventID())
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event1.JSON(), event2.JSON()}, nil)
+
+		// wait for the homeserver to persist the event.
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event2.EventID())
+
+		// do a gappy sync which only picks up the second message.
+		syncRes, _ := alice.MustSync(t,
+			client.SyncReq{
+				Since: syncToken,
+				Filter: buildLazyLoadingSyncFilter(map[string]interface{}{
+					"limit": 1,
+				}),
+			},
+		)
+
+		if !syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID) + ".timeline.limited").Bool() {
+			t.Errorf("/sync response was not gappy")
+		}
+
+		err := client.SyncTimelineHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("event_id").Str == event1.EventID()
+		})(alice.UserID, syncRes)
+		if err == nil {
+			t.Errorf("gappy /sync returned the first event unexpectedly")
+		}
+
+		err = client.SyncTimelineHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("event_id").Str == event2.EventID()
+		})(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find event 2 in lazy-loading /sync response: %s", err)
+		}
+
+		err = client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event2.Sender()
+		})(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event2.Sender(), err)
+		}
+	})
+
+	// incremental sync must return memberships of event senders even when they aren't present in
+	// the partial room state.
+	t.Run("Lazy-loading incremental sync includes remote memberships during partial state join", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		syncToken := getSyncToken(t, alice)
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		syncToken = alice.MustSyncUntil(t,
+			client.SyncReq{
+				Since:  syncToken,
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		// the HS will make an /event_auth request for the event
+		federation.HandleEventAuthRequests()(server)
+
+		// derek sends a message into the room.
+		event := psjResult.CreateMessageEvent(t, "derek", nil)
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+		t.Logf("Derek created event with ID %s", event.EventID())
+
+		// wait for the homeserver to persist the event.
+		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event.EventID())
+
+		// do an incremental sync.
+		syncRes, _ := alice.MustSync(t,
+			client.SyncReq{
+				Since:  syncToken,
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+		)
+
+		err := client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event.Sender()
+		})(alice.UserID, syncRes)
+		if err != nil {
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.Sender(), err)
+		}
+	})
+
 	// a request to (client-side) /members?at= should block until the (federation) /state request completes
 	// TODO(faster_joins): also need to test /state, and /members without an `at`, which follow a different path
 	t.Run("MembersRequestBlocksDuringPartialStateJoin", func(t *testing.T) {
@@ -1147,7 +1310,7 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Fatalf("MakeRespMakeJoin failed : %s", err)
 		}
 
-		// charlie then tries to /send_join via the homeserver under test
+		// daniel then tries to /send_join via the homeserver under test
 		joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv, makeJoinResp.RoomVersion)
 		must.NotError(t, "JoinEvent.Build", err)
 
@@ -1228,6 +1391,125 @@ func TestPartialStateJoin(t *testing.T) {
 				match.JSONKeyPresent("joined." + derekUserID + ".avatar_url"),
 			},
 		})
+	})
+
+	// when the server is in the middle of a partial state join, it should not accept
+	// /make_knock because it can't give a full answer.
+	t.Run("Rejects make_knock during partial join", func(t *testing.T) {
+		// In this test, we have 3 homeservers:
+		//   hs1 (the server under test) with @alice:hs1
+		//     This is the server that will be in the middle of a partial join.
+		//   testServer1 (a Complement test server) with @bob:<server name>
+		//     This is the server that created the room originally.
+		//   testServer2 (another Complement test server) with @charlie:<server name>
+		//     This is the server that will try to make a knock via testServer1.
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		testServer1 := createTestServer(t, deployment)
+		cancel := testServer1.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, testServer1, alice.GetDefaultRoomVersion(t))
+		roomID := serverRoom.RoomID
+		psjResult := beginPartialStateJoin(t, testServer1, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// The partial join is now in progress.
+		// Let's have a new test server rock up and ask to join the room by making a
+		// /make_knock request.
+
+		testServer2 := createTestServer(t, deployment)
+		cancel2 := testServer2.Listen()
+		defer cancel2()
+
+		fedClient2 := testServer2.FederationClient(deployment)
+
+		// charlie sends a make_knock
+		_, err := fedClient2.MakeKnock(context.Background(), "hs1", roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
+
+		if err == nil {
+			t.Errorf("MakeKnock returned 200, want 404")
+		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
+			t.Logf("MakeKnock => %d/%s", httpError.Code, string(httpError.Contents))
+			if httpError.Code != 404 {
+				t.Errorf("expected 404, got %d", httpError.Code)
+			}
+			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
+			if errcode != "M_NOT_FOUND" {
+				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
+			}
+		} else {
+			t.Errorf("MakeKnock: non-HTTPError: %v", err)
+		}
+	})
+
+	// when the server is in the middle of a partial state join, it should not accept
+	// /send_knock because it can't give a full answer.
+	t.Run("Rejects send_knock during partial join", func(t *testing.T) {
+		// In this test, we have 3 homeservers:
+		//   hs1 (the server under test) with @alice:hs1
+		//     This is the server that will be in the middle of a partial join.
+		//   testServer1 (a Complement test server) with @charlie:<server name>
+		//     This is the server that will create the room originally.
+		//   testServer2 (another Complement test server) with @daniel:<server name>
+		//     This is the server that will try to knock on the room via hs2,
+		//     but only after using hs1 to /make_knock (as otherwise we have no way
+		//     of being able to build a request to /send_knock)
+		//
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		testServer1 := createTestServer(t, deployment)
+		cancel := testServer1.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, testServer1, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, testServer1, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// hs1's partial join is now in progress.
+		// Let's have a test server rock up and ask to /send_knock in the room via hs1.
+		// To do that, we need to /make_knock first.
+		// Asking hs1 to /make_knock won't work, because it should reject that request.
+		// To work around that, we /make_knock via hs2.
+
+		testServer2 := createTestServer(t, deployment)
+		cancel2 := testServer2.Listen()
+		defer cancel2()
+
+		fedClient2 := testServer2.FederationClient(deployment)
+
+		// Manually /make_knock via testServer1.
+		// This is permissible because testServer1 is fully joined to the room.
+		// We can't actually use /make_knock because host.docker.internal doesn't resolve,
+		// so compute it without making any requests:
+		makeKnockResp, err := federation.MakeRespMakeKnock(testServer1, serverRoom, testServer2.UserID("daniel"))
+		if err != nil {
+			t.Fatalf("MakeRespMakeKnock failed : %s", err)
+		}
+
+		// daniel then tries to /send_knock via the homeserver under test
+		knockEvent, err := makeKnockResp.KnockEvent.Build(time.Now(), gomatrixserverlib.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv, makeKnockResp.RoomVersion)
+		must.NotError(t, "KnockEvent.Build", err)
+
+		// SendKnock should return a 404 because the homeserver under test has not
+		// finished its partial join.
+		_, err = fedClient2.SendKnock(context.Background(), "hs1", knockEvent)
+		if err == nil {
+			t.Errorf("SendKnock returned 200, want 404")
+		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
+			t.Logf("SendKnock => %d/%s", httpError.Code, string(httpError.Contents))
+			if httpError.Code != 404 {
+				t.Errorf("expected 404, got %d", httpError.Code)
+			}
+			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
+			if errcode != "M_NOT_FOUND" {
+				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
+			}
+		} else {
+			t.Errorf("SendKnock: non-HTTPError: %v", err)
+		}
 	})
 }
 

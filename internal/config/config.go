@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ type HostMount struct {
 
 type Complement struct {
 	BaseImageURI           string
-	BaseImageArgs          []string
+	BaseImageURIs          map[string]string
 	DebugLoggingEnabled    bool
 	AlwaysPrintServerLogs  bool
 	BestEffort             bool
@@ -39,13 +40,14 @@ type Complement struct {
 	CAPrivateKey  *rsa.PrivateKey
 }
 
+var hsRegex = regexp.MustCompile(`COMPLEMENT_BASE_IMAGE_(.+)=(.+)$`)
+
 func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
-	cfg := &Complement{}
+	cfg := &Complement{BaseImageURIs: map[string]string{}}
 	cfg.BaseImageURI = os.Getenv("COMPLEMENT_BASE_IMAGE")
 	if cfg.BaseImageURI == "" {
 		cfg.BaseImageURI = baseImageURI
 	}
-	cfg.BaseImageArgs = strings.Split(os.Getenv("COMPLEMENT_BASE_IMAGE_ARGS"), " ")
 	cfg.DebugLoggingEnabled = os.Getenv("COMPLEMENT_DEBUG") == "1"
 	cfg.AlwaysPrintServerLogs = os.Getenv("COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS") == "1"
 	cfg.EnvVarsPropagatePrefix = os.Getenv("COMPLEMENT_SHARE_ENV_PREFIX")
@@ -67,6 +69,16 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	if cfg.BaseImageURI == "" {
 		panic("COMPLEMENT_BASE_IMAGE must be set")
 	}
+	// Parse HS specific base images
+	for _, env := range os.Environ() {
+		// FindStringSubmatch returns the complete match as well as the capture groups.
+		// In this case we expect there to be 3 matches.
+		if matches := hsRegex.FindStringSubmatch(env); len(matches) == 3 {
+			hs := matches[1]                   // first capture group; homeserver name
+			cfg.BaseImageURIs[hs] = matches[2] // second capture group; homeserver image
+		}
+	}
+
 	cfg.PackageNamespace = pkgNamespace
 
 	// create CA certs and keys
