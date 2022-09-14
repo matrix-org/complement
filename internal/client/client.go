@@ -195,6 +195,13 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	return eventID
 }
 
+func (c *CSAPI) SendRedaction(t *testing.T, roomID string, e b.Event, eventID string) {
+	t.Helper()
+	c.txnID++
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, strconv.Itoa(c.txnID)}
+	c.MustDoFunc(t, "PUT", paths, WithJSONBody(t, e.Content))
+}
+
 // Perform a single /sync request with the given request options. To sync until something happens,
 // see `MustSyncUntil`.
 //
