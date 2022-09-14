@@ -65,7 +65,9 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	})
 	serverRoom.AddEvent(badEvent)
 
-	eventToRedact := badEvent.EventID()
+	eventID := badEvent.EventID()
+	fullServerName := srv.ServerName()
+	eventToRedact := eventID + ":" + fullServerName
 
 	// the client sends a request to the local homeserver to send the redaction
 	roxy.SendRedaction(t, serverRoom.RoomID, b.Event{Type: wantEventType, Content: map[string]interface{}{
