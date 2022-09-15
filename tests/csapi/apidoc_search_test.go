@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"testing"
 
+	"github.com/matrix-org/util"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -253,7 +253,6 @@ func TestSearch(t *testing.T) {
 			})
 		})
 
-		var txnID int
 		for _, ordering := range []string{"rank", "recent"} {
 			// sytest: Search results with $ordering_type ordering do not include redacted events
 			t.Run(fmt.Sprintf("Search results with %s ordering do not include redacted events", ordering), func(t *testing.T) {
@@ -278,8 +277,8 @@ func TestSearch(t *testing.T) {
 
 				// redact the event
 				redactBody := client.WithJSONBody(t, map[string]interface{}{"reason": "testing"})
-				resp := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "redact", redactedEventID, strconv.Itoa(txnID)}, redactBody)
-				txnID++
+				txnID := util.RandomString(8) // random string, as time.Now().Unix() might create the same txnID
+				resp := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "redact", redactedEventID, txnID}, redactBody)
 				j := must.ParseJSON(t, resp.Body)
 				redactionEventID := must.GetJSONFieldStr(t, j, "event_id")
 				// wait for the redaction to come down sync
