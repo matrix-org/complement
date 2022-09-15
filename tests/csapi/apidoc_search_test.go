@@ -13,10 +13,12 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
-// Note: In contrast to Sytest, we define a filter.rooms on each request, this allows us to run in parallel.
+// Note: In contrast to Sytest, we define a filter.rooms on each search request, this allows us to run in parallel.
 func TestSearch(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // https://github.com/matrix-org/dendrite/pull/2675
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -32,7 +34,8 @@ func TestSearch(t *testing.T) {
 			eventID := alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
-					"body": "hello, world",
+					"msgtype": "m.text",
+					"body":    "hello, world",
 				},
 			})
 
@@ -77,7 +80,8 @@ func TestSearch(t *testing.T) {
 				alice.SendEventSynced(t, roomID, b.Event{
 					Type: "m.room.message",
 					Content: map[string]interface{}{
-						"body": fmt.Sprintf("Message number %d", i),
+						"body":    fmt.Sprintf("Message number %d", i),
+						"msgtype": "m.text",
 					},
 				})
 			}
@@ -136,7 +140,8 @@ func TestSearch(t *testing.T) {
 				eventID := alice.SendEventSynced(t, roomID, b.Event{
 					Type: "m.room.message",
 					Content: map[string]interface{}{
-						"body": fmt.Sprintf("Message number %d", i),
+						"body":    fmt.Sprintf("Message number %d", i),
+						"msgtype": "m.text",
 					},
 				})
 				eventIDs[i] = eventID
@@ -202,7 +207,8 @@ func TestSearch(t *testing.T) {
 			eventBeforeUpgrade := alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
-					"body": fmt.Sprintf("Message before upgrade"),
+					"body":    fmt.Sprintf("Message before upgrade"),
+					"msgtype": "m.text",
 				},
 			})
 
@@ -216,7 +222,8 @@ func TestSearch(t *testing.T) {
 			eventAfterUpgrade := alice.SendEventSynced(t, newRoomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
-					"body": fmt.Sprintf("Message after upgrade"),
+					"body":    fmt.Sprintf("Message after upgrade"),
+					"msgtype": "m.text",
 				},
 			})
 
@@ -264,14 +271,16 @@ func TestSearch(t *testing.T) {
 				redactedEventID := alice.SendEventSynced(t, roomID, b.Event{
 					Type: "m.room.message",
 					Content: map[string]interface{}{
-						"body": fmt.Sprintf("This message is going to be redacted"),
+						"body":    fmt.Sprintf("This message is going to be redacted"),
+						"msgtype": "m.text",
 					},
 				})
 
 				visibleEventID := alice.SendEventSynced(t, roomID, b.Event{
 					Type: "m.room.message",
 					Content: map[string]interface{}{
-						"body": fmt.Sprintf("This message is not going to be redacted"),
+						"body":    fmt.Sprintf("This message is not going to be redacted"),
+						"msgtype": "m.text",
 					},
 				})
 
