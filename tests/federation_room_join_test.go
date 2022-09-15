@@ -19,7 +19,6 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -157,7 +156,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -186,7 +185,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID) + "bogus": "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -216,7 +215,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		}).JSON()
 		rawSig, err := json.Marshal(map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		})

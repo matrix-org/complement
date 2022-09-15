@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -32,8 +31,6 @@ import (
 )
 
 var (
-	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
-	HostnameRunningComplement = "host.docker.internal"
 	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
 	HostnameRunningDocker = "localhost"
 )
@@ -292,32 +289,32 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			continue
 		}
 		// collect and store access tokens as labels 'access_token_$userid: $token'
-		labels := make(map[string]string)
+		changes := make([]string, 0)
 		accessTokens := runner.AccessTokens(res.homeserver.Name)
 		if len(bprint.KeepAccessTokensForUsers) > 0 {
 			// only keep access tokens for specified users
 			for _, userID := range bprint.KeepAccessTokensForUsers {
 				tok, ok := accessTokens[userID]
 				if ok {
-					labels["access_token_"+userID] = tok
+					changes = append(changes, fmt.Sprintf("LABEL %s=%s", "access_token_"+userID, tok))
 				}
 			}
 		} else {
 			// keep all tokens
 			for k, v := range accessTokens {
-				labels["access_token_"+k] = v
+				changes = append(changes, fmt.Sprintf("LABEL %s=%s", "access_token_"+k, v))
 			}
 		}
 
 		deviceIDs := runner.DeviceIDs(res.homeserver.Name)
 		for userID, deviceID := range deviceIDs {
-			labels["device_id"+userID] = deviceID
+			changes = append(changes, fmt.Sprintf("LABEL %s=%s", "device_id"+userID, deviceID))
 		}
 
 		// Combine the labels for tokens and application services
 		asLabels := labelsForApplicationServices(res.homeserver)
 		for k, v := range asLabels {
-			labels[k] = v
+			changes = append(changes, fmt.Sprintf("LABEL %s=%s", k, v))
 		}
 
 		// Stop the container before we commit it.
@@ -336,9 +333,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			Author:    "Complement",
 			Pause:     true,
 			Reference: "localhost/complement:" + res.contextStr,
-			Config: &container.Config{
-				Labels: labels,
-			},
+			Changes:   changes,
 		})
 		if err != nil {
 			d.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
