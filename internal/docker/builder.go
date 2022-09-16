@@ -296,25 +296,25 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			for _, userID := range bprint.KeepAccessTokensForUsers {
 				tok, ok := accessTokens[userID]
 				if ok {
-					changes = append(changes, fmt.Sprintf("LABEL %s=%s", "access_token_"+userID, tok))
+					changes = appendLabelToChanges(changes, "access_token_"+userID, tok)
 				}
 			}
 		} else {
 			// keep all tokens
 			for k, v := range accessTokens {
-				changes = append(changes, fmt.Sprintf("LABEL %s=%s", "access_token_"+k, v))
+				changes = appendLabelToChanges(changes, "access_token_"+k, v)
 			}
 		}
 
 		deviceIDs := runner.DeviceIDs(res.homeserver.Name)
 		for userID, deviceID := range deviceIDs {
-			changes = append(changes, fmt.Sprintf("LABEL %s=%s", "device_id"+userID, deviceID))
+			changes = appendLabelToChanges(changes, "device_id"+userID, deviceID)
 		}
 
 		// Combine the labels for tokens and application services
 		asLabels := labelsForApplicationServices(res.homeserver)
 		for k, v := range asLabels {
-			changes = append(changes, fmt.Sprintf("LABEL %s=%s", k, v))
+			changes = appendLabelToChanges(changes, k, v)
 		}
 
 		// Stop the container before we commit it.
@@ -327,6 +327,10 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 
 		// Log again so we can see the timings.
 		d.log("%s: Stopped container: %s", res.contextStr, res.containerID)
+
+		for _, c := range changes {
+			d.log(c)
+		}
 
 		// commit the container
 		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
@@ -344,6 +348,10 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		d.log("%s: Created docker image %s\n", res.contextStr, imageID)
 	}
 	return errs
+}
+
+func appendLabelToChanges(changes []string, key string, value string) []string {
+	return append(changes, fmt.Sprintf("LABEL \"%s\"=\"%s\"", key, value))
 }
 
 // construct this homeserver and execute its instructions, keeping the container alive.
