@@ -114,6 +114,7 @@ func TestSearch(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONKeyPresent(sce + ".count"),
 					match.JSONKeyPresent(sce + ".results"),
+					match.JSONKeyPresent(sce + ".next_batch"),
 					match.JSONKeyEqual(sce+".count", float64(1)),
 					match.JSONKeyEqual(result0+".room_id", roomID),
 					match.JSONKeyPresent(result0 + ".content"),
