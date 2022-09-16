@@ -342,6 +342,7 @@ func checkBackpaginateResult(t *testing.T, resp *http.Response, wantCount float6
 				}
 				return nil
 			}),
+			match.JSONKeyPresent(sce + ".next_batch"),
 			match.JSONKeyEqual(sce+".count", wantCount),
 			match.JSONKeyPresent(result0 + ".content"),
 			match.JSONKeyPresent(result0 + ".type"),
