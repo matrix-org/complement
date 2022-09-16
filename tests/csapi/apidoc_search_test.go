@@ -206,7 +206,7 @@ func TestSearch(t *testing.T) {
 			eventBeforeUpgrade := alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
-					"body":    fmt.Sprintf("Message before upgrade"),
+					"body":    "Message before upgrade",
 					"msgtype": "m.text",
 				},
 			})
@@ -221,7 +221,7 @@ func TestSearch(t *testing.T) {
 			eventAfterUpgrade := alice.SendEventSynced(t, newRoomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
-					"body":    fmt.Sprintf("Message after upgrade"),
+					"body":    "Message after upgrade",
 					"msgtype": "m.text",
 				},
 			})
@@ -269,15 +269,16 @@ func TestSearch(t *testing.T) {
 				redactedEventID := alice.SendEventSynced(t, roomID, b.Event{
 					Type: "m.room.message",
 					Content: map[string]interface{}{
-						"body":    fmt.Sprintf("This message is going to be redacted"),
+						"body":    "This message is going to be redacted",
 						"msgtype": "m.text",
 					},
 				})
 
+				wantContentBody := "This message is not going to be redacted"
 				visibleEventID := alice.SendEventSynced(t, roomID, b.Event{
 					Type: "m.room.message",
 					Content: map[string]interface{}{
-						"body":    fmt.Sprintf("This message is not going to be redacted"),
+						"body":    wantContentBody,
 						"msgtype": "m.text",
 					},
 				})
@@ -312,11 +313,11 @@ func TestSearch(t *testing.T) {
 					JSON: []match.JSON{
 						match.JSONKeyPresent(sce + ".count"),
 						match.JSONKeyPresent(sce + ".results"),
-						match.JSONKeyEqual(sce+".count", float64(1)),
+						match.JSONKeyArrayOfSize(sce+".results", 1),
 						match.JSONKeyPresent(result0 + ".content"),
 						match.JSONKeyPresent(result0 + ".type"),
 						match.JSONKeyEqual(result0+".event_id", visibleEventID),
-						match.JSONKeyEqual(result0+".content.body", "This message is not going to be redacted"),
+						match.JSONKeyEqual(result0+".content.body", wantContentBody),
 					},
 				})
 			})
