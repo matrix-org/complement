@@ -328,10 +328,6 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		// Log again so we can see the timings.
 		d.log("%s: Stopped container: %s", res.contextStr, res.containerID)
 
-		for _, c := range changes {
-			d.log(c)
-		}
-
 		// commit the container
 		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
 			Author:    "Complement",
@@ -407,18 +403,18 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 }
 
 func generateASRegistrationYaml(as b.ApplicationService) string {
-	return fmt.Sprintf("id: %s\n", as.ID) +
-		fmt.Sprintf("hs_token: %s\n", as.HSToken) +
-		fmt.Sprintf("as_token: %s\n", as.ASToken) +
-		fmt.Sprintf("url: '%s'\n", as.URL) +
-		fmt.Sprintf("sender_localpart: %s\n", as.SenderLocalpart) +
-		fmt.Sprintf("rate_limited: %v\n", as.RateLimited) +
-		"namespaces:\n" +
-		"  users:\n" +
-		"    - exclusive: false\n" +
-		"      regex: .*\n" +
-		"  rooms: []\n" +
-		"  aliases: []\n"
+	return fmt.Sprintf("id: %s\\n", as.ID) +
+		fmt.Sprintf("hs_token: %s\\n", as.HSToken) +
+		fmt.Sprintf("as_token: %s\\n", as.ASToken) +
+		fmt.Sprintf("url: '%s'\\n", as.URL) +
+		fmt.Sprintf("sender_localpart: %s\\n", as.SenderLocalpart) +
+		fmt.Sprintf("rate_limited: %v\\n", as.RateLimited) +
+		"namespaces:\\n" +
+		"  users:\\n" +
+		"    - exclusive: false\\n" +
+		"      regex: .*\\n" +
+		"  rooms: []\\n" +
+		"  aliases: []\\n"
 }
 
 // createNetworkIfNotExists creates a docker network and returns its id.
