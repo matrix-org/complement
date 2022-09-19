@@ -54,6 +54,17 @@ If you are using [ufw](https://code.launchpad.net/ufw), this can be done with:
 sudo ufw allow in on br-+
 ```
 
+### Running using Podman
+
+It is possible to run the test suite using Podman and the compatibility layer for Docker API.
+Rootless mode is also supported.
+
+To do so you should:
+- `systemctl --user start podman.service` to start the rootless API daemon (can also be enabled).
+- `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock BUILDAH_FORMAT=docker COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT=host.containers.internal ...`
+
+Docker image format is needed because OCI format doesn't support the HEALTHCHECK directive unfortunately.
+
 ### Running against Dendrite
 
 For instance, for Dendrite:
