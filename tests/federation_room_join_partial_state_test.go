@@ -324,7 +324,7 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 	})
 
-	// we should be able to receipt typing EDU over federation during the resync
+	// we should be able to receive receipt EDU over federation during the resync
 	t.Run("CanReceiveReceiptDuringPartialStateJoin", func(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
@@ -371,6 +371,64 @@ func TestPartialStateJoin(t *testing.T) {
 				return false
 			}),
 		)
+	})
+
+	// we should be able to receive device list update EDU over federation during the resync
+	t.Run("CanReceiveDeviceListUpdateDuringPartialStateJoin", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		derekUserId := psjResult.Server.UserID("derek")
+
+		content, _ := json.Marshal(map[string]interface{}{
+			"device_id": "QBUAZIFURK",
+			"stream_id": 1,
+			"user_id":   derekUserId,
+		})
+		edu := gomatrixserverlib.EDU{
+			Type:    "m.device_list_update",
+			Content: content,
+		}
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+
+		// If we want to check the sync we need to have an encrypted room,
+		// for now just check that the fed transaction is accepted.
+	})
+
+	// we should be able to receive signing key update EDU over federation during the resync
+	t.Run("CanReceiveSigningKeyUpdateDuringPartialStateJoin", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		derekUserId := psjResult.Server.UserID("derek")
+
+		content, _ := json.Marshal(map[string]interface{}{
+			"user_id": derekUserId,
+		})
+		edu := gomatrixserverlib.EDU{
+			Type:    "m.signing_key_update",
+			Content: content,
+		}
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+
+		// If we want to check the sync we need to have an encrypted room,
+		// for now just check that the fed transaction is accepted.
 	})
 
 	// we should be able to receive events over federation during the resync
