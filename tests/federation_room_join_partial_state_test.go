@@ -324,6 +324,55 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 	})
 
+	// we should be able to receipt typing EDU over federation during the resync
+	t.Run("CanReceiveReceiptDuringPartialStateJoin", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+		alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		derekUserId := psjResult.Server.UserID("derek")
+
+		content, _ := json.Marshal(map[string]interface{}{
+			serverRoom.RoomID: map[string]interface{}{
+				"m.read": map[string]interface{}{
+					derekUserId: map[string]interface{}{
+						"data": map[string]interface{}{
+							"ts": 1436451550453,
+						},
+						"event_ids": []string{"mytesteventid"},
+					},
+				},
+			},
+		})
+		edu := gomatrixserverlib.EDU{
+			Type:    "m.receipt",
+			Content: content,
+		}
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+
+		psjResult.FinishStateRequest()
+		alice.MustSyncUntil(t,
+			client.SyncReq{},
+			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
+				if result.Get("type").Str != "m.receipt" {
+					return false
+				}
+
+				if result.Get("content").Get("mytesteventid").Get("m\\.read").Get(strings.Replace(derekUserId, ".", "\\.", -1)).Get("ts").Int() == 1436451550453 {
+					return true
+				}
+				return false
+			}),
+		)
+	})
+
 	// we should be able to receive events over federation during the resync
 	t.Run("CanReceiveEventsDuringPartialStateJoin", func(t *testing.T) {
 		deployment := Deploy(t, b.BlueprintAlice)
