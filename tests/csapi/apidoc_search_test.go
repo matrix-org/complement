@@ -16,7 +16,8 @@ import (
 	"github.com/matrix-org/complement/runtime"
 )
 
-// Note: In contrast to Sytest, we define a filter.rooms on each search request, this allows us to run in parallel.
+// Note: In contrast to Sytest, we define a filter.rooms on each search request, this is to mimic
+// creating a new user and new room per test. This also allows us to run in parallel.
 func TestSearch(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // https://github.com/matrix-org/dendrite/pull/2675
 	deployment := Deploy(t, b.BlueprintAlice)
