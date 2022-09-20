@@ -289,32 +289,32 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			continue
 		}
 		// collect and store access tokens as labels 'access_token_$userid: $token'
-		changes := make([]string, 0)
+		labels := make(map[string]string)
 		accessTokens := runner.AccessTokens(res.homeserver.Name)
 		if len(bprint.KeepAccessTokensForUsers) > 0 {
 			// only keep access tokens for specified users
 			for _, userID := range bprint.KeepAccessTokensForUsers {
 				tok, ok := accessTokens[userID]
 				if ok {
-					changes = appendLabelToChanges(changes, "access_token_"+userID, tok)
+					labels["access_token_"+userID] = tok
 				}
 			}
 		} else {
 			// keep all tokens
 			for k, v := range accessTokens {
-				changes = appendLabelToChanges(changes, "access_token_"+k, v)
+				labels["access_token_"+k] = v
 			}
 		}
 
 		deviceIDs := runner.DeviceIDs(res.homeserver.Name)
 		for userID, deviceID := range deviceIDs {
-			changes = appendLabelToChanges(changes, "device_id"+userID, deviceID)
+			labels["device_id"+userID] = deviceID
 		}
 
 		// Combine the labels for tokens and application services
 		asLabels := labelsForApplicationServices(res.homeserver)
 		for k, v := range asLabels {
-			changes = appendLabelToChanges(changes, k, v)
+			labels[k] = v
 		}
 
 		// Stop the container before we commit it.
@@ -333,7 +333,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			Author:    "Complement",
 			Pause:     true,
 			Reference: "localhost/complement:" + res.contextStr,
-			Changes:   changes,
+			Changes:   toChanges(labels),
 		})
 		if err != nil {
 			d.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
@@ -346,8 +346,12 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 	return errs
 }
 
-func appendLabelToChanges(changes []string, key string, value string) []string {
-	return append(changes, fmt.Sprintf("LABEL \"%s\"=\"%s\"", key, value))
+func toChanges(labels map[string]string) []string {
+	changes := make([]string, 0)
+	for k, v := range labels {
+		changes = append(changes, fmt.Sprintf("LABEL \"%s\"=\"%s\"", k, v))
+	}
+	return changes
 }
 
 // construct this homeserver and execute its instructions, keeping the container alive.
