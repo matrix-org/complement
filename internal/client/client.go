@@ -2,11 +2,13 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha1" // nolint:gosec
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
@@ -26,6 +28,17 @@ import (
 const (
 	SharedSecret = "complement"
 )
+
+type CtxKey string
+
+const (
+	CtxKeyWithRetryUntil CtxKey = "complement_retry_until" // contains *retryUntilParams
+)
+
+type retryUntilParams struct {
+	timeout time.Duration
+	untilFn func(*http.Response) bool
+}
 
 // RequestOpt is a functional option which will modify an outgoing HTTP request.
 // See functions starting with `With...` in this package for more info.
@@ -91,7 +104,7 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 		query.Set("filename", fileName)
 	}
 	res := c.MustDoFunc(
-		t, "POST", []string{"_matrix", "media", "r0", "upload"},
+		t, "POST", []string{"_matrix", "media", "v3", "upload"},
 		WithRawBody(fileBody), WithContentType(contentType), WithQueries(query),
 	)
 	body := ParseJSON(t, res)
@@ -102,7 +115,7 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 	t.Helper()
 	origin, mediaId := SplitMxc(mxcUri)
-	res := c.MustDo(t, "GET", []string{"_matrix", "media", "r0", "download", origin, mediaId}, struct{}{})
+	res := c.MustDo(t, "GET", []string{"_matrix", "media", "v3", "download", origin, mediaId}, struct{}{})
 	contentType := res.Header.Get("Content-Type")
 	b, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -114,7 +127,7 @@ func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 // CreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
 func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, creationContent)
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, creationContent)
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "room_id")
 }
@@ -128,7 +141,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 		query.Add("server_name", serverName)
 	}
 	// join the room
-	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, WithQueries(query))
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias}, WithQueries(query))
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
@@ -138,11 +151,12 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
-// LeaveRoom joins the room ID, else fails the test.
+// LeaveRoom leaves the room ID, else fails the test.
 func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 	t.Helper()
 	// leave the room
-	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
+	body := map[string]interface{}{}
+	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, WithJSONBody(t, body))
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
@@ -152,15 +166,15 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 	body := map[string]interface{}{
 		"user_id": userID,
 	}
-	c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
+	c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
 }
 
 func (c *CSAPI) GetGlobalAccountData(t *testing.T, eventType string) *http.Response {
-	return c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "user", c.UserID, "account_data", eventType})
+	return c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType})
 }
 
 func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map[string]interface{}) *http.Response {
-	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "r0", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
+	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
@@ -168,9 +182,9 @@ func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map
 func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
-	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
 	if e.StateKey != nil {
-		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
+		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
 	res := c.MustDo(t, "PUT", paths, e.Content)
 	body := ParseJSON(t, res)
@@ -208,7 +222,7 @@ func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
 	if syncReq.SetPresence != "" {
 		query["set_presence"] = []string{syncReq.SetPresence}
 	}
-	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, WithQueries(query))
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "sync"}, WithQueries(query))
 	body := ParseJSON(t, res)
 	result := gjson.ParseBytes(body)
 	nextBatch := GetJSONFieldStr(t, body, "next_batch")
@@ -248,7 +262,8 @@ func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
 // In the unlikely event that you need ordering on your checks, call MustSyncUntil multiple times
 // with a single checker, and reuse the returned since token, as in the "Incremental sync" example.
 //
-// Will time out after CSAPI.SyncUntilTimeout. Returns the latest since token used.
+// Will time out after CSAPI.SyncUntilTimeout. Returns the `next_batch` token from the final
+// response.
 func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheckOpt) string {
 	t.Helper()
 	start := time.Now()
@@ -308,7 +323,7 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 		"username": localpart,
 		"password": password,
 	}
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, reqBody)
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "register"}, reqBody)
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -365,7 +380,7 @@ func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bo
 // GetCapbabilities queries the server's capabilities
 func (c *CSAPI) GetCapabilities(t *testing.T) []byte {
 	t.Helper()
-	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "capabilities"})
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("unable to read response body: %v", err)
@@ -440,6 +455,16 @@ func WithQueries(q url.Values) RequestOpt {
 	}
 }
 
+// WithRetryUntil will retry the request until the provided function returns true. Times out after
+// `timeout`, which will then fail the test.
+func WithRetryUntil(timeout time.Duration, untilFn func(res *http.Response) bool) RequestOpt {
+	return func(req *http.Request) {
+		until := req.Context().Value(CtxKeyWithRetryUntil).(*retryUntilParams)
+		until.timeout = timeout
+		until.untilFn = untilFn
+	}
+}
+
 // MustDoFunc is the same as DoFunc but fails the test if the returned HTTP response code is not 2xx.
 func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
@@ -478,6 +503,9 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 	if c.AccessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	}
+	retryUntil := &retryUntilParams{}
+	ctx := context.WithValue(req.Context(), CtxKeyWithRetryUntil, retryUntil)
+	req = req.WithContext(ctx)
 
 	// set functional options
 	for _, o := range opts {
@@ -501,21 +529,48 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 			t.Logf("Request body: <binary:%s>", contentType)
 		}
 	}
-	// Perform the HTTP request
-	res, err := c.Client.Do(req)
-	if err != nil {
-		t.Fatalf("CSAPI.DoFunc response returned error: %s", err)
-	}
-	// debug log the response
-	if c.Debug && res != nil {
-		var dump []byte
-		dump, err = httputil.DumpResponse(res, true)
+	now := time.Now()
+	for {
+		// Perform the HTTP request
+		res, err := c.Client.Do(req)
 		if err != nil {
-			t.Fatalf("CSAPI.DoFunc failed to dump response body: %s", err)
+			t.Fatalf("CSAPI.DoFunc response returned error: %s", err)
 		}
-		t.Logf("%s", string(dump))
+		// debug log the response
+		if c.Debug && res != nil {
+			var dump []byte
+			dump, err = httputil.DumpResponse(res, true)
+			if err != nil {
+				t.Fatalf("CSAPI.DoFunc failed to dump response body: %s", err)
+			}
+			t.Logf("%s", string(dump))
+		}
+		if retryUntil == nil || retryUntil.timeout == 0 {
+			return res // don't retry
+		}
+
+		// check the condition, make a copy of the response body first in case the check consumes it
+		var resBody []byte
+		if res.Body != nil {
+			resBody, err = ioutil.ReadAll(res.Body)
+			if err != nil {
+				t.Fatalf("CSAPI.DoFunc failed to read response body for RetryUntil check: %s", err)
+			}
+			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
+		}
+		if retryUntil.untilFn(res) {
+			// remake the response and return
+			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
+			return res
+		}
+		// condition not satisfied, do we timeout yet?
+		if time.Since(now) > retryUntil.timeout {
+			t.Fatalf("CSAPI.DoFunc RetryUntil: %v %v timed out after %v", method, req.URL, retryUntil.timeout)
+		}
+		t.Logf("CSAPI.DoFunc RetryUntil: %v %v response condition not yet met, retrying", method, req.URL)
+		// small sleep to avoid tight-looping
+		time.Sleep(100 * time.Millisecond)
 	}
-	return res
 }
 
 // NewLoggedClient returns an http.Client which logs requests/responses
@@ -628,6 +683,34 @@ func SyncTimelineHasEventID(roomID string, eventID string) SyncCheckOpt {
 	})
 }
 
+// Check that the state section for `roomID` has an event which passes the check function.
+// Note that the state section of a sync response only contains the change in state up to the start
+// of the timeline and will not contain the entire state of the room for incremental or
+// `lazy_load_members` syncs.
+func SyncStateHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncStateHas(%s): %s", roomID, err)
+	}
+}
+
+func SyncEphemeralHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".ephemeral.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncEphemeralHas(%s): %s", roomID, err)
+	}
+}
+
 // Checks that `userID` gets invited to `roomID`.
 //
 // This checks different parts of the /sync response depending on the client making the request.
@@ -660,15 +743,27 @@ func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 
 // Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event
 func SyncJoinedTo(userID, roomID string) SyncCheckOpt {
+	checkJoined := func(ev gjson.Result) bool {
+		return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join"
+	}
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		// awkward wrapping to get the error message correct at the start :/
-		err := SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join"
-		})(clientUserID, topLevelSyncJSON)
+		// Check both the timeline and the state events for the join event
+		// since on initial sync, the state events may only be in
+		// <room>.state.events.
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", checkJoined,
+		)
 		if err == nil {
 			return nil
 		}
-		return fmt.Errorf("SyncJoinedTo(%s,%s): %s", userID, roomID, err)
+
+		err = loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", checkJoined,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncJoinedTo(%s): %s", roomID, err)
 	}
 }
 
@@ -700,6 +795,21 @@ func SyncLeftFrom(userID, roomID string) SyncCheckOpt {
 func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		return loopArray(topLevelSyncJSON, "account_data.events", check)
+	}
+}
+
+// Calls the `check` function for each account data event for the given room,
+// and returns with success if the `check` function returns true for at least
+// one event.
+func SyncRoomAccountDataHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".account_data.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncRoomAccountDataHas(%s): %s", roomID, err)
 	}
 }
 

@@ -5,55 +5,68 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/docker"
 	"github.com/tidwall/gjson"
 )
 
 // tests/10apidoc/37room-receipts.pl
-func TestRoomReceiptsReadMarkers(t *testing.T) {
+
+func createRoomForReadReceipts(t *testing.T, c *client.CSAPI, deployment *docker.Deployment) (string, string) {
+	roomID := c.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+
+	c.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(c.UserID, roomID))
+
+	eventID := c.SendEventSynced(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Hello world!",
+		},
+	})
+
+	return roomID, eventID
+}
+
+func syncHasReadReceipt(roomID, userID, eventID string) client.SyncCheckOpt {
+	return client.SyncEphemeralHas(roomID, func(result gjson.Result) bool {
+		return result.Get("type").Str == "m.receipt" &&
+			result.Get("content").Get(eventID).Get(`m\.read`).Get(userID).Exists()
+	})
+}
+
+// sytest: POST /rooms/:room_id/receipt can create receipts
+func TestRoomReceipts(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
 
-	// sytest: POST /rooms/:room_id/receipt can create receipts
-	t.Run("Parallel", func(t *testing.T) {
-		t.Run("POST /rooms/:room_id/receipt can create receipts", func(t *testing.T) {
-			t.Parallel()
-			eventID := ""
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
-				if result.Get("type").Str == "m.room.member" {
-					eventID = result.Get("event_id").Str
-					return true
-				}
-				return false
-			}))
-			if eventID == "" {
-				t.Fatal("did not find an event_id")
-			}
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
-		})
+	alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
 
-		// sytest: POST /rooms/:room_id/read_markers can create read marker
-		t.Run("POST /rooms/:room_id/read_markers can create read marker", func(t *testing.T) {
-			t.Parallel()
-			eventID := ""
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
-				if result.Get("type").Str == "m.room.member" {
-					eventID = result.Get("event_id").Str
-					return true
-				}
-				return false
-			}))
-			if eventID == "" {
-				t.Fatal("did not find an event_id")
-			}
+	// Make sure the read receipt shows up in sync.
+	alice.MustSyncUntil(t, client.SyncReq{}, syncHasReadReceipt(roomID, alice.UserID, eventID))
+}
 
-			reqBody := client.WithJSONBody(t, map[string]interface{}{
-				"m.fully_read": eventID,
-				"m.read":       eventID,
-			})
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "read_markers"}, reqBody)
-		})
+// sytest: POST /rooms/:room_id/read_markers can create read marker
+func TestRoomReadMarkers(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
+
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"m.fully_read": eventID,
+		"m.read":       eventID,
 	})
+	alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "read_markers"}, reqBody)
+
+	// Make sure the read receipt shows up in sync.
+	alice.MustSyncUntil(t, client.SyncReq{}, syncHasReadReceipt(roomID, alice.UserID, eventID))
+
+	// Make sure that the fully_read receipt shows up in account data via sync.
+	// Use the same token as above to replay the syncs.
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncRoomAccountDataHas(roomID, func(result gjson.Result) bool {
+		return result.Get("type").Str == "m.fully_read" &&
+			result.Get("content.event_id").Str == eventID
+	}))
 }

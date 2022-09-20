@@ -23,6 +23,6 @@ func TestContent(t *testing.T) {
 		t.Fatalf("uploaded and downloaded content doesn't match: want %v\ngot\n%v", data.MatrixPng, content)
 	}
 	if contentType != wantContentType {
-		t.Fatalf("expected contentType to be %s, got %s", contentType, wantContentType)
+		t.Fatalf("expected contentType to be %s, got %s", wantContentType, contentType)
 	}
 }

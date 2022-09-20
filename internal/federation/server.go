@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/matrix-org/gomatrix"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -20,6 +19,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/matrix-org/gomatrix"
 
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/gomatrixserverlib"
@@ -215,6 +216,7 @@ func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment
 //
 // The requests will be routed according to the deployment map in `deployment`.
 func (s *Server) SendFederationRequest(
+	ctx context.Context,
 	t *testing.T,
 	deployment *docker.Deployment,
 	req gomatrixserverlib.FederationRequest,
@@ -230,9 +232,8 @@ func (s *Server) SendFederationRequest(
 	}
 
 	httpClient := gomatrixserverlib.NewClient(gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}))
-
 	start := time.Now()
-	err = httpClient.DoRequestAndParseResponse(context.Background(), httpReq, resBody)
+	err = httpClient.DoRequestAndParseResponse(ctx, httpReq, resBody)
 
 	if httpError, ok := err.(gomatrix.HTTPError); ok {
 		t.Logf("[SSAPI] %s %s%s => error(%d): %s (%s)", req.Method(), req.Destination(), req.RequestURI(), httpError.Code, err, time.Since(start))
@@ -278,6 +279,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		PrevEvents: prevEvents,
 		Unsigned:   unsigned,
 		AuthEvents: ev.AuthEvents,
+		Redacts:    ev.Redacts,
 	}
 	if eb.AuthEvents == nil {
 		var stateNeeded gomatrixserverlib.StateNeeded

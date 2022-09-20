@@ -88,7 +88,7 @@ func TestRoomsInvite(t *testing.T) {
 			body := client.WithJSONBody(t, map[string]interface{}{
 				"user_id": alice.UserID,
 			})
-			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
+			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 			})
@@ -109,7 +109,7 @@ func TestRoomsInvite(t *testing.T) {
 			body := client.WithJSONBody(t, map[string]interface{}{
 				"user_id": bob.UserID,
 			})
-			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
+			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 			})

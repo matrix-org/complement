@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"net/http"
+
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
@@ -123,7 +125,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		res := knockingUser.DoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "join", roomID},
+			[]string{"_matrix", "client", "v3", "join", roomID},
 			client.WithQueries(query),
 			client.WithRawBody([]byte(`{}`)),
 		)
@@ -175,7 +177,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			knockingUser.MustDo(
 				t,
 				"POST",
-				[]string{"_matrix", "client", "r0", "rooms", roomID, "leave"},
+				[]string{"_matrix", "client", "v3", "rooms", roomID, "leave"},
 				struct {
 					Reason string `json:"reason"`
 				}{
@@ -214,7 +216,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		inRoomUser.MustDo(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "kick"},
+			[]string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
 			struct {
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
@@ -240,7 +242,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		inRoomUser.MustDo(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "kick"},
+			[]string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
 			struct {
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
@@ -258,7 +260,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		inRoomUser.MustDo(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "invite"},
+			[]string{"_matrix", "client", "v3", "rooms", roomID, "invite"},
 			struct {
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
@@ -290,7 +292,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		inRoomUser.MustDo(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "ban"},
+			[]string{"_matrix", "client", "v3", "rooms", roomID, "ban"},
 			struct {
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
@@ -357,7 +359,7 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 	res := c.DoFunc(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "r0", "knock", roomID},
+		[]string{"_matrix", "client", "v3", "knock", roomID},
 		client.WithQueries(query),
 		client.WithRawBody(b),
 	)
@@ -424,7 +426,7 @@ func publishAndCheckRoomJoinRule(t *testing.T, c *client.CSAPI, roomID, expected
 	c.MustDo(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "directory", "list", "room", roomID},
+		[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
 		struct {
 			Visibility string `json:"visibility"`
 		}{
@@ -433,39 +435,37 @@ func publishAndCheckRoomJoinRule(t *testing.T, c *client.CSAPI, roomID, expected
 	)
 
 	// Check that we can see the room in the directory
-	res := c.MustDo(
-		t,
-		"GET",
-		[]string{"_matrix", "client", "r0", "publicRooms"},
-		nil,
+	c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
+		client.WithRetryUntil(time.Second, func(res *http.Response) bool {
+			roomFound := false
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					// For each public room directory chunk (representing a single room entry)
+					match.JSONArrayEach("chunk", func(r gjson.Result) error {
+						// If this is our room
+						if r.Get("room_id").Str == roomID {
+							roomFound = true
+
+							// Check that the join_rule key exists and is as we expect
+							if roomJoinRule := r.Get("join_rule").Str; roomJoinRule != expectedJoinRule {
+								return fmt.Errorf(
+									"'join_rule' key for room in public room chunk is '%s', expected '%s'",
+									roomJoinRule, expectedJoinRule,
+								)
+							}
+						}
+						return nil
+					}),
+				},
+			})
+
+			// Check that we did in fact see the room
+			if !roomFound {
+				t.Logf("Room was not present in public room directory response")
+			}
+			return roomFound
+		}),
 	)
-
-	roomFound := false
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			// For each public room directory chunk (representing a single room entry)
-			match.JSONArrayEach("chunk", func(r gjson.Result) error {
-				// If this is our room
-				if r.Get("room_id").Str == roomID {
-					roomFound = true
-
-					// Check that the join_rule key exists and is as we expect
-					if roomJoinRule := r.Get("join_rule").Str; roomJoinRule != expectedJoinRule {
-						return fmt.Errorf(
-							"'join_rule' key for room in public room chunk is '%s', expected '%s'",
-							roomJoinRule, expectedJoinRule,
-						)
-					}
-				}
-				return nil
-			}),
-		},
-	})
-
-	// Check that we did in fact see the room
-	if !roomFound {
-		t.Fatalf("Room was not present in public room directory response")
-	}
 }
 
 // TestCannotSendNonKnockViaSendKnock checks that we cannot submit anything via /send_knock except a knock

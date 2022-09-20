@@ -18,7 +18,7 @@ func TestRequestEncodingFails(t *testing.T) {
 	testString := `{ "test":"a` + "\x81" + `" }`
 	// sytest: POST rejects invalid utf-8 in JSON
 	t.Run("POST rejects invalid utf-8 in JSON", func(t *testing.T) {
-		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "register"}, client.WithRawBody(json.RawMessage(testString)))
+		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(testString)))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 400,
 			JSON: []match.JSON{
