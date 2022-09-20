@@ -1542,7 +1542,7 @@ func testReceiveEventDuringPartialStateJoin(
 	var respStateIDs gomatrixserverlib.RespStateIDs
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	err := psjResult.Server.SendFederationRequest(ctx, deployment, stateReq, &respStateIDs)
+	err := psjResult.Server.SendFederationRequest(ctx, t, deployment, stateReq, &respStateIDs)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			t.Logf("/state_ids request for event %s blocked as expected", event.EventID())
@@ -1583,7 +1583,7 @@ func testReceiveEventDuringPartialStateJoin(
 			url.QueryEscape(event.EventID()),
 		),
 	)
-	if err := psjResult.Server.SendFederationRequest(context.Background(), deployment, stateReq, &respStateIDs); err != nil {
+	if err := psjResult.Server.SendFederationRequest(context.Background(), t, deployment, stateReq, &respStateIDs); err != nil {
 		t.Errorf("/state_ids request returned non-200: %s", err)
 		return syncToken
 	}
