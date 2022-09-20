@@ -22,22 +22,62 @@ type HostMount struct {
 	ReadOnly      bool
 }
 
+// The config for running Complement. This is configured using environment variables. The comments
+// in this struct are structured so they can be automatically parsed via gendoc. See /cmd/gendoc.
 type Complement struct {
-	BaseImageURI           string
-	BaseImageURIs          map[string]string
-	DebugLoggingEnabled    bool
-	AlwaysPrintServerLogs  bool
-	BestEffort             bool
+	// Name: COMPLEMENT_BASE_IMAGE
+	// Description: **Required.** The name of the Docker image to use as a base homeserver when generating
+	// blueprints. This image must conform to Complement's rules on containers, such as listening on the
+	// correct ports.
+	BaseImageURI string
+	// Name: COMPLEMENT_DEBUG
+	// Default: 0
+	// Description: If 1, prints out more verbose logging such as HTTP request/response bodies.
+	DebugLoggingEnabled bool
+	// Name: COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS
+	// Default: 0
+	// Description: If 1, always prints the Homeserver container logs even on success.
+	AlwaysPrintServerLogs bool
+	// Name: COMPLEMENT_SHARE_ENV_PREFIX
+	// Description: If set, all environment variables on the host with this prefix will be shared with
+	// every homeserver, with the prefix removed. For example, if the prefix was `FOO_` then setting
+	// `FOO_BAR=baz` on the host would translate to `BAR=baz` on the container. Useful for passing through
+	// extra Homeserver configuration options without sharing all host environment variables.
 	EnvVarsPropagatePrefix string
-	SpawnHSTimeout         time.Duration
-	KeepBlueprints         []string
-	HostMounts             []HostMount
+	// Name: COMPLEMENT_SPAWN_HS_TIMEOUT_SECS
+	// Default: 30
+	// Description: The number of seconds to wait for a Homeserver container to be responsive after
+	// starting the container. Responsiveness is detected by `HEALTHCHECK` being healthy *and*
+	// the `/versions` endpoint returning 200 OK.
+	SpawnHSTimeout time.Duration
+	// Name: COMPLEMENT_KEEP_BLUEPRINTS
+	// Description: A list of space separated blueprint names to not clean up after running. For example,
+	// `one_to_one_room alice` would not delete the homeserver images for the blueprints `alice` and
+	// `one_to_one_room`. This can speed up homeserver runs if you frequently run the same base image
+	// over and over again. If the base image changes, this should not be set as it means an older version
+	// of the base image will be used for the named blueprints.
+	KeepBlueprints []string
+	// Name: COMPLEMENT_HOST_MOUNTS
+	// Description: A list of semicolon separated host mounts to mount on every container. The structure
+	// of the mount is `host-path:container-path:[ro]` for example `/path/on/host:/path/on/container` - you
+	// can optionally specify `:ro` to mount the path as readonly. A complete example with multiple mounts
+	// would look like `/host/a:/container/a:ro;/host/b:/container/b;/host/c:/container/c`
+	HostMounts []HostMount
+	// Name: COMPLEMENT_BASE_IMAGE_*
+	// Description: This allows you to override the base image used for a particular named homeserver.
+	// For example, `COMPLEMENT_BASE_IMAGE_HS1=complement-dendrite:latest` would use `complement-dendrite:latest`
+	// for the `hs1` homeserver in blueprints, but not any other homeserver (e.g `hs2`). This matching
+	// is case-insensitive. This allows Complement to test how different homeserver implementations work with each other.
+	BaseImageURIs map[string]string
+
 	// The namespace for all complement created blueprints and deployments
 	PackageNamespace string
 	// Certificate Authority generated values for this run of complement. Homeservers will use this
 	// as a base to derive their own signed Federation certificates.
 	CACertificate *x509.Certificate
 	CAPrivateKey  *rsa.PrivateKey
+
+	BestEffort bool
 }
 
 var hsRegex = regexp.MustCompile(`COMPLEMENT_BASE_IMAGE_(.+)=(.+)$`)
