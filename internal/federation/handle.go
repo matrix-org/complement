@@ -324,6 +324,12 @@ func HandleEventRequests() func(*Server) {
 				}
 			}
 
+			if event == nil {
+				w.WriteHeader(404)
+				w.Write([]byte(fmt.Sprintf(`complement: failed to find event: %s`, eventID)))
+				return
+			}
+
 			txn := gomatrixserverlib.Transaction{
 				Origin:         gomatrixserverlib.ServerName(srv.serverName),
 				OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
