@@ -54,6 +54,8 @@ type Homeserver struct {
 	Rooms []Room
 	// The list of application services to create on the homeserver
 	ApplicationServices []ApplicationService
+	// Optionally override the baseImageURI for blueprint creation
+	BaseImageURI *string
 }
 
 type User struct {

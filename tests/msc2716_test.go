@@ -44,20 +44,20 @@ var (
 	markerEventType    = "org.matrix.msc2716.marker"
 
 	historicalContentField      = "org.matrix.msc2716.historical"
-	nextBatchIDContentField     = "org.matrix.msc2716.next_batch_id"
-	markerInsertionContentField = "org.matrix.msc2716.marker.insertion"
+	nextBatchIDContentField     = "next_batch_id"
+	markerInsertionContentField = "insertion_event_reference"
 )
 
 var createPublicRoomOpts = map[string]interface{}{
 	"preset":       "public_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v3",
+	"room_version": "org.matrix.msc2716v4",
 }
 
 var createPrivateRoomOpts = map[string]interface{}{
 	"preset":       "private_chat",
 	"name":         "the hangout spot",
-	"room_version": "org.matrix.msc2716v3",
+	"room_version": "org.matrix.msc2716v4",
 }
 
 func TestImportHistoricalMessages(t *testing.T) {
