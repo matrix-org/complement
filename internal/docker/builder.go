@@ -406,6 +406,7 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	)
 }
 
+// Multilines label using Dockefile syntax is unsupported, let's inline \n instead
 func generateASRegistrationYaml(as b.ApplicationService) string {
 	return fmt.Sprintf("id: %s\\n", as.ID) +
 		fmt.Sprintf("hs_token: %s\\n", as.HSToken) +
@@ -421,8 +422,8 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 		"  aliases: []\\n"
 }
 
-// createNetworkIfNotExists creates a docker network and returns its id.
-// ID is guaranteed not to be empty when err == nil
+// createNetworkIfNotExists creates a docker network and returns its name.
+// Name is guaranteed not to be empty when err == nil
 func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkName string, err error) {
 	// check if a network already exists for this blueprint
 	nws, err := docker.NetworkList(context.Background(), types.NetworkListOptions{
