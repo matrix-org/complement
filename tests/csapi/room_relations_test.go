@@ -43,7 +43,7 @@ func TestRelations(t *testing.T) {
 	}))
 	threadEventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-  res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.dummy", "txn-3"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.dummy", "txn-3"}, client.WithJSONBody(t, map[string]interface{}{
 		"m.relates_to": map[string]interface{}{
 			"event_id": rootEventID,
 			"rel_type": "m.thread",
@@ -51,13 +51,13 @@ func TestRelations(t *testing.T) {
 	}))
 	dummyEventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-  res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-4"}, client.WithJSONBody(t, map[string]interface{}{
-    "msgtype": "m.text",
-    "body":    "* edited root",
+	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-4"}, client.WithJSONBody(t, map[string]interface{}{
+		"msgtype": "m.text",
+		"body":    "* edited root",
 		"m.new_content": map[string]interface{}{
-		  "msgtype": "m.text",
-		  "body":    "edited root",
-    },
+			"msgtype": "m.text",
+			"body":    "edited root",
+		},
 		"m.relates_to": map[string]interface{}{
 			"event_id": rootEventID,
 			"rel_type": "m.replace",
@@ -84,6 +84,7 @@ func TestRelations(t *testing.T) {
 		},
 	})
 
+	// Also test filtering by the relation type.
 	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID, "m.thread"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
@@ -97,6 +98,7 @@ func TestRelations(t *testing.T) {
 		},
 	})
 
+	// And test filtering by relation type + event type.
 	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID, "m.thread", "m.room.message"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
