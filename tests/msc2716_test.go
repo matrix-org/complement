@@ -1027,7 +1027,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 				)
 			})
 
-			t.Run("Backfill still works after many batches are imported", func(t *testing.T) {
+			t.Run("Backfill still works after many contiguous batches are imported", func(t *testing.T) {
 				t.Parallel()
 
 				roomID := as.CreateRoom(t, createPublicRoomOpts)
