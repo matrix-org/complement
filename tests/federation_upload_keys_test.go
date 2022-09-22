@@ -47,6 +47,17 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 			}),
 		},
 	})
+	bob.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		devicesChanged := topLevelSyncJSON.Get("device_lists.changed")
+		if devicesChanged.Exists() {
+			for _, userID := range devicesChanged.Array() {
+				if userID.Str == alice.UserID {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("no device_lists found")
+	})
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: Can claim remote one time key using POST
