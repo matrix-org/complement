@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-var configPath = flag.String("config", "", "The path to internal/config/config.go")
+var configPath = flag.String("config", "internal/config/config.go", "The path to internal/config/config.go")
 
 type VarDoc struct {
 	Name        string
