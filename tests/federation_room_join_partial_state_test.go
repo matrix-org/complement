@@ -82,8 +82,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// test that a regular /sync request made during a partial-state /send_join
 	// request blocks until the state is correctly synced.
 	t.Run("SyncBlocksDuringPartialStateJoin", func(t *testing.T) {
-		//userId := "@t1alice1:hs1"
-		alice := deployment.RegisterUser(t, "hs1", "t1alice", "secret", false)
+		alice := deployment.RegisterUser(t, "hs1", "t2alice", "secret", false)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
