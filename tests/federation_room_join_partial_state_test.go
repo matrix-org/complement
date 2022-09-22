@@ -76,12 +76,14 @@ func TestPartialStateJoin(t *testing.T) {
 		return syncToken
 	}
 
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
 	// test that a regular /sync request made during a partial-state /send_join
 	// request blocks until the state is correctly synced.
 	t.Run("SyncBlocksDuringPartialStateJoin", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		//userId := "@t1alice1:hs1"
+		alice := deployment.RegisterUser(t, "hs1", "t1alice", "secret", false)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -143,9 +145,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// when Alice does a lazy-loading sync, she should see the room immediately
 	t.Run("CanLazyLoadingSyncDuringPartialStateJoin", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t2alice", "secret", false)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -166,9 +166,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// we should be able to send events in the room, during the resync
 	t.Run("CanSendEventsDuringPartialStateJoin", func(t *testing.T) {
 		t.Skip("Cannot yet send events during resync")
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t3alice", "secret", false)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -190,9 +188,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to receive events over federation during the resync
 	t.Run("CanReceiveEventsDuringPartialStateJoin", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t4alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
@@ -214,9 +210,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to receive events with a missing prev event over federation during the resync
 	t.Run("CanReceiveEventsWithMissingParentsDuringPartialStateJoin", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t5alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
@@ -229,7 +223,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// we construct the following event graph:
 		// ... <-- M <-- A <-- B
 		//
-		// M is @alice:hs1's join event.
+		// M is @t5alice:hs1's join event.
 		// A and B are regular m.room.messsage events created by @derek on the Complement homeserver.
 		//
 		// initially, hs1 only knows about event M.
@@ -254,9 +248,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to receive events with partially missing prev events over federation during the resync
 	t.Run("CanReceiveEventsWithHalfMissingParentsDuringPartialStateJoin", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t6alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
@@ -271,7 +263,7 @@ func TestPartialStateJoin(t *testing.T) {
 		//         v          \
 		// ... <-- M <-- A <-- B
 		//
-		// M is @alice:hs1's join event.
+		// M is @t6alice:hs1's join event.
 		// A and B are regular m.room.messsage events created by @derek on the Complement homeserver.
 		//
 		// initially, hs1 only knows about event M.
@@ -297,9 +289,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// we should be able to receive events with a missing prev event, with half missing prev events,
 	// over federation during the resync
 	t.Run("CanReceiveEventsWithHalfMissingGrandparentsDuringPartialStateJoin", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t7alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
@@ -314,7 +304,7 @@ func TestPartialStateJoin(t *testing.T) {
 		//         v          \
 		// ... <-- M <-- A <-- B <-- C
 		//
-		// M is @alice:hs1's join event.
+		// M is @t7alice:hs1's join event.
 		// A, B and C are regular m.room.messsage events created by @derek on the Complement homeserver.
 		//
 		// initially, hs1 only knows about event M.
@@ -344,9 +334,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// initial sync must return memberships of event senders even when they aren't present in the
 	// partial room state.
 	t.Run("Lazy-loading initial sync includes remote memberships during partial state join", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t8alice", "secret", false)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -385,9 +373,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// gappy sync must return memberships of event senders even when they aren't present in the
 	// partial room state.
 	t.Run("Lazy-loading gappy sync includes remote memberships during partial state join", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t9alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
@@ -457,9 +443,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// incremental sync must return memberships of event senders even when they aren't present in
 	// the partial room state.
 	t.Run("Lazy-loading incremental sync includes remote memberships during partial state join", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t10alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
@@ -507,9 +491,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// a request to (client-side) /members?at= should block until the (federation) /state request completes
 	// TODO(faster_joins): also need to test /state, and /members without an `at`, which follow a different path
 	t.Run("MembersRequestBlocksDuringPartialStateJoin", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t11alice", "secret", false)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -567,9 +549,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// test that a partial-state join continues syncing state after a restart
 	// the same as SyncBlocksDuringPartialStateJoin, with a restart in the middle
 	t.Run("PartialStateJoinContinuesAfterRestart", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t12alice", "secret", false)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -714,9 +694,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// followed by a gappy sync. the gappy sync should include the correct member state,
 	// since it was not sent on the previous sync.
 	t.Run("GappySyncAfterPartialStateSynced", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t13alice", "secret", false)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -810,9 +788,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// and they then get de-outliered as partial state events, we would get stuck in
 	// an infinite loop of de-partial-stating.
 	t.Run("Resync completes even when events arrive before their prev_events", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t14alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
@@ -917,9 +893,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// test that any rejected events that are sent during the partial-state phase
 	// do not suddenly become un-rejected during the resync
 	t.Run("Rejected events remain rejected after resync", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t15alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 
 		server := createTestServer(t, deployment)
@@ -988,9 +962,7 @@ func TestPartialStateJoin(t *testing.T) {
 	})
 
 	t.Run("State accepted incorrectly", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t16alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -1082,9 +1054,7 @@ func TestPartialStateJoin(t *testing.T) {
 	})
 
 	t.Run("State rejected incorrectly", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t17alice", "secret", false)
 		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -1218,15 +1188,13 @@ func TestPartialStateJoin(t *testing.T) {
 	// /make_join because it can't give a full answer.
 	t.Run("Rejects make_join during partial join", func(t *testing.T) {
 		// In this test, we have 3 homeservers:
-		//   hs1 (the server under test) with @alice:hs1
+		//   hs1 (the server under test) with @t18alice:hs1
 		//     This is the server that will be in the middle of a partial join.
 		//   testServer1 (a Complement test server) with @bob:<server name>
 		//     This is the server that created the room originally.
 		//   testServer2 (another Complement test server) with @charlie:<server name>
 		//     This is the server that will try to make a join via testServer1.
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t18alice", "secret", false)
 
 		testServer1 := createTestServer(t, deployment)
 		cancel := testServer1.Listen()
@@ -1269,7 +1237,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// /send_join because it can't give a full answer.
 	t.Run("Rejects send_join during partial join", func(t *testing.T) {
 		// In this test, we have 3 homeservers:
-		//   hs1 (the server under test) with @alice:hs1
+		//   hs1 (the server under test) with @t19alice:hs1
 		//     This is the server that will be in the middle of a partial join.
 		//   testServer1 (a Complement test server) with @charlie:<server name>
 		//     This is the server that will create the room originally.
@@ -1278,9 +1246,7 @@ func TestPartialStateJoin(t *testing.T) {
 		//     but only after using hs1 to /make_join (as otherwise we have no way
 		//     of being able to build a request to /send_join)
 		//
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t19alice", "secret", false)
 
 		testServer1 := createTestServer(t, deployment)
 		cancel := testServer1.Listen()
@@ -1336,9 +1302,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// test that a /joined_members request made during a partial-state /send_join
 	// request blocks until the state is correctly synced.
 	t.Run("joined_members blocks during partial state join", func(t *testing.T) {
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t20alice", "secret", false)
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -1397,15 +1361,13 @@ func TestPartialStateJoin(t *testing.T) {
 	// /make_knock because it can't give a full answer.
 	t.Run("Rejects make_knock during partial join", func(t *testing.T) {
 		// In this test, we have 3 homeservers:
-		//   hs1 (the server under test) with @alice:hs1
+		//   hs1 (the server under test) with @t21alice:hs1
 		//     This is the server that will be in the middle of a partial join.
 		//   testServer1 (a Complement test server) with @bob:<server name>
 		//     This is the server that created the room originally.
 		//   testServer2 (another Complement test server) with @charlie:<server name>
 		//     This is the server that will try to make a knock via testServer1.
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t21alice", "secret", false)
 
 		testServer1 := createTestServer(t, deployment)
 		cancel := testServer1.Listen()
@@ -1448,7 +1410,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// /send_knock because it can't give a full answer.
 	t.Run("Rejects send_knock during partial join", func(t *testing.T) {
 		// In this test, we have 3 homeservers:
-		//   hs1 (the server under test) with @alice:hs1
+		//   hs1 (the server under test) with @t22alice:hs1
 		//     This is the server that will be in the middle of a partial join.
 		//   testServer1 (a Complement test server) with @charlie:<server name>
 		//     This is the server that will create the room originally.
@@ -1457,9 +1419,7 @@ func TestPartialStateJoin(t *testing.T) {
 		//     but only after using hs1 to /make_knock (as otherwise we have no way
 		//     of being able to build a request to /send_knock)
 		//
-		deployment := Deploy(t, b.BlueprintAlice)
-		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.RegisterUser(t, "hs1", "t22alice", "secret", false)
 
 		testServer1 := createTestServer(t, deployment)
 		cancel := testServer1.Listen()
