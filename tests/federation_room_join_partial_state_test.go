@@ -1604,6 +1604,121 @@ func TestPartialStateJoin(t *testing.T) {
 				t.Fatalf(errFormat, args...)
 			}
 		}
+
+		// test that device list updates are sent to the remote homeservers listed in the
+		// `/send_join` response in a room with partial state.
+		t.Run("Device list updates reach all servers in partial state rooms", func(t *testing.T) {
+			alice, server1, server2, deviceListUpdateChannel1, deviceListUpdateChannel2, room, cleanup := setupOutgoingDeviceListUpdateTest(t, deployment, "t23alice")
+			defer cleanup()
+
+			// The room starts with @charlie:server1 and @derek:server1 in it.
+			// @elsie:server2 joins the room before @t23alice:hs1.
+			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+
+			// @t23alice:hs1 joins the room.
+			psjResult := beginPartialStateJoin(t, server1, room, alice)
+			defer psjResult.Destroy()
+
+			// Both homeservers should receive device list updates.
+			renameDevice(t, alice, "A new device name 1")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel1, "@charlie and @derek did not receive device list update.")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel2, "@elsie did not receive device list update.")
+			t.Log("@charlie, @derek and @elsie received device list update.")
+
+			// Finish the partial state join.
+			psjResult.FinishStateRequest()
+			awaitPartialStateJoinCompletion(t, room, alice)
+
+			// Both homeservers should still receive device list updates.
+			renameDevice(t, alice, "A new device name 2")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel1, "@charlie and @derek did not receive device list update.")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel2, "@elsie did not receive device list update.")
+			t.Log("@charlie, @derek and @elsie received device list update.")
+		})
+
+		// test that device list updates are additionally sent to remote homeservers that join after
+		// the local homeserver.
+		t.Run("Device list updates reach newly joined servers in partial state rooms", func(t *testing.T) {
+			alice, server1, server2, deviceListUpdateChannel1, deviceListUpdateChannel2, room, cleanup := setupOutgoingDeviceListUpdateTest(t, deployment, "t24alice")
+			defer cleanup()
+
+			// The room starts with @charlie:server1 and @derek:server1 in it.
+			// @t24alice:hs1 joins the room.
+			psjResult := beginPartialStateJoin(t, server1, room, alice)
+			defer psjResult.Destroy()
+
+			// Only server1 should receive device list updates.
+			renameDevice(t, alice, "A new device name 1")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel1, "@charlie and @derek did not receive device list update.")
+			mustNotReceiveDeviceListUpdate(t, deviceListUpdateChannel2, "@elsie received device list update unexpectedly.")
+			t.Log("@charlie and @derek received device list update.")
+
+			// @elsie:server2 joins the room.
+			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
+			// up right and it can't answer queries about events in the room.
+			joinEvent := createJoinEvent(t, server2, room, server2.UserID("elsie"))
+			room.AddEvent(joinEvent)
+			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
+
+			// Both servers should receive device list updates now.
+			renameDevice(t, alice, "A new device name 2")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel1, "@charlie and @derek did not receive device list update.")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel2, "@elsie did not receive device list update.")
+			t.Log("@charlie, @derek and @elsie received device list update.")
+
+			// Finish the partial state join.
+			psjResult.FinishStateRequest()
+			awaitPartialStateJoinCompletion(t, room, alice)
+
+			// Both homeservers should still receive device list updates.
+			renameDevice(t, alice, "A new device name 3")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel1, "@charlie and @derek did not receive device list update.")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel2, "@elsie did not receive device list update.")
+			t.Log("@charlie, @derek and @elsie received device list update.")
+		})
+
+		// test that device list updates are sent to the remote homeservers listed in the
+		// `/send_join` response in a room with partial state, even after they leave. The homeserver
+		// under test must do so, as it has no way of knowing that a remote homeserver has no more
+		// users in the room.
+		t.Run("Device list updates no longer reach departed servers after partial state join completes", func(t *testing.T) {
+			alice, server1, server2, deviceListUpdateChannel1, deviceListUpdateChannel2, room, cleanup := setupOutgoingDeviceListUpdateTest(t, deployment, "t25alice")
+			defer cleanup()
+
+			// The room starts with @charlie:server1 and @derek:server1 in it.
+			// @elsie:server2 joins the room before @t25alice:hs1.
+			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+
+			// @t25alice:hs1 joins the room.
+			psjResult := beginPartialStateJoin(t, server1, room, alice)
+			defer psjResult.Destroy()
+
+			// @elsie:server2 leaves the room.
+			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
+			// up right and it can't answer queries about events in the room.
+			leaveEvent := createLeaveEvent(t, server2, room, server2.UserID("elsie"))
+			room.AddEvent(leaveEvent)
+			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{leaveEvent.JSON()}, nil)
+			awaitEventViaSync(t, alice, room.RoomID, leaveEvent.EventID(), "")
+
+			// Both homeservers should receive device list updates, since hs1 cannot know that
+			// @elsie was the last user from server2 in the room.
+			renameDevice(t, alice, "A new device name 1")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel1, "@charlie and @derek did not receive device list update.")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel2, "@elsie did not receive device list update.")
+			t.Log("@charlie, @derek and @elsie received device list update.")
+
+			// Finish the partial state join.
+			psjResult.FinishStateRequest()
+			awaitPartialStateJoinCompletion(t, room, alice)
+
+			// @elsie:server2 should no longer receive device list updates.
+			renameDevice(t, alice, "A new device name 2")
+			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel1, "@charlie and @derek did not receive device list update.")
+			mustNotReceiveDeviceListUpdate(t, deviceListUpdateChannel2, "@elsie received device list update unexpectedly.")
+			t.Log("@charlie and @derek received device list update.")
+		})
 	})
 }
 
