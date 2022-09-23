@@ -36,6 +36,8 @@ import (
 func TestPartialStateJoin(t *testing.T) {
 	// createTestServer spins up a federation server suitable for the tests in this file
 	createTestServer := func(t *testing.T, deployment *docker.Deployment) *federation.Server {
+		t.Helper()
+
 		return federation.NewServer(t, deployment,
 			federation.HandleKeyRequests(),
 			federation.HandlePartialStateMakeSendJoinRequests(),
@@ -52,6 +54,8 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// createTestRoom creates a room on the complement server suitable for many of the tests in this file
 	createTestRoom := func(t *testing.T, server *federation.Server, roomVer gomatrixserverlib.RoomVersion) *federation.ServerRoom {
+		t.Helper()
+
 		// create the room on the complement server, with charlie and derek as members
 		serverRoom := server.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, server.UserID("charlie")))
 		serverRoom.AddEvent(server.MustCreateEvent(t, serverRoom, b.Event{
@@ -67,6 +71,8 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// getSyncToken gets the latest sync token
 	getSyncToken := func(t *testing.T, alice *client.CSAPI) string {
+		t.Helper()
+
 		_, syncToken := alice.MustSync(t,
 			client.SyncReq{
 				Filter:        buildLazyLoadingSyncFilter(nil),
@@ -1561,6 +1567,8 @@ func testReceiveEventDuringPartialStateJoin(
 // awaitEventViaSync waits for alice to be able to see a given event via an incremental lazy-loading
 // /sync and returns the new sync token after
 func awaitEventViaSync(t *testing.T, alice *client.CSAPI, roomID string, eventID string, syncToken string) string {
+	t.Helper()
+
 	// check that a lazy-loading sync can see the event
 	syncToken = alice.MustSyncUntil(t,
 		client.SyncReq{
@@ -1577,6 +1585,8 @@ func awaitEventViaSync(t *testing.T, alice *client.CSAPI, roomID string, eventID
 
 // awaitEventArrival waits for alice to be able to see a given event via /event
 func awaitEventArrival(t *testing.T, timeout time.Duration, alice *client.CSAPI, roomID string, eventID string) {
+	t.Helper()
+
 	// Alice should be able to see the event with an /event request. We might have to try it a few times.
 	alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "event", eventID},
 		client.WithRetryUntil(timeout, func(res *http.Response) bool {
