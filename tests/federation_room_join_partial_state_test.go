@@ -52,6 +52,41 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 	}
 
+	// createMemberEvent creates a membership event for the given user
+	createMembershipEvent := func(
+		t *testing.T, signingServer *federation.Server, room *federation.ServerRoom, userId string,
+		membership string,
+	) *gomatrixserverlib.Event {
+		t.Helper()
+
+		return signingServer.MustCreateEvent(t, room, b.Event{
+			Type:     "m.room.member",
+			StateKey: b.Ptr(userId),
+			Sender:   userId,
+			Content: map[string]interface{}{
+				"membership": membership,
+			},
+		})
+	}
+
+	// createJoinEvent creates a join event for the given user
+	createJoinEvent := func(
+		t *testing.T, signingServer *federation.Server, room *federation.ServerRoom, userId string,
+	) *gomatrixserverlib.Event {
+		t.Helper()
+
+		return createMembershipEvent(t, signingServer, room, userId, "join")
+	}
+
+	// createLeaveEvent creates a leave event for the given user
+	createLeaveEvent := func(
+		t *testing.T, signingServer *federation.Server, room *federation.ServerRoom, userId string,
+	) *gomatrixserverlib.Event {
+		t.Helper()
+
+		return createMembershipEvent(t, signingServer, room, userId, "leave")
+	}
+
 	// createTestRoom creates a room on the complement server suitable for many of the tests in this file
 	// The room starts with @charlie and @derek in it
 	createTestRoom := func(t *testing.T, server *federation.Server, roomVer gomatrixserverlib.RoomVersion) *federation.ServerRoom {
@@ -59,14 +94,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// create the room on the complement server, with charlie and derek as members
 		serverRoom := server.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, server.UserID("charlie")))
-		serverRoom.AddEvent(server.MustCreateEvent(t, serverRoom, b.Event{
-			Type:     "m.room.member",
-			StateKey: b.Ptr(server.UserID("derek")),
-			Sender:   server.UserID("derek"),
-			Content: map[string]interface{}{
-				"membership": "join",
-			},
-		}))
+		serverRoom.AddEvent(createJoinEvent(t, server, serverRoom, server.UserID("derek")))
 		return serverRoom
 	}
 
@@ -992,25 +1020,11 @@ func TestPartialStateJoin(t *testing.T) {
 		serverRoom := server.MustMakeRoom(t, roomVer, initialRoomEvents)
 
 		// derek joins
-		derekJoinEvent := server.MustCreateEvent(t, serverRoom, b.Event{
-			Type:     "m.room.member",
-			StateKey: &derek,
-			Sender:   derek,
-			Content: map[string]interface{}{
-				"membership": "join",
-			},
-		})
+		derekJoinEvent := createJoinEvent(t, server, serverRoom, derek)
 		serverRoom.AddEvent(derekJoinEvent)
 
 		// ... and leaves again
-		derekLeaveEvent := server.MustCreateEvent(t, serverRoom, b.Event{
-			Type:     "m.room.member",
-			StateKey: &derek,
-			Sender:   derek,
-			Content: map[string]interface{}{
-				"membership": "leave",
-			},
-		})
+		derekLeaveEvent := createLeaveEvent(t, server, serverRoom, derek)
 		serverRoom.AddEvent(derekLeaveEvent)
 
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
@@ -1085,30 +1099,15 @@ func TestPartialStateJoin(t *testing.T) {
 		serverRoom := server.MustMakeRoom(t, roomVer, initialRoomEvents)
 
 		// derek joins
-		derekJoinEvent := server.MustCreateEvent(t, serverRoom, b.Event{
-			Type:     "m.room.member",
-			StateKey: &derek,
-			Sender:   derek,
-			Content:  map[string]interface{}{"membership": "join"},
-		})
+		derekJoinEvent := createJoinEvent(t, server, serverRoom, derek)
 		serverRoom.AddEvent(derekJoinEvent)
 
 		// ... and leaves again
-		derekLeaveEvent := server.MustCreateEvent(t, serverRoom, b.Event{
-			Type:     "m.room.member",
-			StateKey: &derek,
-			Sender:   derek,
-			Content:  map[string]interface{}{"membership": "leave"},
-		})
+		derekLeaveEvent := createLeaveEvent(t, server, serverRoom, derek)
 		serverRoom.AddEvent(derekLeaveEvent)
 
 		// Elsie joins
-		elsieJoinEvent := server.MustCreateEvent(t, serverRoom, b.Event{
-			Type:     "m.room.member",
-			StateKey: &elsie,
-			Sender:   elsie,
-			Content:  map[string]interface{}{"membership": "join"},
-		})
+		elsieJoinEvent := createJoinEvent(t, server, serverRoom, elsie)
 		serverRoom.AddEvent(elsieJoinEvent)
 
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
