@@ -2403,6 +2403,77 @@ func TestPartialStateJoin(t *testing.T) {
 			mustSyncUntilDeviceListsHas(t, alice, syncToken, "left", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 		})
+
+		// test that device lists stop being tracked when leaving a partial state room before the
+		// partial state join completes.
+		t.Run("Device list no longer tracked when leaving partial state room", func(t *testing.T) {
+			t.Skip("Cannot yet leave a room during resync")
+
+			alice, server, userDevicesChannel, room, _, cleanup := setupDeviceListCachingTest(t, deployment, "t34alice")
+			defer cleanup()
+
+			// The room starts with @charlie and @derek in it.
+
+			// @t34alice:hs1 joins the room.
+			psjResult := beginPartialStateJoin(t, server, room, alice)
+			defer psjResult.Destroy()
+
+			syncToken := getSyncToken(t, alice)
+
+			// @elsie joins the room.
+			joinEvent := createJoinEvent(t, server, room, server.UserID("elsie"))
+			room.AddEvent(joinEvent)
+			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
+
+			// @elsie's device list ought to be cached.
+			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
+			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
+			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
+
+			// Leave the room
+			alice.LeaveRoom(t, room.RoomID)
+
+			// @elsie's device list ought to no longer be cached.
+			mustSyncUntilDeviceListsHas(t, alice, syncToken, "left", server.UserID("elsie"))
+			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
+		})
+
+		// test that device lists stop being tracked when leaving a partial state room due to
+		// failure to complete the partial state join.
+		t.Run("Device list no longer tracked when failing to complete partial state join", func(t *testing.T) {
+			t.Skip("Cannot yet abort a partial state join")
+
+			alice, server, userDevicesChannel, room, _, cleanup := setupDeviceListCachingTest(t, deployment, "t35alice")
+			defer cleanup()
+
+			// The room starts with @charlie and @derek in it.
+
+			// @t35alice:hs1 joins the room.
+			psjResult := beginPartialStateJoin(t, server, room, alice)
+			defer psjResult.Destroy()
+
+			syncToken := getSyncToken(t, alice)
+
+			// @elsie joins the room.
+			joinEvent := createJoinEvent(t, server, room, server.UserID("elsie"))
+			room.AddEvent(joinEvent)
+			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
+
+			// @elsie's device list ought to be cached.
+			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
+			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
+			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
+
+			t.Fatalf("TODO: fail the partial state join")
+			psjResult.FinishStateRequest()
+			awaitPartialStateJoinCompletion(t, room, alice)
+
+			// @elsie's device list ought to no longer be cached.
+			mustSyncUntilDeviceListsHas(t, alice, syncToken, "left", server.UserID("elsie"))
+			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
+		})
 	})
 }
 
