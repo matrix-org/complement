@@ -42,13 +42,7 @@ func TestEventsInCorrectRoom(t *testing.T) {
 
 	for i := 0; i < goConcurrency; i++ {
 		go func() {
-			for {
-				_, ok := <-todoRooms
-
-				if !ok {
-					return
-				}
-
+			for range todoRooms {
 				roomId := alice.CreateRoom(t, map[string]interface{}{
 					"preset": "public_chat",
 				})
@@ -86,9 +80,7 @@ func TestEventsInCorrectRoom(t *testing.T) {
 	}
 
 	var doneEvents = make(chan string, roomAmount)
-	var todoEvents = make(chan txnAndId, goConcurrency)
-
-	txnCount := 0
+	var todoEvents = make(chan txnAndId, roomAmount)
 
 	for i := 0; i < goConcurrency; i++ {
 		go func() {
@@ -112,13 +104,11 @@ func TestEventsInCorrectRoom(t *testing.T) {
 		}()
 	}
 
-	for _, id := range rooms {
+	for i, id := range rooms {
 		todoEvents <- txnAndId{
 			roomId: id,
-			txn:    txnCount,
+			txn:    i,
 		}
-
-		txnCount++
 	}
 
 	close(todoEvents)
@@ -166,10 +156,12 @@ func TestEventsInCorrectRoom(t *testing.T) {
 			events := eventsJson.Array()
 
 			if len(events) > 1 {
+				// We need to test if we somehow have gotten multiple events.
+				// If so, we have either a duplicate or a wrongly-routed event, either case is a test failure.
 				t.Fatalf("Expected 0 or 1 events, got %d events: %s", len(events), events)
 			} else if len(events) == 1 {
 				if okayRooms[roomID] {
-					// We have already cleared an event for this room?
+					// We have already cleared an event for this room? If yes, then this is a duplicate.
 					t.Fatalf("Event received for room %s where event was already received for: %s", roomID, events[0])
 				}
 
