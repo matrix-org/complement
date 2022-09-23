@@ -111,6 +111,16 @@ func TestPartialStateJoin(t *testing.T) {
 		return syncToken
 	}
 
+	// awaitPartialStateJoinCompletion waits until the joined room is no longer partial-stated
+	awaitPartialStateJoinCompletion := func(
+		t *testing.T, room *federation.ServerRoom, user *client.CSAPI,
+	) {
+		t.Helper()
+
+		user.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(user.UserID, room.RoomID))
+		t.Logf("%s's partial state join to %s completed.", user.UserID, room.RoomID)
+	}
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
