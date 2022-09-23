@@ -53,6 +53,7 @@ func TestPartialStateJoin(t *testing.T) {
 	}
 
 	// createTestRoom creates a room on the complement server suitable for many of the tests in this file
+	// The room starts with @charlie and @derek in it
 	createTestRoom := func(t *testing.T, server *federation.Server, roomVer gomatrixserverlib.RoomVersion) *federation.ServerRoom {
 		t.Helper()
 
