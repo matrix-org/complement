@@ -80,7 +80,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 
 	queryParams := url.Values{}
 	queryParams.Set("server_name", "hs1")
-	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
+	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{
@@ -317,7 +317,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	res := alice.MustDoFunc(
 		t,
 		"GET",
-		[]string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.member", charlie},
+		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", charlie},
 	)
 	stateResp := client.ParseJSON(t, res)
 	membership := must.GetJSONFieldStr(t, stateResp, "membership")
@@ -385,7 +385,9 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		}
 
 		var res interface{}
-		err := srv.SendFederationRequest(deployment, req, &res)
+
+		err := srv.SendFederationRequest(context.Background(), t, deployment, req, &res)
+
 		if err == nil {
 			t.Errorf("send request returned 200")
 			return
@@ -459,6 +461,9 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
+
+		// accept incoming presence transactions, etc
+		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
 	defer cancel()
@@ -521,4 +526,30 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 // given an event JSON, return the type and state_key, joined with a "|"
 func typeAndStateKeyForEvent(result gjson.Result) string {
 	return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
+}
+
+func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // Dendrite doesn't read AS registration files from Complement yet
+	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
+	defer deployment.Destroy(t)
+
+	// Create the application service bridge user to try to join the room from
+	asUserID := "@the-bridge-user:hs1"
+	as := deployment.Client(t, "hs1", asUserID)
+
+	// Create the federated remote user which will create the room
+	remoteUserID := "@charlie:hs2"
+	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+
+	t.Run("join remote federated room as application service user", func(t *testing.T) {
+		//t.Parallel()
+		// Create the room from a remote homeserver
+		roomID := remoteCharlie.CreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"name":   "hs2 room",
+		})
+
+		// Join the AS bridge user to the remote federated room (without a profile set)
+		as.JoinRoom(t, roomID, []string{"hs2"})
+	})
 }

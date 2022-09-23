@@ -1,0 +1,8 @@
+# Automatically request reviews from the synapse-core and dendrite-core teams when a pull request comes in.
+* @matrix-org/synapse-core @matrix-org/dendrite-core
+
+# For modifications to complement internals, also directly request review from Kegan.
+/build/ @matrix-org/synapse-core @matrix-org/dendrite-core @kegsay
+/cmd/ @matrix-org/synapse-core @matrix-org/dendrite-core @kegsay
+/internal/ @matrix-org/synapse-core @matrix-org/dendrite-core @kegsay
+/runtime/ @matrix-org/synapse-core @matrix-org/dendrite-core @kegsay

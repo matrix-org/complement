@@ -52,7 +52,7 @@ func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string) {
 
 	origin, mediaId := client.SplitMxc(mxcUri)
 
-	res := c.MustDoFunc(t, "GET", []string{"_matrix", "media", "r0", "thumbnail", origin, mediaId}, client.WithQueries(url.Values{
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "media", "v3", "thumbnail", origin, mediaId}, client.WithQueries(url.Values{
 		"width":  []string{"32"},
 		"height": []string{"32"},
 		"method": []string{"scale"},

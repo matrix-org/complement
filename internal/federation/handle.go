@@ -38,36 +38,79 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	makeJoinResp, err := MakeRespMakeJoin(s, room, userID)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte(fmt.Sprintf("complement: HandleMakeSendJoinRequests %s", err)))
+		return
+	}
+
+	// Send it
+	w.WriteHeader(200)
+	b, _ := json.Marshal(makeJoinResp)
+	w.Write(b)
+}
+
+// MakeRespMakeJoin makes the response for a /make_join request, without verifying any signatures
+// or dealing with HTTP responses itself.
+func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeJoin, err error) {
 	// Generate a join event
 	builder := gomatrixserverlib.EventBuilder{
 		Sender:     userID,
-		RoomID:     roomID,
+		RoomID:     room.RoomID,
 		Type:       "m.room.member",
 		StateKey:   &userID,
 		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
+		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
 	}
-	err := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
+	err = builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
 	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot set membership content: " + err.Error()))
+		err = fmt.Errorf("make_join cannot set membership content: %w", err)
 		return
 	}
 	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
 	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot calculate auth_events: " + err.Error()))
+		err = fmt.Errorf("make_join cannot calculate auth_events: %w", err)
 		return
 	}
 	builder.AuthEvents = room.AuthEvents(stateNeeded)
 
-	// Send it
-	res := map[string]interface{}{
-		"event":        builder,
-		"room_version": room.Version,
+	resp = gomatrixserverlib.RespMakeJoin{
+		RoomVersion: room.Version,
+		JoinEvent:   builder,
 	}
-	w.WriteHeader(200)
-	b, _ := json.Marshal(res)
-	w.Write(b)
+	return
+}
+
+// MakeRespMakeKnock makes the response for a /make_knock request, without verifying any signatures
+// or dealing with HTTP responses itself.
+func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeKnock, err error) {
+	// Generate a knock event
+	builder := gomatrixserverlib.EventBuilder{
+		Sender:     userID,
+		RoomID:     room.RoomID,
+		Type:       "m.room.member",
+		StateKey:   &userID,
+		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
+		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
+	}
+	err = builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
+	if err != nil {
+		err = fmt.Errorf("make_knock cannot set membership content: %w", err)
+		return
+	}
+	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
+	if err != nil {
+		err = fmt.Errorf("make_knock cannot calculate auth_events: %w", err)
+		return
+	}
+	builder.AuthEvents = room.AuthEvents(stateNeeded)
+
+	resp = gomatrixserverlib.RespMakeKnock{
+		RoomVersion: room.Version,
+		KnockEvent:  builder,
+	}
+	return
 }
 
 // SendJoinRequestsHandler is the http.Handler implementation for the send_join part of
@@ -128,11 +171,12 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	authEvents := room.AuthChainForEvents(stateEvents)
 
+	// get servers in room *before* the join event
+	serversInRoom := room.ServersInRoom()
+
 	// insert the join event into the room state
 	room.AddEvent(event)
-
-	// servers in room: just us. TODO(faster_joins): this may not be correct
-	serversInRoom := []string{s.serverName}
+	log.Printf("Received send-join of event %s", event.EventID())
 
 	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
@@ -280,6 +324,12 @@ func HandleEventRequests() func(*Server) {
 				}
 			}
 
+			if event == nil {
+				w.WriteHeader(404)
+				w.Write([]byte(fmt.Sprintf(`complement: failed to find event: %s`, eventID)))
+				return
+			}
+
 			txn := gomatrixserverlib.Transaction{
 				Origin:         gomatrixserverlib.ServerName(srv.serverName),
 				OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
@@ -295,6 +345,55 @@ func HandleEventRequests() func(*Server) {
 			}
 			w.WriteHeader(200)
 			w.Write(resp)
+		}))
+	}
+}
+
+// HandleEventAuthRequests is an option which will process GET /_matrix/federation/v1/event_auth/{roomId}/{eventId}
+// requests universally when requested.
+func HandleEventAuthRequests() func(*Server) {
+	return func(srv *Server) {
+		srv.mux.Handle("/_matrix/federation/v1/event_auth/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			roomID := vars["roomID"]
+			eventID := vars["eventID"]
+
+			room, ok := srv.rooms[roomID]
+			if !ok {
+				srv.t.Logf("/event_auth request for unknown room ID %s", roomID)
+				w.WriteHeader(404)
+				w.Write([]byte("complement: HandleEventAuthRequests event_auth unknown room ID: " + roomID))
+				return
+			}
+
+			// find the event
+			var event *gomatrixserverlib.Event
+			for _, ev := range room.Timeline {
+				if ev.EventID() == eventID {
+					event = ev
+					break
+				}
+			}
+
+			if event == nil {
+				srv.t.Logf("/event_auth request for unknown event ID %s in room %s", eventID, roomID)
+				w.WriteHeader(404)
+				w.Write([]byte("complement: HandleEventAuthRequests event_auth unknown event ID: " + eventID))
+				return
+			}
+
+			authEvents := room.AuthChainForEvents([]*gomatrixserverlib.Event{event})
+			resp := gomatrixserverlib.RespEventAuth{
+				gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
+			}
+			respJSON, err := json.Marshal(resp)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte(fmt.Sprintf(`complement: failed to marshal JSON response: %s`, err)))
+				return
+			}
+			w.WriteHeader(200)
+			w.Write(respJSON)
 		}))
 	}
 }
@@ -365,10 +464,11 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 			}
 		})
 
-		// Note: The spec says to use r0, but implementations rely on /v1 working for federation requests as a legacy
+		// Note: The spec says to use /v3, but implementations rely on /v1 and /r0 working for federation requests as a legacy
 		// route.
-		mediamux.Handle("/v1/download/{origin}/{mediaId}", downloadFn).Methods("GET")
 		mediamux.Handle("/r0/download/{origin}/{mediaId}", downloadFn).Methods("GET")
+		mediamux.Handle("/v1/download/{origin}/{mediaId}", downloadFn).Methods("GET")
+		mediamux.Handle("/v3/download/{origin}/{mediaId}", downloadFn).Methods("GET")
 	}
 }
 

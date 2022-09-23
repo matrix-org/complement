@@ -14,8 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/gomatrixserverlib"
+	"net/http"
 
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -32,6 +33,11 @@ const testKnockReason string = "Let me in... LET ME IN!!!"
 // Knocking is currently an experimental feature and not in the matrix spec.
 // This function tests knocking on local and remote room.
 func TestKnocking(t *testing.T) {
+	// v7 is required for knocking support
+	doTestKnocking(t, "7", "knock")
+}
+
+func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 
@@ -67,14 +73,14 @@ func TestKnocking(t *testing.T) {
 		RoomVersion string `json:"room_version"`
 	}{
 		"private_chat", // Set to private in order to get an invite-only room
-		"7",            // Room version required for knocking.
+		roomVersion,
 	})
 	alice.InviteRoom(t, roomIDOne, david)
 	inviteWaiter.Wait(t, 5*time.Second)
 	serverRoomOne := srv.MustJoinRoom(t, deployment, "hs1", roomIDOne, david)
 
 	// Test knocking between two users on the same homeserver
-	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, serverRoomOne, false)
+	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, serverRoomOne, false, joinRule)
 
 	// Create a room for alice and charlie to test knocking with
 	roomIDTwo := alice.CreateRoom(t, struct {
@@ -82,7 +88,7 @@ func TestKnocking(t *testing.T) {
 		RoomVersion string `json:"room_version"`
 	}{
 		"private_chat", // Set to private in order to get an invite-only room
-		"7",            // Room version required for knocking.
+		roomVersion,
 	})
 	inviteWaiter = NewWaiter()
 	alice.InviteRoom(t, roomIDTwo, david)
@@ -90,10 +96,10 @@ func TestKnocking(t *testing.T) {
 	serverRoomTwo := srv.MustJoinRoom(t, deployment, "hs1", roomIDTwo, david)
 
 	// Test knocking between two users, each on a separate homeserver
-	knockingBetweenTwoUsersTest(t, roomIDTwo, alice, charlie, serverRoomTwo, true)
+	knockingBetweenTwoUsersTest(t, roomIDTwo, alice, charlie, serverRoomTwo, true, joinRule)
 }
 
-func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, serverRoom *federation.ServerRoom, testFederation bool) {
+func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, serverRoom *federation.ServerRoom, testFederation bool, joinRule string) {
 	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
 		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{"hs1"}, 403)
 	})
@@ -105,7 +111,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			Sender:   inRoomUser.UserID,
 			StateKey: &emptyStateKey,
 			Content: map[string]interface{}{
-				"join_rule": "knock",
+				"join_rule": joinRule,
 			},
 		})
 	})
@@ -119,7 +125,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		res := knockingUser.DoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "join", roomID},
+			[]string{"_matrix", "client", "v3", "join", roomID},
 			client.WithQueries(query),
 			client.WithRawBody([]byte(`{}`)),
 		)
@@ -171,7 +177,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			knockingUser.MustDo(
 				t,
 				"POST",
-				[]string{"_matrix", "client", "r0", "rooms", roomID, "leave"},
+				[]string{"_matrix", "client", "v3", "rooms", roomID, "leave"},
 				struct {
 					Reason string `json:"reason"`
 				}{
@@ -210,7 +216,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		inRoomUser.MustDo(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "kick"},
+			[]string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
 			struct {
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
@@ -236,7 +242,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		inRoomUser.MustDo(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "kick"},
+			[]string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
 			struct {
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
@@ -254,7 +260,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		inRoomUser.MustDo(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "invite"},
+			[]string{"_matrix", "client", "v3", "rooms", roomID, "invite"},
 			struct {
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
@@ -286,7 +292,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		inRoomUser.MustDo(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "rooms", roomID, "ban"},
+			[]string{"_matrix", "client", "v3", "rooms", roomID, "ban"},
 			struct {
 				UserID string `json:"user_id"`
 				Reason string `json:"reason"`
@@ -353,7 +359,7 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 	res := c.DoFunc(
 		t,
 		"POST",
-		[]string{"_matrix", "client", "r0", "knock", roomID},
+		[]string{"_matrix", "client", "v3", "knock", roomID},
 		client.WithQueries(query),
 		client.WithRawBody(b),
 	)
@@ -367,6 +373,11 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 // representing a knock room. For sanity-checking, this test will also create a public room and ensure it has a
 // 'join_rule' representing a publicly-joinable room.
 func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
+	// v7 is required for knocking
+	doTestKnockRoomsInPublicRoomsDirectory(t, "7", "knock")
+}
+
+func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, joinRule string) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -380,7 +391,7 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 		RoomVersion string `json:"room_version"`
 	}{
 		"private_chat", // Set to private in order to get an invite-only room
-		"7",            // Room version required for knocking.
+		roomVersion,
 	})
 
 	// Change the join_rule to allow knocking
@@ -390,12 +401,12 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 		Sender:   alice.UserID,
 		StateKey: &emptyStateKey,
 		Content: map[string]interface{}{
-			"join_rule": "knock",
+			"join_rule": joinRule,
 		},
 	})
 
 	// Publish the room to the public room directory and check that the 'join_rule' key is knock
-	publishAndCheckRoomJoinRule(t, alice, roomID, "knock")
+	publishAndCheckRoomJoinRule(t, alice, roomID, joinRule)
 
 	// Create a public room
 	roomID = alice.CreateRoom(t, struct {
@@ -415,7 +426,7 @@ func publishAndCheckRoomJoinRule(t *testing.T, c *client.CSAPI, roomID, expected
 	c.MustDo(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "directory", "list", "room", roomID},
+		[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
 		struct {
 			Visibility string `json:"visibility"`
 		}{
@@ -424,39 +435,37 @@ func publishAndCheckRoomJoinRule(t *testing.T, c *client.CSAPI, roomID, expected
 	)
 
 	// Check that we can see the room in the directory
-	res := c.MustDo(
-		t,
-		"GET",
-		[]string{"_matrix", "client", "r0", "publicRooms"},
-		nil,
+	c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
+		client.WithRetryUntil(time.Second, func(res *http.Response) bool {
+			roomFound := false
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					// For each public room directory chunk (representing a single room entry)
+					match.JSONArrayEach("chunk", func(r gjson.Result) error {
+						// If this is our room
+						if r.Get("room_id").Str == roomID {
+							roomFound = true
+
+							// Check that the join_rule key exists and is as we expect
+							if roomJoinRule := r.Get("join_rule").Str; roomJoinRule != expectedJoinRule {
+								return fmt.Errorf(
+									"'join_rule' key for room in public room chunk is '%s', expected '%s'",
+									roomJoinRule, expectedJoinRule,
+								)
+							}
+						}
+						return nil
+					}),
+				},
+			})
+
+			// Check that we did in fact see the room
+			if !roomFound {
+				t.Logf("Room was not present in public room directory response")
+			}
+			return roomFound
+		}),
 	)
-
-	roomFound := false
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			// For each public room directory chunk (representing a single room entry)
-			match.JSONArrayEach("chunk", func(r gjson.Result) error {
-				// If this is our room
-				if r.Get("room_id").Str == roomID {
-					roomFound = true
-
-					// Check that the join_rule key exists and is as we expect
-					if roomJoinRule := r.Get("join_rule").Str; roomJoinRule != expectedJoinRule {
-						return fmt.Errorf(
-							"'join_rule' key for room in public room chunk is '%s', expected '%s'",
-							roomJoinRule, expectedJoinRule,
-						)
-					}
-				}
-				return nil
-			}),
-		},
-	})
-
-	// Check that we did in fact see the room
-	if !roomFound {
-		t.Fatalf("Room was not present in public room directory response")
-	}
 }
 
 // TestCannotSendNonKnockViaSendKnock checks that we cannot submit anything via /send_knock except a knock

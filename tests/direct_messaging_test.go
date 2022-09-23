@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
@@ -19,7 +20,11 @@ import (
 // Requires a functioning account data implementation.
 func TestWriteMDirectAccountData(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
-	defer deployment.Destroy(t)
+	defer func() {
+		// additional logging to debug https://github.com/matrix-org/synapse/issues/13334
+		t.Logf("%s: TestWriteMDirectAccountData complete: destroying HS deployment", time.Now())
+		deployment.Destroy(t)
+	}()
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
@@ -46,6 +51,7 @@ func TestWriteMDirectAccountData(t *testing.T) {
 		}
 		return true
 	}
+	t.Logf("%s: global account data set; syncing until it arrives", time.Now()) // synapse#13334
 	since := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncGlobalAccountDataHas(checkAccountData))
 	// now update the DM room and test that incremental syncing also pushes new account data
 	roomID = alice.CreateRoom(t, map[string]interface{}{

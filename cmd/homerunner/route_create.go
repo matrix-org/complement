@@ -17,8 +17,8 @@ type ReqCreate struct {
 }
 
 type ResCreate struct {
-	Homeservers map[string]docker.HomeserverDeployment `json:"homeservers"`
-	Expires     time.Time                              `json:"expires"`
+	Homeservers map[string]*docker.HomeserverDeployment `json:"homeservers"`
+	Expires     time.Time                               `json:"expires"`
 }
 
 // RouteCreate handles creating blueprint deployments. There are 3 supported types of requests:

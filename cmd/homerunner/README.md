@@ -138,3 +138,7 @@ The `complement_blueprint` label is the blueprint name you should use to deploy 
 ### Access tokens
 
 Access tokens are returned when deploying the blueprint but sometimes you want to login as a normal user. The format for passwords for all users created by Complement is [here](https://github.com/matrix-org/complement/blob/fc87b081ac9dd3c8e52bcd2ed155bc8d49ce6d56/internal/instruction/runner.go#L415).
+
+### Health
+
+Homerunner will respond to `GET /health` with a 200 response. You can use this to check if homerunner is ready when running your tests.

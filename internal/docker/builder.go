@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	client "github.com/docker/docker/client"
+	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 
@@ -181,7 +181,10 @@ func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
 		return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ImageList: %w", bprint.Name, err)
 	}
 	if len(images) == 0 {
-		d.ConstructBlueprint(bprint)
+		err = d.ConstructBlueprint(bprint)
+		if err != nil {
+			return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ConstructBlueprint: %w", bprint.Name, err)
+		}
 	}
 	return nil
 }
@@ -257,6 +260,8 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			}); delErr != nil {
 				d.log("%s: failed to remove container which failed to deploy: %s", res.contextStr, delErr)
 			}
+			// there is little point continuing to set up the remaining homeservers at this point
+			return
 		}
 		// kill the container
 		defer func(r result) {
@@ -302,6 +307,11 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			for k, v := range accessTokens {
 				labels["access_token_"+k] = v
 			}
+		}
+
+		deviceIDs := runner.DeviceIDs(res.homeserver.Name)
+		for userID, deviceID := range deviceIDs {
+			labels["device_id"+userID] = deviceID
 		}
 
 		// Combine the labels for tokens and application services
@@ -375,9 +385,19 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
+	var baseImageURI string
+	if hs.BaseImageURI == nil {
+		baseImageURI = d.Config.BaseImageURI
+		// Use HS specific base image if defined
+		if uri, ok := d.Config.BaseImageURIs[hs.Name]; ok {
+			baseImageURI = uri
+		}
+	} else {
+		baseImageURI = *hs.BaseImageURI
+	}
 
 	return deployImage(
-		d.Docker, d.Config.BaseImageURI, fmt.Sprintf("complement_%s", contextStr),
+		d.Docker, baseImageURI, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
 		networkID, d.Config,
 	)
