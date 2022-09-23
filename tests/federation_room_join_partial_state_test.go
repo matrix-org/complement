@@ -35,20 +35,23 @@ import (
 
 func TestPartialStateJoin(t *testing.T) {
 	// createTestServer spins up a federation server suitable for the tests in this file
-	createTestServer := func(t *testing.T, deployment *docker.Deployment) *federation.Server {
+	createTestServer := func(t *testing.T, deployment *docker.Deployment, opts ...func(*federation.Server)) *federation.Server {
 		t.Helper()
 
 		return federation.NewServer(t, deployment,
-			federation.HandleKeyRequests(),
-			federation.HandlePartialStateMakeSendJoinRequests(),
-			federation.HandleEventRequests(),
-			federation.HandleTransactionRequests(
-				func(e *gomatrixserverlib.Event) {
-					t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
-				},
-				// the homeserver under test may send us presence when the joining user syncs
-				nil,
-			),
+			append(
+				opts, // `opts` goes first so that it can override any of the following handlers
+				federation.HandleKeyRequests(),
+				federation.HandlePartialStateMakeSendJoinRequests(),
+				federation.HandleEventRequests(),
+				federation.HandleTransactionRequests(
+					func(e *gomatrixserverlib.Event) {
+						t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
+					},
+					// the homeserver under test may send us presence when the joining user syncs
+					nil,
+				),
+			)...,
 		)
 	}
 
