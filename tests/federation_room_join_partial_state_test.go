@@ -1489,6 +1489,122 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Errorf("SendKnock: non-HTTPError: %v", err)
 		}
 	})
+
+	t.Run("Outgoing device list updates", func(t *testing.T) {
+		// setupOutgoingDeviceListUpdateTest sets up two complement homeservers.
+		// A room is created on the first complement server, containing only local users.
+		// Returns channels for device list updates arriving at the complement homeservers, which
+		// can be used with `mustReceiveDeviceListUpdate` and `mustNotReceiveDeviceListUpdate`.
+		setupOutgoingDeviceListUpdateTest := func(
+			t *testing.T, deployment *docker.Deployment, aliceLocalpart string,
+			opts ...func(*federation.Server),
+		) (
+			alice *client.CSAPI, server1 *federation.Server, server2 *federation.Server,
+			deviceListUpdateChannel1 chan gomatrixserverlib.DeviceListUpdateEvent,
+			deviceListUpdateChannel2 chan gomatrixserverlib.DeviceListUpdateEvent,
+			room *federation.ServerRoom, cleanup func(),
+		) {
+			alice = deployment.RegisterUser(t, "hs1", aliceLocalpart, "secret", false)
+
+			deviceListUpdateChannel1 = make(chan gomatrixserverlib.DeviceListUpdateEvent)
+			deviceListUpdateChannel2 = make(chan gomatrixserverlib.DeviceListUpdateEvent)
+
+			createDeviceListUpdateTestServer := func(
+				t *testing.T, deployment *docker.Deployment,
+				deviceListUpdateChannel chan gomatrixserverlib.DeviceListUpdateEvent,
+				opts ...func(*federation.Server),
+			) *federation.Server {
+				return createTestServer(t, deployment,
+					append(
+						opts, // `opts` goes first so that it can override any of the following handlers
+						federation.HandleEventAuthRequests(),
+						federation.HandleTransactionRequests(
+							func(e *gomatrixserverlib.Event) {
+								t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
+							},
+							func(e gomatrixserverlib.EDU) {
+								if e.Type == "m.presence" {
+									return
+								}
+								if e.Type != "m.device_list_update" {
+									t.Fatalf("Received unexpected EDU: %s", e)
+								}
+
+								var deviceListUpdate gomatrixserverlib.DeviceListUpdateEvent
+								json.Unmarshal(e.Content, &deviceListUpdate)
+								deviceListUpdateChannel <- deviceListUpdate
+							},
+						),
+					)...,
+				)
+			}
+
+			server1 = createDeviceListUpdateTestServer(t, deployment, deviceListUpdateChannel1, opts...)
+			server2 = createDeviceListUpdateTestServer(t, deployment, deviceListUpdateChannel2, opts...)
+			cancel1 := server1.Listen()
+			cancel2 := server2.Listen()
+
+			room = createTestRoom(t, server1, alice.GetDefaultRoomVersion(t))
+
+			cleanup = func() {
+				cancel1()
+				cancel2()
+				close(deviceListUpdateChannel1)
+				close(deviceListUpdateChannel2)
+			}
+			return
+		}
+
+		// renameDevice triggers an outgoing device list update
+		// We may want to rewrite this to update keys instead in the future.
+		renameDevice := func(t *testing.T, user *client.CSAPI, displayName string) {
+			t.Helper()
+
+			user.MustDoFunc(
+				t,
+				"PUT",
+				[]string{"_matrix", "client", "v3", "devices", user.DeviceID},
+				client.WithJSONBody(
+					t,
+					map[string]interface{}{
+						"display_name": displayName,
+					},
+				),
+			)
+
+			t.Logf("%s sent device list update.", user.UserID)
+		}
+
+		// mustReceiveDeviceListUpdate checks that a complement homeserver has received a device
+		// list update since the last call. Only consumes a single device list update.
+		mustReceiveDeviceListUpdate := func(
+			t *testing.T, channel chan gomatrixserverlib.DeviceListUpdateEvent, errFormat string,
+			args ...interface{},
+		) {
+			t.Helper()
+
+			select {
+			case <-time.After(1 * time.Second):
+				t.Fatalf(errFormat, args...)
+			case <-channel:
+			}
+		}
+
+		// mustNotReceiveDeviceListUpdate checks that a complement homeserver has not received a
+		// device list update since the last call.
+		mustNotReceiveDeviceListUpdate := func(
+			t *testing.T, channel chan gomatrixserverlib.DeviceListUpdateEvent, errFormat string,
+			args ...interface{},
+		) {
+			t.Helper()
+
+			select {
+			case <-time.After(1 * time.Second):
+			case <-channel:
+				t.Fatalf(errFormat, args...)
+			}
+		}
+	})
 }
 
 // test reception of an event over federation during a resync
