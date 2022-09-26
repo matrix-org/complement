@@ -346,8 +346,11 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 	return errs
 }
 
+// Convert a map of labels to a list of changes directive in Dockerfile format.
+// Labels keys and values can't be multiline (eg. can't contain `\n` character)
+// neither can they contain unescaped `"` character.
 func toChanges(labels map[string]string) []string {
-	changes := make([]string, 0)
+	var changes []string
 	for k, v := range labels {
 		changes = append(changes, fmt.Sprintf("LABEL \"%s\"=\"%s\"", k, v))
 	}
@@ -406,7 +409,7 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	)
 }
 
-// Multilines label using Dockefile syntax is unsupported, let's inline \n instead
+// Multilines label using Dockerfile syntax is unsupported, let's inline \n instead
 func generateASRegistrationYaml(as b.ApplicationService) string {
 	return fmt.Sprintf("id: %s\\n", as.ID) +
 		fmt.Sprintf("hs_token: %s\\n", as.HSToken) +

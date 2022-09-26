@@ -79,7 +79,11 @@ type Complement struct {
 
 	BestEffort bool
 
-	// The hostname of Complement from the perspective of a Homeserver running inside a container
+	// Name: COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT
+	// Default: host.docker.internal
+	// Description: The hostname of Complement from the perspective of a Homeserver running inside a container.
+	// This can be useful for container runtimes using another hostname to access the host from a container,
+	// like Podman that uses `host.containers.internal` instead.
 	HostnameRunningComplement string
 }
 
