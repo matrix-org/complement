@@ -1,7 +1,9 @@
 package csapi_tests
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -19,11 +21,7 @@ func TestRelations(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-
-	const testMessage = "TestSendAndFetchMessage"
-
 	_, token := alice.MustSync(t, client.SyncReq{})
 
 	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
@@ -105,6 +103,104 @@ func TestRelations(t *testing.T) {
 		JSON: []match.JSON{
 			match.JSONCheckOff("chunk", []interface{}{
 				threadEventID,
+			}, func(r gjson.Result) interface{} {
+				return r.Get("event_id").Str
+			}, nil,
+			),
+		},
+	})
+}
+
+func TestRelationsPagination(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // not supported
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	_, token := alice.MustSync(t, client.SyncReq{})
+
+	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
+		"msgtype": "m.text",
+		"body":    "root",
+	}))
+	rootEventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
+
+	// Create some related events.
+	event_ids := [10]string{}
+	for i := 0; i < 10; i++ {
+		res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", fmt.Sprintf("txn-%d", 2+i)}, client.WithJSONBody(t, map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    fmt.Sprintf("reply %d", i),
+			"m.relates_to": map[string]interface{}{
+				"event_id": rootEventID,
+				"rel_type": "m.thread",
+			},
+		}))
+		event_ids[i] = client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
+	}
+
+	// sync until the server has processed it
+	alice.MustSyncUntil(t, client.SyncReq{Since: token}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+		return r.Get("event_id").Str == event_ids[9]
+	}))
+
+	// Fetch the first page.
+	queryParams := url.Values{}
+	queryParams.Set("limit", "3")
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	body := must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON: []match.JSON{
+			match.JSONCheckOff("chunk", []interface{}{
+				event_ids[9], event_ids[8], event_ids[7],
+			}, func(r gjson.Result) interface{} {
+				return r.Get("event_id").Str
+			}, nil,
+			),
+		},
+	})
+
+	// Fetch the next page.
+	queryParams.Set("from", client.GetJSONFieldStr(t, body, "next_batch"))
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON: []match.JSON{
+			match.JSONCheckOff("chunk", []interface{}{
+				event_ids[6], event_ids[5], event_ids[4],
+			}, func(r gjson.Result) interface{} {
+				return r.Get("event_id").Str
+			}, nil,
+			),
+		},
+	})
+
+	// Fetch the first page in the forward direction.
+	queryParams = url.Values{}
+	queryParams.Set("limit", "3")
+	queryParams.Set("dir", "f")
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	body = must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON: []match.JSON{
+			match.JSONCheckOff("chunk", []interface{}{
+				event_ids[0], event_ids[1], event_ids[2],
+			}, func(r gjson.Result) interface{} {
+				return r.Get("event_id").Str
+			}, nil,
+			),
+		},
+	})
+
+	// Fetch the next page in the forward direction.
+	queryParams.Set("from", client.GetJSONFieldStr(t, body, "next_batch"))
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON: []match.JSON{
+			match.JSONCheckOff("chunk", []interface{}{
+				event_ids[3], event_ids[4], event_ids[5],
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
 			}, nil,
