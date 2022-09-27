@@ -78,6 +78,13 @@ type Complement struct {
 	CAPrivateKey  *rsa.PrivateKey
 
 	BestEffort bool
+
+	// Name: COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT
+	// Default: host.docker.internal
+	// Description: The hostname of Complement from the perspective of a Homeserver running inside a container.
+	// This can be useful for container runtimes using another hostname to access the host from a container,
+	// like Podman that uses `host.containers.internal` instead.
+	HostnameRunningComplement string
 }
 
 var hsRegex = regexp.MustCompile(`COMPLEMENT_BASE_IMAGE_(.+)=(.+)$`)
@@ -127,6 +134,13 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	}
 	if cfg.PackageNamespace == "" {
 		panic("package namespace must be set")
+	}
+
+	HostnameRunningComplement := os.Getenv("COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT")
+	if HostnameRunningComplement != "" {
+		cfg.HostnameRunningComplement = HostnameRunningComplement
+	} else {
+		cfg.HostnameRunningComplement = "host.docker.internal"
 	}
 
 	return cfg

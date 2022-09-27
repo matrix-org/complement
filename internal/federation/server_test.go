@@ -11,8 +11,8 @@ import (
 )
 
 func TestComplementServerIsSigned(t *testing.T) {
-	docker.HostnameRunningComplement = "localhost"
 	cfg := config.NewConfigFromEnvVars("test", "unimportant")
+	cfg.HostnameRunningComplement = "localhost"
 	srv := NewServer(t, &docker.Deployment{
 		Config: cfg,
 	})
