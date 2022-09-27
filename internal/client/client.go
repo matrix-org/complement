@@ -151,11 +151,12 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
-// LeaveRoom joins the room ID, else fails the test.
+// LeaveRoom leaves the room ID, else fails the test.
 func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 	t.Helper()
 	// leave the room
-	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"})
+	body := map[string]interface{}{}
+	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, WithJSONBody(t, body))
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
@@ -598,9 +599,9 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	start := time.Now()
 	res, err := t.wrap.RoundTrip(req)
 	if err != nil {
-		t.t.Logf("%s %s%s => error: %s (%s)", req.Method, t.hsName, req.URL.Path, err, time.Since(start))
+		t.t.Logf("[CSAPI] %s %s%s => error: %s (%s)", req.Method, t.hsName, req.URL.Path, err, time.Since(start))
 	} else {
-		t.t.Logf("%s %s%s => %s (%s)", req.Method, t.hsName, req.URL.Path, res.Status, time.Since(start))
+		t.t.Logf("[CSAPI] %s %s%s => %s (%s)", req.Method, t.hsName, req.URL.Path, res.Status, time.Since(start))
 	}
 	return res, err
 }
@@ -682,6 +683,34 @@ func SyncTimelineHasEventID(roomID string, eventID string) SyncCheckOpt {
 	})
 }
 
+// Check that the state section for `roomID` has an event which passes the check function.
+// Note that the state section of a sync response only contains the change in state up to the start
+// of the timeline and will not contain the entire state of the room for incremental or
+// `lazy_load_members` syncs.
+func SyncStateHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncStateHas(%s): %s", roomID, err)
+	}
+}
+
+func SyncEphemeralHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".ephemeral.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncEphemeralHas(%s): %s", roomID, err)
+	}
+}
+
 // Checks that `userID` gets invited to `roomID`.
 //
 // This checks different parts of the /sync response depending on the client making the request.
@@ -714,15 +743,27 @@ func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 
 // Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event
 func SyncJoinedTo(userID, roomID string) SyncCheckOpt {
+	checkJoined := func(ev gjson.Result) bool {
+		return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join"
+	}
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		// awkward wrapping to get the error message correct at the start :/
-		err := SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join"
-		})(clientUserID, topLevelSyncJSON)
+		// Check both the timeline and the state events for the join event
+		// since on initial sync, the state events may only be in
+		// <room>.state.events.
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", checkJoined,
+		)
 		if err == nil {
 			return nil
 		}
-		return fmt.Errorf("SyncJoinedTo(%s,%s): %s", userID, roomID, err)
+
+		err = loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", checkJoined,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncJoinedTo(%s): %s", roomID, err)
 	}
 }
 
@@ -754,6 +795,21 @@ func SyncLeftFrom(userID, roomID string) SyncCheckOpt {
 func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		return loopArray(topLevelSyncJSON, "account_data.events", check)
+	}
+}
+
+// Calls the `check` function for each account data event for the given room,
+// and returns with success if the `check` function returns true for at least
+// one event.
+func SyncRoomAccountDataHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".account_data.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncRoomAccountDataHas(%s): %s", roomID, err)
 	}
 }
 
