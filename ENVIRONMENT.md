@@ -21,6 +21,11 @@ If 1, prints out more verbose logging such as HTTP request/response bodies.
 - Type: `bool`
 - Default: 0
 
+#### `COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT`
+The hostname of Complement from the perspective of a Homeserver running inside a container. This can be useful for container runtimes using another hostname to access the host from a container, like Podman that uses `host.containers.internal` instead.  
+- Type: `string`
+- Default: host.docker.internal
+
 #### `COMPLEMENT_HOST_MOUNTS`
 A list of semicolon separated host mounts to mount on every container. The structure of the mount is `host-path:container-path:[ro]` for example `/path/on/host:/path/on/container` - you can optionally specify `:ro` to mount the path as readonly. A complete example with multiple mounts would look like `/host/a:/container/a:ro;/host/b:/container/b;/host/c:/container/c`  
 - Type: `[]HostMount`
