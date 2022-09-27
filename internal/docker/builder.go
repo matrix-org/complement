@@ -33,6 +33,8 @@ import (
 var (
 	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
 	HostnameRunningDocker = "localhost"
+	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
+	HostnameRunningComplement = "host.docker.internal"
 )
 
 const complementLabel = "complement_context"
@@ -494,7 +496,7 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	if len(csapiPortInfo) == 0 {
 		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", csapiPort, p)
 	}
-	baseURL = fmt.Sprintf("http://"+HostnameRunningDocker+":%s", csapiPortInfo[0].HostPort)
+	baseURL = fmt.Sprintf("http://"+csapiPortInfo[0].HostIP+":%s", csapiPortInfo[0].HostPort)
 
 	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
 	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
@@ -504,7 +506,7 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	if len(ssapiPortInfo) == 0 {
 		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", ssapiPort, p)
 	}
-	fedBaseURL = fmt.Sprintf("https://"+HostnameRunningDocker+":%s", ssapiPortInfo[0].HostPort)
+	fedBaseURL = fmt.Sprintf("https://"+csapiPortInfo[0].HostIP+":%s", ssapiPortInfo[0].HostPort)
 	return
 }
 

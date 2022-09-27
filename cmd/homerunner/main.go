@@ -22,6 +22,7 @@ type Config struct {
 	SpawnHSTimeout         time.Duration
 	KeepBlueprints         []string
 	Snapshot               string
+	HSPortBindingIP        string
 }
 
 func (c *Config) DeriveComplementConfig(baseImageURI string) *config.Complement {
@@ -29,6 +30,7 @@ func (c *Config) DeriveComplementConfig(baseImageURI string) *config.Complement 
 	cfg.BestEffort = true
 	cfg.KeepBlueprints = c.KeepBlueprints
 	cfg.SpawnHSTimeout = c.SpawnHSTimeout
+	cfg.HSPortBindingIP = c.HSPortBindingIP
 	return cfg
 }
 
@@ -39,6 +41,7 @@ func NewConfig() *Config {
 		SpawnHSTimeout:         5 * time.Second,
 		KeepBlueprints:         strings.Split(os.Getenv("HOMERUNNER_KEEP_BLUEPRINTS"), " "),
 		Snapshot:               os.Getenv("HOMERUNNER_SNAPSHOT_BLUEPRINT"),
+		HSPortBindingIP:        os.GetEnv("HOMERUNNER_HS_PORTBINDING_IP", "127.0.0.1"),
 	}
 	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_LIFETIME_MINS")); val != 0 {
 		cfg.HomeserverLifetimeMins = val

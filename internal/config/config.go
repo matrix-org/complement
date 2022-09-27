@@ -85,6 +85,8 @@ type Complement struct {
 	// This can be useful for container runtimes using another hostname to access the host from a container,
 	// like Podman that uses `host.containers.internal` instead.
 	HostnameRunningComplement string
+
+	HSPortBindingIP string
 }
 
 var hsRegex = regexp.MustCompile(`COMPLEMENT_BASE_IMAGE_(.+)=(.+)$`)
@@ -143,6 +145,8 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 		cfg.HostnameRunningComplement = "host.docker.internal"
 	}
 
+	// HSPortBindingIP is fixed here, but used by homerunner to override.
+	cfg.HSPortBindingIP = "127.0.0.1"
 	return cfg
 }
 

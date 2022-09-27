@@ -9,6 +9,7 @@ HOMERUNNER_PORT=54321                                             # port to list
 HOMERUNNER_SPAWN_HS_TIMEOUT_SECS=5                                # how long to wait for the base image to spin up
 HOMERUNNER_KEEP_BLUEPRINTS='clean_hs federation_one_to_one_room'  # space delimited blueprint names to keep images for
 HOMERUNNER_SNAPSHOT_BLUEPRINT=/some/file.json                     # single shot execute this blueprint then commit the image, does not run the server
+HOMERUNNER_HS_PORTBINDING_IP=127.0.0.1                            # IP to bind homeserver ports on, if not local-only
 ```
 
 To build and run:
