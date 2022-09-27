@@ -142,3 +142,12 @@ Access tokens are returned when deploying the blueprint but sometimes you want t
 ### Health
 
 Homerunner will respond to `GET /health` with a 200 response. You can use this to check if homerunner is ready when running your tests.
+
+
+### Running using dind (docker-in-docker)
+
+The provided Docker container contains just homerunner, and a separate docker daemon will be required
+to host the homeservers that are started.
+
+This can be done by mounting the unix socket into the container, or running a `docker:dind` sidecar and exporting `DOCKER_HOST` correctly (eg `tcp://localhost:2375/`).
+
