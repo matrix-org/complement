@@ -212,6 +212,7 @@ func TestSearch(t *testing.T) {
 					"msgtype": "m.text",
 				},
 			})
+			t.Logf("Sent message before upgrade with event ID %s", eventBeforeUpgrade)
 
 			upgradeBody := client.WithJSONBody(t, map[string]string{
 				"new_version": "9",
@@ -219,6 +220,7 @@ func TestSearch(t *testing.T) {
 			upgradeResp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"}, upgradeBody)
 			body := must.ParseJSON(t, upgradeResp.Body)
 			newRoomID := must.GetJSONFieldStr(t, body, "replacement_room")
+			t.Logf("Replaced room %s with %s", roomID, newRoomID)
 
 			eventAfterUpgrade := alice.SendEventSynced(t, newRoomID, b.Event{
 				Type: "m.room.message",
@@ -227,6 +229,7 @@ func TestSearch(t *testing.T) {
 					"msgtype": "m.text",
 				},
 			})
+			t.Logf("Sent message after upgrade with event ID %s", eventAfterUpgrade)
 
 			searchRequest := client.WithJSONBody(t, map[string]interface{}{
 				"search_categories": map[string]interface{}{
@@ -242,20 +245,32 @@ func TestSearch(t *testing.T) {
 
 			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
 			sce := "search_categories.room_events"
-			result0 := sce + ".results.0.result"
-			result1 := sce + ".results.1.result"
+
+			expectedEvents := map[string]string{
+				eventBeforeUpgrade: "Message before upgrade",
+				eventAfterUpgrade:  "Message after upgrade",
+			}
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
 				JSON: []match.JSON{
-					match.JSONKeyPresent(sce + ".count"),
-					match.JSONKeyPresent(sce + ".results"),
 					match.JSONKeyEqual(sce+".count", float64(2)),
-					match.JSONKeyPresent(result0 + ".content"),
-					match.JSONKeyPresent(result0 + ".type"),
-					match.JSONKeyEqual(result0+".event_id", eventBeforeUpgrade),
-					match.JSONKeyEqual(result1+".event_id", eventAfterUpgrade),
-					match.JSONKeyEqual(result0+".content.body", "Message before upgrade"),
-					match.JSONKeyEqual(result1+".content.body", "Message after upgrade"),
+					match.JSONKeyArrayOfSize(sce+".results", 2),
+
+					// the results can be in either order: check that both are there and that the content is as expected
+					match.JSONCheckOff(sce+".results", []interface{}{eventBeforeUpgrade, eventAfterUpgrade}, func(res gjson.Result) interface{} {
+						return res.Get("result.event_id").Str
+					}, func(eventID interface{}, result gjson.Result) error {
+						matchers := []match.JSON{
+							match.JSONKeyEqual("result.type", "m.room.message"),
+							match.JSONKeyEqual("result.content.body", expectedEvents[eventID.(string)]),
+						}
+						for _, jm := range matchers {
+							if err := jm([]byte(result.Raw)); err != nil {
+								return err
+							}
+						}
+						return nil
+					}),
 				},
 			})
 		})
