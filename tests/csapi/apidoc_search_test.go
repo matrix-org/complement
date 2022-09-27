@@ -242,20 +242,32 @@ func TestSearch(t *testing.T) {
 
 			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
 			sce := "search_categories.room_events"
-			result0 := sce + ".results.0.result"
-			result1 := sce + ".results.1.result"
+
+			expectedEvents := map[string]string{
+				eventBeforeUpgrade: "Message before upgrade",
+				eventAfterUpgrade: "Message after upgrade",
+			}
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
 				JSON: []match.JSON{
-					match.JSONKeyPresent(sce + ".count"),
-					match.JSONKeyPresent(sce + ".results"),
 					match.JSONKeyEqual(sce+".count", float64(2)),
-					match.JSONKeyPresent(result0 + ".content"),
-					match.JSONKeyPresent(result0 + ".type"),
-					match.JSONKeyEqual(result0+".event_id", eventBeforeUpgrade),
-					match.JSONKeyEqual(result1+".event_id", eventAfterUpgrade),
-					match.JSONKeyEqual(result0+".content.body", "Message before upgrade"),
-					match.JSONKeyEqual(result1+".content.body", "Message after upgrade"),
+					match.JSONKeyArrayOfSize(sce+".results", 2),
+
+					// the results can be in either order: check that both are there and that the content is as expected
+					match.JSONCheckOff(sce+".results", []interface{} {eventBeforeUpgrade, eventAfterUpgrade}, func(res gjson.Result) interface{} {
+						return res.Get("event_id")
+					}, func(eventID interface{}, result gjson.Result) error {
+						matchers := []match.JSON{
+							match.JSONKeyEqual("type", "m.room.message"),
+							match.JSONKeyEqual("content.body", expectedEvents[eventID.(string)]),
+						}
+						for _, jm := range matchers {
+							if err := jm(body); err != nil {
+								return fmt.Errorf("search result: %w", err)
+							}
+						}
+						return nil
+					}),
 				},
 			})
 		})
