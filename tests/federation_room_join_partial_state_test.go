@@ -1722,6 +1722,8 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// setupIncorrectlyAcceptedKick joins the homeserver under test to a room, then joins
 		// @elsie:server2 and sends an invalid event to kick @elsie:server2 from the room.
+		// As a side effect, @derek is promoted to admin and leaves the room before the homeserver
+		// under test joins.
 		setupIncorrectlyAcceptedKick := func(
 			t *testing.T, deployment *docker.Deployment, alice *client.CSAPI,
 			server1 *federation.Server, server2 *federation.Server,
