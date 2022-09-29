@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -1043,8 +1044,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// could pick for other homeserver implementations so I just did 10+1 to
 				// make sure it also worked in that case.
 				//numBatches := 11
-				numBatches := 2
-				numHistoricalMessagesPerBatch := 100
+				numBatches := 1
+				numHistoricalMessagesPerBatch := 2
 				// wait X number of ms to ensure that the timestamp changes enough for
 				// each of the historical messages we try to import later
 				time.Sleep(time.Duration(numBatches*numHistoricalMessagesPerBatch) * timeBetweenMessages)
@@ -1311,7 +1312,7 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 	}
 
 	for {
-		if time.Since(start) > c.SyncUntilTimeout {
+		if time.Since(start) > 200*c.SyncUntilTimeout {
 			t.Fatalf(
 				"paginateUntilMessageCheckOff timed out. %s",
 				generateErrorMesssageInfo(),
@@ -1325,7 +1326,21 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		}))
 		callCounter++
 		messsageResBody := client.ParseJSON(t, messagesRes)
-		messageResEnd = client.GetJSONFieldStr(t, messsageResBody, "end")
+		eventsJson := gjson.GetBytes(messsageResBody, "chunk").Array()
+
+		var firstEvent gjson.Result
+		var lastEvent gjson.Result
+		if len(eventsJson) > 0 {
+			firstEvent = eventsJson[0]
+			lastEvent = eventsJson[len(eventsJson)-1]
+		}
+		logrus.WithFields(logrus.Fields{
+			"events":     len(eventsJson),
+			"firstEvent": fmt.Sprintf("%s (%s)", firstEvent.Get("event_id"), firstEvent.Get("type")),
+			"lastEvent":  fmt.Sprintf("%s (%s)", lastEvent.Get("event_id"), lastEvent.Get("type")),
+			"start":      gjson.GetBytes(messsageResBody, "start").Str,
+			"end":        gjson.GetBytes(messsageResBody, "end").Str,
+		}).Error("Number of events from `/messages`")
 		// Since the original body can only be read once, create a new one from the body bytes we just read
 		messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
@@ -1365,6 +1380,12 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		if len(workingExpectedEventIDMap) == 0 {
 			return
 		}
+
+		// Since this will throw an error if they key does not exist,
+		// do this at the end of the loop. It's a valid scenario to be at the end
+		// of the room and have no more to paginate so we want the `return` when
+		// we've found all of the expected events to have a chance to run first.
+		messageResEnd = client.GetJSONFieldStr(t, messsageResBody, "end")
 	}
 }
 
