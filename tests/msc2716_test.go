@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -1043,9 +1042,8 @@ func TestImportHistoricalMessages(t *testing.T) {
 				// backfill extremities to 5. 10 also seemed like a round number someone
 				// could pick for other homeserver implementations so I just did 10+1 to
 				// make sure it also worked in that case.
-				//numBatches := 11
-				numBatches := 1
-				numHistoricalMessagesPerBatch := 2
+				numBatches := 11
+				numHistoricalMessagesPerBatch := 100
 				// wait X number of ms to ensure that the timestamp changes enough for
 				// each of the historical messages we try to import later
 				time.Sleep(time.Duration(numBatches*numHistoricalMessagesPerBatch) * timeBetweenMessages)
@@ -1077,7 +1075,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 					// Make sure we see all of the historical messages
 					expectedEventIDs = append(expectedEventIDs, client.GetJSONFieldStringArray(t, batchSendResBody, "event_ids")...)
 					// We should not find any historical state between the batches of messages
-					denyListEventIDs = append(denyListEventIDs, client.GetJSONFieldStringArray(t, batchSendResBody, "state_event_ids")...)
 					nextBatchID = client.GetJSONFieldStr(t, batchSendResBody, "next_batch_id")
 
 					// Grab the base insertion event ID to reference later in the marker event
@@ -1311,8 +1308,12 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		)
 	}
 
+	// We grab 100 events per `/messages` request so it should only take us
+	// (total / 100) requests to see everything. Add +1 to add some slack
+	// for things like state events.
+	expectedNumberOfMessagesRequests := (len(expectedEventIDs) / 100) + 1
 	for {
-		if time.Since(start) > 200*c.SyncUntilTimeout {
+		if time.Since(start) > time.Duration(expectedNumberOfMessagesRequests)*c.SyncUntilTimeout {
 			t.Fatalf(
 				"paginateUntilMessageCheckOff timed out. %s",
 				generateErrorMesssageInfo(),
@@ -1326,21 +1327,6 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		}))
 		callCounter++
 		messsageResBody := client.ParseJSON(t, messagesRes)
-		eventsJson := gjson.GetBytes(messsageResBody, "chunk").Array()
-
-		var firstEvent gjson.Result
-		var lastEvent gjson.Result
-		if len(eventsJson) > 0 {
-			firstEvent = eventsJson[0]
-			lastEvent = eventsJson[len(eventsJson)-1]
-		}
-		logrus.WithFields(logrus.Fields{
-			"events":     len(eventsJson),
-			"firstEvent": fmt.Sprintf("%s (%s)", firstEvent.Get("event_id"), firstEvent.Get("type")),
-			"lastEvent":  fmt.Sprintf("%s (%s)", lastEvent.Get("event_id"), lastEvent.Get("type")),
-			"start":      gjson.GetBytes(messsageResBody, "start").Str,
-			"end":        gjson.GetBytes(messsageResBody, "end").Str,
-		}).Error("Number of events from `/messages`")
 		// Since the original body can only be read once, create a new one from the body bytes we just read
 		messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
