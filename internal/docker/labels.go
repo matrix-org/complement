@@ -33,7 +33,8 @@ func asIDToRegistrationFromLabels(labels map[string]string) map[string]string {
 	asMap := make(map[string]string)
 	for k, v := range labels {
 		if strings.HasPrefix(k, "application_service_") {
-			asMap[strings.TrimPrefix(k, "application_service_")] = v
+			// cf comment of generateASRegistrationYaml for ReplaceAll explanation
+			asMap[strings.TrimPrefix(k, "application_service_")] = strings.ReplaceAll(v, "\\n", "\n")
 		}
 	}
 	return asMap
