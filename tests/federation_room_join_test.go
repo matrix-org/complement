@@ -61,7 +61,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 			w.WriteHeader(502)
 			return
 		}
-		federation.SendJoinRequestsHandler(srv, w, req, false)
+		federation.SendJoinRequestsHandler(srv, w, req, false, false)
 	})).Methods("PUT")
 
 	ver := alice.GetDefaultRoomVersion(t)
