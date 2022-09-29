@@ -69,7 +69,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 		mux:   mux.NewRouter(),
 		// The server name will be updated when the caller calls Listen() to include the port number
 		// of the HTTP server e.g "host.docker.internal:56353"
-		serverName:                  docker.HostnameRunningComplement,
+		serverName:                  deployment.Config.HostnameRunningComplement,
 		rooms:                       make(map[string]*ServerRoom),
 		aliases:                     make(map[string]string),
 		UnexpectedRequestsAreErrors: true,
@@ -476,10 +476,10 @@ func federationServer(cfg *config.Complement, h http.Handler) (*http.Server, str
 			Locality:      []string{"London"},
 			StreetAddress: []string{"123 Street"},
 			PostalCode:    []string{"12345"},
-			CommonName:    docker.HostnameRunningComplement,
+			CommonName:    cfg.HostnameRunningComplement,
 		},
 	}
-	host := docker.HostnameRunningComplement
+	host := cfg.HostnameRunningComplement
 	if ip := net.ParseIP(host); ip != nil {
 		template.IPAddresses = append(template.IPAddresses, ip)
 	} else {
