@@ -57,7 +57,7 @@ type Server struct {
 // NewServer creates a new federation server with configured options.
 func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server)) *Server {
 	// generate signing key
-	_, priv, err := ed25519.GenerateKey(nil)
+	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("federation.NewServer failed to generate ed25519 key: %s", err)
 	}
@@ -65,7 +65,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	srv := &Server{
 		t:     t,
 		Priv:  priv,
-		KeyID: "ed25519:complement",
+		KeyID: gomatrixserverlib.KeyID(fmt.Sprintf("ed25519:complement_%x", pub)),
 		mux:   mux.NewRouter(),
 		// The server name will be updated when the caller calls Listen() to include the port number
 		// of the HTTP server e.g "host.docker.internal:56353"
