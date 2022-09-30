@@ -2409,6 +2409,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// test that device lists stop being tracked when leaving a partial state room before the
 		// partial state join completes.
 		t.Run("Device list no longer tracked when leaving partial state room", func(t *testing.T) {
+			// Skipped until https://github.com/matrix-org/synapse/issues/12802 has been addressed.
 			t.Skip("Cannot yet leave a room during resync")
 
 			alice, server, userDevicesChannel, room, _, cleanup := setupDeviceListCachingTest(t, deployment, "t34alice")
@@ -2444,6 +2445,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// test that device lists stop being tracked when leaving a partial state room due to
 		// failure to complete the partial state join.
 		t.Run("Device list no longer tracked when failing to complete partial state join", func(t *testing.T) {
+			// Skipped until https://github.com/matrix-org/synapse/issues/13000 has been addressed.
 			t.Skip("Cannot yet abort a partial state join")
 
 			alice, server, userDevicesChannel, room, _, cleanup := setupDeviceListCachingTest(t, deployment, "t35alice")
