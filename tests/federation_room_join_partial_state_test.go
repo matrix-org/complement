@@ -1531,6 +1531,7 @@ func TestPartialStateJoin(t *testing.T) {
 									t.Fatalf("Received unexpected EDU: %s", e)
 								}
 
+								t.Logf("Complement server received m.device_list_update: %v", string(e.Content))
 								var deviceListUpdate gomatrixserverlib.DeviceListUpdateEvent
 								json.Unmarshal(e.Content, &deviceListUpdate)
 								deviceListUpdateChannel <- deviceListUpdate
