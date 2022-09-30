@@ -121,7 +121,14 @@ func TestPartialStateJoin(t *testing.T) {
 	) {
 		t.Helper()
 
-		user.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(user.UserID, room.RoomID))
+		// Use a `/members` request to wait for the room to be un-partial stated.
+		// We avoid using `/sync`, as it only waits (or used to wait) for full state at
+		// particular events, rather than the whole room.
+		user.MustDoFunc(
+			t,
+			"GET",
+			[]string{"_matrix", "client", "v3", "rooms", room.RoomID, "members"},
+		)
 		t.Logf("%s's partial state join to %s completed.", user.UserID, room.RoomID)
 	}
 
