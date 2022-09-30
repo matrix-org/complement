@@ -2434,7 +2434,7 @@ func TestPartialStateJoin(t *testing.T) {
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 
-			// Leave the room
+			// alice aborts her join before the resync completes
 			alice.LeaveRoom(t, room.RoomID)
 
 			// @elsie's device list ought to no longer be cached.
