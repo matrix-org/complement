@@ -2349,6 +2349,7 @@ func TestPartialStateJoin(t *testing.T) {
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
 			// @elsie's device list ought to be cached after the first request.
+			// Try to bring their device list into the homeserver's cache, then test whether it really was cached.
 			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
@@ -2391,6 +2392,7 @@ func TestPartialStateJoin(t *testing.T) {
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
 			// @elsie's device list ought to be cached after the first request.
+			// Try to bring their device list into the homeserver's cache, then test whether it really was cached.
 			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
@@ -2430,6 +2432,7 @@ func TestPartialStateJoin(t *testing.T) {
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
 			// @elsie's device list ought to be cached after the first request.
+			// Try to bring their device list into the homeserver's cache, then test whether it really was cached.
 			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
@@ -2466,6 +2469,7 @@ func TestPartialStateJoin(t *testing.T) {
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
 			// @elsie's device list ought to be cached after the first request.
+			// Try to bring their device list into the homeserver's cache, then test whether it really was cached.
 			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
