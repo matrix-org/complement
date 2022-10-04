@@ -61,7 +61,7 @@ func TestPushSync(t *testing.T) {
 		// get the first result where the type is m.push_rules
 		pushrules := syncResp.Get(`account_data.events.#(type=="m.push_rules").content.global`)
 		if !pushrules.Exists() {
-			t.Fatalf("Expected account_data to contain push_rules: %s", syncResp.Raw)
+			t.Fatalf("no pushrules found in sync response: %s", syncResp.Raw)
 		}
 	})
 
@@ -102,7 +102,7 @@ func TestPushSync(t *testing.T) {
 	t.Run("Setting actions for a push rule wakes up an incremental /sync", func(t *testing.T) {
 		checkWokenUp(t, alice, client.SyncReq{Since: nextBatch, TimeoutMillis: "10000"}, func() {
 			body := client.WithJSONBody(t, map[string]interface{}{
-				"actions": []string{"notify"},
+				"actions": []string{"dont_notify"},
 			})
 
 			alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", "!foo:example.com", "actions"}, body)
@@ -116,6 +116,7 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 	go func() {
 		var syncResp gjson.Result
 		syncResp, nextBatch = csapi.MustSync(t, syncReq)
+		// get the first result where the type is m.push_rules
 		pushrules := syncResp.Get(`account_data.events.#(type=="m.push_rules").content.global`)
 		if !pushrules.Exists() {
 			errChan <- fmt.Errorf("no pushrules found in sync response: %s", syncResp.Raw)
