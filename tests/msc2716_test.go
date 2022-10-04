@@ -1254,7 +1254,6 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		}))
 		callCounter++
 		messsageResBody := client.ParseJSON(t, messagesRes)
-		messageResEnd = client.GetJSONFieldStr(t, messsageResBody, "end")
 		// Since the original body can only be read once, create a new one from the body bytes we just read
 		messagesRes.Body = ioutil.NopCloser(bytes.NewBuffer(messsageResBody))
 
@@ -1294,6 +1293,12 @@ func paginateUntilMessageCheckOff(t *testing.T, c *client.CSAPI, roomID string, 
 		if len(workingExpectedEventIDMap) == 0 {
 			return
 		}
+
+		// Since this will throw an error if they key does not exist, do this at the end of
+		// the loop. It's a valid scenario to be at the end of the room and have no more to
+		// paginate so we want to make sure the `return` above runs when we've found all of
+		// the expected events.
+		messageResEnd = client.GetJSONFieldStr(t, messsageResBody, "end")
 	}
 }
 
