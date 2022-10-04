@@ -112,8 +112,10 @@ func TestPushSync(t *testing.T) {
 func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn func()) (nextBatch string) {
 	t.Helper()
 	errChan := make(chan error, 1)
+	syncStarted := make(chan struct{})
 	go func() {
 		var syncResp gjson.Result
+		syncStarted <- struct{}{}
 		syncResp, nextBatch = csapi.MustSync(t, syncReq)
 		// get the first result where the type is m.push_rules
 		pushrules := syncResp.Get(`account_data.events.#(type=="m.push_rules").content.global`)
@@ -123,7 +125,8 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 		}
 		errChan <- nil
 	}()
-
+	// Wait for the sync to actually start, to avoid responding immediately
+	<-syncStarted
 	fn()
 
 	if err := <-errChan; err != nil {
