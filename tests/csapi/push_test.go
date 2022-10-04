@@ -50,7 +50,6 @@ func TestPushSync(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	deployment.Config.AlwaysPrintServerLogs = true
 
 	var syncResp gjson.Result
 	var nextBatch string
