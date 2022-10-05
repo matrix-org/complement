@@ -161,7 +161,12 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 	if !s.listening {
 		s.t.Fatalf("MustMakeRoom() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room ID. Ensure you Listen() first!")
 	}
-	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.serverName)
+	// Generate a unique room ID, prefixed with an incrementing counter.
+	// This ensures that room IDs are not re-used across tests, even if a Complement server happens
+	// to re-use the same port as a previous one, which
+	//  * reduces noise when searching through logs and
+	//  * prevents homeservers from getting confused when multiple test cases re-use the same homeserver deployment.
+	roomID := fmt.Sprintf("!%d-%s:%s", len(s.rooms), util.RandomString(18), s.serverName)
 	t.Logf("Creating room %s with version %s", roomID, roomVer)
 	room := newRoom(roomVer, roomID)
 
