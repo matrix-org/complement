@@ -919,8 +919,12 @@ func TestPartialStateJoin(t *testing.T) {
 			i += len(transactionEvents)
 		}
 
-		// wait for the last outlier to arrive
-		awaitEventArrival(t, 10*time.Second, alice, serverRoom.RoomID, outliers[len(outliers)-1].EventID())
+		// wait for the outliers to arrive
+		for i := 0; i < len(outliers); i += 10 {
+			awaitEventArrival(t, 5*time.Second, alice, serverRoom.RoomID, outliers[i].EventID())
+		}
+		// ...and wait for the last outlier to arrive
+		awaitEventArrival(t, 5*time.Second, alice, serverRoom.RoomID, outliers[len(outliers)-1].EventID())
 
 		// release the federation /state response
 		psjResult.FinishStateRequest()
