@@ -203,6 +203,16 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				contextResResBody := client.ParseJSON(t, contextRes)
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
 
+				// Hit `/messages` until `eventA` has been backfilled and replicated across
+				// workers.
+				fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
+					if ev.Get("event_id").Str == eventA.EventID {
+						return true
+					}
+
+					return false
+				})
+
 				// Paginate backwards from eventB
 				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
