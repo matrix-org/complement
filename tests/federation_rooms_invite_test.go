@@ -34,9 +34,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 		bob.JoinRoom(t, roomID, []string{})
 		queryParams := url.Values{}
 		queryParams.Set("format", "event")
-		bob.Debug = true
 		bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncJoinedTo(bob.UserID, roomID))
-		bob.Debug = false
 		// now get the direct flag from the server
 		res := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID}, client.WithQueries(queryParams))
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -47,6 +45,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 		})
 		// leave again,
 		bob.LeaveRoom(t, roomID)
+		bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncLeftFrom(bob.UserID, roomID))
 		aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(bob.UserID, roomID))
 	})
 
