@@ -132,7 +132,7 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 		fn()
 	case <-time.After(time.Second * 5):
 		// even though this should mostly be impossible, make sure we have a timeout
-		t.Fatalf("go routine didn't start")
+		t.Fatalf("goroutine didn't start")
 	}
 
 	// Try to wait for the sync to return or timeout after 15 seconds,
