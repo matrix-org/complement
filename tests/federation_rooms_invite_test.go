@@ -25,8 +25,8 @@ func TestFederationRoomsInvite(t *testing.T) {
 			t.Parallel()
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
+				"invite": []string{bob.UserID},
 			})
-			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			bob.LeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
@@ -51,14 +51,14 @@ func TestFederationRoomsInvite(t *testing.T) {
 			t.Parallel()
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
+				"invite": []string{bob.UserID},
 			})
 			aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-			alice.InviteRoom(t, roomID, bob.UserID)
-			charlieSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			alice.LeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomID))
 			bob.LeaveRoom(t, roomID)
-			bob.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncLeftFrom(bob.UserID, roomID))
+			bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
 
 		// sytest: Remote invited user can see room metadata
@@ -67,6 +67,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"name":   "Invites room",
+				"invite": []string{bob.UserID},
 			})
 
 			wantFields := map[string]string{
@@ -78,7 +79,6 @@ func TestFederationRoomsInvite(t *testing.T) {
 				"m.room.name":       "Invites room",
 			}
 
-			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			res, _ := bob.MustSync(t, client.SyncReq{})
 			verifyState(t, res, wantFields, wantValues, roomID, alice)
@@ -88,7 +88,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"name":   "Invites room",
-				// invite Bob and make the room a DM, so the first test can verify m.direct flag is in the prev_content
+				// invite Bob and make the room a DM, so we can verify m.direct flag is in the prev_content after joining
 				"invite":    []string{bob.UserID},
 				"is_direct": true,
 			})
@@ -96,7 +96,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			queryParams := url.Values{}
 			queryParams.Set("format", "event")
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
-			// now get the direct flag from the server
+			// now get the direct flag from the membership event
 			res := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID}, client.WithQueries(queryParams))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
