@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -21,10 +22,33 @@ func TestFederationRoomsInvite(t *testing.T) {
 	roomID := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "private_chat",
 		"name":   "Invites room",
+		// invite Bob and make the room a DM, so the first test can verify m.direct flag is in the prev_content
+		"invite":    []string{bob.UserID},
+		"is_direct": true,
 	})
 
 	aliceSince := ""
 	bobSince := ""
+
+	t.Run("Invited user has 'is_direct' flag in prev_content after joining", func(t *testing.T) {
+		bob.JoinRoom(t, roomID, []string{})
+		queryParams := url.Values{}
+		queryParams.Set("format", "event")
+		bob.Debug = true
+		bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncJoinedTo(bob.UserID, roomID))
+		bob.Debug = false
+		// now get the direct flag from the server
+		res := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID}, client.WithQueries(queryParams))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("unsigned.prev_content.membership", "invite"),
+				match.JSONKeyEqual("unsigned.prev_content.is_direct", true),
+			},
+		})
+		// leave again,
+		bob.LeaveRoom(t, roomID)
+		aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(bob.UserID, roomID))
+	})
 
 	// sytest: Invited user can reject invite over federation
 	t.Run("Invited user can reject invite over federation", func(t *testing.T) {
