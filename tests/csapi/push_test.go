@@ -3,6 +3,7 @@ package csapi_tests
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -125,12 +126,27 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 		}
 		errChan <- nil
 	}()
-	// Wait for the sync to actually start, to avoid responding immediately
-	<-syncStarted
-	fn()
-
-	if err := <-errChan; err != nil {
-		t.Fatal(err)
+	// Try to wait for the sync to actually start, so that we test wakeups
+	select {
+	case <-syncStarted:
+		fn()
+	case <-time.After(time.Second * 5):
+		// even though this should mostly be impossible, make sure we have a timeout
+		t.Fatalf("go routine didn't start")
 	}
+
+	// Try to wait for the sync to return or timeout after 15 seconds,
+	// as the above tests are using a timeout of 10 seconds
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second * 15):
+		t.Errorf("sync failed to return")
+	}
+
+	close(errChan)
+	close(syncStarted)
 	return nextBatch
 }
