@@ -214,6 +214,14 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
+		// Alice should still be able to see incoming PDUs in the room during
+		// the resync; the earlier EDU shouldn't interfere with this.
+		// (See https://github.com/matrix-org/synapse/issues/13684)
+		event := psjResult.CreateMessageEvent(t, "charlie", nil)
+		serverRoom.AddEvent(event)
+		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+		awaitEventViaSync(t, alice, serverRoom.RoomID, event.EventID(), "")
+
 		psjResult.FinishStateRequest()
 		alice.MustSyncUntil(t,
 			client.SyncReq{},
