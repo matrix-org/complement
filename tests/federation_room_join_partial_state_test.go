@@ -201,8 +201,8 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy()
 
+		// Derek starts typing in the room.
 		derekUserId := psjResult.Server.UserID("derek")
-
 		content, _ := json.Marshal(map[string]interface{}{
 			"room_id": serverRoom.RoomID,
 			"user_id": derekUserId,
@@ -214,6 +214,21 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
+		// Alice should be able to see that Derek is typing (even though HS1 is resyncing).
+		alice.MustSyncUntil(t,
+			client.SyncReq{},
+			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
+				if result.Get("type").Str != "m.typing" {
+					return false
+				}
+				user_ids := result.Get("content.user_ids").Array()
+				if len(user_ids) != 1 {
+					return false
+				}
+				return user_ids[0].Str == derekUserID
+			}),
+		)
+
 		// Alice should still be able to see incoming PDUs in the room during
 		// the resync; the earlier EDU shouldn't interfere with this.
 		// (See https://github.com/matrix-org/synapse/issues/13684)
@@ -222,21 +237,30 @@ func TestPartialStateJoin(t *testing.T) {
 		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
 		awaitEventViaSync(t, alice, serverRoom.RoomID, event.EventID(), "")
 
+		// The resync completes.
 		psjResult.FinishStateRequest()
+
+		// Derek stops typing.
+		content, _ = json.Marshal(map[string]interface{}{
+			"room_id": serverRoom.RoomID,
+			"user_id": derekUserId,
+			"typing":  false,
+		})
+		edu := gomatrixserverlib.EDU{
+			Type:    "m.typing",
+			Content: content,
+		}
+		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+
+		// Alice should be able to see that no-one is typing.
 		alice.MustSyncUntil(t,
 			client.SyncReq{},
 			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
-				if result.Get("type").Str != "m.typing" {
-					return false
-				}
-				for _, item := range result.Get("content").Get("user_ids").Array() {
-					if item.Str == derekUserId {
-						return true
-					}
-				}
-				return false
+				return result.Get("type").Str == "m.typing" &&
+					result.Get("content.user_ids.#").Int() == 0
 			}),
 		)
+
 	})
 
 	// we should be able to receive presence EDU over federation during the resync
@@ -269,7 +293,7 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
-		// for now we just check that the fed transaction is accepted,
+		// TODO: for now we just check that the fed transaction is accepted,
 		// presence is not always going down the sync for some reason
 
 		// psjResult.FinishStateRequest()
