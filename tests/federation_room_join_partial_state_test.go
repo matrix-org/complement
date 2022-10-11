@@ -278,7 +278,7 @@ func TestPartialStateJoin(t *testing.T) {
 				if len(user_ids) != 1 {
 					return false
 				}
-				return user_ids[0].Str == derekUserID
+				return user_ids[0].Str == derekUserId
 			}),
 		)
 
@@ -299,7 +299,7 @@ func TestPartialStateJoin(t *testing.T) {
 			"user_id": derekUserId,
 			"typing":  false,
 		})
-		edu := gomatrixserverlib.EDU{
+		edu = gomatrixserverlib.EDU{
 			Type:    "m.typing",
 			Content: content,
 		}
