@@ -173,7 +173,7 @@ func TestUploadKey(t *testing.T) {
 	})
 }
 
-func generateKeys(t *testing.T, user *client.CSAPI, otkCount uint) (map[string]interface{}, map[string]interface{}) {
+func generateKeys(t *testing.T, user *client.CSAPI, otkCount uint) (deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) {
 	t.Helper()
 	account := olm.NewAccount()
 	ed25519Key, curveKey := account.IdentityKeys()
@@ -181,7 +181,7 @@ func generateKeys(t *testing.T, user *client.CSAPI, otkCount uint) (map[string]i
 	ed25519KeyID := fmt.Sprintf("ed25519:%s", user.DeviceID)
 	curveKeyID := fmt.Sprintf("curve25519:%s", user.DeviceID)
 
-	deviceKeys := map[string]interface{}{
+	deviceKeys = map[string]interface{}{
 		"user_id":    user.UserID,
 		"device_id":  user.DeviceID,
 		"algorithms": []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
@@ -200,8 +200,7 @@ func generateKeys(t *testing.T, user *client.CSAPI, otkCount uint) (map[string]i
 	}
 
 	account.GenOneTimeKeys(otkCount)
-
-	oneTimeKeys := map[string]interface{}{}
+	oneTimeKeys = map[string]interface{}{}
 
 	for kid, key := range account.OneTimeKeys() {
 		keyID := fmt.Sprintf("signed_curve25519:%s", kid)
