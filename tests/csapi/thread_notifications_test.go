@@ -8,6 +8,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/runtime"
 )
 
 func syncHasUnreadNotifs(roomID string, check func(gjson.Result, gjson.Result) bool) client.SyncCheckOpt {
@@ -30,6 +31,7 @@ func syncHasUnreadNotifs(roomID string, check func(gjson.Result, gjson.Result) b
 // threaded and unthreaded receipts and ensure the notification counts are updated
 // appropriately.
 func TestThreadedReceipts(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // not supported
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
