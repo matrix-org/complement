@@ -309,8 +309,8 @@ func TestPartialStateJoin(t *testing.T) {
 		alice.MustSyncUntil(t,
 			client.SyncReq{},
 			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
-				return result.Get("type").Str == "m.typing" &&
-					result.Get("content.user_ids.#").Int() == 0
+				return (result.Get("type").Str == "m.typing" &&
+					result.Get("content.user_ids.#").Int() == 0)
 			}),
 		)
 
