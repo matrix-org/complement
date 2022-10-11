@@ -2348,8 +2348,12 @@ func TestPartialStateJoin(t *testing.T) {
 			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
-			// @elsie's device list ought to be cached after the first request.
-			// Try to bring their device list into the homeserver's cache, then test whether it really was cached.
+			// hs1 should now be tracking @elsie's device list. Enforce this in two steps:
+			// 1) Have Alice request Elsie's keys via the CS API and check
+			// that hs1 makes a federation request to serve Alice's request.
+			// 2) Repeat Alice's request and check that hs1 does _not_ make a
+			// second federation request. This proves that hs1 has cached the
+			// response from the first step.
 			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
@@ -2359,6 +2363,8 @@ func TestPartialStateJoin(t *testing.T) {
 			sendDeviceListUpdate("elsie")
 			mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
+			// Again, hs1 should have cached @elsie's device list.
+			// hs1 should not require a second federation request if Alice rerequests @elsie's keys.
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 
 			// Finish the partial state join.
@@ -2391,8 +2397,12 @@ func TestPartialStateJoin(t *testing.T) {
 			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
-			// @elsie's device list ought to be cached after the first request.
-			// Try to bring their device list into the homeserver's cache, then test whether it really was cached.
+			// hs1 should now be tracking @elsie's device list. Enforce this in two steps:
+			// 1) Have Alice request Elsie's keys via the CS API and check
+			// that hs1 makes a federation request to serve Alice's request.
+			// 2) Repeat Alice's request and check that hs1 does _not_ make a
+			// second federation request. This proves that hs1 has cached the
+			// response from the first step.
 			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
@@ -2403,7 +2413,8 @@ func TestPartialStateJoin(t *testing.T) {
 			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{leaveEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, leaveEvent.EventID(), syncToken)
 
-			// @elsie's device list ought to no longer be cached.
+			// hs1 should no longer be tracking elsie's device list; subsequent
+			// key requests from alice require a federation request.
 			mustSyncUntilDeviceListsHas(t, alice, syncToken, "left", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 		})
@@ -2431,8 +2442,12 @@ func TestPartialStateJoin(t *testing.T) {
 			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
-			// @elsie's device list ought to be cached after the first request.
-			// Try to bring their device list into the homeserver's cache, then test whether it really was cached.
+			// hs1 should now be tracking @elsie's device list. Enforce this in two steps:
+			// 1) Have Alice request Elsie's keys via the CS API and check
+			// that hs1 makes a federation request to serve Alice's request.
+			// 2) Repeat Alice's request and check that hs1 does _not_ make a
+			// second federation request. This proves that hs1 has cached the
+			// response from the first step.
 			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
@@ -2440,7 +2455,8 @@ func TestPartialStateJoin(t *testing.T) {
 			// alice aborts her join before the resync completes
 			alice.LeaveRoom(t, room.RoomID)
 
-			// @elsie's device list ought to no longer be cached.
+			// hs1 should no longer be tracking elsie's device list; subsequent
+			// key requests from alice require a federation request.
 			mustSyncUntilDeviceListsHas(t, alice, syncToken, "left", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 		})
@@ -2468,8 +2484,12 @@ func TestPartialStateJoin(t *testing.T) {
 			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
-			// @elsie's device list ought to be cached after the first request.
-			// Try to bring their device list into the homeserver's cache, then test whether it really was cached.
+			// hs1 should now be tracking @elsie's device list. Enforce this in two steps:
+			// 1) Have Alice request Elsie's keys via the CS API and check
+			// that hs1 makes a federation request to serve Alice's request.
+			// 2) Repeat Alice's request and check that hs1 does _not_ make a
+			// second federation request. This proves that hs1 has cached the
+			// response from the first step.
 			syncToken = mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
@@ -2478,7 +2498,8 @@ func TestPartialStateJoin(t *testing.T) {
 			psjResult.FinishStateRequest()
 			awaitPartialStateJoinCompletion(t, room, alice)
 
-			// @elsie's device list ought to no longer be cached.
+			// hs1 should no longer be tracking elsie's device list; subsequent
+			// key requests from alice require a federation request.
 			mustSyncUntilDeviceListsHas(t, alice, syncToken, "left", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 		})
@@ -2547,7 +2568,7 @@ func testReceiveEventDuringPartialStateJoin(
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", psjResult.ServerRoom.RoomID, "state", "m.room.member", "@non-existent:remote"},
 	)
-	
+
 	// check the server's idea of the state at the event. We do this by making a `state_ids` request over federation
 	stateReq = gomatrixserverlib.NewFederationRequest("GET", "hs1",
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
