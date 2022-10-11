@@ -327,10 +327,11 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy()
 
+		// Send a to-device message from Derek to Alice.
 		derekUserId := psjResult.Server.UserID("derek")
-
+		messageId := "hiezohf6Hoo7kaev"
 		content, _ := json.Marshal(map[string]interface{}{
-			"message_id": "hiezohf6Hoo7kaev",
+			"message_id": messageId,
 			"sender":     derekUserId,
 			"type":       "m.test",
 			"messages": map[string]interface{}{
@@ -345,18 +346,21 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
-		psjResult.FinishStateRequest()
+		// Alice should see Derek's to-device message when she syncs.
 		alice.MustSyncUntil(t,
 			client.SyncReq{},
 			func(userID string, sync gjson.Result) error {
-				for _, e := range sync.Get("to_device").Get("events").Array() {
-					if e.Get("sender").Str == derekUserId && e.Get("type").Str == "m.test" {
+				for _, e := range sync.Get("to_device.events").Array() {
+					if e.Get("sender").Str == derekUserId &&
+						e.Get("type").Str == "m.test" &&
+						e.Get("message_id").Str == messageId {
 						return nil
 					}
 				}
 				return fmt.Errorf("No to_device update from %s", derekUserId)
 			},
 		)
+		psjResult.FinishStateRequest()
 	})
 
 	// we should be able to receive receipt EDU over federation during the resync
