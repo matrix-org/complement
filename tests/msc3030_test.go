@@ -204,7 +204,8 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
 
 				// Hit `/messages` until `eventA` has been backfilled and replicated across
-				// workers.
+				// workers (the worker persisting events isn't necessarily the same as the worker
+				// serving `/messages`)
 				fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
 					if ev.Get("event_id").Str == eventA.EventID {
 						return true
