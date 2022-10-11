@@ -294,9 +294,10 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		// TODO: for now we just check that the fed transaction is accepted,
-		// presence is not always going down the sync for some reason
-
-		// psjResult.FinishStateRequest()
+		// presence is not always going down the sync for some reason.
+		// Unclear if this is an existing Synapse bug or a new problem specific
+		// to partial joins.
+		//
 		// alice.MustSyncUntil(t,
 		// 	client.SyncReq{},
 		// 	func(userID string, sync gjson.Result) error {
@@ -309,6 +310,8 @@ func TestPartialStateJoin(t *testing.T) {
 		// 		return fmt.Errorf("No presence update from %s", derekUserId)
 		// 	},
 		// )
+
+		psjResult.FinishStateRequest()
 	})
 
 	// we should be able to receive to_device EDU over federation during the resync
