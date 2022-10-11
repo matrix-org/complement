@@ -378,6 +378,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		derekUserId := psjResult.Server.UserID("derek")
 
+		// Derek sends a read receipt into the room.
 		content, _ := json.Marshal(map[string]interface{}{
 			serverRoom.RoomID: map[string]interface{}{
 				"m.read": map[string]interface{}{
@@ -396,7 +397,7 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
-		psjResult.FinishStateRequest()
+		// Alice should be able to see Derek's read receipt during the resync
 		alice.MustSyncUntil(t,
 			client.SyncReq{},
 			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
@@ -410,6 +411,7 @@ func TestPartialStateJoin(t *testing.T) {
 				return false
 			}),
 		)
+		psjResult.FinishStateRequest()
 	})
 
 	// we should be able to receive device list update EDU over federation during the resync
