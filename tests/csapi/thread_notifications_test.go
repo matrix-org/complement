@@ -29,6 +29,20 @@ func syncHasUnreadNotifs(roomID string, check func(gjson.Result, gjson.Result) b
 	}
 }
 
+func syncHasUnthreadedReadReceipt(roomID, userID, eventID string) client.SyncCheckOpt {
+	return client.SyncEphemeralHas(roomID, func(result gjson.Result) bool {
+		userReceipt := result.Get("content").Get(eventID).Get(`m\.read`).Get(userID)
+		return result.Get("type").Str == "m.receipt" && userReceipt.Exists() && !userReceipt.Get("thread_id").Exists()
+	})
+}
+
+func syncHasThreadedReadReceipt(roomID, userID, eventID, threadID string) client.SyncCheckOpt {
+	return client.SyncEphemeralHas(roomID, func(result gjson.Result) bool {
+		userReceipt := result.Get("content").Get(eventID).Get(`m\.read`).Get(userID)
+		return result.Get("type").Str == "m.receipt" && userReceipt.Exists() && userReceipt.Get("thread_id").Str == threadID
+	})
+}
+
 // Test behavior of threaded receipts and notifications.
 //
 // 1. Send a series of messages, some of which are in threads.
@@ -138,6 +152,7 @@ func TestThreadedReceipts(t *testing.T) {
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == eventD
 		}),
+		syncHasThreadedReadReceipt(roomID, bob.UserID, firstEventID, "main"),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 3 && !t.Exists()
 		}),
@@ -148,6 +163,7 @@ func TestThreadedReceipts(t *testing.T) {
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == eventD
 		}),
+		syncHasThreadedReadReceipt(roomID, bob.UserID, firstEventID, "main"),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			threadNotifications := t.Get(client.GjsonEscape(eventA))
 			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 1 &&
@@ -163,6 +179,8 @@ func TestThreadedReceipts(t *testing.T) {
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == eventD
 		}),
+		syncHasThreadedReadReceipt(roomID, bob.UserID, firstEventID, "main"),
+		syncHasThreadedReadReceipt(roomID, bob.UserID, firstThreadEventID, firstEventID),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 2 && !t.Exists()
 		}),
@@ -173,6 +191,8 @@ func TestThreadedReceipts(t *testing.T) {
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == eventD
 		}),
+		syncHasThreadedReadReceipt(roomID, bob.UserID, firstEventID, "main"),
+		syncHasThreadedReadReceipt(roomID, bob.UserID, firstThreadEventID, firstEventID),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			threadNotifications := t.Get(client.GjsonEscape(eventA))
 			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 1 &&
@@ -188,6 +208,7 @@ func TestThreadedReceipts(t *testing.T) {
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == eventD
 		}),
+		syncHasUnthreadedReadReceipt(roomID, bob.UserID, secondEventID),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 0 && !t.Exists()
 		}),
@@ -198,6 +219,7 @@ func TestThreadedReceipts(t *testing.T) {
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == eventD
 		}),
+		syncHasUnthreadedReadReceipt(roomID, bob.UserID, secondEventID),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 0 && !t.Exists()
 		}),
