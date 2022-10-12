@@ -207,11 +207,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				// workers (the worker persisting events isn't necessarily the same as the worker
 				// serving `/messages`)
 				fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
-					if ev.Get("event_id").Str == eventA.EventID {
-						return true
-					}
-
-					return false
+					return ev.Get("event_id").Str == eventA.EventID
 				})
 
 				// Paginate backwards from eventB
