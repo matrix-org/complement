@@ -67,7 +67,7 @@ func TestRelations(t *testing.T) {
 	}))
 
 	// Request the relations.
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID})
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "relations", rootEventID})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -81,7 +81,7 @@ func TestRelations(t *testing.T) {
 	})
 
 	// Also test filtering by the relation type.
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID, "m.thread"})
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "relations", rootEventID, "m.thread"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -95,7 +95,7 @@ func TestRelations(t *testing.T) {
 	})
 
 	// And test filtering by relation type + event type.
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID, "m.thread", "m.room.message"})
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "relations", rootEventID, "m.thread", "m.room.message"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -145,7 +145,7 @@ func TestRelationsPagination(t *testing.T) {
 	// Fetch the first page.
 	queryParams := url.Values{}
 	queryParams.Set("limit", "3")
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	body := must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -160,7 +160,7 @@ func TestRelationsPagination(t *testing.T) {
 
 	// Fetch the next page.
 	queryParams.Set("from", client.GetJSONFieldStr(t, body, "next_batch"))
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -177,7 +177,7 @@ func TestRelationsPagination(t *testing.T) {
 	queryParams = url.Values{}
 	queryParams.Set("limit", "3")
 	queryParams.Set("dir", "f")
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	body = must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -192,7 +192,7 @@ func TestRelationsPagination(t *testing.T) {
 
 	// Fetch the next page in the forward direction.
 	queryParams.Set("from", client.GetJSONFieldStr(t, body, "next_batch"))
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
