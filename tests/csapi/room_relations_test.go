@@ -16,7 +16,6 @@ import (
 )
 
 func TestRelations(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // not supported
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -112,7 +111,6 @@ func TestRelations(t *testing.T) {
 }
 
 func TestRelationsPagination(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // not supported
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
