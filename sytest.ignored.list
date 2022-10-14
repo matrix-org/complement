@@ -6,6 +6,10 @@ foo
 
 # Tests synapse admin API
 Can quarantine media in rooms
+/purge_history
+/purge_history by ts
+Shutdown room
+Can backfill purged history
 
 # Tests deprecated endpoints
 Tags appear in the v1 /initialSync
