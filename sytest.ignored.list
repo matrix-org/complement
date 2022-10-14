@@ -3,6 +3,7 @@
 
 # Dummy test in 00prepare.pl
 foo
+Checking local federation server
 
 # Tests synapse admin API
 Can quarantine media in rooms
