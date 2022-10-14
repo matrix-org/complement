@@ -1,9 +1,9 @@
 package tests
 
 import (
-	"net/url"
 	"testing"
 
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -93,17 +93,22 @@ func TestFederationRoomsInvite(t *testing.T) {
 				"is_direct": true,
 			})
 			bob.JoinRoom(t, roomID, []string{})
-			queryParams := url.Values{}
-			queryParams.Set("format", "event")
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
-			// now get the direct flag from the membership event
-			res := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID}, client.WithQueries(queryParams))
-			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONKeyEqual("unsigned.prev_content.membership", "invite"),
-					match.JSONKeyEqual("unsigned.prev_content.is_direct", true),
-				},
-			})
+			bob.MustSyncUntil(t, client.SyncReq{},
+				client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
+					// We expect a membership event ..
+					if result.Get("type").Str != gomatrixserverlib.MRoomMember {
+						return false
+					}
+					// .. for Bob
+					if result.Get("state_key").Str != bob.UserID {
+						return false
+					}
+					// Check that we've got tbe expected is_idrect flag
+					return result.Get("unsigned.prev_content.membership").Str == "invite" &&
+						result.Get("unsigned.prev_content.is_direct").Bool() == true &&
+						result.Get("unsigned.prev_sender").Str == alice.UserID
+				}),
+			)
 		})
 	})
 }
