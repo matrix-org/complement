@@ -18,6 +18,10 @@ func TestMembersLocal(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
+	_, sinceToken := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+
+	bob.JoinRoom(t, roomID, []string{})
+
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: New room members see their own join event
 		t.Run("New room members see their own join event", func(t *testing.T) {
@@ -29,16 +33,15 @@ func TestMembersLocal(t *testing.T) {
 		// sytest: Existing members see new members' join events
 		t.Run("Existing members see new members' join events", func(t *testing.T) {
 			t.Parallel()
-			bob.JoinRoom(t, roomID, []string{})
 			// SyncJoinedTo already checks everything we need to know
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+			alice.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncJoinedTo(bob.UserID, roomID))
 		})
 
 		// sytest: Existing members see new members' presence
 		t.Run("Existing members see new members' presence", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // Still failing
 			t.Parallel()
-			alice.MustSyncUntil(t, client.SyncReq{},
+			alice.MustSyncUntil(t, client.SyncReq{Since: sinceToken},
 				client.SyncJoinedTo(bob.UserID, roomID),
 				func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 					presenceEvents := topLevelSyncJSON.Get("presence.events")
