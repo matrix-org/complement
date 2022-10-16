@@ -11,14 +11,10 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/complement/runtime"
 )
 
-// @shadowjonathan: do we need this test anymore?
 // sytest: Getting push rules doesn't corrupt the cache SYN-390
 func TestPushRuleCacheHealth(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // Dendrite does not support push notifications (yet)
-
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
