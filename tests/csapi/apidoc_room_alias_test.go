@@ -3,6 +3,7 @@ package csapi_tests
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
@@ -82,13 +83,36 @@ func TestRoomAlias(t *testing.T) {
 
 			setRoomAliasResp(t, alice, roomID, roomAlias)
 
-			res = listRoomAliasesResp(t, alice, roomID)
-
-			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONKeyEqual("aliases", []interface{}{roomAlias}),
-				},
-			})
+			// Synapse doesn't read-after-write consistency here; it can race:
+			//
+			// 1. Request to set the alias arrives on a writer worker.
+			// 2. Writer tells the reader worker to invalidate its caches.
+			// 3. Response received by the client.
+			// 4. A new query arrives at the reader.
+			//
+			// If (4) arrives at the reader before (2), the reader responds with
+			// old data. Bodge around this by retrying for up to a second.
+			res = alice.DoFunc(
+				t,
+				"GET",
+				[]string{"_matrix", "client", "v3", "rooms", roomID, "aliases"},
+				client.WithRetryUntil(
+					1*time.Second,
+					func(res *http.Response) bool {
+						if res.StatusCode != 200 {
+							return false
+						}
+						eventResBody := client.ParseJSON(t, res)
+						matcher := match.JSONKeyEqual("aliases", []interface{}{roomAlias})
+						err := matcher(eventResBody)
+						if err != nil {
+							t.Log(err)
+							return false
+						}
+						return true
+					},
+				),
+			)
 		})
 
 		// sytest: Only room members can list aliases of a room
