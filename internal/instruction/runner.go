@@ -482,9 +482,11 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 						path = "/_matrix/client/v3/join/$roomId"
 						method = "POST"
 
-						// Set server_name to the homeserver that created the room, as they're a pretty
-						// good candidate to join the room through
-						queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
+						if room.Ref != "" {
+							// Set server_name to the homeserver that created the room, as they're a pretty
+							// good candidate to join the room through
+							queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
+						}
 					case "leave":
 						path = "/_matrix/client/v3/rooms/$roomId/leave"
 						method = "POST"
