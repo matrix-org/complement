@@ -6,6 +6,8 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 )
@@ -17,6 +19,18 @@ func TestMembersLocal(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+
+	res := bob.DoFunc(
+		t,
+		"PUT",
+		[]string{"_matrix", "client", "v3", "presence", bob.UserID, "status"},
+		client.WithJSONBody(t, map[string]interface{}{
+			"presence": "online",
+		}),
+	)
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: 200,
+	})
 
 	_, sinceToken := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
