@@ -1,4 +1,4 @@
-# Extracted from matrix-org/sytest#9ea3f15b
+# Extracted from matrix-org/sytest#da1c9e22
 # With `grep -E "^\s*(test|multi_test) \"" -R . | grep ".pl:" | docker run --rm -i -e LC_ALL=C ubuntu:18.04 sort`
 
 ./tests/10apidoc/01register.pl:   test "POST $ep_name admin with shared secret",
@@ -421,11 +421,6 @@
 ./tests/42tags.pl:test "Tags appear in the v1 /events stream",
 ./tests/42tags.pl:test "Tags appear in the v1 /initialSync",
 ./tests/42tags.pl:test "Tags appear in the v1 room initial sync",
-./tests/43search.pl:   test "Search results with $ordering_type ordering do not include redacted events",
-./tests/43search.pl:test "Can back-paginate search results",
-./tests/43search.pl:test "Can get context around search results",
-./tests/43search.pl:test "Can search for an event by body",
-./tests/43search.pl:test "Search works across an upgraded room and its predecessor",
 ./tests/44account_data.pl:test "Account data appears in v1 /events stream",
 ./tests/44account_data.pl:test "Can add account data to room",
 ./tests/44account_data.pl:test "Can add account data",
@@ -636,11 +631,6 @@
 ./tests/61push/05_set_actions.pl:test "Changing the actions of an unknown default rule fails with 404",
 ./tests/61push/05_set_actions.pl:test "Changing the actions of an unknown rule fails with 404",
 ./tests/61push/06_get_pusher.pl:test "Can fetch a user's pushers",
-./tests/61push/06_push_rules_in_sync.pl:test "Adding a push rule wakes up an incremental /sync",
-./tests/61push/06_push_rules_in_sync.pl:test "Disabling a push rule wakes up an incremental /sync",
-./tests/61push/06_push_rules_in_sync.pl:test "Enabling a push rule wakes up an incremental /sync",
-./tests/61push/06_push_rules_in_sync.pl:test "Push rules come down in an initial /sync",
-./tests/61push/06_push_rules_in_sync.pl:test "Setting actions for a push rule wakes up an incremental /sync",
 ./tests/61push/07_set_enabled.pl:test "Can enable/disable default rules",
 ./tests/61push/07_set_enabled.pl:test "Enabling an unknown default rule fails with 404",
 ./tests/61push/08_rejected_pushers.pl:multi_test "Test that rejected pushers are removed.",
