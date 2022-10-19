@@ -40,7 +40,6 @@ var oGraphHtml = fmt.Sprintf(`
 // sytest: Test URL preview
 func TestUrlPreview(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/621
-	runtime.SkipIf(t, runtime.Synapse)  // FIXME: https://github.com/matrix-org/synapse/pull/14198
 
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
