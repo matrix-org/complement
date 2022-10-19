@@ -243,7 +243,7 @@ func (s *Server) SendFederationRequest(
 	if httpError, ok := err.(gomatrix.HTTPError); ok {
 		t.Logf("[SSAPI] %s %s%s => error(%d): %s (%s)", req.Method(), req.Destination(), req.RequestURI(), httpError.Code, err, time.Since(start))
 	} else if err == nil {
-		t.Logf("[SSAPI] %s %s%s => (%s)", req.Method(), req.Destination(), req.RequestURI(), time.Since(start))
+		t.Logf("[SSAPI] %s %s%s => 2xx (%s)", req.Method(), req.Destination(), req.RequestURI(), time.Since(start))
 	}
 	return err
 }
