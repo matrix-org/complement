@@ -14,33 +14,12 @@ import (
 )
 
 func TestLeftRoomFixture(t *testing.T) {
-	deployment := Deploy(t, b.MustValidate(b.Blueprint{
-		Name: "abc",
-		Homeservers: []b.Homeserver{
-			{
-				Name: "hs1",
-				Users: []b.User{
-					{
-						Localpart:   "@alice",
-						DisplayName: "Alice",
-					},
-					{
-						Localpart:   "@bob",
-						DisplayName: "Bob",
-					},
-					{
-						Localpart:   "@charlie",
-						DisplayName: "Charlie",
-					},
-				},
-			},
-		},
-	}))
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
+	charlie := deployment.RegisterUser(t, "hs1", "charlie", "sufficiently_long_password_charlie", false)
 
 	roomID := alice.CreateRoom(t, map[string]interface{}{
 		"initial_state": []map[string]interface{}{
@@ -137,6 +116,7 @@ func TestLeftRoomFixture(t *testing.T) {
 	})
 
 	// Have charlie join the room, to check against /members calls later
+	// (Bob should not see Charlie in /members after he leaves the room.)
 	charlie.JoinRoom(t, roomID, nil)
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
 
@@ -246,6 +226,7 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	// sytest: Getting messages going forward is limited for a departed room (SPEC-216)
 	t.Run("Getting messages going forward is limited for a departed room", func(t *testing.T) {
+		// TODO: try this with the most recent since token too
 		resp := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(url.Values{
 			"dir":   []string{"f"},
 			"limit": []string{"100"},
