@@ -21,7 +21,6 @@ import (
 
 // TODO:
 // Outbound federation can request missing events
-// Inbound federation can return missing events for $vis visibility
 // outliers whose auth_events are in a different room are correctly rejected
 
 // /get_missing_events is used to fill in gaps in the room DAG when a server is pushed (via /send)
@@ -153,13 +152,13 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 // room with a bad JSON value (e.g. a float) should discard the bad data.
 //
 // To test this we need to:
-// * Add an event with "bad" data into the room history, but don't send it.
-// * Add a "good" event into the room history and send it.
-// * wait for the homeserver to attempt to get the missing event (with the bad data).
-//   (The homeserver should reject the "good" event.)
-// * To check the good event was rejected, send another valid event pointing at
-//   the first "good" event, and wait for a call to `/get_missing_events` for
-//   that event (thus proving that the homeserver rejected the good event).
+//   - Add an event with "bad" data into the room history, but don't send it.
+//   - Add a "good" event into the room history and send it.
+//   - wait for the homeserver to attempt to get the missing event (with the bad data).
+//     (The homeserver should reject the "good" event.)
+//   - To check the good event was rejected, send another valid event pointing at
+//     the first "good" event, and wait for a call to `/get_missing_events` for
+//     that event (thus proving that the homeserver rejected the good event).
 //
 // sytest: Outbound federation will ignore a missing event with bad JSON for room version 6
 func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *testing.T) {
@@ -313,4 +312,136 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		},
 	})
 	waiter.Wait(t, 5*time.Second)
+}
+
+func TestInboundCanReturnMissingEvents(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintAlice)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		// Handle any transactions that the homeserver may send when connecting to another homeserver (such as presence)
+		federation.HandleTransactionRequests(nil, nil),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+
+	charlie := srv.UserID("charlie")
+	roomVersion := alice.GetDefaultRoomVersion(t)
+
+	for _, visibility := range []gomatrixserverlib.HistoryVisibility{
+		gomatrixserverlib.HistoryVisibilityWorldReadable,
+		gomatrixserverlib.HistoryVisibilityShared,
+		gomatrixserverlib.HistoryVisibilityInvited,
+		gomatrixserverlib.HistoryVisibilityJoined,
+	} {
+		// sytest: Inbound federation can return missing events for $vis visibility
+		t.Run(fmt.Sprintf("Inbound federation can return missing events for %s visibility", visibility), func(t *testing.T) {
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"preset":  "public_chat",
+				"version": roomVersion,
+			})
+
+			stateKey := ""
+			// Set the history visibility for this room
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type: gomatrixserverlib.MRoomHistoryVisibility,
+				Content: map[string]interface{}{
+					"history_visibility": visibility,
+				},
+				StateKey: &stateKey,
+			})
+
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"body":    "1",
+					"msgtype": "m.text",
+				},
+				Sender: alice.UserID,
+			})
+
+			room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie, roomID))
+
+			req := gomatrixserverlib.NewFederationRequest("POST", "hs1",
+				fmt.Sprintf("/_matrix/federation/v1/get_missing_events/%s", roomID),
+			)
+
+			// Find two event IDs that there's going to be something missing
+			// inbetween. Say, any history between the room's creation and my own
+			// joining of it.
+			earliestEvent := room.CurrentState("m.room.create", "")
+			latestEvent := room.CurrentState("m.room.member", charlie)
+
+			err := req.SetContent(map[string]interface{}{
+				"earliest_events": []string{earliestEvent.EventID()},
+				"latest_events":   []string{latestEvent.EventID()},
+				"limit":           10,
+				"min_depth":       1,
+			})
+			must.NotError(t, "failed to set content", err)
+
+			result := gomatrixserverlib.RespMissingEvents{}
+			err = srv.SendFederationRequest(context.Background(), t, deployment, req, &result)
+			must.NotError(t, "get_missing_events failed", err)
+			if len(result.Events) == 0 {
+				t.Fatalf("no events returned from /get_missing_events")
+			}
+
+			// check that they are the *right* events. We expect copies of:
+			// * the creator's join
+			// * the power_levels
+			// * the join rules
+			// * the initial history_vis
+			// * another history_vis, unless we tried to set it to the default (shared)
+			// * the message
+			events := result.Events.UntrustedEvents(roomVersion)
+			i := 0
+			for _, ev := range events {
+				must.EqualStr(t, ev.RoomID(), roomID, "unexpected roomID")
+				switch i {
+				case 0:
+					must.EqualStr(t, ev.Type(), "m.room.member", "not a membership event")
+					must.EqualStr(t, *ev.StateKey(), alice.UserID, "unexpected creator")
+					i++
+				case 1:
+					must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomPowerLevels, "not a powerlevel event")
+					i++
+				case 2:
+					must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomJoinRules, "not a join_rules event")
+					i++
+				case 3:
+					must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomHistoryVisibility, "not a history_visiblity event")
+					i++
+				case 4:
+					if visibility != gomatrixserverlib.HistoryVisibilityShared { // shared -> shared no-ops
+						must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomHistoryVisibility, "not a history_visiblity event")
+						i++
+					}
+				case 5:
+					must.EqualStr(t, ev.Type(), "m.room.message", "not a message event")
+					// if the history vis is 'joined' or 'invite', we should get redacted
+					// copies of the events before we joined.
+					if visibility == gomatrixserverlib.HistoryVisibilityJoined || visibility == gomatrixserverlib.HistoryVisibilityInvited {
+						if !ev.Redacted() {
+							t.Fatalf("Expected event to be redacted")
+						}
+					} else {
+						for _, path := range []string{"msgtype", "body"} {
+							if !gjson.Get(string(ev.Content()), path).Exists() {
+								t.Fatalf("expected '%s' in content, but didn't find it: %s", path, string(ev.JSON()))
+							}
+						}
+					}
+					i++
+				case 6:
+					t.Fatalf("extra events returned: %+v", ev)
+				}
+			}
+		})
+	}
 }
