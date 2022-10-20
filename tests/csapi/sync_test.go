@@ -382,6 +382,50 @@ func TestSync(t *testing.T) {
 	})
 }
 
+// Test presence from people in 2 different rooms in incremental sync
+func TestPresenceSyncDifferentRooms(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
+
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+
+	deployment.RegisterUser(t, "hs1", "charlie", "charlie", false)
+	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
+
+	bobRoomID := alice.CreateRoom(t, struct{}{})
+	charlieRoomID := alice.CreateRoom(t, struct{}{})
+	nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, bobRoomID), client.SyncJoinedTo(alice.UserID, charlieRoomID))
+
+	alice.InviteRoom(t, bobRoomID, bob.UserID)
+	alice.InviteRoom(t, charlieRoomID, charlie.UserID)
+	bob.JoinRoom(t, bobRoomID, nil)
+	charlie.JoinRoom(t, charlieRoomID, nil)
+
+	nextBatch = alice.MustSyncUntil(t,
+		client.SyncReq{Since: nextBatch},
+		client.SyncJoinedTo(bob.UserID, bobRoomID),
+		client.SyncJoinedTo(charlie.UserID, charlieRoomID),
+	)
+
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"presence": "online",
+	})
+	bob.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
+	charlie.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
+
+	nextBatch = alice.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(clientUserID string, sync gjson.Result) error {
+		presence := sync.Get("presence")
+		if len(presence.Get("events").Array()) == 0 {
+			return fmt.Errorf("presence.events is empty: %+v", presence)
+		}
+		usersInPresenceEvents(t, presence, []string{bob.UserID, charlie.UserID})
+		return nil
+	})
+}
+
 func sendMessages(t *testing.T, client *client.CSAPI, roomID string, prefix string, count int) {
 	t.Helper()
 	for i := 0; i < count; i++ {
