@@ -384,8 +384,6 @@ func TestSync(t *testing.T) {
 
 // Test presence from people in 2 different rooms in incremental sync
 func TestPresenceSyncDifferentRooms(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
-
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
