@@ -8,46 +8,17 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
 )
 
 func TestMembersLocal(t *testing.T) {
-	deployment := Deploy(t, b.MustValidate(b.Blueprint{
-		Name: "ab",
-		Homeservers: []b.Homeserver{
-			{
-				Name: "hs1",
-				Users: []b.User{
-					{
-						Localpart:   "@alice",
-						DisplayName: "Alice",
-					},
-					{
-						Localpart:   "@bob",
-						DisplayName: "Bob",
-					},
-				},
-			},
-		},
-	}))
+	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob := deployment.RegisterUser(t, "hs1", "bob", "bobspassword", false)
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
-	res := bob.DoFunc(
-		t,
-		"PUT",
-		[]string{"_matrix", "client", "v3", "presence", bob.UserID, "status"},
-		client.WithJSONBody(t, map[string]interface{}{
-			"presence": "online",
-		}),
-	)
-	must.MatchResponse(t, res, match.HTTPResponse{
-		StatusCode: 200,
-	})
+	bob.MustSync(t, client.SyncReq{TimeoutMillis: "0", SetPresence: "online"})
 
 	_, sinceToken := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
