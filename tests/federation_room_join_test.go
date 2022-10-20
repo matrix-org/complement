@@ -19,7 +19,6 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -62,7 +61,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 			w.WriteHeader(502)
 			return
 		}
-		federation.SendJoinRequestsHandler(srv, w, req, false)
+		federation.SendJoinRequestsHandler(srv, w, req, false, false)
 	})).Methods("PUT")
 
 	ver := alice.GetDefaultRoomVersion(t)
@@ -157,7 +156,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -186,7 +185,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID) + "bogus": "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -216,7 +215,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		}).JSON()
 		rawSig, err := json.Marshal(map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		})
@@ -385,7 +384,9 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		}
 
 		var res interface{}
-		err := srv.SendFederationRequest(context.Background(), deployment, req, &res)
+
+		err := srv.SendFederationRequest(context.Background(), t, deployment, req, &res)
+
 		if err == nil {
 			t.Errorf("send request returned 200")
 			return

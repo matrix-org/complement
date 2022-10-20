@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -49,7 +49,6 @@ type Deployer struct {
 	DeployNamespace string
 	Docker          *client.Client
 	Counter         int
-	networkID       string
 	debugLogging    bool
 	config          *config.Complement
 }
@@ -93,11 +92,10 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	if len(images) == 0 {
 		return nil, fmt.Errorf("Deploy: No images have been built for blueprint %s", blueprintName)
 	}
-	networkID, err := createNetworkIfNotExists(d.Docker, d.config.PackageNamespace, blueprintName)
+	networkName, err := createNetworkIfNotExists(d.Docker, d.config.PackageNamespace, blueprintName)
 	if err != nil {
 		return nil, fmt.Errorf("Deploy: %w", err)
 	}
-	d.networkID = networkID
 
 	// deploy images in parallel
 	var mu sync.Mutex // protects mutable values like the counter and errors
@@ -116,7 +114,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		// TODO: Make CSAPI port configurable
 		deployment, err := deployImage(
 			d.Docker, img.ID, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
-			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkID, d.config,
+			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkName, d.config,
 		)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
@@ -184,14 +182,6 @@ func (d *Deployer) Restart(hsDep *HomeserverDeployment, cfg *config.Complement) 
 		return fmt.Errorf("Restart: Failed to stop container %s: %s", hsDep.ContainerID, err)
 	}
 
-	// Remove the container from the network. If we don't do this,
-	// (re)starting the container fails with an error like
-	// "Error response from daemon: endpoint with name complement_fed_1_fed.alice.hs1_1 already exists in network complement_fed_alice".
-	err = d.Docker.NetworkDisconnect(ctx, d.networkID, hsDep.ContainerID, false)
-	if err != nil {
-		return fmt.Errorf("Restart: Failed to disconnect container %s: %s", hsDep.ContainerID, err)
-	}
-
 	err = d.Docker.ContainerStart(ctx, hsDep.ContainerID, types.ContainerStartOptions{})
 	if err != nil {
 		return fmt.Errorf("Restart: Failed to start container %s: %s", hsDep.ContainerID, err)
@@ -216,7 +206,7 @@ func (d *Deployer) Restart(hsDep *HomeserverDeployment, cfg *config.Complement) 
 // nolint
 func deployImage(
 	docker *client.Client, imageID string, containerName, pkgNamespace, blueprintName, hsName string,
-	asIDToRegistrationMap map[string]string, contextStr, networkID string, cfg *config.Complement,
+	asIDToRegistrationMap map[string]string, contextStr, networkName string, cfg *config.Complement,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -283,9 +273,8 @@ func deployImage(
 		Mounts:     mounts,
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
-			contextStr: {
-				NetworkID: networkID,
-				Aliases:   []string{hsName},
+			networkName: {
+				Aliases: []string{hsName},
 			},
 		},
 	}, nil, containerName)
@@ -298,7 +287,7 @@ func deployImage(
 
 	containerID := body.ID
 	if cfg.DebugLoggingEnabled {
-		log.Printf("%s: Created container '%s' using image '%s' on network '%s'", contextStr, containerID, imageID, networkID)
+		log.Printf("%s: Created container '%s' using image '%s' on network '%s'", contextStr, containerID, imageID, networkName)
 	}
 	stubDeployment := &HomeserverDeployment{
 		ContainerID: containerID,

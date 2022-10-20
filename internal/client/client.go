@@ -609,9 +609,9 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	start := time.Now()
 	res, err := t.wrap.RoundTrip(req)
 	if err != nil {
-		t.t.Logf("%s %s%s => error: %s (%s)", req.Method, t.hsName, req.URL.Path, err, time.Since(start))
+		t.t.Logf("[CSAPI] %s %s%s => error: %s (%s)", req.Method, t.hsName, req.URL.Path, err, time.Since(start))
 	} else {
-		t.t.Logf("%s %s%s => %s (%s)", req.Method, t.hsName, req.URL.Path, res.Status, time.Since(start))
+		t.t.Logf("[CSAPI] %s %s%s => %s (%s)", req.Method, t.hsName, req.URL.Path, res.Status, time.Since(start))
 	}
 	return res, err
 }
@@ -751,29 +751,41 @@ func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 	}
 }
 
-// Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event
-func SyncJoinedTo(userID, roomID string) SyncCheckOpt {
+// Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event.
+//
+// Additional checks can be passed to narrow down the check, all must pass.
+func SyncJoinedTo(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
 	checkJoined := func(ev gjson.Result) bool {
-		return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join"
+		if ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join" {
+			for _, check := range checks {
+				if !check(ev) {
+					// short-circuit, bail early
+					return false
+				}
+			}
+			// passed both basic join check and all other checks
+			return true
+		}
+		return false
 	}
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		// Check both the timeline and the state events for the join event
 		// since on initial sync, the state events may only be in
 		// <room>.state.events.
-		err := loopArray(
+		firstErr := loopArray(
 			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", checkJoined,
 		)
-		if err == nil {
+		if firstErr == nil {
 			return nil
 		}
 
-		err = loopArray(
+		secondErr := loopArray(
 			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", checkJoined,
 		)
-		if err == nil {
+		if secondErr == nil {
 			return nil
 		}
-		return fmt.Errorf("SyncJoinedTo(%s): %s", roomID, err)
+		return fmt.Errorf("SyncJoinedTo(%s): %s & %s", roomID, firstErr, secondErr)
 	}
 }
 

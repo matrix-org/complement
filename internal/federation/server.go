@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/gomatrix"
+
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/util"
@@ -55,7 +57,7 @@ type Server struct {
 // NewServer creates a new federation server with configured options.
 func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server)) *Server {
 	// generate signing key
-	_, priv, err := ed25519.GenerateKey(nil)
+	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("federation.NewServer failed to generate ed25519 key: %s", err)
 	}
@@ -63,11 +65,11 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	srv := &Server{
 		t:     t,
 		Priv:  priv,
-		KeyID: "ed25519:complement",
+		KeyID: gomatrixserverlib.KeyID(fmt.Sprintf("ed25519:complement_%x", pub)),
 		mux:   mux.NewRouter(),
 		// The server name will be updated when the caller calls Listen() to include the port number
 		// of the HTTP server e.g "host.docker.internal:56353"
-		serverName:                  docker.HostnameRunningComplement,
+		serverName:                  deployment.Config.HostnameRunningComplement,
 		rooms:                       make(map[string]*ServerRoom),
 		aliases:                     make(map[string]string),
 		UnexpectedRequestsAreErrors: true,
@@ -159,7 +161,12 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 	if !s.listening {
 		s.t.Fatalf("MustMakeRoom() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room ID. Ensure you Listen() first!")
 	}
-	roomID := fmt.Sprintf("!%d:%s", len(s.rooms), s.serverName)
+	// Generate a unique room ID, prefixed with an incrementing counter.
+	// This ensures that room IDs are not re-used across tests, even if a Complement server happens
+	// to re-use the same port as a previous one, which
+	//  * reduces noise when searching through logs and
+	//  * prevents homeservers from getting confused when multiple test cases re-use the same homeserver deployment.
+	roomID := fmt.Sprintf("!%d-%s:%s", len(s.rooms), util.RandomString(18), s.serverName)
 	t.Logf("Creating room %s with version %s", roomID, roomVer)
 	room := newRoom(roomVer, roomID)
 
@@ -213,7 +220,13 @@ func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment
 // SendFederationRequest signs and sends an arbitrary federation request from this server.
 //
 // The requests will be routed according to the deployment map in `deployment`.
-func (s *Server) SendFederationRequest(ctx context.Context, deployment *docker.Deployment, req gomatrixserverlib.FederationRequest, resBody interface{}) error {
+func (s *Server) SendFederationRequest(
+	ctx context.Context,
+	t *testing.T,
+	deployment *docker.Deployment,
+	req gomatrixserverlib.FederationRequest,
+	resBody interface{},
+) error {
 	if err := req.Sign(gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
 		return err
 	}
@@ -224,7 +237,15 @@ func (s *Server) SendFederationRequest(ctx context.Context, deployment *docker.D
 	}
 
 	httpClient := gomatrixserverlib.NewClient(gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}))
-	return httpClient.DoRequestAndParseResponse(ctx, httpReq, resBody)
+	start := time.Now()
+	err = httpClient.DoRequestAndParseResponse(ctx, httpReq, resBody)
+
+	if httpError, ok := err.(gomatrix.HTTPError); ok {
+		t.Logf("[SSAPI] %s %s%s => error(%d): %s (%s)", req.Method(), req.Destination(), req.RequestURI(), httpError.Code, err, time.Since(start))
+	} else if err == nil {
+		t.Logf("[SSAPI] %s %s%s => 2xx (%s)", req.Method(), req.Destination(), req.RequestURI(), time.Since(start))
+	}
+	return err
 }
 
 // MustCreateEvent will create and sign a new latest event for the given room.
@@ -460,10 +481,10 @@ func federationServer(cfg *config.Complement, h http.Handler) (*http.Server, str
 			Locality:      []string{"London"},
 			StreetAddress: []string{"123 Street"},
 			PostalCode:    []string{"12345"},
-			CommonName:    docker.HostnameRunningComplement,
+			CommonName:    cfg.HostnameRunningComplement,
 		},
 	}
-	host := docker.HostnameRunningComplement
+	host := cfg.HostnameRunningComplement
 	if ip := net.ParseIP(host); ip != nil {
 		template.IPAddresses = append(template.IPAddresses, ip)
 	} else {
