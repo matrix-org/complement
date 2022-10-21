@@ -450,7 +450,9 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice should be able to see Derek's read receipt during the resync
 		alice.MustSyncUntil(t,
-			client.SyncReq{},
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
 			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
 				if result.Get("type").Str != "m.receipt" {
 					return false
