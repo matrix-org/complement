@@ -109,18 +109,13 @@ func TestSync(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	filter := map[string]interface{}{
+	filterID := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
 			"timeline": map[string]interface{}{
 				"limit": 10,
 			},
 		},
-	}
-	f, err := json.Marshal(filter)
-	if err != nil {
-		t.Errorf("unable to marshal filter: %v", err)
-	}
-	filterID := createFilter(t, alice, f, alice.UserID)
+	})
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Can sync a joined room
@@ -164,7 +159,8 @@ func TestSync(t *testing.T) {
 		t.Run("Newly joined room has correct timeline in incremental sync", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
 			t.Parallel()
-			filter = map[string]interface{}{
+
+			filterBob := createFilter(t, bob, map[string]interface{}{
 				"room": map[string]interface{}{
 					"timeline": map[string]interface{}{
 						"limit": 10,
@@ -174,12 +170,7 @@ func TestSync(t *testing.T) {
 						"types": []string{},
 					},
 				},
-			}
-			f, err = json.Marshal(filter)
-			if err != nil {
-				t.Errorf("unable to marshal filter: %v", err)
-			}
-			filterBob := createFilter(t, bob, f, bob.UserID)
+			})
 
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
