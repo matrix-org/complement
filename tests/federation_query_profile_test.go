@@ -55,7 +55,7 @@ func TestOutboundFederationProfile(t *testing.T) {
 
 		// query the display name which should do an outbound federation hit
 		unauthedClient := deployment.Client(t, "hs1", "")
-		res := unauthedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "profile", remoteUserID, "displayname"}, nil)
+		res := unauthedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "profile", remoteUserID, "displayname"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyEqual("displayname", remoteDisplayName),
