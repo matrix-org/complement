@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
@@ -141,6 +143,28 @@ func TestRoomAlias(t *testing.T) {
 				StatusCode: 403,
 			})
 		})
+
+		// sytest: Room aliases can contain Unicode
+		t.Run("Room aliases can contain Unicode", func(t *testing.T) {
+			t.Parallel()
+
+			const unicodeAlias = "#老虎Â£я:hs1"
+
+			roomID := alice.CreateRoom(t, map[string]interface{}{})
+
+			res := setRoomAliasResp(t, alice, roomID, unicodeAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+
+			res = getRoomAliasResp(t, alice, unicodeAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("room_id", roomID),
+				},
+			})
+		})
 	})
 }
 
@@ -236,6 +260,194 @@ func TestRoomDeleteAlias(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
 				},
+			})
+		})
+
+		// sytest: Can delete canonical alias
+		t.Run("Can delete canonical alias", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := alice.CreateRoom(t, map[string]interface{}{})
+
+			roomAlias := "#random_alias:hs1"
+
+			res := setRoomAliasResp(t, alice, roomID, roomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+
+			res = setCanonicalAlias(t, alice, roomID, roomAlias, nil)
+
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyPresent("event_id"),
+				},
+			})
+
+			_, sinceToken := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+
+			res = deleteRoomAliasResp(t, alice, roomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+
+			alice.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+				if ev.Get("type").Str != "m.room.canonical_alias" ||
+					!ev.Get("content").IsObject() ||
+					len(ev.Get("content").Map()) != 0 {
+					return false
+				}
+
+				return true
+			}))
+		})
+
+		// sytest: Regular users can add and delete aliases in the default room configuration
+		t.Run("Regular users can add and delete aliases in the default room configuration", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := alice.CreateRoom(t, map[string]interface{}{})
+
+			randomAlias := "#random_alias_2:hs1"
+
+			alice.InviteRoom(t, roomID, bob.UserID)
+			bob.JoinRoom(t, roomID, nil)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+			res := setRoomAliasResp(t, bob, roomID, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+
+			res = getRoomAliasResp(t, alice, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("room_id", roomID),
+				},
+			})
+
+			res = deleteRoomAliasResp(t, bob, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+		})
+
+		// sytest: Regular users can add and delete aliases when m.room.aliases is restricted
+		t.Run("Regular users can add and delete aliases when m.room.aliases is restricted", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := alice.CreateRoom(t, map[string]interface{}{})
+
+			randomAlias := "#random_alias_3:hs1"
+
+			alice.InviteRoom(t, roomID, bob.UserID)
+			bob.JoinRoom(t, roomID, nil)
+
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type:     "m.room.power_levels",
+				StateKey: b.Ptr(""),
+				Content: map[string]interface{}{
+					"users": map[string]int64{
+						alice.UserID: 100,
+					},
+					"events": map[string]int64{
+						"m.room.aliases": 50,
+					},
+				},
+			})
+
+			res := setRoomAliasResp(t, bob, roomID, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+
+			res = getRoomAliasResp(t, alice, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("room_id", roomID),
+				},
+			})
+
+			res = deleteRoomAliasResp(t, bob, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+		})
+
+		// sytest: Users can't delete other's aliases
+		t.Run("Users can't delete other's aliases", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := alice.CreateRoom(t, map[string]interface{}{})
+
+			randomAlias := "#random_alias_4:hs1"
+
+			alice.InviteRoom(t, roomID, bob.UserID)
+			bob.JoinRoom(t, roomID, nil)
+
+			res := setRoomAliasResp(t, alice, roomID, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+
+			res = getRoomAliasResp(t, bob, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("room_id", roomID),
+				},
+			})
+
+			res = deleteRoomAliasResp(t, bob, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 403,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_FORBIDDEN"),
+				},
+			})
+		})
+
+		// sytest: Users with sufficient power-level can delete other's aliases
+		t.Run("Users with sufficient power-level can delete other's aliases", func(t *testing.T) {
+			t.Parallel()
+
+			roomID := alice.CreateRoom(t, map[string]interface{}{})
+
+			randomAlias := "#random_alias_5:hs1"
+
+			alice.InviteRoom(t, roomID, bob.UserID)
+			bob.JoinRoom(t, roomID, nil)
+
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type:     "m.room.power_levels",
+				StateKey: b.Ptr(""),
+				Content: map[string]interface{}{
+					"users": map[string]int64{
+						alice.UserID: 100,
+						bob.UserID:   100,
+					},
+				},
+			})
+
+			res := setRoomAliasResp(t, alice, roomID, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+			})
+
+			res = getRoomAliasResp(t, bob, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("room_id", roomID),
+				},
+			})
+
+			res = deleteRoomAliasResp(t, bob, randomAlias)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
 			})
 		})
 	})
