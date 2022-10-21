@@ -411,8 +411,7 @@ func TestPartialStateJoin(t *testing.T) {
 			func(userID string, sync gjson.Result) error {
 				for _, e := range sync.Get("to_device.events").Array() {
 					if e.Get("sender").Str == derekUserId &&
-						e.Get("type").Str == "m.test" &&
-						e.Get("message_id").Str == messageId {
+						e.Get("type").Str == "m.test" {
 						return nil
 					}
 				}
