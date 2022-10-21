@@ -3,11 +3,13 @@ package tests
 import (
 	"testing"
 
+	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/gjson"
 )
 
 func TestFederationRoomsInvite(t *testing.T) {
@@ -23,8 +25,8 @@ func TestFederationRoomsInvite(t *testing.T) {
 			t.Parallel()
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
+				"invite": []string{bob.UserID},
 			})
-			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			bob.LeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
@@ -49,14 +51,14 @@ func TestFederationRoomsInvite(t *testing.T) {
 			t.Parallel()
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
+				"invite": []string{bob.UserID},
 			})
 			aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-			alice.InviteRoom(t, roomID, bob.UserID)
-			charlieSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			alice.LeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomID))
 			bob.LeaveRoom(t, roomID)
-			bob.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncLeftFrom(bob.UserID, roomID))
+			bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
 
 		// sytest: Remote invited user can see room metadata
@@ -65,37 +67,72 @@ func TestFederationRoomsInvite(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"name":   "Invites room",
+				"invite": []string{bob.UserID},
 			})
 
-			alice.InviteRoom(t, roomID, bob.UserID)
+			wantFields := map[string]string{
+				"m.room.join_rules": "join_rule",
+				"m.room.name":       "name",
+			}
+			wantValues := map[string]string{
+				"m.room.join_rules": "invite",
+				"m.room.name":       "Invites room",
+			}
+
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			res, _ := bob.MustSync(t, client.SyncReq{})
-			verifyState(t, res, roomID, alice)
+			verifyState(t, res, wantFields, wantValues, roomID, alice)
+		})
+
+		t.Run("Invited user has 'is_direct' flag in prev_content after joining", func(t *testing.T) {
+			roomID := alice.CreateRoom(t, map[string]interface{}{
+				"preset": "private_chat",
+				"name":   "Invites room",
+				// invite Bob and make the room a DM, so we can verify m.direct flag is in the prev_content after joining
+				"invite":    []string{bob.UserID},
+				"is_direct": true,
+			})
+			bob.JoinRoom(t, roomID, []string{})
+			bob.MustSyncUntil(t, client.SyncReq{},
+				client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
+					// We expect a membership event ..
+					if result.Get("type").Str != gomatrixserverlib.MRoomMember {
+						return false
+					}
+					// .. for Bob
+					if result.Get("state_key").Str != bob.UserID {
+						return false
+					}
+					// Check that we've got tbe expected is_idrect flag
+					return result.Get("unsigned.prev_content.membership").Str == "invite" &&
+						result.Get("unsigned.prev_content.is_direct").Bool() == true &&
+						result.Get("unsigned.prev_sender").Str == alice.UserID
+				}),
+			)
 		})
 	})
 }
 
 // verifyState checks that the fields in "wantFields" are present in invite_state.events
-func verifyState(t *testing.T, res gjson.Result, roomID string, cl *client.CSAPI) {
-	wantFields := map[string]string{
-		"m.room.join_rules": "join_rule",
-		"m.room.name":       "name",
+func verifyState(t *testing.T, res gjson.Result, wantFields, wantValues map[string]string, roomID string, cl *client.CSAPI) {
+	inviteEvents := res.Get("rooms.invite." + client.GjsonEscape(roomID) + ".invite_state.events")
+	if !inviteEvents.Exists() {
+		t.Errorf("expected invite events, but they don't exist")
 	}
-
-	for _, event := range res.Get("rooms.invite." + client.GjsonEscape(roomID) + ".invite_state.events").Array() {
+	for _, event := range inviteEvents.Array() {
 		eventType := event.Get("type").Str
 		field, ok := wantFields[eventType]
 		if !ok {
 			continue
 		}
-		eventContent := event.Get("content." + field).Str
+		wantValue := wantValues[eventType]
 		eventStateKey := event.Get("state_key").Str
 
 		res := cl.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, eventStateKey})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONKeyEqual(field, eventContent),
+				match.JSONKeyEqual(field, wantValue),
 			},
 		})
 	}

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -23,11 +24,23 @@ var (
 	testFilenameRegexp = regexp.MustCompile(`/tests/(.*)\.pl`)
 )
 
+var debug bool
+var verbose bool
+
+func init() {
+	debugFlag := flag.Bool("d", false, "debug mode")
+	verboseFlag := flag.Bool("v", false, "verbose mode")
+
+	flag.Parse()
+
+	debug = *debugFlag
+	verbose = *verboseFlag
+}
+
 // Maps test names to filenames then looks for:
 //   sytest: $test_name
 // in all files in ./tests - if there's a match it marks that test as converted.
 func main() {
-	verbose := len(os.Args) == 2 && os.Args[1] == "-v"
 
 	filenameToTestName, testNameToFilename := getList()
 
@@ -53,6 +66,9 @@ func main() {
 			for _, line := range lines {
 				_, ok := testNameToFilename[line]
 				if !ok {
+					if debug && strings.Contains(line, "sytest:") {
+						fmt.Printf("Found unrecognised sytest marker in %s: %v\n", path, line)
+					}
 					continue
 				}
 				convertedTests[line] = true
