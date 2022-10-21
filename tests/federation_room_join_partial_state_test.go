@@ -220,6 +220,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to send events in the room, during the resync
 	t.Run("CanSendEventsDuringPartialStateJoin", func(t *testing.T) {
+		// See https://github.com/matrix-org/synapse/issues/12997")
 		t.Skip("Cannot yet send events during resync")
 		alice := deployment.RegisterUser(t, "hs1", "t3alice", "secret", false)
 
@@ -318,6 +319,8 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to receive presence EDU over federation during the resync
 	t.Run("CanReceivePresenceDuringPartialStateJoin", func(t *testing.T) {
+		// See https://github.com/matrix-org/synapse/issues/13008")
+		t.Skip("Presence EDUs are currently dropped during a resync")
 		deployment := Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
 		alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -346,23 +349,18 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
-		// TODO: for now we just check that the fed transaction is accepted,
-		// presence is not always going down the sync for some reason.
-		// Unclear if this is an existing Synapse bug or a new problem specific
-		// to partial joins.
-		//
-		// alice.MustSyncUntil(t,
-		// 	client.SyncReq{},
-		// 	func(userID string, sync gjson.Result) error {
-		// 		for _, e := range sync.Get("presence").Get("events").Array() {
-		// 			t.Logf("lllll %s", e)
-		// 			if e.Get("sender").Str == derekUserId {
-		// 				return nil
-		// 			}
-		// 		}
-		// 		return fmt.Errorf("No presence update from %s", derekUserId)
-		// 	},
-		// )
+		alice.MustSyncUntil(t,
+			client.SyncReq{},
+			func(userID string, sync gjson.Result) error {
+				for _, e := range sync.Get("presence").Get("events").Array() {
+					t.Logf("lllll %s", e)
+					if e.Get("sender").Str == derekUserId {
+						return nil
+					}
+				}
+				return fmt.Errorf("No presence update from %s", derekUserId)
+			},
+		)
 
 		psjResult.FinishStateRequest()
 	})
