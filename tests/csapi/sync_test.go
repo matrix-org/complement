@@ -392,7 +392,7 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	deployment.RegisterUser(t, "hs1", "charlie", "charlie", false)
+	deployment.RegisterUser(t, "hs1", "charlie", "charliepassword", false)
 	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
 
 	bobRoomID := alice.CreateRoom(t, struct{}{})
