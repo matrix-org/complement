@@ -270,7 +270,9 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice should be able to see that Derek is typing (even though HS1 is resyncing).
 		alice.MustSyncUntil(t,
-			client.SyncReq{},
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
 			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
 				if result.Get("type").Str != "m.typing" {
 					return false
@@ -308,7 +310,9 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice should be able to see that no-one is typing.
 		alice.MustSyncUntil(t,
-			client.SyncReq{},
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
 			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
 				return (result.Get("type").Str == "m.typing" &&
 					result.Get("content.user_ids.#").Int() == 0)
@@ -350,7 +354,9 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		alice.MustSyncUntil(t,
-			client.SyncReq{},
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
 			func(userID string, sync gjson.Result) error {
 				for _, e := range sync.Get("presence").Get("events").Array() {
 					t.Logf("lllll %s", e)
@@ -399,7 +405,9 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice should see Derek's to-device message when she syncs.
 		alice.MustSyncUntil(t,
-			client.SyncReq{},
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
 			func(userID string, sync gjson.Result) error {
 				for _, e := range sync.Get("to_device.events").Array() {
 					if e.Get("sender").Str == derekUserId &&
