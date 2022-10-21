@@ -416,13 +416,28 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	bob.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
 	charlie.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
 
-	nextBatch = alice.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(clientUserID string, sync gjson.Result) error {
-		presence := sync.Get("presence")
-		if len(presence.Get("events").Array()) == 0 {
-			return fmt.Errorf("presence.events is empty: %+v", presence)
+	presenceBob, presenceCharlie := false, false
+
+	alice.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(clientUserID string, sync gjson.Result) error {
+		presenceArray := sync.Get("presence").Get("events").Array()
+		if len(presenceArray) == 0 {
+			return fmt.Errorf("presence.events is empty")
 		}
-		usersInPresenceEvents(t, presence, []string{bob.UserID, charlie.UserID})
-		return nil
+		for _, x := range presenceArray {
+			if x.Get("content").Get("presence").Str != "online" {
+				continue
+			}
+			if x.Get("sender").Str == bob.UserID {
+				presenceBob = true
+			}
+			if x.Get("sender").Str == charlie.UserID {
+				presenceCharlie = true
+			}
+			if presenceBob && presenceCharlie {
+				return nil
+			}
+		}
+		return fmt.Errorf("all users not present yet, bob %t charlie %t", presenceBob, presenceCharlie)
 	})
 }
 
