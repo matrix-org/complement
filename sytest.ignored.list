@@ -35,7 +35,8 @@ New room members see first user's profile information in per-room initialSync
 A departed room is still included in /initialSync (SPEC-216)
 Can get rooms/{roomId}/initialSync for a departed room (SPEC-216)
 initialSync sees my presence status
-Global initialSyncGlobal initialSync with limit=0 gives no messages
+Global initialSync
+Global initialSync with limit=0 gives no messages
 Room initialSync
 Room initialSync with limit=0 gives no messages
 Read receipts are visible to /initialSync
