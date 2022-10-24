@@ -291,7 +291,7 @@ func TestPartialStateJoin(t *testing.T) {
 		event := psjResult.CreateMessageEvent(t, "charlie", nil)
 		serverRoom.AddEvent(event)
 		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
-		awaitEventViaSync(t, alice, serverRoom.RoomID, event.EventID(), "")
+		aliceNextBatch = awaitEventViaSync(t, alice, serverRoom.RoomID, event.EventID(), aliceNextBatch)
 
 		// The resync completes.
 		psjResult.FinishStateRequest()
@@ -312,7 +312,7 @@ func TestPartialStateJoin(t *testing.T) {
 		alice.MustSyncUntil(t,
 			client.SyncReq{
 				Filter: buildLazyLoadingSyncFilter(nil),
-				Since: aliceNextBatch,
+				Since:  aliceNextBatch,
 			},
 			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
 				return (result.Get("type").Str == "m.typing" &&
