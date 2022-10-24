@@ -220,7 +220,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to send events in the room, during the resync
 	t.Run("CanSendEventsDuringPartialStateJoin", func(t *testing.T) {
-		// See https://github.com/matrix-org/synapse/issues/12997")
+		// See https://github.com/matrix-org/synapse/issues/12997
 		t.Skip("Cannot yet send events during resync")
 		alice := deployment.RegisterUser(t, "hs1", "t3alice", "secret", false)
 
