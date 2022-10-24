@@ -269,7 +269,7 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		// Alice should be able to see that Derek is typing (even though HS1 is resyncing).
-		alice.MustSyncUntil(t,
+		aliceNextBatch := alice.MustSyncUntil(t,
 			client.SyncReq{
 				Filter: buildLazyLoadingSyncFilter(nil),
 			},
@@ -312,6 +312,7 @@ func TestPartialStateJoin(t *testing.T) {
 		alice.MustSyncUntil(t,
 			client.SyncReq{
 				Filter: buildLazyLoadingSyncFilter(nil),
+				Since: aliceNextBatch,
 			},
 			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
 				return (result.Get("type").Str == "m.typing" &&
