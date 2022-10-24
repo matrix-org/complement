@@ -360,7 +360,6 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 			func(userID string, sync gjson.Result) error {
 				for _, e := range sync.Get("presence").Get("events").Array() {
-					t.Logf("lllll %s", e)
 					if e.Get("sender").Str == derekUserId {
 						return nil
 					}
