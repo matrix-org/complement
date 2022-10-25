@@ -1501,59 +1501,6 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Errorf("SendKnock: non-HTTPError: %v", err)
 		}
 	})
-
-	// Test that a) you can add a room alias during a resync and that
-	// b) querying that alias returns at least the servers we were told
-	// about in the /send_join response.
-	t.Run("Room aliases can be added and queried during a resync", func(t *testing.T) {
-		// Alice begins a partial join to a room.
-		alice := deployment.RegisterUser(t, "hs1", "t23alice", "secret", false)
-		server := createTestServer(t, deployment)
-		cancel := server.Listen()
-		defer cancel()
-
-		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
-		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
-		defer psjResult.Destroy()
-
-		// Alice creates an alias for the room
-		aliasName := "#t23alice-room:hs1"
-		alice.MustDoFunc(
-			t,
-			"PUT",
-			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
-			client.WithJSONBody(t, map[string]interface{}{
-				"room_id": serverRoom.RoomID,
-			}),
-		)
-
-		// Alice then queries that alias
-		response := alice.MustDoFunc(
-			t,
-			"GET",
-			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
-			client.WithJSONBody(t, map[string]interface{}{
-				"room_id": serverRoom.RoomID,
-			}),
-		)
-
-		// The response should be 200 OK, should include the room id and
-		// should include both HSes.
-		spec := match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("room_id", serverRoom.RoomID),
-				match.JSONCheckOff(
-					"servers",
-					[]interface{}{"hs1", server.ServerName()},
-					func(r gjson.Result) interface{} { return r.Str },
-					nil,
-				),
-			},
-		}
-		must.MatchResponse(t, response, spec)
-	})
-
 	t.Run("Outgoing device list updates", func(t *testing.T) {
 		// setupOutgoingDeviceListUpdateTest sets up two complement homeservers.
 		// A room is created on the first complement server, containing only local users.
@@ -2827,6 +2774,59 @@ func TestPartialStateJoin(t *testing.T) {
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 		})
 	})
+
+	// Test that a) you can add a room alias during a resync and that
+	// b) querying that alias returns at least the servers we were told
+	// about in the /send_join response.
+	t.Run("Room aliases can be added and queried during a resync", func(t *testing.T) {
+		// Alice begins a partial join to a room.
+		alice := deployment.RegisterUser(t, "hs1", "t40alice", "secret", false)
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// Alice creates an alias for the room
+		aliasName := "#t40alice-room:hs1"
+		alice.MustDoFunc(
+			t,
+			"PUT",
+			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
+			client.WithJSONBody(t, map[string]interface{}{
+				"room_id": serverRoom.RoomID,
+			}),
+		)
+
+		// Alice then queries that alias
+		response := alice.MustDoFunc(
+			t,
+			"GET",
+			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
+			client.WithJSONBody(t, map[string]interface{}{
+				"room_id": serverRoom.RoomID,
+			}),
+		)
+
+		// The response should be 200 OK, should include the room id and
+		// should include both HSes.
+		spec := match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("room_id", serverRoom.RoomID),
+				match.JSONCheckOff(
+					"servers",
+					[]interface{}{"hs1", server.ServerName()},
+					func(r gjson.Result) interface{} { return r.Str },
+					nil,
+				),
+			},
+		}
+		must.MatchResponse(t, response, spec)
+	})
+
 }
 
 // test reception of an event over federation during a resync
