@@ -501,7 +501,12 @@ func TestPartialStateJoin(t *testing.T) {
 		aliceNextBatch := getSyncToken(t, alice)
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
+		// The resync completes.
+		psjResult.FinishStateRequest()
+
 		// Check that Alice is told that Derek's devices have changed.
+		// (Alice does not get told this during the resync, since we can't know
+		// for certain who is in that room until the resync completes.)
 		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{
@@ -512,7 +517,7 @@ func TestPartialStateJoin(t *testing.T) {
 				matcher := match.JSONCheckOff(
 					"device_lists.changed",
 					[]interface{}{derekUserId},
-					func(r gjson.Result) interface{} { return r },
+					func(r gjson.Result) interface{} { return r.Str },
 					nil,
 				)
 				return matcher([]byte(res.Raw))
