@@ -498,10 +498,26 @@ func TestPartialStateJoin(t *testing.T) {
 			Type:    "m.device_list_update",
 			Content: content,
 		}
+		aliceNextBatch := getSyncToken(t, alice)
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
-		// If we want to check the sync we need to have an encrypted room,
-		// for now just check that the fed transaction is accepted.
+		// Check that Alice is told that Derek's devices have changed.
+		aliceNextBatch = alice.MustSyncUntil(
+			t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+				Since:  aliceNextBatch,
+			},
+			func(clientUserID string, res gjson.Result) error {
+				matcher := match.JSONCheckOff(
+					"device_lists.changed",
+					[]interface{}{derekUserId},
+					func(r gjson.Result) interface{} { return r },
+					nil,
+				)
+				return matcher([]byte(res.Raw))
+			},
+		)
 	})
 
 	// we should be able to receive signing key update EDU over federation during the resync
