@@ -1,6 +1,7 @@
 package csapi_tests
 
 import (
+	"net/http"
 	"net/url"
 	"testing"
 	"time"
@@ -11,9 +12,6 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/complement/runtime"
-
-	"net/http"
 )
 
 func TestRoomState(t *testing.T) {
