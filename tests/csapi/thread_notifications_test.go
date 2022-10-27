@@ -60,7 +60,7 @@ func TestThreadedReceipts(t *testing.T) {
 	bobNextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// Send an initial message as alice.
-	firstEventID := alice.SendEventSynced(t, roomID, b.Event{
+	eventA := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
@@ -70,13 +70,13 @@ func TestThreadedReceipts(t *testing.T) {
 
 	// Create a thread from the above message and send both two messages in it,
 	// the second of which is a mention (causing a highlight).
-	firstThreadEventID := alice.SendEventSynced(t, roomID, b.Event{
+	eventB := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Start thread!",
 			"m.relates_to": map[string]interface{}{
-				"event_id": firstEventID,
+				"event_id": eventA,
 				"rel_type": "m.thread",
 			},
 		},
@@ -87,14 +87,14 @@ func TestThreadedReceipts(t *testing.T) {
 			"msgtype": "m.text",
 			"body":    fmt.Sprintf("Thread response %s!", bob.UserID),
 			"m.relates_to": map[string]interface{}{
-				"event_id": firstEventID,
+				"event_id": eventA,
 				"rel_type": "m.thread",
 			},
 		},
 	})
 
 	// Send an additional unthreaded message, which is a mention (causing a highlight).
-	secondEventID := alice.SendEventSynced(t, roomID, b.Event{
+	eventD := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
@@ -110,7 +110,7 @@ func TestThreadedReceipts(t *testing.T) {
 	bob.MustSyncUntil(
 		t, client.SyncReq{Since: bobNextBatch},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-			return r.Get("event_id").Str == secondEventID
+			return r.Get("event_id").Str == eventD
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 4 && !t.Exists()
@@ -120,10 +120,10 @@ func TestThreadedReceipts(t *testing.T) {
 		t,
 		client.SyncReq{Since: bobNextBatch, Filter: threadFilter},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-			return r.Get("event_id").Str == secondEventID
+			return r.Get("event_id").Str == eventD
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
-			threadNotifications := t.Get(client.GjsonEscape(firstEventID))
+			threadNotifications := t.Get(client.GjsonEscape(eventA))
 			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 2 &&
 			  threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 2
 		}),
@@ -132,11 +132,11 @@ func TestThreadedReceipts(t *testing.T) {
 	// Mark the first event as read with a threaded receipt. This causes only the
 	// notification from that event to be marked as read and only impacts the main
 	// timeline.
-	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", firstEventID}, client.WithJSONBody(t, map[string]interface{}{"thread_id": "main"}))
+	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventA}, client.WithJSONBody(t, map[string]interface{}{"thread_id": "main"}))
 	bob.MustSyncUntil(
 		t, client.SyncReq{Since: bobNextBatch},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-			return r.Get("event_id").Str == secondEventID
+			return r.Get("event_id").Str == eventD
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 3 && !t.Exists()
@@ -146,10 +146,10 @@ func TestThreadedReceipts(t *testing.T) {
 		t,
 		client.SyncReq{Since: bobNextBatch, Filter: threadFilter},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-			return r.Get("event_id").Str == secondEventID
+			return r.Get("event_id").Str == eventD
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
-			threadNotifications := t.Get(client.GjsonEscape(firstEventID))
+			threadNotifications := t.Get(client.GjsonEscape(eventA))
 			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 1 &&
 			  threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 2
 		}),
@@ -157,11 +157,11 @@ func TestThreadedReceipts(t *testing.T) {
 
 	// Mark the first thread event as read. This causes only the notification from
 	// that event to be marked as read and only impacts the thread timeline.
-	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", firstThreadEventID}, client.WithJSONBody(t, map[string]interface{}{"thread_id": firstEventID}))
+	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventB}, client.WithJSONBody(t, map[string]interface{}{"thread_id": eventA}))
 	bob.MustSyncUntil(
 		t, client.SyncReq{Since: bobNextBatch},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-			return r.Get("event_id").Str == secondEventID
+			return r.Get("event_id").Str == eventD
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 2 && !t.Exists()
@@ -171,10 +171,10 @@ func TestThreadedReceipts(t *testing.T) {
 		t,
 		client.SyncReq{Since: bobNextBatch, Filter: threadFilter},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-			return r.Get("event_id").Str == secondEventID
+			return r.Get("event_id").Str == eventD
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
-			threadNotifications := t.Get(client.GjsonEscape(firstEventID))
+			threadNotifications := t.Get(client.GjsonEscape(eventA))
 			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 1 &&
 			  threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 1
 		}),
@@ -182,11 +182,11 @@ func TestThreadedReceipts(t *testing.T) {
 
 	// Mark the entire room as read by sending an unthreaded read receipt on the last
 	// event. This clears all notification counts.
-	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", secondEventID}, client.WithJSONBody(t, struct{}{}))
+	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventD}, client.WithJSONBody(t, struct{}{}))
 	bob.MustSyncUntil(
 		t, client.SyncReq{Since: bobNextBatch},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-			return r.Get("event_id").Str == secondEventID
+			return r.Get("event_id").Str == eventD
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 0 && !t.Exists()
@@ -196,7 +196,7 @@ func TestThreadedReceipts(t *testing.T) {
 		t,
 		client.SyncReq{Since: bobNextBatch, Filter: threadFilter},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-			return r.Get("event_id").Str == secondEventID
+			return r.Get("event_id").Str == eventD
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 0 && !t.Exists()
