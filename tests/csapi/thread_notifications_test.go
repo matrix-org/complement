@@ -31,11 +31,11 @@ func syncHasUnreadNotifs(roomID string, check func(gjson.Result, gjson.Result) b
 // 2. Send combinations of threaded and unthreaded receipts.
 // 3. Ensure the notification counts are updated appropriately.
 //
-// This sends four messages as alice creating a DAG somewhat like:
+// This sends four messages as alice creating a timeline like:
 //
-// A<--B<--C
+// A<--B<--C    [thread]
 // ^
-// +---D
+// +---D        [main timeline]
 //
 // Where C and D generate highlight notifications.
 //
