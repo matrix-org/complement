@@ -11,12 +11,16 @@ import (
 	"github.com/matrix-org/complement/runtime"
 )
 
+// Builds a `SyncCheckOpt` which enforces that a sync result satisfies some `check` function
+// on the `unread_notifications` and `unread_thread_notifications` fields for the given room.
+// The `unread_notifications` field must exist, or else the overall SyncCheckOpt will be considered
+// as failing.
 func syncHasUnreadNotifs(roomID string, check func(gjson.Result, gjson.Result) bool) client.SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		unreadNotifications := topLevelSyncJSON.Get("rooms.join." + client.GjsonEscape(roomID) + ".unread_notifications")
 		unreadThreadNotifications := topLevelSyncJSON.Get("rooms.join." + client.GjsonEscape(roomID) + ".unread_thread_notifications")
 		if !unreadNotifications.Exists() {
-			return fmt.Errorf("syncHasUnreadNotifs(%s): missing notifications", roomID)
+			return fmt.Errorf("syncHasUnreadNotifs(%s): missing unread notifications", roomID)
 		}
 		if check(unreadNotifications, unreadThreadNotifications) {
 			return nil
