@@ -25,6 +25,7 @@ func awaitTyping(userId string) func(result gjson.Result) bool {
 	}
 }
 
+// sytest: Typing notifications also sent to remote room members
 func TestRemoteTyping(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
