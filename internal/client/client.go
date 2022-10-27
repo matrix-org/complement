@@ -835,3 +835,48 @@ func SplitMxc(mxcUri string) (string, string) {
 
 	return origin, mediaId
 }
+
+// SendToDeviceMessages sends to-device messages over /sendToDevice/.
+//
+// The messages parameter is nested as follows:
+// user_id -> device_id -> content (map[string]interface{})
+func (c *CSAPI) SendToDeviceMessages(t *testing.T, evType string, messages map[string]map[string]map[string]interface{}) {
+	t.Helper()
+	c.txnID++
+	c.MustDoFunc(
+		t,
+		"PUT",
+		[]string{"_matrix", "client", "v3", "sendToDevice", evType, strconv.Itoa(c.txnID)},
+		WithJSONBody(
+			t,
+			map[string]map[string]map[string]map[string]interface{}{
+				"messages": messages,
+			},
+		),
+	)
+}
+
+// Check that sync has received a to-device message,
+// with optional user filtering.
+//
+// If fromUser == "", all messages will be passed through to the check function.
+// `check` will be called for all messages that have passed the filter.
+//
+// `check` gets passed the full event, including sender and type.
+func SyncToDeviceHas(fromUser string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "to_device.events", func(result gjson.Result) bool {
+				if fromUser != "" && result.Get("sender").Str != fromUser {
+					return false
+				} else {
+					return check(result)
+				}
+			},
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncToDeviceHas(%v): %s", fromUser, err)
+	}
+}
