@@ -56,7 +56,8 @@ func TestThreadedReceipts(t *testing.T) {
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.JoinRoom(t, roomID, nil)
 
-	token := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+  // A next batch token which is past the initial room creation.
+	bobNextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// Send an initial message as alice.
 	firstEventID := alice.SendEventSynced(t, roomID, b.Event{
@@ -107,7 +108,7 @@ func TestThreadedReceipts(t *testing.T) {
 	// Check the unthreaded and threaded counts, which should include all previously
 	// sent messages.
 	bob.MustSyncUntil(
-		t, client.SyncReq{Since: token},
+		t, client.SyncReq{Since: bobNextBatch},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
@@ -117,7 +118,7 @@ func TestThreadedReceipts(t *testing.T) {
 	)
 	bob.MustSyncUntil(
 		t,
-		client.SyncReq{Since: token, Filter: threadFilter},
+		client.SyncReq{Since: bobNextBatch, Filter: threadFilter},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
@@ -133,7 +134,7 @@ func TestThreadedReceipts(t *testing.T) {
 	// timeline.
 	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", firstEventID}, client.WithJSONBody(t, map[string]interface{}{"thread_id": "main"}))
 	bob.MustSyncUntil(
-		t, client.SyncReq{Since: token},
+		t, client.SyncReq{Since: bobNextBatch},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
@@ -143,7 +144,7 @@ func TestThreadedReceipts(t *testing.T) {
 	)
 	bob.MustSyncUntil(
 		t,
-		client.SyncReq{Since: token, Filter: threadFilter},
+		client.SyncReq{Since: bobNextBatch, Filter: threadFilter},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
@@ -158,7 +159,7 @@ func TestThreadedReceipts(t *testing.T) {
 	// that event to be marked as read and only impacts the thread timeline.
 	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", firstThreadEventID}, client.WithJSONBody(t, map[string]interface{}{"thread_id": firstEventID}))
 	bob.MustSyncUntil(
-		t, client.SyncReq{Since: token},
+		t, client.SyncReq{Since: bobNextBatch},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
@@ -168,7 +169,7 @@ func TestThreadedReceipts(t *testing.T) {
 	)
 	bob.MustSyncUntil(
 		t,
-		client.SyncReq{Since: token, Filter: threadFilter},
+		client.SyncReq{Since: bobNextBatch, Filter: threadFilter},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
@@ -183,7 +184,7 @@ func TestThreadedReceipts(t *testing.T) {
 	// event. This clears all notification counts.
 	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", secondEventID}, client.WithJSONBody(t, struct{}{}))
 	bob.MustSyncUntil(
-		t, client.SyncReq{Since: token},
+		t, client.SyncReq{Since: bobNextBatch},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
@@ -193,7 +194,7 @@ func TestThreadedReceipts(t *testing.T) {
 	)
 	bob.MustSyncUntil(
 		t,
-		client.SyncReq{Since: token, Filter: threadFilter},
+		client.SyncReq{Since: bobNextBatch, Filter: threadFilter},
 		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
