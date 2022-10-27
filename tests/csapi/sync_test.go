@@ -393,6 +393,7 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	deployment.RegisterUser(t, "hs1", "charlie", "charliepassword", false)
 	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
 
+	// Alice creates two rooms: one with her and Bob, and a second with her and Charlie.
 	bobRoomID := alice.CreateRoom(t, struct{}{})
 	charlieRoomID := alice.CreateRoom(t, struct{}{})
 	nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, bobRoomID), client.SyncJoinedTo(alice.UserID, charlieRoomID))
@@ -408,6 +409,7 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 		client.SyncJoinedTo(charlie.UserID, charlieRoomID),
 	)
 
+	// Bob and Charlie mark themselves as online.
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"presence": "online",
 	})
