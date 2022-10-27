@@ -219,7 +219,7 @@ func TestClientSpacesSummary(t *testing.T) {
 	// - Rooms are returned correctly along with the custom fields `room_type`.
 	// - Events are returned correctly.
 	t.Run("query whole graph", func(t *testing.T) {
-		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
+		res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -352,7 +352,7 @@ func TestClientSpacesSummary(t *testing.T) {
 			StateKey: &ss1,
 			Content:  map[string]interface{}{},
 		})
-		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
+		res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -464,7 +464,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	bob.JoinRoom(t, root, []string{"hs1"})
 
-	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
+	res := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
@@ -482,7 +482,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	alice.InviteRoom(t, r1, bob.UserID)
 	alice.InviteRoom(t, r3, bob.UserID)
 
-	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
+	res = bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
@@ -499,7 +499,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	// Invite to SS1 and it now appears, as well as the rooms under it.
 	alice.InviteRoom(t, ss1, bob.UserID)
 
-	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
+	res = bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
@@ -627,7 +627,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 	}
 	t.Logf("rooms: %v", allEvents)
 
-	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"}, nil)
+	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
