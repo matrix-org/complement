@@ -56,9 +56,15 @@ func syncHasThreadedReadReceipt(roomID, userID, eventID, threadID string) client
 //
 // This sends four messages as alice creating a timeline like:
 //
-// A<--B<--C    [thread]
+// A<--B<--C<--E  [m.thread to A]
 // ^
-// +---D        [main timeline]
+// |
+// +---D          [main timeline]
+// |
+// +<--F          [m.reference to A]
+//
+//	|
+//	+<--G      [m.annotation to F]
 //
 // Where C and D generate highlight notifications.
 //
@@ -121,6 +127,43 @@ func TestThreadedReceipts(t *testing.T) {
 		},
 	})
 
+	// Send another event in the thread created above.
+	alice.SendEventSynced(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "End thread",
+			"m.relates_to": map[string]interface{}{
+				"event_id": eventA,
+				"rel_type": "m.thread",
+			},
+		},
+	})
+
+	// Create another event related to the root event via a reference (i.e. but
+	// not via a thread). Then create an event which is an annotation to it.
+	eventF := alice.SendEventSynced(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Reference!",
+			"m.relates_to": map[string]interface{}{
+				"event_id": eventA,
+				"rel_type": "m.reference",
+			},
+		},
+	})
+	eventG := alice.SendEventSynced(t, roomID, b.Event{
+		Type: "m.room.reaction",
+		Content: map[string]interface{}{
+			"m.relates_to": map[string]interface{}{
+				"event_id": eventF,
+				"rel_type": "m.annotation",
+				"key":      "test",
+			},
+		},
+	})
+
 	// A filter to get thread notifications.
 	threadFilter := `{"room":{"timeline":{"unread_thread_notifications":true}}}`
 
@@ -132,7 +175,7 @@ func TestThreadedReceipts(t *testing.T) {
 			return r.Get("event_id").Str == eventD
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
-			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 4 && !t.Exists()
+			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 6 && !t.Exists()
 		}),
 	)
 	bob.MustSyncUntil(
@@ -143,8 +186,8 @@ func TestThreadedReceipts(t *testing.T) {
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			threadNotifications := t.Get(client.GjsonEscape(eventA))
-			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 2 &&
-				threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 2
+			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 3 &&
+				threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 3
 		}),
 	)
 
@@ -159,7 +202,7 @@ func TestThreadedReceipts(t *testing.T) {
 		}),
 		syncHasThreadedReadReceipt(roomID, bob.UserID, eventA, "main"),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
-			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 3 && !t.Exists()
+			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 5 && !t.Exists()
 		}),
 	)
 	bob.MustSyncUntil(
@@ -171,8 +214,8 @@ func TestThreadedReceipts(t *testing.T) {
 		syncHasThreadedReadReceipt(roomID, bob.UserID, eventA, "main"),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			threadNotifications := t.Get(client.GjsonEscape(eventA))
-			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 1 &&
-				threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 2
+			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 2 &&
+				threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 3
 		}),
 	)
 
@@ -187,7 +230,7 @@ func TestThreadedReceipts(t *testing.T) {
 		syncHasThreadedReadReceipt(roomID, bob.UserID, eventA, "main"),
 		syncHasThreadedReadReceipt(roomID, bob.UserID, eventB, eventA),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
-			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 2 && !t.Exists()
+			return r.Get("highlight_count").Num == 2 && r.Get("notification_count").Num == 4 && !t.Exists()
 		}),
 	)
 	bob.MustSyncUntil(
@@ -200,13 +243,12 @@ func TestThreadedReceipts(t *testing.T) {
 		syncHasThreadedReadReceipt(roomID, bob.UserID, eventB, eventA),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			threadNotifications := t.Get(client.GjsonEscape(eventA))
-			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 1 &&
-				threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 1
+			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 2 &&
+				threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 2
 		}),
 	)
 
-	// Mark the entire room as read by sending an unthreaded read receipt on the last
-	// event. This clears all notification counts.
+	// Use an unthreaded receipt to mark the second thread event and an unthreaded event as read.
 	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventD}, client.WithJSONBody(t, struct{}{}))
 	bob.MustSyncUntil(
 		t, client.SyncReq{Since: bobNextBatch},
@@ -215,7 +257,7 @@ func TestThreadedReceipts(t *testing.T) {
 		}),
 		syncHasUnthreadedReadReceipt(roomID, bob.UserID, eventD),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
-			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 0 && !t.Exists()
+			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 2 && !t.Exists()
 		}),
 	)
 	bob.MustSyncUntil(
@@ -226,7 +268,34 @@ func TestThreadedReceipts(t *testing.T) {
 		}),
 		syncHasUnthreadedReadReceipt(roomID, bob.UserID, eventD),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
-			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 0 && !t.Exists()
+			threadNotifications := t.Get(client.GjsonEscape(eventA))
+			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 1 &&
+				threadNotifications.Get("highlight_count").Num == 0 && threadNotifications.Get("notification_count").Num == 1
+		}),
+	)
+
+	// Finally, mark the entire thread as read, using the annotation.
+	//
+	// Note that this will *not* affect the main timeline.
+	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventG}, client.WithJSONBody(t, map[string]interface{}{"thread_id": eventA}))
+	bob.MustSyncUntil(
+		t, client.SyncReq{Since: bobNextBatch},
+		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+			return r.Get("event_id").Str == eventD
+		}),
+		syncHasUnthreadedReadReceipt(roomID, bob.UserID, eventD),
+		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
+			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 1 && !t.Exists()
+		}),
+	)
+	bob.MustSyncUntil(
+		t,
+		client.SyncReq{Since: bobNextBatch, Filter: threadFilter}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+			return r.Get("event_id").Str == eventD
+		}),
+		syncHasUnthreadedReadReceipt(roomID, bob.UserID, eventD),
+		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
+			return r.Get("highlight_count").Num == 0 && r.Get("notification_count").Num == 1 && !t.Exists()
 		}),
 	)
 }
