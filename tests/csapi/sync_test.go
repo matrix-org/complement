@@ -416,7 +416,10 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	bob.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
 	charlie.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
 
-	presenceBob, presenceCharlie := false, false
+	// Alice should see that Bob and Charlie are online. She may see this happen
+	// simultaneously in one /sync response, or separately in two /sync
+	// responses.
+	seenBobOnline, seenCharlieOnline := false, false
 
 	alice.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(clientUserID string, sync gjson.Result) error {
 		presenceArray := sync.Get("presence").Get("events").Array()
@@ -428,16 +431,16 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 				continue
 			}
 			if x.Get("sender").Str == bob.UserID {
-				presenceBob = true
+				seenBobOnline = true
 			}
 			if x.Get("sender").Str == charlie.UserID {
-				presenceCharlie = true
+				seenCharlieOnline = true
 			}
-			if presenceBob && presenceCharlie {
+			if seenBobOnline && seenCharlieOnline {
 				return nil
 			}
 		}
-		return fmt.Errorf("all users not present yet, bob %t charlie %t", presenceBob, presenceCharlie)
+		return fmt.Errorf("all users not present yet, bob %t charlie %t", seenBobOnline, seenCharlieOnline)
 	})
 }
 
