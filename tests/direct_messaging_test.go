@@ -28,10 +28,6 @@ func TestWriteMDirectAccountData(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-
-	// additional logging to debug https://github.com/matrix-org/synapse/issues/13334
-	alice.Debug = true
-
 	roomID := alice.CreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,

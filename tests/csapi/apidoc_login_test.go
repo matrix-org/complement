@@ -43,14 +43,14 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login can log in as a user
 		t.Run("POST /login can login as user", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, json.RawMessage(`{
+			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
 					"user": "@test_login_user:hs1"
 				},
 				"password": "superuser"
-			}`))
+			}`)))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -63,7 +63,7 @@ func TestLogin(t *testing.T) {
 		t.Run("POST /login returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
 			deviceID := "test_device_id"
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, json.RawMessage(`{
+			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
@@ -71,7 +71,7 @@ func TestLogin(t *testing.T) {
 				},
 				"password": "superuser",
 				"device_id": "`+deviceID+`"
-			}`))
+			}`)))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -84,14 +84,14 @@ func TestLogin(t *testing.T) {
 		t.Run("POST /login can log in as a user with just the local part of the id", func(t *testing.T) {
 			t.Parallel()
 
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, json.RawMessage(`{
+			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
 					"user": "test_login_user"
 				},
 				"password": "superuser"
-			}`))
+			}`)))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
