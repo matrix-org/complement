@@ -113,7 +113,8 @@ func TestThreadedReceipts(t *testing.T) {
 	)
 	bob.MustSyncUntil(
 		t,
-		client.SyncReq{Since: token, Filter: threadFilter}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+		client.SyncReq{Since: token, Filter: threadFilter},
+		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
@@ -138,7 +139,8 @@ func TestThreadedReceipts(t *testing.T) {
 	)
 	bob.MustSyncUntil(
 		t,
-		client.SyncReq{Since: token, Filter: threadFilter}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+		client.SyncReq{Since: token, Filter: threadFilter},
+		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
@@ -162,7 +164,8 @@ func TestThreadedReceipts(t *testing.T) {
 	)
 	bob.MustSyncUntil(
 		t,
-		client.SyncReq{Since: token, Filter: threadFilter}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+		client.SyncReq{Since: token, Filter: threadFilter},
+		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
@@ -186,7 +189,8 @@ func TestThreadedReceipts(t *testing.T) {
 	)
 	bob.MustSyncUntil(
 		t,
-		client.SyncReq{Since: token, Filter: threadFilter}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
+		client.SyncReq{Since: token, Filter: threadFilter},
+		client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 			return r.Get("event_id").Str == secondEventID
 		}),
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
