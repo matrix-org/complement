@@ -144,7 +144,7 @@ func TestThreadedReceipts(t *testing.T) {
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			threadNotifications := t.Get(client.GjsonEscape(eventA))
 			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 2 &&
-			  threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 2
+				threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 2
 		}),
 	)
 
@@ -172,7 +172,7 @@ func TestThreadedReceipts(t *testing.T) {
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			threadNotifications := t.Get(client.GjsonEscape(eventA))
 			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 1 &&
-			  threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 2
+				threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 2
 		}),
 	)
 
@@ -201,7 +201,7 @@ func TestThreadedReceipts(t *testing.T) {
 		syncHasUnreadNotifs(roomID, func(r gjson.Result, t gjson.Result) bool {
 			threadNotifications := t.Get(client.GjsonEscape(eventA))
 			return r.Get("highlight_count").Num == 1 && r.Get("notification_count").Num == 1 &&
-			  threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 1
+				threadNotifications.Get("highlight_count").Num == 1 && threadNotifications.Get("notification_count").Num == 1
 		}),
 	)
 
