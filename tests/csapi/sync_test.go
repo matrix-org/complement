@@ -102,7 +102,7 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 }
 
 func TestSync(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // too flakey, fails with sync_test.go:135: unchanged room !7ciB69Jg2lCc4Vdf:hs1 should not be in the sync
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 	// sytest: Can sync
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
@@ -162,7 +162,7 @@ func TestSync(t *testing.T) {
 		})
 		// sytest: Newly joined room has correct timeline in incremental sync
 		t.Run("Newly joined room has correct timeline in incremental sync", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
+			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 			t.Parallel()
 			filter = map[string]interface{}{
 				"room": map[string]interface{}{
@@ -211,7 +211,7 @@ func TestSync(t *testing.T) {
 		})
 		// sytest: Newly joined room includes presence in incremental sync
 		t.Run("Newly joined room includes presence in incremental sync", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
+			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			_, nextBatch := bob.MustSync(t, client.SyncReq{})
@@ -231,7 +231,7 @@ func TestSync(t *testing.T) {
 		})
 		// sytest: Get presence for newly joined members in incremental sync
 		t.Run("Get presence for newly joined members in incremental sync", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
+			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			sendMessages(t, alice, roomID, "dummy message", 1)

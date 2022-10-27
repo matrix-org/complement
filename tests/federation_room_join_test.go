@@ -200,7 +200,10 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		alice.JoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with state with unverifiable auth events shouldn't block room join", func(t *testing.T) {
-		runtime.SkipIf(t, runtime.Dendrite) // https://github.com/matrix-org/dendrite/issues/2028
+		// FIXME: https://github.com/matrix-org/dendrite/issues/2800
+		//  (previously https://github.com/matrix-org/dendrite/issues/2028)
+		runtime.SkipIf(t, runtime.Dendrite)
+
 		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 		roomAlias := srv.MakeAliasMapping("UnverifiableAuthEvents", room.RoomID)
 
@@ -528,7 +531,9 @@ func typeAndStateKeyForEvent(result gjson.Result) string {
 }
 
 func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // Dendrite doesn't read AS registration files from Complement yet
+	// Dendrite doesn't read AS registration files from Complement yet
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/complement/issues/514
+
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
