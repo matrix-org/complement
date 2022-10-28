@@ -44,7 +44,7 @@ func TestUrlPreview(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	webServer := web.NewServer(t, func(router *mux.Router) {
+	webServer := web.NewServer(t, complementBuilder.Config, func(router *mux.Router) {
 		router.HandleFunc("/test.png", func(w http.ResponseWriter, req *http.Request) {
 			t.Log("/test.png fetched")
 
@@ -64,9 +64,9 @@ func TestUrlPreview(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "media", "r0", "preview_url"},
+	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "media", "v3", "preview_url"},
 		client.WithQueries(url.Values{
-			"url": []string{fmt.Sprintf("%s/test.html", webServer.Url(complementBuilder.Config))},
+			"url": []string{webServer.Url + "/test.html"},
 		}),
 	)
 
