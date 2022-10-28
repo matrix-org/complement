@@ -50,6 +50,7 @@ func TestLeakyTyping(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	charlie := deployment.RegisterUser(t, "hs1", "charlie", "charliepassword", false)
 
+	// Alice creates a room. Bob joins it.
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.JoinRoom(t, roomID, nil)
 
@@ -57,6 +58,7 @@ func TestLeakyTyping(t *testing.T) {
 
 	_, charlieToken := charlie.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
+	// Alice types in that room. Bob should see her typing.
 	alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
 		"typing":  true,
 		"timeout": 10000,
@@ -74,6 +76,7 @@ func TestLeakyTyping(t *testing.T) {
 		return false
 	}))
 
+	// Charlie is not in the room, so should not see Alice typing.
 	res, _ := charlie.MustSync(t, client.SyncReq{TimeoutMillis: "2000", Since: charlieToken})
 
 	err := client.SyncEphemeralHas(roomID, func(result gjson.Result) bool {
