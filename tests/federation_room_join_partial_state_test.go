@@ -1830,8 +1830,8 @@ func TestPartialStateJoin(t *testing.T) {
 		) {
 			alice = deployment.RegisterUser(t, "hs1", aliceLocalpart, "secret", false)
 
-			deviceListUpdateChannel1 = make(chan gomatrixserverlib.DeviceListUpdateEvent)
-			deviceListUpdateChannel2 = make(chan gomatrixserverlib.DeviceListUpdateEvent)
+			deviceListUpdateChannel1 = make(chan gomatrixserverlib.DeviceListUpdateEvent, 10)
+			deviceListUpdateChannel2 = make(chan gomatrixserverlib.DeviceListUpdateEvent, 10)
 
 			createDeviceListUpdateTestServer := func(
 				t *testing.T, deployment *docker.Deployment,
