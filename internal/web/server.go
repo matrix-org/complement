@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -46,6 +45,6 @@ func NewServer(t *testing.T, comp *config.Complement, configFunc func(router *mu
 }
 
 func (s *Server) Close() {
-	s.server.Shutdown(context.Background())
+	s.server.Close()
 	s.listener.Close()
 }
