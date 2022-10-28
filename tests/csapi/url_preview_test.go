@@ -66,7 +66,7 @@ func TestUrlPreview(t *testing.T) {
 
 	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "media", "v3", "preview_url"},
 		client.WithQueries(url.Values{
-			"url": []string{webServer.Url + "/test.html"},
+			"url": []string{webServer.URL + "/test.html"},
 		}),
 	)
 

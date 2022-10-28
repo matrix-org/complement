@@ -13,8 +13,8 @@ import (
 )
 
 type Server struct {
-	Url      string
-	port     int
+	URL      string
+	Port     int
 	server   *http.Server
 	listener net.Listener
 }
@@ -38,8 +38,8 @@ func NewServer(t *testing.T, comp *config.Complement, configFunc func(router *mu
 	go server.Serve(listener)
 
 	return &Server{
-		Url:      fmt.Sprintf("http://%s:%d", comp.HostnameRunningComplement, port),
-		port:     port,
+		URL:      fmt.Sprintf("http://%s:%d", comp.HostnameRunningComplement, port),
+		Port:     port,
 		server:   server,
 		listener: listener,
 	}
