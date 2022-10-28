@@ -68,12 +68,20 @@ func TestLeakyTyping(t *testing.T) {
 		if result.Get("type").Str != "m.typing" {
 			return false
 		}
-		for _, item := range result.Get("content").Get("user_ids").Array() {
+
+		sawAlice := false
+
+		// Go through all users, return early if typing user is not alice
+		for _, item := range result.Get("content.user_ids").Array() {
 			if item.Str == alice.UserID {
-				return true
+				sawAlice = true
+			} else {
+				t.Errorf("Saw one additional user typing, expected only alice: %s", item.Str)
+				return false
 			}
 		}
-		return false
+
+		return sawAlice
 	}))
 
 	// Charlie is not in the room, so should not see Alice typing.
