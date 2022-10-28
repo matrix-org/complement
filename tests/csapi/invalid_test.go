@@ -168,7 +168,7 @@ func getFilters() []map[string]interface{} {
 
 // sytest: Check creating invalid filters returns 4xx
 func TestFilter(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // TODO remove if https://github.com/matrix-org/dendrite/issues/2067 is fixed
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2067
 
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)

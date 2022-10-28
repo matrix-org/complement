@@ -248,6 +248,37 @@ func (s *Server) SendFederationRequest(
 	return err
 }
 
+// DoFederationRequest signs and sends an arbitrary federation request from this server, and returns the response.
+//
+// The requests will be routed according to the deployment map in `deployment`.
+func (s *Server) DoFederationRequest(
+	ctx context.Context,
+	t *testing.T,
+	deployment *docker.Deployment,
+	req gomatrixserverlib.FederationRequest) (*http.Response, error) {
+	if err := req.Sign(gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
+		return nil, err
+	}
+
+	httpReq, err := req.HTTPRequest()
+	if err != nil {
+		return nil, err
+	}
+
+	httpClient := gomatrixserverlib.NewClient(gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}))
+	start := time.Now()
+
+	var resp *http.Response
+	resp, err = httpClient.DoHTTPRequest(ctx, httpReq)
+
+	if httpError, ok := err.(gomatrix.HTTPError); ok {
+		t.Logf("[SSAPI] %s %s%s => error(%d): %s (%s)", req.Method(), req.Destination(), req.RequestURI(), httpError.Code, err, time.Since(start))
+	} else if err == nil {
+		t.Logf("[SSAPI] %s %s%s => %d (%s)", req.Method(), req.Destination(), req.RequestURI(), resp.StatusCode, time.Since(start))
+	}
+	return resp, err
+}
+
 // MustCreateEvent will create and sign a new latest event for the given room.
 // It does not insert this event into the room however. See ServerRoom.AddEvent for that.
 func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *gomatrixserverlib.Event {
