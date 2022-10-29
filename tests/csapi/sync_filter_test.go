@@ -35,7 +35,7 @@ func TestSyncFilter(t *testing.T) {
 				},
 			},
 		})
-		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "user", "@alice:hs1", "filter", filterID}, nil)
+		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", "@alice:hs1", "filter", filterID})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyPresent("room"),

@@ -12,11 +12,9 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/complement/runtime"
 )
 
 func TestRelations(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // not supported
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -112,7 +110,6 @@ func TestRelations(t *testing.T) {
 }
 
 func TestRelationsPagination(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // not supported
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
