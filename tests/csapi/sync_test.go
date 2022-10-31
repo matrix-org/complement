@@ -102,7 +102,7 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 }
 
 func TestSync(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // too flakey, fails with sync_test.go:135: unchanged room !7ciB69Jg2lCc4Vdf:hs1 should not be in the sync
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 	// sytest: Can sync
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
@@ -162,7 +162,7 @@ func TestSync(t *testing.T) {
 		})
 		// sytest: Newly joined room has correct timeline in incremental sync
 		t.Run("Newly joined room has correct timeline in incremental sync", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
+			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 			t.Parallel()
 			filter = map[string]interface{}{
 				"room": map[string]interface{}{
@@ -211,7 +211,7 @@ func TestSync(t *testing.T) {
 		})
 		// sytest: Newly joined room includes presence in incremental sync
 		t.Run("Newly joined room includes presence in incremental sync", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
+			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			_, nextBatch := bob.MustSync(t, client.SyncReq{})
@@ -231,7 +231,7 @@ func TestSync(t *testing.T) {
 		})
 		// sytest: Get presence for newly joined members in incremental sync
 		t.Run("Get presence for newly joined members in incremental sync", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // does not yet pass
+			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			sendMessages(t, alice, roomID, "dummy message", 1)
@@ -379,6 +379,68 @@ func TestSync(t *testing.T) {
 
 			// that's it - we successfully did a gappy sync.
 		})
+	})
+}
+
+// Test presence from people in 2 different rooms in incremental sync
+func TestPresenceSyncDifferentRooms(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+
+	deployment.RegisterUser(t, "hs1", "charlie", "charliepassword", false)
+	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
+
+	// Alice creates two rooms: one with her and Bob, and a second with her and Charlie.
+	bobRoomID := alice.CreateRoom(t, struct{}{})
+	charlieRoomID := alice.CreateRoom(t, struct{}{})
+	nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, bobRoomID), client.SyncJoinedTo(alice.UserID, charlieRoomID))
+
+	alice.InviteRoom(t, bobRoomID, bob.UserID)
+	alice.InviteRoom(t, charlieRoomID, charlie.UserID)
+	bob.JoinRoom(t, bobRoomID, nil)
+	charlie.JoinRoom(t, charlieRoomID, nil)
+
+	nextBatch = alice.MustSyncUntil(t,
+		client.SyncReq{Since: nextBatch},
+		client.SyncJoinedTo(bob.UserID, bobRoomID),
+		client.SyncJoinedTo(charlie.UserID, charlieRoomID),
+	)
+
+	// Bob and Charlie mark themselves as online.
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"presence": "online",
+	})
+	bob.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
+	charlie.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
+
+	// Alice should see that Bob and Charlie are online. She may see this happen
+	// simultaneously in one /sync response, or separately in two /sync
+	// responses.
+	seenBobOnline, seenCharlieOnline := false, false
+
+	alice.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(clientUserID string, sync gjson.Result) error {
+		presenceArray := sync.Get("presence").Get("events").Array()
+		if len(presenceArray) == 0 {
+			return fmt.Errorf("presence.events is empty")
+		}
+		for _, x := range presenceArray {
+			if x.Get("content").Get("presence").Str != "online" {
+				continue
+			}
+			if x.Get("sender").Str == bob.UserID {
+				seenBobOnline = true
+			}
+			if x.Get("sender").Str == charlie.UserID {
+				seenCharlieOnline = true
+			}
+			if seenBobOnline && seenCharlieOnline {
+				return nil
+			}
+		}
+		return fmt.Errorf("all users not present yet, bob %t charlie %t", seenBobOnline, seenCharlieOnline)
 	})
 }
 

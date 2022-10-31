@@ -115,7 +115,7 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 	t.Helper()
 	origin, mediaId := SplitMxc(mxcUri)
-	res := c.MustDo(t, "GET", []string{"_matrix", "media", "v3", "download", origin, mediaId}, struct{}{})
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "media", "v3", "download", origin, mediaId})
 	contentType := res.Header.Get("Content-Type")
 	b, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -127,7 +127,7 @@ func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 // CreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
 func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, creationContent)
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, creationContent))
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "room_id")
 }
@@ -166,7 +166,7 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 	body := map[string]interface{}{
 		"user_id": userID,
 	}
-	c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
+	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
 }
 
 func (c *CSAPI) GetGlobalAccountData(t *testing.T, eventType string) *http.Response {
@@ -186,7 +186,7 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
-	res := c.MustDo(t, "PUT", paths, e.Content)
+	res := c.MustDoFunc(t, "PUT", paths, WithJSONBody(t, e.Content))
 	body := ParseJSON(t, res)
 	eventID := GetJSONFieldStr(t, body, "event_id")
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
@@ -323,7 +323,7 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 		"username": localpart,
 		"password": password,
 	}
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "register"}, reqBody)
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, WithJSONBody(t, reqBody))
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -401,21 +401,6 @@ func (c *CSAPI) GetDefaultRoomVersion(t *testing.T) gomatrixserverlib.RoomVersio
 	return gomatrixserverlib.RoomVersion(defaultVersion.Str)
 }
 
-// MustDo will do the HTTP request and fail the test if the response is not 2xx
-//
-// Deprecated: Prefer MustDoFunc. MustDo is the older format which doesn't allow for vargs
-// and will be removed in the future. MustDoFunc also logs HTTP response bodies on error.
-func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
-	t.Helper()
-	res := c.DoFunc(t, method, paths, WithJSONBody(t, jsonBody))
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		defer res.Body.Close()
-		body, _ := ioutil.ReadAll(res.Body)
-		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d : %s", method, res.Request.URL.String(), res.StatusCode, string(body))
-	}
-	return res
-}
-
 // WithRawBody sets the HTTP request body to `body`
 func WithRawBody(body []byte) RequestOpt {
 	return func(req *http.Request) {
@@ -472,7 +457,7 @@ func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		defer res.Body.Close()
 		body, _ := ioutil.ReadAll(res.Body)
-		t.Fatalf("CSAPI.MustDoFunc response return non-2xx code: %s - body: %s", res.Status, string(body))
+		t.Fatalf("CSAPI.MustDoFunc %s %s returned non-2xx code: %s - body: %s", method, res.Request.URL.String(), res.Status, string(body))
 	}
 	return res
 }
@@ -849,4 +834,49 @@ func SplitMxc(mxcUri string) (string, string) {
 	mediaId := strings.Join(mxcParts[1:], "/")
 
 	return origin, mediaId
+}
+
+// SendToDeviceMessages sends to-device messages over /sendToDevice/.
+//
+// The messages parameter is nested as follows:
+// user_id -> device_id -> content (map[string]interface{})
+func (c *CSAPI) SendToDeviceMessages(t *testing.T, evType string, messages map[string]map[string]map[string]interface{}) {
+	t.Helper()
+	c.txnID++
+	c.MustDoFunc(
+		t,
+		"PUT",
+		[]string{"_matrix", "client", "v3", "sendToDevice", evType, strconv.Itoa(c.txnID)},
+		WithJSONBody(
+			t,
+			map[string]map[string]map[string]map[string]interface{}{
+				"messages": messages,
+			},
+		),
+	)
+}
+
+// Check that sync has received a to-device message,
+// with optional user filtering.
+//
+// If fromUser == "", all messages will be passed through to the check function.
+// `check` will be called for all messages that have passed the filter.
+//
+// `check` gets passed the full event, including sender and type.
+func SyncToDeviceHas(fromUser string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "to_device.events", func(result gjson.Result) bool {
+				if fromUser != "" && result.Get("sender").Str != fromUser {
+					return false
+				} else {
+					return check(result)
+				}
+			},
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncToDeviceHas(%v): %s", fromUser, err)
+	}
 }

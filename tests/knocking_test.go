@@ -174,15 +174,13 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			_, since := knockingUser.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 			// Rescind knock
-			knockingUser.MustDo(
+			knockingUser.MustDoFunc(
 				t,
 				"POST",
 				[]string{"_matrix", "client", "v3", "rooms", roomID, "leave"},
-				struct {
-					Reason string `json:"reason"`
-				}{
-					"Just kidding!",
-				},
+				client.WithJSONBody(t, map[string]interface{}{
+					"reason": "Just kidding!",
+				}),
 			)
 
 			// Use our sync token from earlier to carry out an incremental sync. Initial syncs may not contain room
@@ -213,17 +211,14 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		//
 		// In the case of federation, this test will still check that a knock can be
 		// carried out after a previous knock is rejected.
-		inRoomUser.MustDo(
+		inRoomUser.MustDoFunc(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
-			struct {
-				UserID string `json:"user_id"`
-				Reason string `json:"reason"`
-			}{
-				knockingUser.UserID,
-				"I don't think so",
-			},
+			client.WithJSONBody(t, map[string]string{
+				"user_id": knockingUser.UserID,
+				"reason":  "I don't think so",
+			}),
 		)
 
 		// Wait until the leave membership event has come down sync
@@ -239,17 +234,14 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 
 	t.Run("A user can knock on a room without a reason", func(t *testing.T) {
 		// Reject the knock
-		inRoomUser.MustDo(
+		inRoomUser.MustDoFunc(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
-			struct {
-				UserID string `json:"user_id"`
-				Reason string `json:"reason"`
-			}{
-				knockingUser.UserID,
-				"Please try again",
-			},
+			client.WithJSONBody(t, map[string]string{
+				"user_id": knockingUser.UserID,
+				"reason":  "Please try again",
+			}),
 		)
 
 		// Knock again, this time without a reason
@@ -257,17 +249,14 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("A user in the room can accept a knock", func(t *testing.T) {
-		inRoomUser.MustDo(
+		inRoomUser.MustDoFunc(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "invite"},
-			struct {
-				UserID string `json:"user_id"`
-				Reason string `json:"reason"`
-			}{
-				knockingUser.UserID,
-				"Seems like a trustworthy fellow",
-			},
+			client.WithJSONBody(t, map[string]string{
+				"user_id": knockingUser.UserID,
+				"reason":  "Seems like a trustworthy fellow",
+			}),
 		)
 
 		// Wait until the invite membership event has come down sync
@@ -289,17 +278,14 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		//
 		// In the case of federation, this test will still check that a knock can not be
 		// carried out after a ban.
-		inRoomUser.MustDo(
+		inRoomUser.MustDoFunc(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "ban"},
-			struct {
-				UserID string `json:"user_id"`
-				Reason string `json:"reason"`
-			}{
-				knockingUser.UserID,
-				"Turns out Bob wasn't that trustworthy after all!",
-			},
+			client.WithJSONBody(t, map[string]string{
+				"user_id": knockingUser.UserID,
+				"reason":  "Turns out Bob wasn't that trustworthy after all!",
+			}),
 		)
 
 		// Wait until the ban membership event has come down sync
@@ -423,15 +409,13 @@ func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, jo
 // It will then query the directory and ensure the room is listed, and has a given 'join_rule' entry
 func publishAndCheckRoomJoinRule(t *testing.T, c *client.CSAPI, roomID, expectedJoinRule string) {
 	// Publish the room to the public room directory
-	c.MustDo(
+	c.MustDoFunc(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
-		struct {
-			Visibility string `json:"visibility"`
-		}{
-			"public",
-		},
+		client.WithJSONBody(t, map[string]string{
+			"visibility": "public",
+		}),
 	)
 
 	// Check that we can see the room in the directory
