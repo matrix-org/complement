@@ -7,6 +7,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
 )
 
 // sytest: PUT /rooms/:room_id/typing/:user_id sets typing notification
@@ -69,19 +70,13 @@ func TestLeakyTyping(t *testing.T) {
 			return false
 		}
 
-		sawAlice := false
+		err := match.JSONCheckOff("content.user_ids", []interface{}{
+			alice.UserID,
+		}, func(result gjson.Result) interface{} {
+			return result.Str
+		}, nil)([]byte(result.Raw))
 
-		// Go through all users, return early if typing user is not alice
-		for _, item := range result.Get("content.user_ids").Array() {
-			if item.Str == alice.UserID {
-				sawAlice = true
-			} else {
-				t.Errorf("Saw one additional user typing, expected only alice: %s", item.Str)
-				return false
-			}
-		}
-
-		return sawAlice
+		return err == nil
 	}))
 
 	// Charlie is not in the room, so should not see Alice typing.
