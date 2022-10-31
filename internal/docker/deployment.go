@@ -1,8 +1,6 @@
 package docker
 
 import (
-	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -82,22 +80,11 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 	return client
 }
 
-// Random hex-encoded string function, needed for NewUser, taken from https://stackoverflow.com/a/65607935/8700553
-func randomString(length int) string {
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, length)
-	rand.Read(b)
-	return fmt.Sprintf("%x", b)[:length]
-}
-
 // NewUser creates a new user as a convenience method to RegisterUser.
 //
 //It registers the user with a random password, and without admin privileges.
 func (d *Deployment) NewUser(t *testing.T, localpart, hs string) *client.CSAPI {
-	// Dendrite requires at least 8 characters for a password, we choose 12 here in case they increase that.
-	password := randomString(12)
-
-	return d.RegisterUser(t, hs, localpart, password, false)
+	return d.RegisterUser(t, hs, localpart, "complement_meets_min_pasword_req_"+localpart, false)
 }
 
 // RegisterUser within a homeserver and return an authenticatedClient, Fails the test if the hsName is not found.
