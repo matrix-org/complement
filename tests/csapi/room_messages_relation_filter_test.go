@@ -26,8 +26,8 @@ func TestFilterMessagesByRelType(t *testing.T) {
 
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
-  // A token which only has the messages of interest after it.
-  beforeToken := alice.MustSyncUntil(t, client.SyncReq{})
+	// A token which only has the messages of interest after it.
+	beforeToken := alice.MustSyncUntil(t, client.SyncReq{})
 
 	// Send messages with different relations.
 	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
