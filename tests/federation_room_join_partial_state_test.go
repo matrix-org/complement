@@ -2827,6 +2827,44 @@ func TestPartialStateJoin(t *testing.T) {
 		must.MatchResponse(t, response, spec)
 	})
 
+	// Test that you can delete a room alias during a resync that you added during
+	// the resync.
+	t.Run("Room aliases can be added and deleted during a resync", func(t *testing.T) {
+		// Alice begins a partial join to a room.
+		alice := deployment.RegisterUser(t, "hs1", "t41alice", "secret", false)
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// Alice creates an alias for the room
+		aliasName := "#t41alice-room:hs1"
+		alice.MustDoFunc(
+			t,
+			"PUT",
+			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
+			client.WithJSONBody(t, map[string]interface{}{
+				"room_id": serverRoom.RoomID,
+			}),
+		)
+
+		// Alice then deletes that alias
+		response := alice.MustDoFunc(
+			t,
+			"DELETE",
+			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
+		)
+
+		// The response should be 200 OK. (Strictly speaking it should have an
+		// empty json object as the response body but that's not important here)
+		spec := match.HTTPResponse{
+			StatusCode: 200,
+		}
+		must.MatchResponse(t, response, spec)
+	})
 }
 
 // test reception of an event over federation during a resync
