@@ -400,44 +400,48 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			// * another history_vis, unless we tried to set it to the default (shared)
 			// * the message
 			events := result.Events.UntrustedEvents(roomVersion)
-			i := 0
-			for _, ev := range events {
+
+			verifyMsgEvent := func(ev *gomatrixserverlib.Event) {
+				must.EqualStr(t, ev.Type(), "m.room.message", "not a message event")
+				// if the history vis is 'joined' or 'invite', we should get redacted
+				// copies of the events before we joined.
+				if visibility == gomatrixserverlib.HistoryVisibilityJoined || visibility == gomatrixserverlib.HistoryVisibilityInvited {
+					if !ev.Redacted() {
+						t.Fatalf("Expected event to be redacted")
+					}
+				} else {
+					for _, path := range []string{"msgtype", "body"} {
+						if !gjson.Get(string(ev.Content()), path).Exists() {
+							t.Fatalf("expected '%s' in content, but didn't find it: %s", path, string(ev.JSON()))
+						}
+					}
+				}
+			}
+
+			for i, ev := range events {
 				must.EqualStr(t, ev.RoomID(), roomID, "unexpected roomID")
 				switch i {
 				case 0:
 					must.EqualStr(t, ev.Type(), "m.room.member", "not a membership event")
 					must.EqualStr(t, *ev.StateKey(), alice.UserID, "unexpected creator")
-					i++
 				case 1:
 					must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomPowerLevels, "not a powerlevel event")
-					i++
 				case 2:
 					must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomJoinRules, "not a join_rules event")
-					i++
 				case 3:
 					must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomHistoryVisibility, "not a history_visiblity event")
-					i++
 				case 4:
 					if visibility != gomatrixserverlib.HistoryVisibilityShared { // shared -> shared no-ops
 						must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomHistoryVisibility, "not a history_visiblity event")
-						i++
+					} else {
+						verifyMsgEvent(ev)
 					}
 				case 5:
-					must.EqualStr(t, ev.Type(), "m.room.message", "not a message event")
-					// if the history vis is 'joined' or 'invite', we should get redacted
-					// copies of the events before we joined.
-					if visibility == gomatrixserverlib.HistoryVisibilityJoined || visibility == gomatrixserverlib.HistoryVisibilityInvited {
-						if !ev.Redacted() {
-							t.Fatalf("Expected event to be redacted")
-						}
-					} else {
-						for _, path := range []string{"msgtype", "body"} {
-							if !gjson.Get(string(ev.Content()), path).Exists() {
-								t.Fatalf("expected '%s' in content, but didn't find it: %s", path, string(ev.JSON()))
-							}
-						}
+					// there shouldn't be any more events after the message event for shared history visibility
+					if visibility == gomatrixserverlib.HistoryVisibilityShared {
+						t.Fatalf("extra events returned: %+v", ev)
 					}
-					i++
+					verifyMsgEvent(ev)
 				case 6:
 					t.Fatalf("extra events returned: %+v", ev)
 				}
