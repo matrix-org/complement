@@ -2,15 +2,12 @@ package csapi_tests
 
 import (
 	"fmt"
-	"net/url"
 	"testing"
 
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -64,52 +61,4 @@ func TestMembersLocal(t *testing.T) {
 		})
 	})
 
-}
-
-// sytest: Can get rooms/{roomId}/members at a given point
-func TestMembersAtAGivenPoint(t *testing.T) {
-	deplyoment := Deploy(t, b.BlueprintOneToOneRoom)
-	defer deplyoment.Destroy(t)
-
-	alice := deplyoment.Client(t, "hs1", "@alice:hs1")
-	bob := deplyoment.Client(t, "hs1", "@bob:hs1")
-
-	roomID := alice.CreateRoom(t, map[string]interface{}{
-		"preset": "public_chat",
-	})
-	alice.SendEventSynced(t, roomID, b.Event{
-		Type: "m.room.message",
-		Content: map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    "Hello World!",
-		},
-	})
-
-	resp, _ := alice.MustSync(t, client.SyncReq{})
-	prevBatch := resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.prev_batch").Str
-
-	bob.JoinRoom(t, roomID, []string{})
-	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
-
-	alice.SendEventSynced(t, roomID, b.Event{
-		Type: "m.room.message",
-		Content: map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    "Hello back",
-		},
-	})
-
-	params := url.Values{}
-	params.Add("at", prevBatch)
-
-	roomsResp := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "members"}, client.WithQueries(params))
-	must.MatchResponse(t, roomsResp, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
-				alice.UserID,
-			}, func(r gjson.Result) interface{} {
-				return r.Get("state_key").Str
-			}, nil),
-		},
-	})
 }
