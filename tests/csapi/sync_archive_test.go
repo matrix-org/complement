@@ -37,7 +37,7 @@ func TestSyncLeaveSection(t *testing.T) {
 
 	// Get independently-fetched sync tokens for every subsequent test,
 	// to isolate interference/side effects otherwise possibly caused by
-	// multiple  sync calls with the same token using different filters or
+	// multiple sync calls reusing the same token with different filters or
 	// settings.
 	fullStateSince := s(client.SyncReq{
 		Filter: includeLeaveFilter,
@@ -279,8 +279,10 @@ func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 		},
 	})
 
+	// Pad out the timeline with filler messages to create a "gap" between
+	// this sync and the next.
 	for i := 0; i < 20; i++ {
-		alice.SendEventSynced(t, roomToSpam, b.Event{
+		bob.SendEventSynced(t, roomToSpam, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
