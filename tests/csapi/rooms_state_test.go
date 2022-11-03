@@ -127,7 +127,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 			secondID := *getEventIdForState(t, alice, roomID, "m.room.member", alice.UserID)
 
 			if firstID != secondID {
-				t.Fatalf("Both Event IDs from supposedly-idempotent room joins diff, %s != %s", firstID, secondID)
+				t.Fatalf("Both Event IDs from supposedly-idempotent room joins differ, %s != %s", firstID, secondID)
 			}
 		})
 	})
