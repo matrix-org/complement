@@ -306,6 +306,7 @@ func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 }
 
 // sytest: We should see our own leave event, even if history_visibility is
+//  restricted (SYN-662)
 func TestLeaveEventVisibility(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
 
@@ -391,6 +392,7 @@ func TestLeaveEventVisibility(t *testing.T) {
 }
 
 // sytest: We should see our own leave event when rejecting an invite,
+//  even if history_visibility is restricted (riot-web/3462)
 func TestLeaveEventInviteRejection(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
 
