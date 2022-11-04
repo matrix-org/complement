@@ -436,6 +436,7 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 }
 
 func TestRoomSummary(t *testing.T) {
+	runtime.SkipIf(t, runtime.Synapse) // Currently more of a Dendrite test, so skip on Synapse
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
