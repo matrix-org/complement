@@ -17,7 +17,7 @@ import (
 func requestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, expected_rooms []interface{}) {
 	t.Helper()
 
-	res := user.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", space, "hierarchy"}, map[string]interface{}{})
+	res := user.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", space, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", expected_rooms, func(r gjson.Result) interface{} {

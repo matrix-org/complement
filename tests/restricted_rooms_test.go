@@ -225,7 +225,7 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 }
 
 func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, joinRule string) {
-	runtime.SkipIf(t, runtime.Dendrite) // requires more debugging
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2801
 
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
@@ -352,7 +352,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 }
 
 func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, joinRule string) {
-	runtime.SkipIf(t, runtime.Dendrite) // requires more debugging
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2801
 
 	deployment := Deploy(t, b.Blueprint{
 		Name: "federation_three_homeservers",

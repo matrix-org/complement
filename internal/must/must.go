@@ -132,6 +132,35 @@ func MatchFederationRequest(t *testing.T, fedReq *gomatrixserverlib.FederationRe
 	}
 }
 
+// MatchGJSON performs JSON assertions on a gjson.Result object.
+func MatchGJSON(t *testing.T, jsonResult gjson.Result, matchers ...match.JSON) {
+	t.Helper()
+
+	MatchJSON(t, jsonResult.Str, matchers...)
+}
+
+// MatchJSON performs JSON assertions on a raw JSON string.
+func MatchJSON(t *testing.T, json string, matchers ...match.JSON) {
+	t.Helper()
+
+	MatchJSONBytes(t, []byte(json), matchers...)
+}
+
+// MatchJSONBytes performs JSON assertions on a raw json byte slice.
+func MatchJSONBytes(t *testing.T, rawJson []byte, matchers ...match.JSON) {
+	t.Helper()
+
+	if !gjson.ValidBytes(rawJson) {
+		t.Fatalf("MatchJSONBytes: rawJson is not valid JSON")
+	}
+
+	for _, jm := range matchers {
+		if err := jm(rawJson); err != nil {
+			t.Fatalf("MatchJSONBytes %s", err)
+		}
+	}
+}
+
 // EqualStr ensures that got==want else logs an error.
 func EqualStr(t *testing.T, got, want, msg string) {
 	t.Helper()

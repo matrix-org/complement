@@ -328,7 +328,7 @@ func TestDeviceListUpdates(t *testing.T) {
 	t.Run("when remote user leaves a room", func(t *testing.T) { testOtherUserLeave(t, deployment, "hs1", "hs2") })
 	t.Run("when leaving a room with a local user", func(t *testing.T) { testLeave(t, deployment, "hs1", "hs1") })
 	t.Run("when leaving a room with a remote user", func(t *testing.T) {
-		runtime.SkipIf(t, runtime.Synapse) // https://github.com/matrix-org/synapse/issues/13650
+		runtime.SkipIf(t, runtime.Synapse) // FIXME: https://github.com/matrix-org/synapse/issues/13650
 		testLeave(t, deployment, "hs1", "hs2")
 	})
 	t.Run("when local user rejoins a room", func(t *testing.T) { testOtherUserRejoin(t, deployment, "hs1", "hs1") })

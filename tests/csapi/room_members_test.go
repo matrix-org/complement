@@ -11,7 +11,6 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/complement/runtime"
 )
 
 // Maps every object by extracting `type` and `state_key` into a "$type|$state_key" string.
@@ -43,6 +42,10 @@ func TestGetRoomMembers(t *testing.T) {
 
 	must.MatchResponse(t, resp, match.HTTPResponse{
 		JSON: []match.JSON{
+			match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
+				must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+				return nil
+			}),
 			match.JSONCheckOff("chunk",
 				[]interface{}{
 					"m.room.member|" + alice.UserID,
@@ -56,8 +59,6 @@ func TestGetRoomMembers(t *testing.T) {
 // Utilize ?at= to get room members at a point in sync.
 // sytest: Can get rooms/{roomId}/members at a given point
 func TestGetRoomMembersAtPoint(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1308
-
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -76,10 +77,10 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 		},
 	})
 
-	_, since_token := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+	syncResp, _ := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+	sinceToken := syncResp.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.prev_batch").Str
 
 	bob.JoinRoom(t, roomID, nil)
-
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	bob.SendEventSynced(t, roomID, b.Event{
@@ -95,24 +96,28 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
 		client.WithQueries(url.Values{
-			"at": []string{since_token},
+			"at": []string{sinceToken},
 		}),
 	)
 
 	must.MatchResponse(t, resp, match.HTTPResponse{
 		JSON: []match.JSON{
+			match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
+				must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+				return nil
+			}),
 			match.JSONCheckOff("chunk",
 				[]interface{}{
 					"m.room.member|" + alice.UserID,
 				}, typeToStateKeyMapper, nil),
 		},
+
 		StatusCode: 200,
 	})
 }
 
 // sytest: Can filter rooms/{roomId}/members
 func TestGetFilteredRoomMembers(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1308
 
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
@@ -144,6 +149,10 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			JSON: []match.JSON{
+				match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
+					must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+					return nil
+				}),
 				match.JSONCheckOff("chunk",
 					[]interface{}{
 						"m.room.member|" + alice.UserID,
@@ -165,6 +174,10 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			JSON: []match.JSON{
+				match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
+					must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+					return nil
+				}),
 				match.JSONCheckOff("chunk",
 					[]interface{}{
 						"m.room.member|" + bob.UserID,
@@ -186,6 +199,10 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			JSON: []match.JSON{
+				match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
+					must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+					return nil
+				}),
 				match.JSONCheckOff("chunk",
 					[]interface{}{
 						"m.room.member|" + alice.UserID,
