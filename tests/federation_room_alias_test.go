@@ -17,7 +17,7 @@ func TestRemoteAliasRequestsUnderstandUnicode(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
-	const unicodeAlias = "#老虎Â£я:hs1"
+	const unicodeAlias = "#老虎Â£я🤨👉ඞ:hs1"
 
 	roomID := alice.CreateRoom(t, map[string]interface{}{})
 

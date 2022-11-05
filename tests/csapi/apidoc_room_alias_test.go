@@ -31,7 +31,7 @@ func listRoomAliasesResp(t *testing.T, c *client.CSAPI, roomID string) *http.Res
 	return c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "aliases"})
 }
 
-func setCanonicalAlias(t *testing.T, c *client.CSAPI, roomID string, roomAlias string, altAliases *[]string) *http.Response {
+func setCanonicalAliasResp(t *testing.T, c *client.CSAPI, roomID string, roomAlias string, altAliases *[]string) *http.Response {
 	content := map[string]interface{}{
 		"alias": roomAlias,
 	}
@@ -40,6 +40,21 @@ func setCanonicalAlias(t *testing.T, c *client.CSAPI, roomID string, roomAlias s
 	}
 
 	return c.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.canonical_alias"}, client.WithJSONBody(t, content))
+}
+
+func mustSetCanonicalAlias(t *testing.T, c *client.CSAPI, roomID string, roomAlias string, altAliases *[]string) string {
+	content := map[string]interface{}{
+		"alias": roomAlias,
+	}
+	if altAliases != nil {
+		content["alt_aliases"] = altAliases
+	}
+
+	return c.SendEventSynced(t, roomID, b.Event{
+		Type:     "m.room.canonical_alias",
+		StateKey: b.Ptr(""),
+		Content:  content,
+	})
 }
 
 func TestRoomAlias(t *testing.T) {
@@ -148,7 +163,7 @@ func TestRoomAlias(t *testing.T) {
 		t.Run("Room aliases can contain Unicode", func(t *testing.T) {
 			t.Parallel()
 
-			const unicodeAlias = "#老虎Â£я:hs1"
+			const unicodeAlias = "#老虎Â£я🤨👉ඞ:hs1"
 
 			roomID := alice.CreateRoom(t, map[string]interface{}{})
 
@@ -233,14 +248,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 				},
 			})
 
-			res = setCanonicalAlias(t, alice, roomID, roomAlias, nil)
-
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 200,
-				JSON: []match.JSON{
-					match.JSONKeyPresent("event_id"),
-				},
-			})
+			mustSetCanonicalAlias(t, alice, roomID, roomAlias, nil)
 
 			res = deleteRoomAliasResp(t, bob, roomAlias)
 			must.MatchResponse(t, res, match.HTTPResponse{
@@ -276,14 +284,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 				StatusCode: 200,
 			})
 
-			res = setCanonicalAlias(t, alice, roomID, roomAlias, nil)
-
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 200,
-				JSON: []match.JSON{
-					match.JSONKeyPresent("event_id"),
-				},
-			})
+			mustSetCanonicalAlias(t, alice, roomID, roomAlias, nil)
 
 			_, sinceToken := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
@@ -293,13 +294,13 @@ func TestRoomDeleteAlias(t *testing.T) {
 			})
 
 			alice.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.canonical_alias" ||
-					!ev.Get("content").IsObject() ||
-					len(ev.Get("content").Map()) != 0 {
-					return false
+				if ev.Get("type").Str == "m.room.canonical_alias" &&
+					ev.Get("content").IsObject() &&
+					len(ev.Get("content").Map()) == 0 {
+					return true
 				}
 
-				return true
+				return false
 			}))
 		})
 
@@ -475,14 +476,7 @@ func TestRoomCanonicalAlias(t *testing.T) {
 				StatusCode: 200,
 			})
 
-			res = setCanonicalAlias(t, alice, roomID, roomAlias, nil)
-
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 200,
-				JSON: []match.JSON{
-					match.JSONKeyPresent("event_id"),
-				},
-			})
+			mustSetCanonicalAlias(t, alice, roomID, roomAlias, nil)
 		})
 
 		// part of "Canonical alias can be set"
@@ -494,7 +488,7 @@ func TestRoomCanonicalAlias(t *testing.T) {
 
 			roomAlias := "#rejects_missing:hs1"
 
-			res := setCanonicalAlias(t, alice, roomID, roomAlias, nil)
+			res := setCanonicalAliasResp(t, alice, roomID, roomAlias, nil)
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
@@ -513,7 +507,7 @@ func TestRoomCanonicalAlias(t *testing.T) {
 
 			roomAlias := "%invalid_aliases:hs1"
 
-			res := setCanonicalAlias(t, alice, roomID, roomAlias, nil)
+			res := setCanonicalAliasResp(t, alice, roomID, roomAlias, nil)
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
@@ -547,7 +541,7 @@ func TestRoomCanonicalAlias(t *testing.T) {
 				StatusCode: 404,
 			})
 
-			res = setCanonicalAlias(t, alice, roomID, roomAlias, nil)
+			res = setCanonicalAliasResp(t, alice, roomID, roomAlias, nil)
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
@@ -571,7 +565,7 @@ func TestRoomCanonicalAlias(t *testing.T) {
 				StatusCode: 200,
 			})
 
-			res = setCanonicalAlias(t, alice, room2, roomAlias, nil)
+			res = setCanonicalAliasResp(t, alice, room2, roomAlias, nil)
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
@@ -595,14 +589,7 @@ func TestRoomCanonicalAlias(t *testing.T) {
 				StatusCode: 200,
 			})
 
-			res = setCanonicalAlias(t, alice, roomID, roomAlias, &[]string{roomAlias})
-
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 200,
-				JSON: []match.JSON{
-					match.JSONKeyPresent("event_id"),
-				},
-			})
+			mustSetCanonicalAlias(t, alice, roomID, roomAlias, &[]string{roomAlias})
 		})
 
 		// part of "Canonical alias can include alt_aliases"
@@ -619,7 +606,7 @@ func TestRoomCanonicalAlias(t *testing.T) {
 				StatusCode: 200,
 			})
 
-			res = setCanonicalAlias(t, alice, roomID, roomAlias, &[]string{wrongRoomAlias})
+			res = setCanonicalAliasResp(t, alice, roomID, roomAlias, &[]string{wrongRoomAlias})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
@@ -643,7 +630,7 @@ func TestRoomCanonicalAlias(t *testing.T) {
 				StatusCode: 200,
 			})
 
-			res = setCanonicalAlias(t, alice, roomID, roomAlias, &[]string{wrongRoomAlias})
+			res = setCanonicalAliasResp(t, alice, roomID, roomAlias, &[]string{wrongRoomAlias})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
@@ -674,7 +661,7 @@ func TestRoomCanonicalAlias(t *testing.T) {
 				StatusCode: 200,
 			})
 
-			res = setCanonicalAlias(t, alice, room2, room2Alias, &[]string{room1Alias})
+			res = setCanonicalAliasResp(t, alice, room2, room2Alias, &[]string{room1Alias})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
