@@ -1,7 +1,10 @@
 package csapi_tests
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
@@ -57,24 +60,66 @@ func TestPowerLevels(t *testing.T) {
 		// Test if the old state still exists
 		res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
 
+		// note: before v10 we technically cannot assume that powerlevel integers are json numbers,
+		//  as they can be both strings and numbers.
+		// However, for this test, we control the test environment,
+		//  and we will assume the server is sane and give us powerlevels as numbers,
+		//  and if it doesn't, that's an offense worthy of a frown.
+
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
-				match.JSONKeyPresent("users"),
+				match.JSONKeyTypeEqual("ban", gjson.Number),
+				match.JSONKeyTypeEqual("kick", gjson.Number),
+				match.JSONKeyTypeEqual("redact", gjson.Number),
+				match.JSONKeyTypeEqual("state_default", gjson.Number),
+				match.JSONKeyTypeEqual("events_default", gjson.Number),
+				match.JSONKeyTypeEqual("users_default", gjson.Number),
+
+				match.JSONKeyTypeEqual("events", gjson.JSON),
+
+				match.JSONKeyTypeEqual("users", gjson.JSON),
+				match.JSONKeyTypeEqual("users."+client.GjsonEscape(alice.UserID), gjson.Number),
+
+				func(body []byte) error {
+					userDefault := int(gjson.GetBytes(body, "users_default").Num)
+					thisUser := int(gjson.GetBytes(body, "users."+client.GjsonEscape(alice.UserID)).Num)
+
+					if thisUser > userDefault {
+						return nil
+					} else {
+						return fmt.Errorf("expected room creator (%d) to have a higher-than-default powerlevel (which is %d)", thisUser, userDefault)
+					}
+				},
 			},
 		})
 	})
 
 	// sytest: PUT /rooms/:room_id/state/m.room.power_levels can set levels
 	t.Run("PUT /rooms/:room_id/state/m.room.power_levels can set levels", func(t *testing.T) {
-		alice.SendEventSynced(t, roomID, b.Event{
+		// note: these need to be floats to allow a roundtrip comparison
+		PLContent := map[string]interface{}{
+			"invite": 100.0,
+			"users": map[string]interface{}{
+				alice.UserID: 100.0,
+			},
+		}
+
+		eventId := alice.SendEventSynced(t, roomID, b.Event{
 			Type:     "m.room.power_levels",
 			StateKey: b.Ptr(""),
-			Content: map[string]interface{}{
-				"invite": 100,
-				"users": map[string]interface{}{
-					alice.UserID: 100,
-				},
+			Content:  PLContent,
+		})
+
+		res := alice.MustDoFunc(
+			t,
+			"GET",
+			[]string{"_matrix", "client", "v3", "rooms", roomID, "event", eventId},
+		)
+
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("content", PLContent),
 			},
 		})
 	})
