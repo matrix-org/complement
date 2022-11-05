@@ -468,7 +468,7 @@ func (s *Server) Listen() (cancel func()) {
 	}()
 
 	return func() {
-		err := s.srv.Shutdown(context.Background())
+		err := s.srv.Close()
 		if err != nil {
 			s.t.Fatalf("ListenFederationServer: failed to shutdown server: %s", err)
 		}

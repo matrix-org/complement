@@ -1813,7 +1813,6 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Errorf("SendKnock: non-HTTPError: %v", err)
 		}
 	})
-
 	t.Run("Outgoing device list updates", func(t *testing.T) {
 		// setupOutgoingDeviceListUpdateTest sets up two complement homeservers.
 		// A room is created on the first complement server, containing only local users.
@@ -1830,8 +1829,8 @@ func TestPartialStateJoin(t *testing.T) {
 		) {
 			alice = deployment.RegisterUser(t, "hs1", aliceLocalpart, "secret", false)
 
-			deviceListUpdateChannel1 = make(chan gomatrixserverlib.DeviceListUpdateEvent)
-			deviceListUpdateChannel2 = make(chan gomatrixserverlib.DeviceListUpdateEvent)
+			deviceListUpdateChannel1 = make(chan gomatrixserverlib.DeviceListUpdateEvent, 10)
+			deviceListUpdateChannel2 = make(chan gomatrixserverlib.DeviceListUpdateEvent, 10)
 
 			createDeviceListUpdateTestServer := func(
 				t *testing.T, deployment *docker.Deployment,
@@ -3086,6 +3085,97 @@ func TestPartialStateJoin(t *testing.T) {
 			mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
 		})
+	})
+
+	// Test that a) you can add a room alias during a resync and that
+	// b) querying that alias returns at least the servers we were told
+	// about in the /send_join response.
+	t.Run("Room aliases can be added and queried during a resync", func(t *testing.T) {
+		// Alice begins a partial join to a room.
+		alice := deployment.RegisterUser(t, "hs1", "t40alice", "secret", false)
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// Alice creates an alias for the room
+		aliasName := "#t40alice-room:hs1"
+		alice.MustDoFunc(
+			t,
+			"PUT",
+			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
+			client.WithJSONBody(t, map[string]interface{}{
+				"room_id": serverRoom.RoomID,
+			}),
+		)
+
+		// Alice then queries that alias
+		response := alice.MustDoFunc(
+			t,
+			"GET",
+			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
+			client.WithJSONBody(t, map[string]interface{}{
+				"room_id": serverRoom.RoomID,
+			}),
+		)
+
+		// The response should be 200 OK, should include the room id and
+		// should include both HSes.
+		spec := match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("room_id", serverRoom.RoomID),
+				match.JSONCheckOff(
+					"servers",
+					[]interface{}{"hs1", server.ServerName()},
+					func(r gjson.Result) interface{} { return r.Str },
+					nil,
+				),
+			},
+		}
+		must.MatchResponse(t, response, spec)
+	})
+
+	// Test that you can delete a room alias during a resync that you added during
+	// the resync.
+	t.Run("Room aliases can be added and deleted during a resync", func(t *testing.T) {
+		// Alice begins a partial join to a room.
+		alice := deployment.RegisterUser(t, "hs1", "t41alice", "secret", false)
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		// Alice creates an alias for the room
+		aliasName := "#t41alice-room:hs1"
+		alice.MustDoFunc(
+			t,
+			"PUT",
+			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
+			client.WithJSONBody(t, map[string]interface{}{
+				"room_id": serverRoom.RoomID,
+			}),
+		)
+
+		// Alice then deletes that alias
+		response := alice.MustDoFunc(
+			t,
+			"DELETE",
+			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
+		)
+
+		// The response should be 200 OK. (Strictly speaking it should have an
+		// empty json object as the response body but that's not important here)
+		spec := match.HTTPResponse{
+			StatusCode: 200,
+		}
+		must.MatchResponse(t, response, spec)
 	})
 }
 

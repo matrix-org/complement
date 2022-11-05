@@ -109,18 +109,13 @@ func TestSync(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	filter := map[string]interface{}{
+	filterID := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
 			"timeline": map[string]interface{}{
 				"limit": 10,
 			},
 		},
-	}
-	f, err := json.Marshal(filter)
-	if err != nil {
-		t.Errorf("unable to marshal filter: %v", err)
-	}
-	filterID := createFilter(t, alice, f, alice.UserID)
+	})
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Can sync a joined room
@@ -164,7 +159,8 @@ func TestSync(t *testing.T) {
 		t.Run("Newly joined room has correct timeline in incremental sync", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 			t.Parallel()
-			filter = map[string]interface{}{
+
+			filterBob := createFilter(t, bob, map[string]interface{}{
 				"room": map[string]interface{}{
 					"timeline": map[string]interface{}{
 						"limit": 10,
@@ -174,12 +170,7 @@ func TestSync(t *testing.T) {
 						"types": []string{},
 					},
 				},
-			}
-			f, err = json.Marshal(filter)
-			if err != nil {
-				t.Errorf("unable to marshal filter: %v", err)
-			}
-			filterBob := createFilter(t, bob, f, bob.UserID)
+			})
 
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
@@ -442,6 +433,51 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 		}
 		return fmt.Errorf("all users not present yet, bob %t charlie %t", seenBobOnline, seenCharlieOnline)
 	})
+}
+
+func TestRoomSummary(t *testing.T) {
+	runtime.SkipIf(t, runtime.Synapse) // Currently more of a Dendrite test, so skip on Synapse
+	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	defer deployment.Destroy(t)
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs1", "@bob:hs1")
+
+	_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+	roomID := alice.CreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		"invite": []string{bob.UserID},
+	})
+	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince},
+		client.SyncJoinedTo(alice.UserID, roomID),
+		func(clientUserID string, syncResp gjson.Result) error {
+			summary := syncResp.Get("rooms.join." + client.GjsonEscape(roomID) + ".summary")
+			invitedUsers := summary.Get(client.GjsonEscape("m.invited_member_count")).Int()
+			joinedUsers := summary.Get(client.GjsonEscape("m.joined_member_count")).Int()
+			// We expect there to be one joined and one invited user
+			if invitedUsers != 1 || joinedUsers != 1 {
+				return fmt.Errorf("expected one invited and one joined user, got %d and %d: %v", invitedUsers, joinedUsers, summary.Raw)
+			}
+			return nil
+		},
+	)
+
+	joinedCheck := func(clientUserID string, syncResp gjson.Result) error {
+		summary := syncResp.Get("rooms.join." + client.GjsonEscape(roomID) + ".summary")
+		invitedUsers := summary.Get(client.GjsonEscape("m.invited_member_count")).Int()
+		joinedUsers := summary.Get(client.GjsonEscape("m.joined_member_count")).Int()
+		// We expect there to be two joined and no invited user
+		if invitedUsers != 0 || joinedUsers != 2 {
+			return fmt.Errorf("expected no invited and two joined user, got %d and %d: %v", invitedUsers, joinedUsers, summary.Raw)
+		}
+		return nil
+	}
+
+	sinceToken := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+	bob.JoinRoom(t, roomID, []string{})
+	// Verify Bob sees the correct room summary
+	bob.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
+	// .. and Alice as well.
+	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
 }
 
 func sendMessages(t *testing.T, client *client.CSAPI, roomID string, prefix string, count int) {
