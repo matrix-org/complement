@@ -436,18 +436,34 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 }
 
 func TestRoomSummary(t *testing.T) {
-	runtime.SkipIf(t, runtime.Synapse) // Currently more of a Dendrite test, so skip on Synapse
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+	// Synapse only adds room summaries if a filter with lazy_load_members is provided, so create them
+	aliceFilterID := createFilter(t, alice, map[string]interface{}{
+		"room": map[string]interface{}{
+			"state": map[string]bool{
+				"lazy_load_members": true,
+			},
+		},
+	})
+
+	bobFilterID := createFilter(t, bob, map[string]interface{}{
+		"room": map[string]interface{}{
+			"state": map[string]bool{
+				"lazy_load_members": true,
+			},
+		},
+	})
+
+	_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0", Filter: aliceFilterID})
 	roomID := alice.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"invite": []string{bob.UserID},
 	})
-	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince},
+	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince, Filter: aliceFilterID},
 		client.SyncJoinedTo(alice.UserID, roomID),
 		func(clientUserID string, syncResp gjson.Result) error {
 			summary := syncResp.Get("rooms.join." + client.GjsonEscape(roomID) + ".summary")
@@ -472,12 +488,12 @@ func TestRoomSummary(t *testing.T) {
 		return nil
 	}
 
-	sinceToken := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+	sinceToken := bob.MustSyncUntil(t, client.SyncReq{Filter: bobFilterID}, client.SyncInvitedTo(bob.UserID, roomID))
 	bob.JoinRoom(t, roomID, []string{})
 	// Verify Bob sees the correct room summary
-	bob.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
+	bob.MustSyncUntil(t, client.SyncReq{Since: sinceToken, Filter: bobFilterID}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
 	// .. and Alice as well.
-	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
+	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince, Filter: aliceFilterID}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
 }
 
 func sendMessages(t *testing.T, client *client.CSAPI, roomID string, prefix string, count int) {
