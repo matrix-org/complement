@@ -76,10 +76,21 @@ func TestPowerLevels(t *testing.T) {
 				match.JSONKeyTypeEqual("events_default", gjson.Number),
 				match.JSONKeyTypeEqual("users_default", gjson.Number),
 
-				match.JSONKeyTypeEqual("events", gjson.JSON),
+				match.JSONMapEach("events", func(k, v gjson.Result) error {
+					if v.Type != gjson.Number {
+						return fmt.Errorf("key %s is not a number", k.Str)
+					} else {
+						return nil
+					}
+				}),
 
-				match.JSONKeyTypeEqual("users", gjson.JSON),
-				match.JSONKeyTypeEqual("users."+client.GjsonEscape(alice.UserID), gjson.Number),
+				match.JSONMapEach("users", func(k, v gjson.Result) error {
+					if v.Type != gjson.Number {
+						return fmt.Errorf("key %s is not a number", k.Str)
+					} else {
+						return nil
+					}
+				}),
 
 				func(body []byte) error {
 					userDefault := int(gjson.GetBytes(body, "users_default").Num)
@@ -101,7 +112,8 @@ func TestPowerLevels(t *testing.T) {
 		PLContent := map[string]interface{}{
 			"invite": 100.0,
 			"users": map[string]interface{}{
-				alice.UserID: 100.0,
+				alice.UserID:                    100.0,
+				"@random-other-user:their.home": 20.0,
 			},
 		}
 
