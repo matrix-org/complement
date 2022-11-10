@@ -269,17 +269,20 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 	start := time.Now()
 	numResponsesReturned := 0
 	checkers := make([]struct {
-		check SyncCheckOpt
-		errs  []string
+		check         SyncCheckOpt
+		errs          []string
+		originalIndex int
 	}, len(checks))
 	for i := range checks {
 		c := checkers[i]
 		c.check = checks[i]
+		c.originalIndex = i
 		checkers[i] = c
 	}
 	printErrors := func() string {
 		err := "Checkers:\n"
 		for _, c := range checkers {
+			err += fmt.Sprintf("Checker %d:\n", c.originalIndex)
 			err += strings.Join(c.errs, "\n")
 			err += ", \n"
 		}

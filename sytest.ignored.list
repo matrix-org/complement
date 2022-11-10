@@ -12,6 +12,21 @@ Can quarantine media in rooms
 Shutdown room
 Can backfill purged history
 
+# Not formalised by the spec: https://github.com/matrix-org/matrix-spec/issues/456
+Cannot send tombstone event that points to the same room
+Local and remote users' homeservers remove a room from their public directory on upgrade
+/upgrade copies >100 power levels to the new room
+/upgrade copies ban events to the new room
+/upgrade copies important state to the new room
+/upgrade copies the power levels to the new room
+/upgrade moves remote aliases to the new room
+/upgrade preserves direct room state
+/upgrade preserves room federation ability
+/upgrade preserves the power level of the upgrading user in old and new rooms
+/upgrade restricts power levels in the old room
+/upgrade restricts power levels in the old room when the old PLs are unusual
+/upgrade should preserve room visibility for $vis rooms
+
 # Tests deprecated endpoints
 Tags appear in the v1 /initialSync
 Tags appear in the v1 /events stream
