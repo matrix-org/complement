@@ -170,7 +170,7 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 }
 
 func (c *CSAPI) GetGlobalAccountData(t *testing.T, eventType string) *http.Response {
-	return c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType})
+	return c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType})
 }
 
 func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map[string]interface{}) *http.Response {
