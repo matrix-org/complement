@@ -509,17 +509,26 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 		returnedStateEventKeys = append(returnedStateEventKeys, typeAndStateKeyForEvent(gjson.ParseBytes(ev)))
 	}
 	must.CheckOffAll(t, returnedStateEventKeys, []interface{}{
-		"m.room.create|", "m.room.power_levels|", "m.room.join_rules|", "m.room.history_visibility|",
+		"m.room.create|",
+		"m.room.power_levels|",
+		"m.room.join_rules|",
+		"m.room.history_visibility|",
+		// Expect Alice and Bob's membership here because they're room heroes
+		"m.room.member|" + alice.UserID,
+		"m.room.member|" + bob.UserID,
 	})
 
-	// check the returned auth events match those expected
+	// check the returned auth events match those expected.
+    // Now that we include heroes in the partial join response,
+    // all of the events are included under "state" and so we don't expect any
+	// extra auth_events.
+	// TODO: add in a second e.g. power_levels event so that we add stuff to the
+	// auth chain.
 	var returnedAuthEventKeys []interface{}
 	for _, ev := range sendJoinResp.AuthEvents {
 		returnedAuthEventKeys = append(returnedAuthEventKeys, typeAndStateKeyForEvent(gjson.ParseBytes(ev)))
 	}
-	must.CheckOffAll(t, returnedAuthEventKeys, []interface{}{
-		"m.room.member|" + alice.UserID,
-	})
+	must.CheckOffAll(t, returnedAuthEventKeys, []interface{}{ })
 
 	// check the server list. Only one, so we can use HaveInOrder even though the list is unordered
 	must.HaveInOrder(t, sendJoinResp.ServersInRoom, []string{"hs1"})
