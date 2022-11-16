@@ -118,7 +118,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
 			timestampString := strconv.FormatInt(timestamp, 10)
-			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc3030", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"ts":  []string{timestampString},
 				"dir": []string{"f"},
 			}))
@@ -146,7 +146,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
 			timestampString := strconv.FormatInt(timestamp, 10)
-			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc3030", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"ts":  []string{timestampString},
 				"dir": []string{"f"},
 			}))
@@ -300,7 +300,7 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 
 	givenTimestamp := makeTimestampFromTime(givenTime)
 	timestampString := strconv.FormatInt(givenTimestamp, 10)
-	timestampToEventRes := c.DoFunc(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc3030", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+	timestampToEventRes := c.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		"ts":  []string{timestampString},
 		"dir": []string{direction},
 	}))
