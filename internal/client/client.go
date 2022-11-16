@@ -196,6 +196,16 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	return eventID
 }
 
+// SendRedaction sends a redaction request. Will fail if the returned HTTP request code is not 200
+func (c *CSAPI) SendRedaction(t *testing.T, roomID string, e b.Event, eventID string) string {
+	t.Helper()
+	c.txnID++
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, strconv.Itoa(c.txnID)}
+	res := c.MustDoFunc(t, "PUT", paths, WithJSONBody(t, e.Content))
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "event_id")
+}
+
 // Perform a single /sync request with the given request options. To sync until something happens,
 // see `MustSyncUntil`.
 //
