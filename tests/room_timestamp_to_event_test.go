@@ -1,9 +1,9 @@
-//go:build msc3030
-// +build msc3030
+//go:build !dendrite_blacklist
+// +build !dendrite_blacklist
 
-// This file contains tests for a jump to date API endpoint,
-// currently experimental feature defined by MSC3030, which you can read here:
-// https://github.com/matrix-org/matrix-doc/pull/3030
+// This file contains tests for the `/timestamp_to_event` client and federation API
+// endpoints (also known as *jump to date*). As defined by MSC3030, which you can read
+// here: https://github.com/matrix-org/matrix-doc/pull/3030
 
 package tests
 
