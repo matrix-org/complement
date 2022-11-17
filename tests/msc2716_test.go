@@ -1126,16 +1126,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 	})
 }
 
-var txnCounter int = 0
-
-func getTxnID(prefix string) (txnID string) {
-	txnId := fmt.Sprintf("%s-%d", prefix, txnCounter)
-
-	txnCounter++
-
-	return txnId
-}
-
 func makeInterfaceSlice(slice []string) []interface{} {
 	interfaceSlice := make([]interface{}, len(slice))
 	for i := range slice {

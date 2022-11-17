@@ -236,6 +236,16 @@ type eventTime struct {
 	AfterTimestamp  time.Time
 }
 
+var txnCounter int = 0
+
+func getTxnID(prefix string) (txnID string) {
+	txnId := fmt.Sprintf("%s-%d", prefix, txnCounter)
+
+	txnCounter++
+
+	return txnId
+}
+
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
 	t.Helper()
 
