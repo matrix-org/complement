@@ -82,7 +82,7 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 
 // NewUser creates a new user as a convenience method to RegisterUser.
 //
-//It registers the user with a random password, and without admin privileges.
+//It registers the user with a deterministic password, and without admin privileges.
 func (d *Deployment) NewUser(t *testing.T, localpart, hs string) *client.CSAPI {
 	return d.RegisterUser(t, hs, localpart, "complement_meets_min_pasword_req_"+localpart, false)
 }
