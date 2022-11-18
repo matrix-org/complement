@@ -119,7 +119,11 @@ func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp gomatri
 // expectPartialState should be true if we should expect the incoming send_join
 // request to use the partial_state flag, per MSC3706. In that case, we reply
 // with only the critical subset of the room state.
-func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request, expectPartialState bool) {
+//
+// omitServersInRoom should be false to respond to partial_state joins with the complete list of
+// servers in the room. When omitServersInRoom is true, a misbehaving server is simulated and only
+// the current server is returned to the joining server.
+func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request, expectPartialState bool, omitServersInRoom bool) {
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
 		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 	)
@@ -172,7 +176,10 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 	authEvents := room.AuthChainForEvents(stateEvents)
 
 	// get servers in room *before* the join event
-	serversInRoom := room.ServersInRoom()
+	serversInRoom := []string{s.serverName}
+	if !omitServersInRoom {
+		serversInRoom = room.ServersInRoom()
+	}
 
 	// insert the join event into the room state
 	room.AddEvent(event)
@@ -205,7 +212,7 @@ func HandleMakeSendJoinRequests() func(*Server) {
 		})).Methods("GET")
 
 		s.mux.Handle("/_matrix/federation/v2/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			SendJoinRequestsHandler(s, w, req, false)
+			SendJoinRequestsHandler(s, w, req, false, false)
 		})).Methods("PUT")
 	}
 }
@@ -218,7 +225,7 @@ func HandlePartialStateMakeSendJoinRequests() func(*Server) {
 		})).Methods("GET")
 
 		s.mux.Handle("/_matrix/federation/v2/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			SendJoinRequestsHandler(s, w, req, true)
+			SendJoinRequestsHandler(s, w, req, true, false)
 		})).Methods("PUT")
 	}
 }

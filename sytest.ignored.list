@@ -3,9 +3,18 @@
 
 # Dummy test in 00prepare.pl
 foo
+Checking local federation server
 
 # Tests synapse admin API
 Can quarantine media in rooms
+/purge_history
+/purge_history by ts
+Shutdown room
+Can backfill purged history
+
+# Dummy test that exists only to prove a capability
+# (in 10apidoc/36room-levels)
+Both GET and PUT work
 
 # Tests deprecated endpoints
 Tags appear in the v1 /initialSync
@@ -30,12 +39,12 @@ New room members see first user's profile information in per-room initialSync
 A departed room is still included in /initialSync (SPEC-216)
 Can get rooms/{roomId}/initialSync for a departed room (SPEC-216)
 initialSync sees my presence status
-Global initialSyncGlobal initialSync with limit=0 gives no messages
+Global initialSync
+Global initialSync with limit=0 gives no messages
 Room initialSync
 Room initialSync with limit=0 gives no messages
 Read receipts are visible to /initialSync
 Newly created users see their own presence in /initialSync (SYT-34)
-Push rules come down in an initial /sync
 Guest user calling /events doesn't tightloop
 Guest user cannot call /events globally
 !53groups

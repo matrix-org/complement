@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/runtime"
-	"github.com/tidwall/gjson"
 )
 
 func TestMembersLocal(t *testing.T) {
@@ -36,7 +37,7 @@ func TestMembersLocal(t *testing.T) {
 
 		// sytest: Existing members see new members' presence
 		t.Run("Existing members see new members' presence", func(t *testing.T) {
-			runtime.SkipIf(t, runtime.Dendrite) // Still failing
+			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2803
 			t.Parallel()
 			alice.MustSyncUntil(t, client.SyncReq{},
 				client.SyncJoinedTo(bob.UserID, roomID),

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -32,8 +31,6 @@ import (
 )
 
 var (
-	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
-	HostnameRunningComplement = "host.docker.internal"
 	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
 	HostnameRunningDocker = "localhost"
 )
@@ -257,7 +254,7 @@ func (d *Builder) ConstructBlueprint(bprint b.Blueprint, homeserversToConstruct 
 func (d *Builder) construct(bprint b.Blueprint, homeserversToConstruct []b.Homeserver) (errs []error) {
 	d.log("Constructing blueprint '%s'", bprint.Name)
 
-	networkID, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
+	networkName, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
 	if err != nil {
 		return []error{err}
 	}
@@ -265,7 +262,7 @@ func (d *Builder) construct(bprint b.Blueprint, homeserversToConstruct []b.Homes
 	runner := instruction.NewRunner(bprint.Name, d.Config.BestEffort, d.Config.DebugLoggingEnabled)
 	results := make([]result, len(homeserversToConstruct))
 	for i, hs := range homeserversToConstruct {
-		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
+		res := d.constructHomeserver(bprint.Name, runner, hs, networkName)
 		if res.err != nil {
 			errs = append(errs, res.err)
 			if res.containerID != "" {
@@ -353,9 +350,7 @@ func (d *Builder) construct(bprint b.Blueprint, homeserversToConstruct []b.Homes
 			Author:    "Complement",
 			Pause:     true,
 			Reference: "localhost/complement:" + res.contextStr,
-			Config: &container.Config{
-				Labels: labels,
-			},
+			Changes:   toChanges(labels),
 		})
 		if err != nil {
 			d.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
@@ -368,11 +363,22 @@ func (d *Builder) construct(bprint b.Blueprint, homeserversToConstruct []b.Homes
 	return errs
 }
 
+// Convert a map of labels to a list of changes directive in Dockerfile format.
+// Labels keys and values can't be multiline (eg. can't contain `\n` character)
+// neither can they contain unescaped `"` character.
+func toChanges(labels map[string]string) []string {
+	var changes []string
+	for k, v := range labels {
+		changes = append(changes, fmt.Sprintf("LABEL \"%s\"=\"%s\"", k, v))
+	}
+	return changes
+}
+
 // construct this homeserver and execute its instructions, keeping the container alive.
-func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
+func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkName string) result {
 	contextStr := fmt.Sprintf("%s.%s.%s", d.Config.PackageNamespace, blueprintName, hs.Name)
 	d.log("%s : constructing homeserver...\n", contextStr)
-	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
+	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkName)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
 		containerID := ""
@@ -400,7 +406,7 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 }
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
-func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
+func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkName string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 	var baseImageURI string
 	if hs.BaseImageURI == nil {
@@ -416,28 +422,29 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 	return deployImage(
 		d.Docker, baseImageURI, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
-		networkID, d.Config,
+		networkName, d.Config,
 	)
 }
 
+// Multilines label using Dockerfile syntax is unsupported, let's inline \n instead
 func generateASRegistrationYaml(as b.ApplicationService) string {
-	return fmt.Sprintf("id: %s\n", as.ID) +
-		fmt.Sprintf("hs_token: %s\n", as.HSToken) +
-		fmt.Sprintf("as_token: %s\n", as.ASToken) +
-		fmt.Sprintf("url: '%s'\n", as.URL) +
-		fmt.Sprintf("sender_localpart: %s\n", as.SenderLocalpart) +
-		fmt.Sprintf("rate_limited: %v\n", as.RateLimited) +
-		"namespaces:\n" +
-		"  users:\n" +
-		"    - exclusive: false\n" +
-		"      regex: .*\n" +
-		"  rooms: []\n" +
-		"  aliases: []\n"
+	return fmt.Sprintf("id: %s\\n", as.ID) +
+		fmt.Sprintf("hs_token: %s\\n", as.HSToken) +
+		fmt.Sprintf("as_token: %s\\n", as.ASToken) +
+		fmt.Sprintf("url: '%s'\\n", as.URL) +
+		fmt.Sprintf("sender_localpart: %s\\n", as.SenderLocalpart) +
+		fmt.Sprintf("rate_limited: %v\\n", as.RateLimited) +
+		"namespaces:\\n" +
+		"  users:\\n" +
+		"    - exclusive: false\\n" +
+		"      regex: .*\\n" +
+		"  rooms: []\\n" +
+		"  aliases: []\\n"
 }
 
-// createNetworkIfNotExists creates a docker network and returns its id.
-// ID is guaranteed not to be empty when err == nil
-func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkID string, err error) {
+// createNetworkIfNotExists creates a docker network and returns its name.
+// Name is guaranteed not to be empty when err == nil
+func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkName string, err error) {
 	// check if a network already exists for this blueprint
 	nws, err := docker.NetworkList(context.Background(), types.NetworkListOptions{
 		Filters: label(
@@ -453,10 +460,11 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 		if len(nws) > 1 {
 			log.Printf("WARNING: createNetworkIfNotExists got %d networks for pkg=%s blueprint=%s", len(nws), pkgNamespace, blueprintName)
 		}
-		return nws[0].ID, nil
+		return nws[0].Name, nil
 	}
+	networkName = "complement_" + pkgNamespace + "_" + blueprintName
 	// make a user-defined network so we get DNS based on the container name
-	nw, err := docker.NetworkCreate(context.Background(), "complement_"+pkgNamespace+"_"+blueprintName, types.NetworkCreate{
+	nw, err := docker.NetworkCreate(context.Background(), networkName, types.NetworkCreate{
 		Labels: map[string]string{
 			complementLabel:        blueprintName,
 			"complement_blueprint": blueprintName,
@@ -475,7 +483,7 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 	if nw.ID == "" {
 		return "", fmt.Errorf("%s: unexpected empty ID while creating networkID", blueprintName)
 	}
-	return nw.ID, nil
+	return networkName, nil
 }
 
 func printLogs(docker *client.Client, containerID, contextStr string) {

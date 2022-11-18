@@ -19,7 +19,6 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -62,7 +61,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 			w.WriteHeader(502)
 			return
 		}
-		federation.SendJoinRequestsHandler(srv, w, req, false)
+		federation.SendJoinRequestsHandler(srv, w, req, false, false)
 	})).Methods("PUT")
 
 	ver := alice.GetDefaultRoomVersion(t)
@@ -157,7 +156,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -186,7 +185,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID) + "bogus": "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -201,7 +200,10 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		alice.JoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with state with unverifiable auth events shouldn't block room join", func(t *testing.T) {
-		runtime.SkipIf(t, runtime.Dendrite) // https://github.com/matrix-org/dendrite/issues/2028
+		// FIXME: https://github.com/matrix-org/dendrite/issues/2800
+		//  (previously https://github.com/matrix-org/dendrite/issues/2028)
+		runtime.SkipIf(t, runtime.Dendrite)
+
 		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 		roomAlias := srv.MakeAliasMapping("UnverifiableAuthEvents", room.RoomID)
 
@@ -216,7 +218,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		}).JSON()
 		rawSig, err := json.Marshal(map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		})
@@ -385,7 +387,9 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		}
 
 		var res interface{}
-		err := srv.SendFederationRequest(context.Background(), deployment, req, &res)
+
+		err := srv.SendFederationRequest(context.Background(), t, deployment, req, &res)
+
 		if err == nil {
 			t.Errorf("send request returned 200")
 			return
@@ -505,17 +509,26 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 		returnedStateEventKeys = append(returnedStateEventKeys, typeAndStateKeyForEvent(gjson.ParseBytes(ev)))
 	}
 	must.CheckOffAll(t, returnedStateEventKeys, []interface{}{
-		"m.room.create|", "m.room.power_levels|", "m.room.join_rules|", "m.room.history_visibility|",
+		"m.room.create|",
+		"m.room.power_levels|",
+		"m.room.join_rules|",
+		"m.room.history_visibility|",
+		// Expect Alice and Bob's membership here because they're room heroes
+		"m.room.member|" + alice.UserID,
+		"m.room.member|" + bob.UserID,
 	})
 
-	// check the returned auth events match those expected
+	// check the returned auth events match those expected.
+    // Now that we include heroes in the partial join response,
+    // all of the events are included under "state" and so we don't expect any
+	// extra auth_events.
+	// TODO: add in a second e.g. power_levels event so that we add stuff to the
+	// auth chain.
 	var returnedAuthEventKeys []interface{}
 	for _, ev := range sendJoinResp.AuthEvents {
 		returnedAuthEventKeys = append(returnedAuthEventKeys, typeAndStateKeyForEvent(gjson.ParseBytes(ev)))
 	}
-	must.CheckOffAll(t, returnedAuthEventKeys, []interface{}{
-		"m.room.member|" + alice.UserID,
-	})
+	must.CheckOffAll(t, returnedAuthEventKeys, []interface{}{ })
 
 	// check the server list. Only one, so we can use HaveInOrder even though the list is unordered
 	must.HaveInOrder(t, sendJoinResp.ServersInRoom, []string{"hs1"})
@@ -527,7 +540,9 @@ func typeAndStateKeyForEvent(result gjson.Result) string {
 }
 
 func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // Dendrite doesn't read AS registration files from Complement yet
+	// Dendrite doesn't read AS registration files from Complement yet
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/complement/issues/514
+
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
