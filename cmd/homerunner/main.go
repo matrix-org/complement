@@ -34,6 +34,15 @@ func (c *Config) DeriveComplementConfig(baseImageURI string) *config.Complement 
 	return cfg
 }
 
+func Getenv(key string, default_value string) string {
+	value, exists := os.LookupEnv(key)
+        if (exists) {
+		return value
+	} else {
+		return default_value
+	}
+}
+
 func NewConfig() *Config {
 	cfg := &Config{
 		HomeserverLifetimeMins: 30,
@@ -41,7 +50,7 @@ func NewConfig() *Config {
 		SpawnHSTimeout:         5 * time.Second,
 		KeepBlueprints:         strings.Split(os.Getenv("HOMERUNNER_KEEP_BLUEPRINTS"), " "),
 		Snapshot:               os.Getenv("HOMERUNNER_SNAPSHOT_BLUEPRINT"),
-		HSPortBindingIP:        os.Getenv("HOMERUNNER_HS_PORTBINDING_IP", "127.0.0.1"),
+		HSPortBindingIP:        Getenv("HOMERUNNER_HS_PORTBINDING_IP", "127.0.0.1"),
 	}
 	if val, _ := strconv.Atoi(os.Getenv("HOMERUNNER_LIFETIME_MINS")); val != 0 {
 		cfg.HomeserverLifetimeMins = val
