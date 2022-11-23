@@ -7,7 +7,6 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 )
 
@@ -21,6 +20,8 @@ import (
 func TestOutboundFederationSend(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
 	waiter := NewWaiter()
 	wantEventType := "m.room.message"
@@ -45,14 +46,13 @@ func TestOutboundFederationSend(t *testing.T) {
 	defer cancel()
 
 	// the remote homeserver creates a public room
-	ver := gomatrixserverlib.RoomVersionV5
+	ver := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	alice.JoinRoom(t, roomAlias, []string{docker.HostnameRunningComplement})
+	alice.JoinRoom(t, roomAlias, []string{deployment.Config.HostnameRunningComplement})
 
 	// the local homeserver sends an event into the room
 	alice.SendEventSynced(t, serverRoom.RoomID, b.Event{

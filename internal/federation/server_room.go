@@ -94,22 +94,45 @@ func (r *ServerRoom) AllCurrentState() (events []*gomatrixserverlib.Event) {
 
 // AuthChain returns all auth events for all events in the current state TODO: recursively
 func (r *ServerRoom) AuthChain() (chain []*gomatrixserverlib.Event) {
+	return r.AuthChainForEvents(r.AllCurrentState())
+}
+
+// AuthChainForEvents returns all auth events for all events in the given state
+func (r *ServerRoom) AuthChainForEvents(events []*gomatrixserverlib.Event) (chain []*gomatrixserverlib.Event) {
 	chainMap := make(map[string]bool)
-	// get all the auth event IDs
-	for _, ev := range r.AllCurrentState() {
+
+	// build a map of all events in the room
+	// Timeline and State contain different sets of events, so check them both.
+	eventsByID := map[string]*gomatrixserverlib.Event{}
+	for _, ev := range r.Timeline {
+		eventsByID[ev.EventID()] = ev
+	}
+	for _, ev := range r.State {
+		eventsByID[ev.EventID()] = ev
+	}
+
+	// a queue of events whose auth events are to be included in the auth chain
+	queue := []*gomatrixserverlib.Event{}
+	queue = append(queue, events...)
+
+	// get all the auth events recursively
+	// we extend the "queue" as we go along
+	for i := 0; i < len(queue); i++ {
+		ev := queue[i]
 		for _, evID := range ev.AuthEventIDs() {
 			if chainMap[evID] {
 				continue
 			}
 			chainMap[evID] = true
+			event, ok := eventsByID[evID]
+			if !ok {
+				panic(fmt.Sprintf("AuthChainForEvents: event %s refers to unknown event %s in auth events", ev.EventID(), evID))
+			}
+			chain = append(chain, event)
+			queue = append(queue, event)
 		}
 	}
-	// find them in the timeline
-	for _, tev := range r.Timeline {
-		if chainMap[tev.EventID()] {
-			chain = append(chain, tev)
-		}
-	}
+
 	return
 }
 
@@ -127,6 +150,33 @@ func (r *ServerRoom) MustHaveMembershipForUser(t *testing.T, userID, wantMembers
 	if m != wantMembership {
 		t.Fatalf("incorrect membership state for %s: got %s, want %s", userID, m, wantMembership)
 	}
+}
+
+// ServersInRoom gets all servers currently joined to the room
+func (r *ServerRoom) ServersInRoom() (servers []string) {
+	serverSet := make(map[string]struct{})
+
+	for _, ev := range r.State {
+		if ev.Type() != "m.room.member" {
+			continue
+		}
+		membership, err := ev.Membership()
+		if err != nil || membership != "join" {
+			continue
+		}
+		_, server, err := gomatrixserverlib.SplitID('@', *ev.StateKey())
+		if err != nil {
+			continue
+		}
+
+		serverSet[string(server)] = struct{}{}
+	}
+
+	for server := range serverSet {
+		servers = append(servers, server)
+	}
+
+	return
 }
 
 func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLevelContent) {

@@ -2,7 +2,13 @@ package client
 
 import (
 	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha1" // nolint:gosec
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
@@ -12,21 +18,77 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/must"
 )
+
+const (
+	SharedSecret = "complement"
+)
+
+type CtxKey string
+
+const (
+	CtxKeyWithRetryUntil CtxKey = "complement_retry_until" // contains *retryUntilParams
+)
+
+type retryUntilParams struct {
+	timeout time.Duration
+	untilFn func(*http.Response) bool
+}
 
 // RequestOpt is a functional option which will modify an outgoing HTTP request.
 // See functions starting with `With...` in this package for more info.
 type RequestOpt func(req *http.Request)
 
+// SyncCheckOpt is a functional option for use with MustSyncUntil which should return <nil> if
+// the response satisfies the check, else return a human friendly error.
+// The result object is the entire /sync response from this request.
+type SyncCheckOpt func(clientUserID string, topLevelSyncJSON gjson.Result) error
+
+// SyncReq contains all the /sync request configuration options. The empty struct `SyncReq{}` is valid
+// which will do a full /sync due to lack of a since token.
+type SyncReq struct {
+	// A point in time to continue a sync from. This should be the next_batch token returned by an
+	// earlier call to this endpoint.
+	Since string
+	// The ID of a filter created using the filter API or a filter JSON object encoded as a string.
+	// The server will detect whether it is an ID or a JSON object by whether the first character is
+	// a "{" open brace. Passing the JSON inline is best suited to one off requests. Creating a
+	// filter using the filter API is recommended for clients that reuse the same filter multiple
+	// times, for example in long poll requests.
+	Filter string
+	// Controls whether to include the full state for all rooms the user is a member of.
+	// If this is set to true, then all state events will be returned, even if since is non-empty.
+	// The timeline will still be limited by the since parameter. In this case, the timeout parameter
+	// will be ignored and the query will return immediately, possibly with an empty timeline.
+	// If false, and since is non-empty, only state which has changed since the point indicated by
+	// since will be returned.
+	// By default, this is false.
+	FullState bool
+	// Controls whether the client is automatically marked as online by polling this API. If this
+	// parameter is omitted then the client is automatically marked as online when it uses this API.
+	// Otherwise if the parameter is set to “offline” then the client is not marked as being online
+	// when it uses this API. When set to “unavailable”, the client is marked as being idle.
+	// One of: [offline online unavailable].
+	SetPresence string
+	// The maximum time to wait, in milliseconds, before returning this request. If no events
+	// (or other data) become available before this time elapses, the server will return a response
+	// with empty fields.
+	// By default, this is 1000 for Complement testing.
+	TimeoutMillis string // string for easier conversion to query params
+}
+
 type CSAPI struct {
 	UserID      string
 	AccessToken string
+	DeviceID    string
 	BaseURL     string
 	Client      *http.Client
-	// how long are we willing to wait for SyncUntil.... calls
+	// how long are we willing to wait for MustSyncUntil.... calls
 	SyncUntilTimeout time.Duration
 	// True to enable verbose logging
 	Debug bool
@@ -42,7 +104,7 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 		query.Set("filename", fileName)
 	}
 	res := c.MustDoFunc(
-		t, "POST", []string{"_matrix", "media", "r0", "upload"},
+		t, "POST", []string{"_matrix", "media", "v3", "upload"},
 		WithRawBody(fileBody), WithContentType(contentType), WithQueries(query),
 	)
 	body := ParseJSON(t, res)
@@ -52,10 +114,8 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 // DownloadContent downloads media from the server, returning the raw bytes and the Content-Type. Fails the test on error.
 func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 	t.Helper()
-	mxcParts := strings.Split(strings.TrimPrefix(mxcUri, "mxc://"), "/")
-	origin := mxcParts[0]
-	mediaId := strings.Join(mxcParts[1:], "/")
-	res := c.MustDo(t, "GET", []string{"_matrix", "media", "r0", "download", origin, mediaId}, struct{}{})
+	origin, mediaId := SplitMxc(mxcUri)
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "media", "v3", "download", origin, mediaId})
 	contentType := res.Header.Get("Content-Type")
 	b, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -67,7 +127,7 @@ func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 // CreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
 func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, creationContent)
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, creationContent))
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "room_id")
 }
@@ -81,7 +141,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 		query.Add("server_name", serverName)
 	}
 	// join the room
-	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", roomIDOrAlias}, WithQueries(query))
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias}, WithQueries(query))
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
@@ -91,11 +151,12 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
-// LeaveRoom joins the room ID, else fails the test.
+// LeaveRoom leaves the room ID, else fails the test.
 func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 	t.Helper()
 	// leave the room
-	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
+	body := map[string]interface{}{}
+	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, WithJSONBody(t, body))
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
@@ -105,7 +166,15 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 	body := map[string]interface{}{
 		"user_id": userID,
 	}
-	c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "invite"}, body)
+	c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
+}
+
+func (c *CSAPI) GetGlobalAccountData(t *testing.T, eventType string) *http.Response {
+	return c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType})
+}
+
+func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map[string]interface{}) *http.Response {
+	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
@@ -113,104 +182,149 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
-	paths := []string{"_matrix", "client", "r0", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
 	if e.StateKey != nil {
-		paths = []string{"_matrix", "client", "r0", "rooms", roomID, "state", e.Type, *e.StateKey}
+		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
-	res := c.MustDo(t, "PUT", paths, e.Content)
+	res := c.MustDoFunc(t, "PUT", paths, WithJSONBody(t, e.Content))
 	body := ParseJSON(t, res)
 	eventID := GetJSONFieldStr(t, body, "event_id")
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
-	c.SyncUntilTimelineHas(t, roomID, func(r gjson.Result) bool {
+	c.MustSyncUntil(t, SyncReq{}, SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID
-	})
+	}))
 	return eventID
 }
 
-// SyncUntilTimelineHas is a wrapper around `SyncUntil`.
-// It blocks and continually calls `/sync` until
-// - we have joined the given room
-// - we see an event in the room for which the `check` function returns True
-// If the `check` function fails the test, the failing event will be automatically logged.
-// Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntilTimelineHas(t *testing.T, roomID string, check func(gjson.Result) bool) {
+// SendRedaction sends a redaction request. Will fail if the returned HTTP request code is not 200
+func (c *CSAPI) SendRedaction(t *testing.T, roomID string, e b.Event, eventID string) string {
 	t.Helper()
-	c.SyncUntil(t, "", "", "rooms.join."+GjsonEscape(roomID)+".timeline.events", check)
+	c.txnID++
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, strconv.Itoa(c.txnID)}
+	res := c.MustDoFunc(t, "PUT", paths, WithJSONBody(t, e.Content))
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "event_id")
 }
 
-// SyncUntilInvitedTo is a wrapper around SyncUntil.
-// It blocks and continually calls `/sync` until we've been invited to the given room.
-// Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntilInvitedTo(t *testing.T, roomID string) {
+// Perform a single /sync request with the given request options. To sync until something happens,
+// see `MustSyncUntil`.
+//
+// Fails the test if the /sync request does not return 200 OK.
+// Returns the top-level parsed /sync response JSON as well as the next_batch token from the response.
+func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
 	t.Helper()
-	check := func(event gjson.Result) bool {
-		return event.Get("type").Str == "m.room.member" &&
-			event.Get("content.membership").Str == "invite" &&
-			event.Get("state_key").Str == c.UserID
+	query := url.Values{
+		"timeout": []string{"1000"},
 	}
-	c.SyncUntil(t, "", "", "rooms.invite."+GjsonEscape(roomID)+".invite_state.events", check)
+	// configure the HTTP request based on SyncReq
+	if syncReq.TimeoutMillis != "" {
+		query["timeout"] = []string{syncReq.TimeoutMillis}
+	}
+	if syncReq.Since != "" {
+		query["since"] = []string{syncReq.Since}
+	}
+	if syncReq.Filter != "" {
+		query["filter"] = []string{syncReq.Filter}
+	}
+	if syncReq.FullState {
+		query["full_state"] = []string{"true"}
+	}
+	if syncReq.SetPresence != "" {
+		query["set_presence"] = []string{syncReq.SetPresence}
+	}
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "sync"}, WithQueries(query))
+	body := ParseJSON(t, res)
+	result := gjson.ParseBytes(body)
+	nextBatch := GetJSONFieldStr(t, body, "next_batch")
+	return result, nextBatch
 }
 
-// SyncUntil blocks and continually calls /sync until
-// - the response contains a particular `key`, and
-// - its corresponding value is an array
-// - some element in that array makes the `check` function return true.
-// If the `check` function fails the test, the failing event will be automatically logged.
-// Will time out after CSAPI.SyncUntilTimeout.
-func (c *CSAPI) SyncUntil(t *testing.T, since, filter, key string, check func(gjson.Result) bool) {
+// MustSyncUntil blocks and continually calls /sync (advancing the since token) until all the
+// check functions return no error. Returns the final/latest since token.
+//
+// Initial /sync example: (no since token)
+//   bob.InviteRoom(t, roomID, alice.UserID)
+//   alice.JoinRoom(t, roomID, nil)
+//   alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+//
+// Incremental /sync example: (test controls since token)
+//    since := alice.MustSyncUntil(t, client.SyncReq{TimeoutMillis: "0"}) // get a since token
+//    bob.InviteRoom(t, roomID, alice.UserID)
+//    since = alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncInvitedTo(alice.UserID, roomID))
+//    alice.JoinRoom(t, roomID, nil)
+//    alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncJoinedTo(alice.UserID, roomID))
+//
+// Checking multiple parts of /sync:
+//    alice.MustSyncUntil(
+//        t, client.SyncReq{},
+//        client.SyncJoinedTo(alice.UserID, roomID),
+//        client.SyncJoinedTo(alice.UserID, roomID2),
+//        client.SyncJoinedTo(alice.UserID, roomID3),
+//    )
+//
+// Check functions are unordered and independent. Once a check function returns true it is removed
+// from the list of checks and won't be called again.
+//
+// In the unlikely event that you want all the checkers to pass *explicitly* in a single /sync
+// response (e.g to assert some form of atomic update which updates multiple parts of the /sync
+// response at once) then make your own checker function which does this.
+//
+// In the unlikely event that you need ordering on your checks, call MustSyncUntil multiple times
+// with a single checker, and reuse the returned since token, as in the "Incremental sync" example.
+//
+// Will time out after CSAPI.SyncUntilTimeout. Returns the `next_batch` token from the final
+// response.
+func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheckOpt) string {
 	t.Helper()
 	start := time.Now()
-	checkCounter := 0
-	// Print failing events in a defer() so we handle t.Fatalf in the same way as t.Errorf
-	var wasFailed = t.Failed()
-	var lastEvent *gjson.Result
-	timedOut := false
-	defer func() {
-		if !wasFailed && t.Failed() {
-			raw := ""
-			if lastEvent != nil {
-				raw = lastEvent.Raw
-			}
-			if !timedOut {
-				t.Logf("SyncUntil: failing event %s", raw)
-			}
+	numResponsesReturned := 0
+	checkers := make([]struct {
+		check SyncCheckOpt
+		errs  []string
+	}, len(checks))
+	for i := range checks {
+		c := checkers[i]
+		c.check = checks[i]
+		checkers[i] = c
+	}
+	printErrors := func() string {
+		err := "Checkers:\n"
+		for _, c := range checkers {
+			err += strings.Join(c.errs, "\n")
+			err += ", \n"
 		}
-	}()
+		return err
+	}
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
-			timedOut = true
-			t.Fatalf("SyncUntil: timed out. Called check function %d times", checkCounter)
+			t.Fatalf("%s MustSyncUntil: timed out after %v. Seen %d /sync responses. %s", c.UserID, time.Since(start), numResponsesReturned, printErrors())
 		}
-		query := url.Values{
-			"timeout": []string{"1000"},
-		}
-		if since != "" {
-			query["since"] = []string{since}
-		}
-		if filter != "" {
-			query["filter"] = []string{filter}
-		}
-		res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "sync"}, WithQueries(query))
-		body := ParseJSON(t, res)
-		since = GetJSONFieldStr(t, body, "next_batch")
-		keyRes := gjson.GetBytes(body, key)
-		if keyRes.IsArray() {
-			events := keyRes.Array()
-			for i, ev := range events {
-				lastEvent = &events[i]
-				if check(ev) {
-					return
-				}
-				wasFailed = t.Failed()
-				checkCounter++
+		response, nextBatch := c.MustSync(t, syncReq)
+		syncReq.Since = nextBatch
+		numResponsesReturned += 1
+
+		for i := 0; i < len(checkers); i++ {
+			err := checkers[i].check(c.UserID, response)
+			if err == nil {
+				// check passed, removed from checkers
+				checkers = append(checkers[:i], checkers[i+1:]...)
+				i--
+			} else {
+				c := checkers[i]
+				c.errs = append(c.errs, fmt.Sprintf("[t=%v] Response #%d: %s", time.Since(start), numResponsesReturned, err))
+				checkers[i] = c
 			}
+		}
+		if len(checkers) == 0 {
+			// every checker has passed!
+			return syncReq.Since
 		}
 	}
 }
 
 //RegisterUser will register the user with given parameters and
 // return user ID & access token, and fail the test on network error
-func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken string) {
+func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"auth": map[string]string{
@@ -219,7 +333,7 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 		"username": localpart,
 		"password": password,
 	}
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "r0", "register"}, reqBody)
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, WithJSONBody(t, reqBody))
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -228,20 +342,73 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 
 	userID = gjson.GetBytes(body, "user_id").Str
 	accessToken = gjson.GetBytes(body, "access_token").Str
-	return userID, accessToken
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	return userID, accessToken, deviceID
 }
 
-// MustDo will do the HTTP request and fail the test if the response is not 2xx
-//
-// Deprecated: Prefer MustDoFunc. MustDo is the older format which doesn't allow for vargs
-// and will be removed in the future. MustDoFunc also logs HTTP response bodies on error.
-func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, jsonBody interface{}) *http.Response {
-	t.Helper()
-	res := c.DoFunc(t, method, paths, WithJSONBody(t, jsonBody))
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		t.Fatalf("CSAPI.MustDo %s %s returned HTTP %d", method, res.Request.URL.String(), res.StatusCode)
+// RegisterSharedSecret registers a new account with a shared secret via HMAC
+// See https://github.com/matrix-org/synapse/blob/e550ab17adc8dd3c48daf7fedcd09418a73f524b/synapse/_scripts/register_new_matrix_user.py#L40
+func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bool) (userID, accessToken, deviceID string) {
+	resp := c.DoFunc(t, "GET", []string{"_synapse", "admin", "v1", "register"})
+	if resp.StatusCode != 200 {
+		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
+		return
 	}
-	return res
+	body := must.ParseJSON(t, resp.Body)
+	nonce := gjson.GetBytes(body, "nonce")
+	if !nonce.Exists() {
+		t.Fatalf("Malformed shared secret GET response: %s", string(body))
+	}
+	mac := hmac.New(sha1.New, []byte(SharedSecret))
+	mac.Write([]byte(nonce.Str))
+	mac.Write([]byte("\x00"))
+	mac.Write([]byte(user))
+	mac.Write([]byte("\x00"))
+	mac.Write([]byte(pass))
+	mac.Write([]byte("\x00"))
+	if isAdmin {
+		mac.Write([]byte("admin"))
+	} else {
+		mac.Write([]byte("notadmin"))
+	}
+	sig := mac.Sum(nil)
+	reqBody := map[string]interface{}{
+		"nonce":    nonce.Str,
+		"username": user,
+		"password": pass,
+		"mac":      hex.EncodeToString(sig),
+		"admin":    isAdmin,
+	}
+	resp = c.MustDoFunc(t, "POST", []string{"_synapse", "admin", "v1", "register"}, WithJSONBody(t, reqBody))
+	body = must.ParseJSON(t, resp.Body)
+	userID = gjson.GetBytes(body, "user_id").Str
+	accessToken = gjson.GetBytes(body, "access_token").Str
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	return userID, accessToken, deviceID
+}
+
+// GetCapbabilities queries the server's capabilities
+func (c *CSAPI) GetCapabilities(t *testing.T) []byte {
+	t.Helper()
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+	return body
+}
+
+// GetDefaultRoomVersion returns the server's default room version
+func (c *CSAPI) GetDefaultRoomVersion(t *testing.T) gomatrixserverlib.RoomVersion {
+	t.Helper()
+	capabilities := c.GetCapabilities(t)
+	defaultVersion := gjson.GetBytes(capabilities, `capabilities.m\.room_versions.default`)
+	if !defaultVersion.Exists() {
+		// spec says use RoomV1 in this case
+		return gomatrixserverlib.RoomVersionV1
+	}
+
+	return gomatrixserverlib.RoomVersion(defaultVersion.Str)
 }
 
 // WithRawBody sets the HTTP request body to `body`
@@ -283,6 +450,16 @@ func WithQueries(q url.Values) RequestOpt {
 	}
 }
 
+// WithRetryUntil will retry the request until the provided function returns true. Times out after
+// `timeout`, which will then fail the test.
+func WithRetryUntil(timeout time.Duration, untilFn func(res *http.Response) bool) RequestOpt {
+	return func(req *http.Request) {
+		until := req.Context().Value(CtxKeyWithRetryUntil).(*retryUntilParams)
+		until.timeout = timeout
+		until.untilFn = untilFn
+	}
+}
+
 // MustDoFunc is the same as DoFunc but fails the test if the returned HTTP response code is not 2xx.
 func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
@@ -290,7 +467,7 @@ func (c *CSAPI) MustDoFunc(t *testing.T, method string, paths []string, opts ...
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		defer res.Body.Close()
 		body, _ := ioutil.ReadAll(res.Body)
-		t.Fatalf("CSAPI.MustDoFunc response return non-2xx code: %s - body: %s", res.Status, string(body))
+		t.Fatalf("CSAPI.MustDoFunc %s %s returned non-2xx code: %s - body: %s", method, res.Request.URL.String(), res.Status, string(body))
 	}
 	return res
 }
@@ -321,6 +498,9 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 	if c.AccessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	}
+	retryUntil := &retryUntilParams{}
+	ctx := context.WithValue(req.Context(), CtxKeyWithRetryUntil, retryUntil)
+	req = req.WithContext(ctx)
 
 	// set functional options
 	for _, o := range opts {
@@ -332,7 +512,7 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 	}
 	// debug log the request
 	if c.Debug {
-		t.Logf("Making %s request to %s", method, reqURL)
+		t.Logf("Making %s request to %s (%s)", method, req.URL, c.AccessToken)
 		contentType := req.Header.Get("Content-Type")
 		if contentType == "application/json" || strings.HasPrefix(contentType, "text/") {
 			if req.Body != nil {
@@ -344,21 +524,48 @@ func (c *CSAPI) DoFunc(t *testing.T, method string, paths []string, opts ...Requ
 			t.Logf("Request body: <binary:%s>", contentType)
 		}
 	}
-	// Perform the HTTP request
-	res, err := c.Client.Do(req)
-	if err != nil {
-		t.Fatalf("CSAPI.DoFunc response returned error: %s", err)
-	}
-	// debug log the response
-	if c.Debug && res != nil {
-		var dump []byte
-		dump, err = httputil.DumpResponse(res, true)
+	now := time.Now()
+	for {
+		// Perform the HTTP request
+		res, err := c.Client.Do(req)
 		if err != nil {
-			t.Fatalf("CSAPI.DoFunc failed to dump response body: %s", err)
+			t.Fatalf("CSAPI.DoFunc response returned error: %s", err)
 		}
-		t.Logf("%s", string(dump))
+		// debug log the response
+		if c.Debug && res != nil {
+			var dump []byte
+			dump, err = httputil.DumpResponse(res, true)
+			if err != nil {
+				t.Fatalf("CSAPI.DoFunc failed to dump response body: %s", err)
+			}
+			t.Logf("%s", string(dump))
+		}
+		if retryUntil == nil || retryUntil.timeout == 0 {
+			return res // don't retry
+		}
+
+		// check the condition, make a copy of the response body first in case the check consumes it
+		var resBody []byte
+		if res.Body != nil {
+			resBody, err = ioutil.ReadAll(res.Body)
+			if err != nil {
+				t.Fatalf("CSAPI.DoFunc failed to read response body for RetryUntil check: %s", err)
+			}
+			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
+		}
+		if retryUntil.untilFn(res) {
+			// remake the response and return
+			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
+			return res
+		}
+		// condition not satisfied, do we timeout yet?
+		if time.Since(now) > retryUntil.timeout {
+			t.Fatalf("CSAPI.DoFunc RetryUntil: %v %v timed out after %v", method, req.URL, retryUntil.timeout)
+		}
+		t.Logf("CSAPI.DoFunc RetryUntil: %v %v response condition not yet met, retrying", method, req.URL)
+		// small sleep to avoid tight-looping
+		time.Sleep(100 * time.Millisecond)
 	}
-	return res
 }
 
 // NewLoggedClient returns an http.Client which logs requests/responses
@@ -387,9 +594,9 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	start := time.Now()
 	res, err := t.wrap.RoundTrip(req)
 	if err != nil {
-		t.t.Logf("%s %s%s => error: %s (%s)", req.Method, t.hsName, req.URL.Path, err, time.Since(start))
+		t.t.Logf("[CSAPI] %s %s%s => error: %s (%s)", req.Method, t.hsName, req.URL.Path, err, time.Since(start))
 	} else {
-		t.t.Logf("%s %s%s => %s (%s)", req.Method, t.hsName, req.URL.Path, res.Status, time.Since(start))
+		t.t.Logf("[CSAPI] %s %s%s => %s (%s)", req.Method, t.hsName, req.URL.Path, res.Status, time.Since(start))
 	}
 	return res, err
 }
@@ -449,4 +656,274 @@ func GjsonEscape(in string) string {
 	in = strings.ReplaceAll(in, ".", `\.`)
 	in = strings.ReplaceAll(in, "*", `\*`)
 	return in
+}
+
+// Check that the timeline for `roomID` has an event which passes the check function.
+func SyncTimelineHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncTimelineHas(%s): %s", roomID, err)
+	}
+}
+
+// Check that the timeline for `roomID` has an event which matches the event ID.
+func SyncTimelineHasEventID(roomID string, eventID string) SyncCheckOpt {
+	return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+		return ev.Get("event_id").Str == eventID
+	})
+}
+
+// Check that the state section for `roomID` has an event which passes the check function.
+// Note that the state section of a sync response only contains the change in state up to the start
+// of the timeline and will not contain the entire state of the room for incremental or
+// `lazy_load_members` syncs.
+func SyncStateHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncStateHas(%s): %s", roomID, err)
+	}
+}
+
+func SyncEphemeralHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".ephemeral.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncEphemeralHas(%s): %s", roomID, err)
+	}
+}
+
+// Check that the sync contains presence from a user, optionally with an expected presence (set to nil to not check),
+// and optionally with extra checks.
+func SyncPresenceHas(fromUser string, expectedPresence *string, checks ...func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		presenceEvents := topLevelSyncJSON.Get("presence.events")
+		if !presenceEvents.Exists() {
+			return fmt.Errorf("presence.events does not exist")
+		}
+		for _, x := range presenceEvents.Array() {
+			if !(x.Get("type").Exists() &&
+				x.Get("sender").Exists() &&
+				x.Get("content").Exists() &&
+				x.Get("content.presence").Exists()) {
+				return fmt.Errorf(
+					"malformatted presence event, expected the following fields: [sender, type, content, content.presence]: %s",
+					x.Raw,
+				)
+			} else if x.Get("sender").Str != fromUser {
+				continue
+			} else if expectedPresence != nil && x.Get("content.presence").Str != *expectedPresence {
+				return fmt.Errorf(
+					"found presence for user %s, but not expected presence: got %s, want %s",
+					fromUser, x.Get("content.presence").Str, *expectedPresence,
+				)
+			} else {
+				for i, check := range checks {
+					if !check(x) {
+						return fmt.Errorf("matched presence event to user %s, but check %d did not pass", fromUser, i)
+					}
+				}
+				return nil
+			}
+		}
+		return fmt.Errorf("did not find %s in presence events", fromUser)
+	}
+}
+
+// Checks that `userID` gets invited to `roomID`.
+//
+// This checks different parts of the /sync response depending on the client making the request.
+// If the client is also the person being invited to the room then the 'invite' block will be inspected.
+// If the client is different to the person being invited then the 'join' block will be inspected.
+func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		// two forms which depend on what the client user is:
+		// - passively viewing an invite for a room you're joined to (timeline events)
+		// - actively being invited to a room.
+		if clientUserID == userID {
+			// active
+			err := loopArray(
+				topLevelSyncJSON, "rooms.invite."+GjsonEscape(roomID)+".invite_state.events",
+				func(ev gjson.Result) bool {
+					return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("SyncInvitedTo(%s): %s", roomID, err)
+			}
+			return nil
+		}
+		// passive
+		return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
+		})(clientUserID, topLevelSyncJSON)
+	}
+}
+
+// Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event.
+//
+// Additional checks can be passed to narrow down the check, all must pass.
+func SyncJoinedTo(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
+	checkJoined := func(ev gjson.Result) bool {
+		if ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join" {
+			for _, check := range checks {
+				if !check(ev) {
+					// short-circuit, bail early
+					return false
+				}
+			}
+			// passed both basic join check and all other checks
+			return true
+		}
+		return false
+	}
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		// Check both the timeline and the state events for the join event
+		// since on initial sync, the state events may only be in
+		// <room>.state.events.
+		firstErr := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", checkJoined,
+		)
+		if firstErr == nil {
+			return nil
+		}
+
+		secondErr := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", checkJoined,
+		)
+		if secondErr == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncJoinedTo(%s): %s & %s", roomID, firstErr, secondErr)
+	}
+}
+
+// Check that `userID` is leaving `roomID` by inspecting the timeline for a membership event, or witnessing `roomID` in `rooms.leave`
+// Note: This will not work properly with initial syncs, see https://github.com/matrix-org/matrix-doc/issues/3537
+func SyncLeftFrom(userID, roomID string) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		// two forms which depend on what the client user is:
+		// - passively viewing a membership for a room you're joined in
+		// - actively leaving the room
+		if clientUserID == userID {
+			// active
+			events := topLevelSyncJSON.Get("rooms.leave." + GjsonEscape(roomID))
+			if !events.Exists() {
+				return fmt.Errorf("no leave section for room %s", roomID)
+			} else {
+				return nil
+			}
+		}
+		// passive
+		return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "leave"
+		})(clientUserID, topLevelSyncJSON)
+	}
+}
+
+// Calls the `check` function for each global account data event, and returns with success if the
+// `check` function returns true for at least one event.
+func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		return loopArray(topLevelSyncJSON, "account_data.events", check)
+	}
+}
+
+// Calls the `check` function for each account data event for the given room,
+// and returns with success if the `check` function returns true for at least
+// one event.
+func SyncRoomAccountDataHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".account_data.events", check,
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncRoomAccountDataHas(%s): %s", roomID, err)
+	}
+}
+
+func loopArray(object gjson.Result, key string, check func(gjson.Result) bool) error {
+	array := object.Get(key)
+	if !array.Exists() {
+		return fmt.Errorf("Key %s does not exist", key)
+	}
+	if !array.IsArray() {
+		return fmt.Errorf("Key %s exists but it isn't an array", key)
+	}
+	goArray := array.Array()
+	for _, ev := range goArray {
+		if check(ev) {
+			return nil
+		}
+	}
+	return fmt.Errorf("check function did not pass while iterating over %d elements: %v", len(goArray), array.Raw)
+}
+
+// Splits an MXC URI into its origin and media ID parts
+func SplitMxc(mxcUri string) (string, string) {
+	mxcParts := strings.Split(strings.TrimPrefix(mxcUri, "mxc://"), "/")
+	origin := mxcParts[0]
+	mediaId := strings.Join(mxcParts[1:], "/")
+
+	return origin, mediaId
+}
+
+// SendToDeviceMessages sends to-device messages over /sendToDevice/.
+//
+// The messages parameter is nested as follows:
+// user_id -> device_id -> content (map[string]interface{})
+func (c *CSAPI) SendToDeviceMessages(t *testing.T, evType string, messages map[string]map[string]map[string]interface{}) {
+	t.Helper()
+	c.txnID++
+	c.MustDoFunc(
+		t,
+		"PUT",
+		[]string{"_matrix", "client", "v3", "sendToDevice", evType, strconv.Itoa(c.txnID)},
+		WithJSONBody(
+			t,
+			map[string]map[string]map[string]map[string]interface{}{
+				"messages": messages,
+			},
+		),
+	)
+}
+
+// Check that sync has received a to-device message,
+// with optional user filtering.
+//
+// If fromUser == "", all messages will be passed through to the check function.
+// `check` will be called for all messages that have passed the filter.
+//
+// `check` gets passed the full event, including sender and type.
+func SyncToDeviceHas(fromUser string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		err := loopArray(
+			topLevelSyncJSON, "to_device.events", func(result gjson.Result) bool {
+				if fromUser != "" && result.Get("sender").Str != fromUser {
+					return false
+				} else {
+					return check(result)
+				}
+			},
+		)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncToDeviceHas(%v): %s", fromUser, err)
+	}
 }

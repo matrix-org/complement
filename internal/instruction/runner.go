@@ -21,6 +21,33 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 )
 
+// An instruction for the runner to run.
+type Instr struct {
+	UserID  string
+	Method  string
+	Path    string
+	Queries map[string]string
+	Body    interface{}
+	Store   map[string]string
+}
+
+type ConcurrencyType int
+
+const (
+	// No concurrency: instructions execute in serial.
+	ConcurrencyTypeNone ConcurrencyType = iota
+	// Per-user concurrency: User requests execute in serial but multiple users can have concurrent requests.
+	ConcurrencyTypePerUser
+	// All concurrency: All requests are executed at the same time.
+	ConcurrencyTypeAll
+)
+
+type RunOpts struct {
+	Concurrency    ConcurrencyType
+	HSURL          string
+	StoreNamespace string
+}
+
 type Runner struct {
 	blueprintName string
 	lookup        *sync.Map // string -> string
@@ -73,6 +100,55 @@ func (r *Runner) AccessTokens(hsDomain string) map[string]string {
 	return res
 }
 
+// DeviceIDs returns the device ids for all users who were created on the given HS domain.
+// Returns a map of user_id => device_id
+func (r *Runner) DeviceIDs(hsDomain string) map[string]string {
+	res := make(map[string]string)
+	r.lookup.Range(func(k, v interface{}) bool {
+		key := k.(string)
+		val := v.(string)
+		if strings.HasPrefix(key, "device_@") && strings.HasSuffix(key, ":"+hsDomain) {
+			res[strings.TrimPrefix(key, "device_")] = val
+		}
+		return true
+	})
+	return res
+}
+
+// Load a previously stored value from RunInstructions
+func (r *Runner) GetStoredValue(opts RunOpts, key string) string {
+	fullKey := opts.StoreNamespace + key
+	val, ok := r.lookup.Load(fullKey)
+	if !ok {
+		return ""
+	}
+	return val.(string)
+}
+
+// RunInstructions runs custom instruction sets on this runner.
+func (r *Runner) RunInstructions(opts RunOpts, instrs []Instr) (resErr error) {
+	sets := r.createInstructionSets(opts, instrs)
+	var wg sync.WaitGroup
+	wg.Add(len(sets))
+	for _, set := range sets {
+		go func(s []instruction) {
+			defer wg.Done()
+			err := r.runInstructionSet("RunInstructions", opts.HSURL, s)
+			if err != nil {
+				r.log("RunInstructions set failed: %s", err)
+				resErr = err
+				r.terminate.Store(true)
+			}
+		}(set)
+	}
+	wg.Wait()
+	if resErr != nil {
+		r.log("Terminating: user creation failed: %s", resErr)
+		return resErr
+	}
+	return nil
+}
+
 // Run all instructions until completion. Return an error if there was a problem executing any instruction.
 func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 	userInstrSets := calculateUserInstructionSets(r, hs)
@@ -81,7 +157,7 @@ func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 	for _, set := range userInstrSets {
 		go func(s []instruction) {
 			defer wg.Done()
-			err := r.runInstructionSet(hs, hsURL, s)
+			err := r.runInstructionSet(fmt.Sprintf("%s.%s", r.blueprintName, hs.Name), hsURL, s)
 			if err != nil {
 				r.log("Instruction set failed: %s", err)
 				resErr = err
@@ -100,7 +176,7 @@ func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 	for _, set := range roomInstrSets {
 		go func(s []instruction) {
 			defer wg.Done()
-			err := r.runInstructionSet(hs, hsURL, s)
+			err := r.runInstructionSet(fmt.Sprintf("%s.%s", r.blueprintName, hs.Name), hsURL, s)
 			if err != nil {
 				r.log("Instruction set failed: %s", err)
 				resErr = err
@@ -113,8 +189,7 @@ func (r *Runner) Run(hs b.Homeserver, hsURL string) (resErr error) {
 	return resErr
 }
 
-func (r *Runner) runInstructionSet(hs b.Homeserver, hsURL string, instrs []instruction) error {
-	contextStr := fmt.Sprintf("%s.%s", r.blueprintName, hs.Name)
+func (r *Runner) runInstructionSet(contextStr string, hsURL string, instrs []instruction) error {
 	i := 0
 	cli := http.Client{
 		Timeout: 30 * time.Second,
@@ -227,6 +302,49 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 	return req, &instr, i
 }
 
+func (r *Runner) createInstructionSets(opts RunOpts, instrs []Instr) (sets [][]instruction) {
+	switch opts.Concurrency {
+	case ConcurrencyTypeAll: // every instruction is its own set
+		for _, in := range instrs {
+			sets = append(sets, []instruction{
+				r.toInstruction(opts, in),
+			})
+		}
+	case ConcurrencyTypeNone: // all instructions in one set
+		set := make([]instruction, len(instrs))
+		for i, in := range instrs {
+			set[i] = r.toInstruction(opts, in)
+		}
+		sets = append(sets, set)
+	case ConcurrencyTypePerUser: // set per user based on user concurrency
+		sets = make([][]instruction, r.userConcurrency)
+		for _, in := range instrs {
+			i := indexFor(in.UserID, r.userConcurrency)
+			instrs := sets[i]
+			instrs = append(instrs, r.toInstruction(opts, in))
+			sets[i] = instrs
+		}
+	default:
+		panic("unknown RunOpts.Concurrency")
+	}
+	return
+}
+
+func (r *Runner) toInstruction(opts RunOpts, i Instr) instruction {
+	sr := make(map[string]string)
+	for k, v := range i.Store {
+		sr[opts.StoreNamespace+k] = v
+	}
+	return instruction{
+		method:        i.Method,
+		path:          i.Path,
+		queryParams:   i.Queries,
+		accessToken:   "user_" + i.UserID,
+		body:          i.Body,
+		storeResponse: sr,
+	}
+}
+
 // instruction represents an HTTP request which should be made to a remote server
 type instruction struct {
 	// The HTTP method e.g GET POST PUT
@@ -327,7 +445,7 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 			}
 			instrs = append(instrs, instruction{
 				method:        "POST",
-				path:          "/_matrix/client/r0/createRoom",
+				path:          "/_matrix/client/v3/createRoom",
 				accessToken:   "user_" + room.Creator,
 				body:          room.CreateRoom,
 				storeResponse: storeRes,
@@ -347,10 +465,10 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 				subs["$roomId"] = fmt.Sprintf(".room_ref_%s", room.Ref)
 			}
 			if event.StateKey != nil {
-				path = "/_matrix/client/r0/rooms/$roomId/state/$eventType/$stateKey"
+				path = "/_matrix/client/v3/rooms/$roomId/state/$eventType/$stateKey"
 				subs["$stateKey"] = *event.StateKey
 			} else {
-				path = "/_matrix/client/r0/rooms/$roomId/send/$eventType/$txnId"
+				path = "/_matrix/client/v3/rooms/$roomId/send/$eventType/$txnId"
 				subs["$txnId"] = fmt.Sprintf("%d", eventIndex)
 			}
 
@@ -361,23 +479,25 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 				if ok {
 					switch membership {
 					case "join":
-						path = "/_matrix/client/r0/join/$roomId"
+						path = "/_matrix/client/v3/join/$roomId"
 						method = "POST"
 
-						// Set server_name to the homeserver that created the room, as they're a pretty
-						// good candidate to join the room through
-						queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
+						if room.Ref != "" {
+							// Set server_name to the homeserver that created the room, as they're a pretty
+							// good candidate to join the room through
+							queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
+						}
 					case "leave":
-						path = "/_matrix/client/r0/rooms/$roomId/leave"
+						path = "/_matrix/client/v3/rooms/$roomId/leave"
 						method = "POST"
 						if *event.StateKey != event.Sender {
 							// it's a kick
-							path = "/_matrix/client/r0/rooms/$roomId/kick"
+							path = "/_matrix/client/v3/rooms/$roomId/kick"
 							method = "POST"
 							event.Content["user_id"] = *event.StateKey
 						}
 					case "invite":
-						path = "/_matrix/client/r0/rooms/$roomId/invite"
+						path = "/_matrix/client/v3/rooms/$roomId/invite"
 						method = "POST"
 						event.Content["user_id"] = *event.StateKey
 					}
@@ -391,7 +511,7 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 					ri := roomIndex
 					instrs = append(instrs, instruction{
 						method:        "PUT",
-						path:          "/_matrix/client/r0/directory/room/" + url.PathEscape(alias),
+						path:          "/_matrix/client/v3/directory/room/" + url.PathEscape(alias),
 						accessToken:   fmt.Sprintf("user_%s", event.Sender),
 						substitutions: subs,
 						queryParams:   queryParams,
@@ -434,11 +554,12 @@ func instructionRegister(hs b.Homeserver, user b.User) instruction {
 
 	return instruction{
 		method:      "POST",
-		path:        "/_matrix/client/r0/register",
+		path:        "/_matrix/client/v3/register",
 		accessToken: "",
 		body:        body,
 		storeResponse: map[string]string{
-			"user_@" + user.Localpart + ":" + hs.Name: ".access_token",
+			"user_@" + user.Localpart + ":" + hs.Name:   ".access_token",
+			"device_@" + user.Localpart + ":" + hs.Name: ".device_id",
 		},
 	}
 }
@@ -450,7 +571,7 @@ func instructionDisplayName(hs b.Homeserver, user b.User) instruction {
 	return instruction{
 		method: "PUT",
 		path: fmt.Sprintf(
-			"/_matrix/client/r0/profile/@%s:%s/displayname",
+			"/_matrix/client/v3/profile/@%s:%s/displayname",
 			user.Localpart, hs.Name,
 		),
 		accessToken: fmt.Sprintf("user_@%s:%s", user.Localpart, hs.Name),
@@ -474,11 +595,12 @@ func instructionLogin(hs b.Homeserver, user b.User) instruction {
 
 	return instruction{
 		method:      "POST",
-		path:        "/_matrix/client/r0/login",
+		path:        "/_matrix/client/v3/login",
 		accessToken: "",
 		body:        body,
 		storeResponse: map[string]string{
-			"user_@" + user.Localpart + ":" + hs.Name: ".access_token",
+			"user_@" + user.Localpart + ":" + hs.Name:   ".access_token",
+			"device_@" + user.Localpart + ":" + hs.Name: ".device_id",
 		},
 	}
 }
@@ -533,7 +655,7 @@ func instructionOneTimeKeyUpload(hs b.Homeserver, user b.User) instruction {
 	}
 	return instruction{
 		method:      "POST",
-		path:        "/_matrix/client/r0/keys/upload",
+		path:        "/_matrix/client/v3/keys/upload",
 		accessToken: fmt.Sprintf("user_@%s:%s", user.Localpart, hs.Name),
 		body: map[string]interface{}{
 			"device_keys":   deviceKeys,

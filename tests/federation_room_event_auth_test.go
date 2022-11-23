@@ -1,4 +1,5 @@
 // These tests currently fail on Dendrite, due to Dendrite bugs.
+//go:build !dendrite_blacklist
 // +build !dendrite_blacklist
 
 package tests
@@ -15,6 +16,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -96,7 +98,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 			_, _ = w.Write([]byte("{}"))
 			return
 		}
-		res := gomatrixserverlib.RespEventAuth{AuthEvents: authEvents}
+		res := gomatrixserverlib.RespEventAuth{AuthEvents: gomatrixserverlib.NewEventJSONsFromEvents(authEvents)}
 		responseBytes, _ := json.Marshal(&res)
 		w.WriteHeader(200)
 		_, _ = w.Write(responseBytes)
@@ -124,7 +126,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement1",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName),
+		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:    "hs1",
 		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
@@ -195,7 +197,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	_, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement2",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName),
+		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:    "hs1",
 		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
@@ -208,17 +210,16 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	t.Logf("Sent transaction; awaiting arrival")
 
 	// wait for alice to receive sentinelEvent
-	alice.SyncUntilTimelineHas(
-		t,
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room.RoomID,
 		func(ev gjson.Result) bool {
 			return ev.Get("event_id").Str == sentinelEvent.EventID()
 		},
-	)
+	))
 
 	// now inspect the results. Each of the rejected events should give a 404 for /event
 	t.Run("Outlier should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", room.RoomID, "event", outlierEvent.EventID()})
+		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", outlierEvent.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching outlier event, but got %d", res.StatusCode)
@@ -226,7 +227,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 
 	t.Run("sent event 1 should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", room.RoomID, "event", sentEvent1.EventID()})
+		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent1.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching sent event 1, but got %d", res.StatusCode)
@@ -234,7 +235,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 
 	t.Run("sent event 2 should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", room.RoomID, "event", sentEvent2.EventID()})
+		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent2.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching sent event 2, but got %d", res.StatusCode)

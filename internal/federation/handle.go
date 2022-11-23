@@ -18,7 +18,7 @@ import (
 func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
 	// Check federation signature
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-		req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
+		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 	)
 	if fedReq == nil {
 		w.WriteHeader(errResp.Code)
@@ -38,43 +38,94 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	makeJoinResp, err := MakeRespMakeJoin(s, room, userID)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte(fmt.Sprintf("complement: HandleMakeSendJoinRequests %s", err)))
+		return
+	}
+
+	// Send it
+	w.WriteHeader(200)
+	b, _ := json.Marshal(makeJoinResp)
+	w.Write(b)
+}
+
+// MakeRespMakeJoin makes the response for a /make_join request, without verifying any signatures
+// or dealing with HTTP responses itself.
+func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeJoin, err error) {
 	// Generate a join event
 	builder := gomatrixserverlib.EventBuilder{
 		Sender:     userID,
-		RoomID:     roomID,
+		RoomID:     room.RoomID,
 		Type:       "m.room.member",
 		StateKey:   &userID,
 		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
+		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
 	}
-	err := builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
+	err = builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
 	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot set membership content: " + err.Error()))
+		err = fmt.Errorf("make_join cannot set membership content: %w", err)
 		return
 	}
 	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
 	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("complement: HandleMakeSendJoinRequests make_join cannot calculate auth_events: " + err.Error()))
+		err = fmt.Errorf("make_join cannot calculate auth_events: %w", err)
 		return
 	}
 	builder.AuthEvents = room.AuthEvents(stateNeeded)
 
-	// Send it
-	res := map[string]interface{}{
-		"event":        builder,
-		"room_version": room.Version,
+	resp = gomatrixserverlib.RespMakeJoin{
+		RoomVersion: room.Version,
+		JoinEvent:   builder,
 	}
-	w.WriteHeader(200)
-	b, _ := json.Marshal(res)
-	w.Write(b)
+	return
+}
+
+// MakeRespMakeKnock makes the response for a /make_knock request, without verifying any signatures
+// or dealing with HTTP responses itself.
+func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp gomatrixserverlib.RespMakeKnock, err error) {
+	// Generate a knock event
+	builder := gomatrixserverlib.EventBuilder{
+		Sender:     userID,
+		RoomID:     room.RoomID,
+		Type:       "m.room.member",
+		StateKey:   &userID,
+		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
+		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
+	}
+	err = builder.SetContent(map[string]interface{}{"membership": gomatrixserverlib.Join})
+	if err != nil {
+		err = fmt.Errorf("make_knock cannot set membership content: %w", err)
+		return
+	}
+	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&builder)
+	if err != nil {
+		err = fmt.Errorf("make_knock cannot calculate auth_events: %w", err)
+		return
+	}
+	builder.AuthEvents = room.AuthEvents(stateNeeded)
+
+	resp = gomatrixserverlib.RespMakeKnock{
+		RoomVersion: room.Version,
+		KnockEvent:  builder,
+	}
+	return
 }
 
 // SendJoinRequestsHandler is the http.Handler implementation for the send_join part of
 // HandleMakeSendJoinRequests.
-func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
+//
+// expectPartialState should be true if we should expect the incoming send_join
+// request to use the partial_state flag, per MSC3706. In that case, we reply
+// with only the critical subset of the room state.
+//
+// omitServersInRoom should be false to respond to partial_state joins with the complete list of
+// servers in the room. When omitServersInRoom is true, a misbehaving server is simulated and only
+// the current server is returned to the joining server.
+func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request, expectPartialState bool, omitServersInRoom bool) {
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-		req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
+		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 	)
 	if fedReq == nil {
 		w.WriteHeader(errResp.Code)
@@ -82,6 +133,18 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		w.Write(b)
 		return
 	}
+
+	// if we expect a partial-state join, the request should have a "partial_state" flag
+	queryParams := req.URL.Query()
+	partialState := queryParams.Get("org.matrix.msc3706.partial_state")
+	if expectPartialState && partialState != "true" {
+		log.Printf("Not a partial-state request: got %v, want %s",
+			partialState, "true")
+		w.WriteHeader(500)
+		w.Write([]byte("complement: Incoming send_join was not partial_state"))
+		return
+	}
+
 	vars := mux.Vars(req)
 	roomID := vars["roomID"]
 
@@ -95,19 +158,45 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 	if err != nil {
 		w.WriteHeader(500)
 		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot parse event JSON: " + err.Error()))
+		return
 	}
+
+	// build the state list *before* we insert the new event
+	var stateEvents []*gomatrixserverlib.Event
+	for _, ev := range room.State {
+		// filter out non-critical memberships if this is a partial-state join
+		if expectPartialState {
+			if ev.Type() == "m.room.member" && ev.StateKey() != event.StateKey() {
+				continue
+			}
+		}
+		stateEvents = append(stateEvents, ev)
+	}
+
+	authEvents := room.AuthChainForEvents(stateEvents)
+
+	// get servers in room *before* the join event
+	serversInRoom := []string{s.serverName}
+	if !omitServersInRoom {
+		serversInRoom = room.ServersInRoom()
+	}
+
 	// insert the join event into the room state
 	room.AddEvent(event)
+	log.Printf("Received send-join of event %s", event.EventID())
 
-	// return current state and auth chain
+	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
-		AuthEvents:  room.AuthChain(),
-		StateEvents: room.AllCurrentState(),
-		Origin:      gomatrixserverlib.ServerName(s.ServerName),
+		Origin:        gomatrixserverlib.ServerName(s.serverName),
+		AuthEvents:    gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
+		StateEvents:   gomatrixserverlib.NewEventJSONsFromEvents(stateEvents),
+		PartialState:  expectPartialState,
+		ServersInRoom: serversInRoom,
 	})
 	if err != nil {
 		w.WriteHeader(500)
 		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot marshal RespSendJoin: " + err.Error()))
+		return
 	}
 	w.WriteHeader(200)
 	w.Write(b)
@@ -123,7 +212,20 @@ func HandleMakeSendJoinRequests() func(*Server) {
 		})).Methods("GET")
 
 		s.mux.Handle("/_matrix/federation/v2/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			SendJoinRequestsHandler(s, w, req)
+			SendJoinRequestsHandler(s, w, req, false, false)
+		})).Methods("PUT")
+	}
+}
+
+// HandlePartialStateMakeSendJoinRequests is similar to HandleMakeSendJoinRequests, but expects a partial-state join.
+func HandlePartialStateMakeSendJoinRequests() func(*Server) {
+	return func(s *Server) {
+		s.mux.Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			MakeJoinRequestsHandler(s, w, req)
+		})).Methods("GET")
+
+		s.mux.Handle("/_matrix/federation/v2/send_join/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			SendJoinRequestsHandler(s, w, req, true, false)
 		})).Methods("PUT")
 	}
 }
@@ -136,7 +238,7 @@ func HandleInviteRequests(inviteCallback func(*gomatrixserverlib.Event)) func(*S
 		// https://matrix.org/docs/spec/server_server/r0.1.4#put-matrix-federation-v2-invite-roomid-eventid
 		s.mux.Handle("/_matrix/federation/v2/invite/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(s.ServerName), s.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
 			)
 			if fedReq == nil {
 				w.WriteHeader(errResp.Code)
@@ -164,7 +266,7 @@ func HandleInviteRequests(inviteCallback func(*gomatrixserverlib.Event)) func(*S
 			}
 
 			// Sign the event before we send it back
-			signedEvent := inviteRequest.Event().Sign(s.ServerName, s.KeyID, s.Priv)
+			signedEvent := inviteRequest.Event().Sign(s.serverName, s.KeyID, s.Priv)
 
 			// Send the response
 			res := map[string]interface{}{
@@ -190,7 +292,7 @@ func HandleDirectoryLookups() func(*Server) {
 				b, err := json.Marshal(gomatrixserverlib.RespDirectory{
 					RoomID: roomID,
 					Servers: []gomatrixserverlib.ServerName{
-						gomatrixserverlib.ServerName(s.ServerName),
+						gomatrixserverlib.ServerName(s.serverName),
 					},
 				})
 				if err != nil {
@@ -229,8 +331,14 @@ func HandleEventRequests() func(*Server) {
 				}
 			}
 
+			if event == nil {
+				w.WriteHeader(404)
+				w.Write([]byte(fmt.Sprintf(`complement: failed to find event: %s`, eventID)))
+				return
+			}
+
 			txn := gomatrixserverlib.Transaction{
-				Origin:         gomatrixserverlib.ServerName(srv.ServerName),
+				Origin:         gomatrixserverlib.ServerName(srv.serverName),
 				OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 				PDUs: []json.RawMessage{
 					event.JSON(),
@@ -248,13 +356,62 @@ func HandleEventRequests() func(*Server) {
 	}
 }
 
+// HandleEventAuthRequests is an option which will process GET /_matrix/federation/v1/event_auth/{roomId}/{eventId}
+// requests universally when requested.
+func HandleEventAuthRequests() func(*Server) {
+	return func(srv *Server) {
+		srv.mux.Handle("/_matrix/federation/v1/event_auth/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			roomID := vars["roomID"]
+			eventID := vars["eventID"]
+
+			room, ok := srv.rooms[roomID]
+			if !ok {
+				srv.t.Logf("/event_auth request for unknown room ID %s", roomID)
+				w.WriteHeader(404)
+				w.Write([]byte("complement: HandleEventAuthRequests event_auth unknown room ID: " + roomID))
+				return
+			}
+
+			// find the event
+			var event *gomatrixserverlib.Event
+			for _, ev := range room.Timeline {
+				if ev.EventID() == eventID {
+					event = ev
+					break
+				}
+			}
+
+			if event == nil {
+				srv.t.Logf("/event_auth request for unknown event ID %s in room %s", eventID, roomID)
+				w.WriteHeader(404)
+				w.Write([]byte("complement: HandleEventAuthRequests event_auth unknown event ID: " + eventID))
+				return
+			}
+
+			authEvents := room.AuthChainForEvents([]*gomatrixserverlib.Event{event})
+			resp := gomatrixserverlib.RespEventAuth{
+				gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
+			}
+			respJSON, err := json.Marshal(resp)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte(fmt.Sprintf(`complement: failed to marshal JSON response: %s`, err)))
+				return
+			}
+			w.WriteHeader(200)
+			w.Write(respJSON)
+		}))
+	}
+}
+
 // HandleKeyRequests is an option which will process GET /_matrix/key/v2/server requests universally when requested.
 func HandleKeyRequests() func(*Server) {
 	return func(srv *Server) {
 		keymux := srv.mux.PathPrefix("/_matrix/key/v2").Subrouter()
 		keyFn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			k := gomatrixserverlib.ServerKeys{}
-			k.ServerName = gomatrixserverlib.ServerName(srv.ServerName)
+			k.ServerName = gomatrixserverlib.ServerName(srv.serverName)
 			publicKey := srv.Priv.Public().(ed25519.PublicKey)
 			k.VerifyKeys = map[gomatrixserverlib.KeyID]gomatrixserverlib.VerifyKey{
 				srv.KeyID: {
@@ -271,7 +428,7 @@ func HandleKeyRequests() func(*Server) {
 			}
 
 			k.Raw, err = gomatrixserverlib.SignJSON(
-				string(srv.ServerName), srv.KeyID, srv.Priv, toSign,
+				string(srv.serverName), srv.KeyID, srv.Priv, toSign,
 			)
 			if err != nil {
 				w.WriteHeader(500)
@@ -299,9 +456,9 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 			origin := vars["origin"]
 			mediaId := vars["mediaId"]
 
-			if origin != srv.ServerName {
+			if origin != srv.serverName {
 				w.WriteHeader(400)
-				w.Write([]byte("complement: Invalid Origin; Expected " + srv.ServerName))
+				w.Write([]byte("complement: Invalid Origin; Expected " + srv.serverName))
 				return
 			}
 
@@ -314,15 +471,17 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 			}
 		})
 
-		// Note: The spec says to use r0, but implementations rely on /v1 working for federation requests as a legacy
+		// Note: The spec says to use /v3, but implementations rely on /v1 and /r0 working for federation requests as a legacy
 		// route.
-		mediamux.Handle("/v1/download/{origin}/{mediaId}", downloadFn).Methods("GET")
 		mediamux.Handle("/r0/download/{origin}/{mediaId}", downloadFn).Methods("GET")
+		mediamux.Handle("/v1/download/{origin}/{mediaId}", downloadFn).Methods("GET")
+		mediamux.Handle("/v3/download/{origin}/{mediaId}", downloadFn).Methods("GET")
 	}
 }
 
 // HandleTransactionRequests is an option which will process GET /_matrix/federation/v1/send/{transactionID} requests universally when requested.
-// pduCallback and eduCallback are functions that if non-nil will be called and passed each PDU or EDU event received in the transaction
+// pduCallback and eduCallback are functions that if non-nil will be called and passed each PDU or EDU event received in the transaction.
+// Callbacks will be fired AFTER the event has been stored onto the respective ServerRoom.
 func HandleTransactionRequests(pduCallback func(*gomatrixserverlib.Event), eduCallback func(gomatrixserverlib.EDU)) func(*Server) {
 	return func(srv *Server) {
 		srv.mux.Handle("/_matrix/federation/v1/send/{transactionID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -332,7 +491,7 @@ func HandleTransactionRequests(pduCallback func(*gomatrixserverlib.Event), eduCa
 
 			// Check federation signature
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(srv.ServerName), srv.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), srv.keyRing,
 			)
 			if fedReq == nil {
 				log.Printf(

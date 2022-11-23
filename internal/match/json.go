@@ -41,6 +41,18 @@ func JSONKeyPresent(wantKey string) JSON {
 	}
 }
 
+// JSONKeyMissing returns a matcher which will check that `forbiddenKey` is not present in the JSON object.
+// `forbiddenKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
+func JSONKeyMissing(forbiddenKey string) JSON {
+	return func(body []byte) error {
+		res := gjson.GetBytes(body, forbiddenKey)
+		if res.Exists() {
+			return fmt.Errorf("key '%s' present", forbiddenKey)
+		}
+		return nil
+	}
+}
+
 // JSONKeyTypeEqual returns a matcher which will check that `wantKey` is present and its value is of the type `wantType`.
 // `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
 func JSONKeyTypeEqual(wantKey string, wantType gjson.Type) JSON {
@@ -80,7 +92,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 	return func(body []byte) error {
 		res := gjson.GetBytes(body, wantKey)
 		if !res.Exists() {
-			return fmt.Errorf("missing key '%s'", wantKey)
+			return fmt.Errorf("JSONCheckOff: missing key '%s'", wantKey)
 		}
 		if !res.IsArray() && !res.IsObject() {
 			return fmt.Errorf("JSONCheckOff: key '%s' is not an array or object", wantKey)
@@ -94,7 +106,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 			// convert it to something we can check off
 			item := mapper(itemRes)
 			if item == nil {
-				err = fmt.Errorf("JSONCheckOff: mapper function mapped %v to nil", itemRes.Raw)
+				err = fmt.Errorf("JSONCheckOff(%s): mapper function mapped %v to nil", wantKey, itemRes.Raw)
 				return false
 			}
 
@@ -107,7 +119,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 				}
 			}
 			if !allowUnwantedItems && want == -1 {
-				err = fmt.Errorf("JSONCheckOff: unexpected item %s", item)
+				err = fmt.Errorf("JSONCheckOff(%s): unexpected item %v (mapped value %v)", wantKey, itemRes.Raw, item)
 				return false
 			}
 
@@ -120,6 +132,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 			if fn != nil {
 				err = fn(item, val)
 				if err != nil {
+					err = fmt.Errorf("JSONCheckOff(%s): item %v failed checks: %w", wantKey, val, err)
 					return false
 				}
 			}
@@ -129,7 +142,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 		// at this point we should have gone through all of wantItems.
 		// If we haven't then we expected to see some items but didn't.
 		if err == nil && len(wantItems) > 0 {
-			err = fmt.Errorf("JSONCheckOff: did not see items: %v", wantItems)
+			err = fmt.Errorf("JSONCheckOff(%s): did not see items: %v", wantKey, wantItems)
 		}
 
 		return err

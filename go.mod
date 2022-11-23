@@ -1,24 +1,34 @@
 module github.com/matrix-org/complement
 
-go 1.13
+go 1.16
 
 require (
-	github.com/Microsoft/go-winio v0.4.14 // indirect
-	github.com/docker/distribution v2.7.1+incompatible // indirect
-	github.com/docker/docker v1.13.1
+	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
+	github.com/Microsoft/go-winio v0.5.2 // indirect
+	github.com/docker/distribution v2.8.1+incompatible // indirect
+	github.com/docker/docker v20.10.16+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/docker/go-units v0.4.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/gorilla/mux v1.8.0
-	github.com/matrix-org/gomatrix v0.0.0-20190528120928-7df988a63f26
-	github.com/matrix-org/gomatrixserverlib v0.0.0-20211115130817-ba4a3b9a6f12
-	github.com/matrix-org/util v0.0.0-20190711121626-527ce5ddefc7
+	github.com/matrix-org/gomatrix v0.0.0-20210324163249-be2af5ef2e16
+	github.com/matrix-org/gomatrixserverlib v0.0.0-20220830164018-c71e518537a2
+	github.com/matrix-org/util v0.0.0-20200807132607-55161520e1d4
+	github.com/moby/term v0.0.0-20210610120745-9d4ed1856297 // indirect
+	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
-	github.com/sirupsen/logrus v1.6.0
-	github.com/tidwall/gjson v1.9.3
-	github.com/tidwall/sjson v1.1.5
-	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4 // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
-	maunium.net/go/mautrix v0.8.3
+	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
+	github.com/sirupsen/logrus v1.9.0
+	github.com/tidwall/gjson v1.14.3
+	github.com/tidwall/sjson v1.2.5
+	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
+	golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6 // indirect
+	golang.org/x/image v0.0.0-20220413100746-70e8d0d3baa9 // indirect
+	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2 // indirect
+	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261 // indirect
+	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
+	gonum.org/v1/plot v0.11.0
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gotest.tools/v3 v3.0.3 // indirect
+	maunium.net/go/mautrix v0.11.0
 )

@@ -106,9 +106,7 @@ by an actual sytest run due to parameterised tests.
 ### Where should I put new tests?
 
 If the test *only* has CS API calls, then put it in `/tests/csapi`. If the test involves both CS API and Federation, or just Federation, put it in `/tests`.
-This is because of how parallelisation works currently. All federation tests MUST be in the same directory due to the use of shared resources (for example,
-the local Complement server always binds to `:8448` which is a problem if 2 fed tests want to do that at the same time). This will be resolved in the future
-by the use of `.well-known` but at present this is how things stand.
+This will change in the future once we have decided how to split tests by category.
 
 ### Should I always make a new blueprint for a test?
 
@@ -173,19 +171,9 @@ There is no syntactically pleasing way to do this. Create a separate function wh
 
 This is done using standard Go testing mechanisms, use `t.Logf(...)` which will be logged only if the test fails or if `-v` is set. Note that you will not need to log HTTP requests performed using one of the built in deployment clients as they are already wrapped in loggers. For full HTTP logs, use `COMPLEMENT_DEBUG=1`.
 
-For debugging, you can also use `logrus` to expand a bunch of variables:
-
-```go
-logrus.WithFields(logrus.Fields{
-	"events": events,
-	"context": context,
-}).Error("message response")
-```
-
 ### How do I show the server logs even when the tests pass?
 
 Normally, server logs are only printed when one of the tests fail. To override that behavior to always show server logs, you can use `COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1`.
-
 
 ### How do I skip a test?
 
@@ -209,6 +197,8 @@ Error will fail the test but continue execution, where Fatal will fail the test 
 
 ### How do I run tests inside my IDE?
 
+Make sure you have first built a compatible complement image, such as `complement-dendrite:latest` (see [README.md "Running against Dendrite"](README.md#running-against-dendrite)), which will be used in this section. (If you're using a different server, replace any instance of `complement-dendrite:latest` with your own tag)
+
 For VSCode, add to `settings.json`:
 ```
 "go.testEnvVars": {
@@ -217,9 +207,18 @@ For VSCode, add to `settings.json`:
 ```
 
 For Goland:
- * Under "Run"->"Edit Configurations..."->"Templates"->"Go Test", add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest`
+ * Under "Run"->"Edit Configurations..."->"Edit Configuration Templates..."->"Go Test", and add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest` to "Environment"
  * Then you can right-click on any test file or test case and "Run <test name>".
 
+	
+### How do I make the linter checks pass?
+
+Use [`goimports`](https://pkg.go.dev/golang.org/x/tools/cmd/goimports) to sort imports and format in the style of `gofmt`.
+	
+Set this up to run on save in VSCode as follows:
+- File -> Preferences -> Settings.
+  - Search for "Format On Save" and enable it.
+  - Search for `go: format tool` and choose `goimports`.
 
 ### How do I hook up a Matrix client like Element to the homeservers spun up by Complement after a test runs?
 
@@ -252,6 +251,4 @@ It can be useful to view the output of a test in Element to better debug somethi
 
 ### What do I need to know if I'm coming from sytest?
 
-Sytest has a concept of a `fixture` to configure the homeserver or test in a particular way, these are replaced with a `Blueprint` in Complement.
-
-Unlike Sytest, each test must opt-in to attaching core functionality to the server so the reader can clearly see what is and is not being handled automatically.
+Unlike Sytest, each test must opt-in to attaching core functionality to the test federation server so the reader can clearly see what is and is not being handled automatically.

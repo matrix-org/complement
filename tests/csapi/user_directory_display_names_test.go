@@ -1,3 +1,4 @@
+//go:build !dendrite_blacklist
 // +build !dendrite_blacklist
 
 // Rationale for being included in Dendrite's blacklist: https://github.com/matrix-org/complement/pull/199#issuecomment-904852233
@@ -43,8 +44,8 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	}
 
 	alice := deployment.Client(t, "hs1", aliceUserID)
-	bob := deployment.RegisterUser(t, "hs1", "bob", "bob-has-a-very-secret-pw")
-	eve := deployment.RegisterUser(t, "hs1", "eve", "eve-has-a-very-secret-pw")
+	bob := deployment.RegisterUser(t, "hs1", "bob", "bob-has-a-very-secret-pw", false)
+	eve := deployment.RegisterUser(t, "hs1", "eve", "eve-has-a-very-secret-pw", false)
 
 	// Alice sets her profile displayname. This ensures that her
 	// public name, private name and userid localpart are all
@@ -52,7 +53,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	alice.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "profile", alice.UserID, "displayname"},
+		[]string{"_matrix", "client", "v3", "profile", alice.UserID, "displayname"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"displayname": alicePublicName,
 		}),
@@ -68,7 +69,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := eve.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": alicePublicName,
 			}),
@@ -80,7 +81,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := eve.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": aliceUserID,
 			}),
@@ -92,7 +93,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := eve.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": alicePrivateName,
 			}),
@@ -104,7 +105,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := bob.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": alicePublicName,
 			}),
@@ -118,7 +119,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 		res := bob.MustDoFunc(
 			t,
 			"POST",
-			[]string{"_matrix", "client", "r0", "user_directory", "search"},
+			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"search_term": aliceUserID,
 			}),
@@ -140,14 +141,14 @@ func TestRoomSpecificUsernameChange(t *testing.T) {
 	})
 
 	// Alice waits until she sees the invite, then accepts.
-	alice.SyncUntilInvitedTo(t, privateRoom)
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, privateRoom))
 	alice.JoinRoom(t, privateRoom, nil)
 
 	// Alice reveals her private name to Bob
 	alice.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "rooms", privateRoom, "state", "m.room.member", alice.UserID},
+		[]string{"_matrix", "client", "v3", "rooms", privateRoom, "state", "m.room.member", alice.UserID},
 		client.WithJSONBody(t, map[string]interface{}{
 			"displayname": alicePrivateName,
 			"membership":  "join",
@@ -169,14 +170,14 @@ func TestRoomSpecificUsernameAtJoin(t *testing.T) {
 
 	// Alice waits until she sees the invite, then accepts.
 	// When she accepts, she does so with a specific displayname.
-	alice.SyncUntilInvitedTo(t, privateRoom)
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, privateRoom))
 	alice.JoinRoom(t, privateRoom, nil)
 
 	// Alice reveals her private name to Bob
 	alice.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "r0", "rooms", privateRoom, "state", "m.room.member", alice.UserID},
+		[]string{"_matrix", "client", "v3", "rooms", privateRoom, "state", "m.room.member", alice.UserID},
 		client.WithJSONBody(t, map[string]interface{}{
 			"displayname": alicePrivateName,
 			"membership":  "join",

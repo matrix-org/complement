@@ -1,3 +1,4 @@
+//go:build msc2836
 // +build msc2836
 
 package tests
@@ -18,6 +19,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -89,14 +91,15 @@ func TestEventRelationships(t *testing.T) {
 	// Join the room from another server
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 	_ = bob.JoinRoom(t, roomID, []string{"hs1"})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// Now hit /event_relationships with eventD
-	res := bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
+	res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":       eventD,
 		"room_id":        roomID, // required so the server knows which servers to ask
 		"direction":      "down", // no newer events, so nothing should be added
 		"include_parent": true,   // this should pull in event B
-	})
+	}))
 	var gots []gjson.Result
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
@@ -123,13 +126,13 @@ func TestEventRelationships(t *testing.T) {
 	}, []string{eventC, eventD})
 
 	// now hit /event_relationships again with B, which should return everything (and fetch the missing events A,C)
-	res = bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
+	res = bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":       eventB,
 		"room_id":        roomID, // required so the server knows which servers to ask
 		"direction":      "down", // this pulls in C,D
 		"include_parent": true,   // this pulls in A
 		"recent_first":   false,
-	})
+	}))
 	gots = []gjson.Result{}
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
@@ -187,15 +190,19 @@ func TestEventRelationships(t *testing.T) {
 func TestFederatedEventRelationships(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
 	defer cancel()
 
 	// create a room on Complement, add some events to walk.
-	roomVer := gomatrixserverlib.RoomVersionV6
+	roomVer := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 	room := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, charlie))
 	eventA := srv.MustCreateEvent(t, room, b.Event{
@@ -293,8 +300,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 
 	// join the room on HS1
 	// HS1 will not have any of these messages, only the room state.
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	alice.JoinRoom(t, room.RoomID, []string{srv.ServerName})
+	alice.JoinRoom(t, room.RoomID, []string{srv.ServerName()})
 
 	// send a new child in the thread (child of D) so the HS has something to latch on to.
 	eventE := srv.MustCreateEvent(t, room, b.Event{
@@ -313,7 +319,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	fedClient := srv.FederationClient(deployment)
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName),
+		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:    gomatrixserverlib.ServerName("hs1"),
 		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
@@ -322,12 +328,18 @@ func TestFederatedEventRelationships(t *testing.T) {
 	})
 	must.NotError(t, "failed to SendTransaction", err)
 
+	// wait for it to be processed
+	t.Logf("Waiting to see Event E from /send: %s", eventE.EventID())
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(room.RoomID, func(r gjson.Result) bool {
+		return r.Get("event_id").Str == eventE.EventID()
+	}))
+
 	// Hit /event_relationships to make sure it spiders the whole thing by asking /event_relationships on Complement
-	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
+	res := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":  eventE.EventID(),
 		"max_depth": 10,
 		"direction": "up",
-	})
+	}))
 	var gotEventIDs []string
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
@@ -344,12 +356,12 @@ func TestFederatedEventRelationships(t *testing.T) {
 	must.HaveInOrder(t, gotEventIDs, []string{eventE.EventID(), eventD.EventID(), eventC.EventID(), eventA.EventID()})
 
 	// now querying for the children of A should return A,B,C (it should've been remembered B from the previous /event_relationships request)
-	res = alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
+	res = alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":     eventA.EventID(),
 		"max_depth":    1,
 		"direction":    "down",
 		"recent_first": false,
-	})
+	}))
 	gotEventIDs = []string{}
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{

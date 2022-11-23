@@ -12,6 +12,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/gomatrixserverlib"
+
 	"github.com/matrix-org/complement/internal/match"
 )
 
@@ -115,6 +117,50 @@ func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byt
 	return body
 }
 
+// MatchFederationRequest performs JSON assertions on incoming federation requests.
+func MatchFederationRequest(t *testing.T, fedReq *gomatrixserverlib.FederationRequest, matchers ...match.JSON) {
+	t.Helper()
+	content := fedReq.Content()
+	if !gjson.ValidBytes(content) {
+		t.Fatalf("MatchFederationRequest content is not valid JSON - %s", fedReq.RequestURI())
+	}
+
+	for _, jm := range matchers {
+		if err := jm(content); err != nil {
+			t.Fatalf("MatchFederationRequest %s - %s", err, fedReq.RequestURI())
+		}
+	}
+}
+
+// MatchGJSON performs JSON assertions on a gjson.Result object.
+func MatchGJSON(t *testing.T, jsonResult gjson.Result, matchers ...match.JSON) {
+	t.Helper()
+
+	MatchJSON(t, jsonResult.Raw, matchers...)
+}
+
+// MatchJSON performs JSON assertions on a raw JSON string.
+func MatchJSON(t *testing.T, json string, matchers ...match.JSON) {
+	t.Helper()
+
+	MatchJSONBytes(t, []byte(json), matchers...)
+}
+
+// MatchJSONBytes performs JSON assertions on a raw json byte slice.
+func MatchJSONBytes(t *testing.T, rawJson []byte, matchers ...match.JSON) {
+	t.Helper()
+
+	if !gjson.ValidBytes(rawJson) {
+		t.Fatalf("MatchJSONBytes: rawJson is not valid JSON")
+	}
+
+	for _, jm := range matchers {
+		if err := jm(rawJson); err != nil {
+			t.Fatalf("MatchJSONBytes %s", err)
+		}
+	}
+}
+
 // EqualStr ensures that got==want else logs an error.
 func EqualStr(t *testing.T, got, want, msg string) {
 	t.Helper()
@@ -166,10 +212,37 @@ func HaveInOrder(t *testing.T, gots []string, wants []string) {
 	}
 }
 
+// CheckOffAll checks that a list contains exactly the given items, in any order.
+//
+// if an item is not present, the test is failed.
+// if an item not present in the want list is present, the test is failed.
+// Items are compared using reflect.DeepEqual
+func CheckOffAll(t *testing.T, items []interface{}, wantItems []interface{}) {
+	t.Helper()
+	remaining := CheckOffAllAllowUnwanted(t, items, wantItems)
+	if len(remaining) > 0 {
+		t.Errorf("CheckOffAll: unexpected items %v", remaining)
+	}
+}
+
+// CheckOffAllAllowUnwanted checks that a list contains all of the given items, in any order.
+// The updated list with the matched items removed from it is returned.
+//
+// if an item is not present, the test is failed.
+// Items are compared using reflect.DeepEqual
+func CheckOffAllAllowUnwanted(t *testing.T, items []interface{}, wantItems []interface{}) []interface{} {
+	t.Helper()
+	for _, wantItem := range wantItems {
+		items = CheckOff(t, items, wantItem)
+	}
+	return items
+}
+
 // CheckOff an item from the list. If the item is not present the test is failed.
 // The updated list with the matched item removed from it is returned. Items are
 // compared using reflect.DeepEqual
 func CheckOff(t *testing.T, items []interface{}, wantItem interface{}) []interface{} {
+	t.Helper()
 	// check off the item
 	want := -1
 	for i, w := range items {
@@ -179,7 +252,7 @@ func CheckOff(t *testing.T, items []interface{}, wantItem interface{}) []interfa
 		}
 	}
 	if want == -1 {
-		t.Errorf("CheckOff: unexpected item %s", wantItem)
+		t.Errorf("CheckOff: item %s not present", wantItem)
 		return items
 	}
 	// delete the wanted item

@@ -60,6 +60,8 @@ type Homeserver struct {
 	Rooms []Room
 	// The list of application services to create on the homeserver
 	ApplicationServices []ApplicationService
+	// Optionally override the baseImageURI for blueprint creation
+	BaseImageURI *string
 }
 
 type User struct {
@@ -112,6 +114,13 @@ type Event struct {
 	// This can be either []EventReference for room v1/v2, or []string for room v3 onwards.
 	// If it is left at nil, MustCreateEvent will populate it automatically based on the room state.
 	AuthEvents interface{}
+
+	// The prev events of the event if we want to override or falsify them.
+	// If it is left at nil, MustCreateEvent will populate it automatically based on the forward extremities.
+	PrevEvents interface{}
+
+	// If this is a redaction, the event that it redacts
+	Redacts string
 }
 
 func MustValidate(bp Blueprint) Blueprint {

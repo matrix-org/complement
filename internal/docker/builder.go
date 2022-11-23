@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,28 +14,14 @@
 package docker
 
 import (
-	"archive/tar"
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
-	"net/url"
-	"os"
-	"path"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/volume"
-	client "github.com/docker/docker/client"
+	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 
@@ -45,28 +31,15 @@ import (
 )
 
 var (
-	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
-	HostnameRunningComplement = "host.docker.internal"
 	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
 	HostnameRunningDocker = "localhost"
 )
 
-func init() {
-	if os.Getenv("CI") == "true" {
-		log.Println("Running under CI: redirecting localhost to docker host on 172.17.0.1")
-		// this assumes we are running inside docker so they have
-		// forwarded the docker socket to us and we're in a container.
-		HostnameRunningDocker = "172.17.0.1"
-	}
-}
-
 const complementLabel = "complement_context"
 
 type Builder struct {
-	Config         *config.Complement
-	CSAPIPort      int
-	FederationPort int
-	Docker         *client.Client
+	Config *config.Complement
+	Docker *client.Client
 }
 
 func NewBuilder(cfg *config.Complement) (*Builder, error) {
@@ -75,10 +48,8 @@ func NewBuilder(cfg *config.Complement) (*Builder, error) {
 		return nil, err
 	}
 	return &Builder{
-		Docker:         cli,
-		Config:         cfg,
-		CSAPIPort:      8008,
-		FederationPort: 8448,
+		Docker: cli,
+		Config: cfg,
 	}, nil
 }
 
@@ -196,63 +167,52 @@ func (d *Builder) removeContainers() error {
 	return nil
 }
 
-func (d *Builder) ConstructBlueprintsIfNotExist(bs []b.Blueprint) error {
-	var blueprintsToBuild []b.Blueprint
-	for _, bprint := range bs {
-		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
-			Filters: label(
-				"complement_blueprint="+bprint.Name,
-				"complement_pkg="+d.Config.PackageNamespace,
-			),
-		})
+func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
+	images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
+		Filters: label(
+			"complement_blueprint="+bprint.Name,
+			"complement_pkg="+d.Config.PackageNamespace,
+		),
+	})
+	if err != nil {
+		return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ImageList: %w", bprint.Name, err)
+	}
+	if len(images) == 0 {
+		err = d.ConstructBlueprint(bprint)
 		if err != nil {
-			return fmt.Errorf("ConstructBlueprintsIfNotExist: failed to ImageList: %w", err)
-		}
-		if len(images) == 0 {
-			blueprintsToBuild = append(blueprintsToBuild, bprint)
+			return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ConstructBlueprint: %w", bprint.Name, err)
 		}
 	}
-	if len(blueprintsToBuild) == 0 {
-		return nil
-	}
-	return d.ConstructBlueprints(blueprintsToBuild)
+	return nil
 }
 
-func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
-	errc := make(chan []error, len(bs))
-	for _, bprint := range bs {
-		go (func(bprint b.Blueprint) {
-			errc <- d.construct(bprint)
-		})(bprint)
-	}
-	var errs []error
-	for i := 0; i < len(bs); i++ {
-		// the channel returns a slice of errors;
-		// spread and append them to the error slice
-		// (nothing will be appended if the slice is empty)
-		errs = append(errs, <-errc...)
-	}
-	close(errc)
+func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
+	errs := d.construct(bprint)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			d.log("could not construct blueprint: %s", err)
 		}
-		return errs[0]
+		return fmt.Errorf("errors whilst constructing blueprint %s: %v", bprint.Name, errs)
 	}
 
 	// wait a bit for images/containers to show up in 'image ls'
 	foundImages := false
-	for i := 0; i < 50; i++ { // max 5s
-		images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
+	var images []types.ImageSummary
+	var err error
+	waitTime := 5 * time.Second
+	startTime := time.Now()
+	for time.Since(startTime) < waitTime {
+		images, err = d.Docker.ImageList(context.Background(), types.ImageListOptions{
 			Filters: label(
 				complementLabel,
+				"complement_blueprint="+bprint.Name,
 				"complement_pkg="+d.Config.PackageNamespace,
 			),
 		})
 		if err != nil {
 			return err
 		}
-		if len(images) < len(bs) {
+		if len(images) < len(bprint.Homeservers) {
 			time.Sleep(100 * time.Millisecond)
 		} else {
 			foundImages = true
@@ -265,12 +225,19 @@ func (d *Builder) ConstructBlueprints(bs []b.Blueprint) error {
 	if !foundImages {
 		return fmt.Errorf("failed to find built images via ImageList: did they all build ok?")
 	}
+	var imgDatas []string
+	for _, img := range images {
+		imgDatas = append(imgDatas, fmt.Sprintf("%s=>%v", img.ID, img.Labels))
+	}
+	d.log("Constructed blueprint '%s' : %v", bprint.Name, imgDatas)
 	return nil
 }
 
 // construct all Homeservers sequentially then commits them
 func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
-	networkID, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
+	d.log("Constructing blueprint '%s'", bprint.Name)
+
+	networkName, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
 	if err != nil {
 		return []error{err}
 	}
@@ -278,20 +245,40 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 	runner := instruction.NewRunner(bprint.Name, d.Config.BestEffort, d.Config.DebugLoggingEnabled)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
-		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
+		res := d.constructHomeserver(bprint.Name, runner, hs, networkName)
 		if res.err != nil {
 			errs = append(errs, res.err)
 			if res.containerID != "" {
 				// something went wrong, but we have a container which may have interesting logs
 				printLogs(d.Docker, res.containerID, res.contextStr)
 			}
+			if delErr := d.Docker.ContainerRemove(context.Background(), res.containerID, types.ContainerRemoveOptions{
+				Force: true,
+			}); delErr != nil {
+				d.log("%s: failed to remove container which failed to deploy: %s", res.contextStr, delErr)
+			}
+			// there is little point continuing to set up the remaining homeservers at this point
+			return
 		}
 		// kill the container
 		defer func(r result) {
+			containerInfo, err := d.Docker.ContainerInspect(context.Background(), r.containerID)
+
+			if err != nil {
+				d.log("%s : Can't get status of %s", r.contextStr, r.containerID)
+				return
+			}
+
+			if !containerInfo.State.Running {
+				// The container isn't running anyway, so no need to kill it.
+				return
+			}
+
 			killErr := d.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
 			if killErr != nil {
 				d.log("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
 			}
+
 		}(res)
 		results[i] = res
 	}
@@ -319,20 +306,34 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			}
 		}
 
+		deviceIDs := runner.DeviceIDs(res.homeserver.Name)
+		for userID, deviceID := range deviceIDs {
+			labels["device_id"+userID] = deviceID
+		}
+
 		// Combine the labels for tokens and application services
 		asLabels := labelsForApplicationServices(res.homeserver)
 		for k, v := range asLabels {
 			labels[k] = v
 		}
 
+		// Stop the container before we commit it.
+		// This gives it chance to shut down gracefully.
+		// If we don't do this, then e.g. Postgres databases can become corrupt, which
+		// then incurs a slow recovery process when we use the blueprint later.
+		d.log("%s: Stopping container: %s", res.contextStr, res.containerID)
+		timeout := 10 * time.Second
+		d.Docker.ContainerStop(context.Background(), res.containerID, &timeout)
+
+		// Log again so we can see the timings.
+		d.log("%s: Stopped container: %s", res.contextStr, res.containerID)
+
 		// commit the container
 		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
 			Author:    "Complement",
 			Pause:     true,
 			Reference: "localhost/complement:" + res.contextStr,
-			Config: &container.Config{
-				Labels: labels,
-			},
+			Changes:   toChanges(labels),
 		})
 		if err != nil {
 			d.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
@@ -340,16 +341,27 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			continue
 		}
 		imageID := strings.Replace(commit.ID, "sha256:", "", 1)
-		d.log("%s => %s\n", res.contextStr, imageID)
+		d.log("%s: Created docker image %s\n", res.contextStr, imageID)
 	}
 	return errs
 }
 
+// Convert a map of labels to a list of changes directive in Dockerfile format.
+// Labels keys and values can't be multiline (eg. can't contain `\n` character)
+// neither can they contain unescaped `"` character.
+func toChanges(labels map[string]string) []string {
+	var changes []string
+	for k, v := range labels {
+		changes = append(changes, fmt.Sprintf("LABEL \"%s\"=\"%s\"", k, v))
+	}
+	return changes
+}
+
 // construct this homeserver and execute its instructions, keeping the container alive.
-func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
+func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkName string) result {
 	contextStr := fmt.Sprintf("%s.%s.%s", d.Config.PackageNamespace, blueprintName, hs.Name)
 	d.log("%s : constructing homeserver...\n", contextStr)
-	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
+	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkName)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
 		containerID := ""
@@ -377,262 +389,45 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 }
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
-func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
+func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkName string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
+	var baseImageURI string
+	if hs.BaseImageURI == nil {
+		baseImageURI = d.Config.BaseImageURI
+		// Use HS specific base image if defined
+		if uri, ok := d.Config.BaseImageURIs[hs.Name]; ok {
+			baseImageURI = uri
+		}
+	} else {
+		baseImageURI = *hs.BaseImageURI
+	}
 
 	return deployImage(
-		d.Docker, d.Config.BaseImageURI, d.CSAPIPort, fmt.Sprintf("complement_%s", contextStr),
+		d.Docker, baseImageURI, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
-		networkID, d.Config.SpawnHSTimeout,
+		networkName, d.Config,
 	)
 }
 
-// getCaVolume returns the correct volume mount for providing a CA to homeserver containers.
-// If running CI, returns an error if it's unable to find a volume that has /ca
-// Otherwise, returns an error if we're unable to find the <cwd>/ca directory on the local host
-func getCaVolume(ctx context.Context, docker *client.Client) (caMount mount.Mount, err error) {
-	// TODO: wrap in a lockfile
-	if os.Getenv("CI") == "true" {
-		// When in CI, Complement itself is a container with the CA volume mounted at /ca.
-		// We need to mount this volume to all homeserver containers to synchronize the CA cert.
-		// This is needed to establish trust among all containers.
-
-		// Get volume mounted at /ca. First we get the container ID
-		// /proc/1/cpuset should be /docker/<containerID>
-		cpuset, err := ioutil.ReadFile("/proc/1/cpuset")
-		if err != nil {
-			return caMount, err
-		}
-		if !strings.Contains(string(cpuset), "docker") {
-			return caMount, errors.New("Could not identify container ID using /proc/1/cpuset")
-		}
-		cpusetList := strings.Split(strings.TrimSpace(string(cpuset)), "/")
-		containerID := cpusetList[len(cpusetList)-1]
-		container, err := docker.ContainerInspect(ctx, containerID)
-		if err != nil {
-			return caMount, err
-		}
-		// Get the volume that matches the destination in our complement container
-		var volumeName string
-		for i := range container.Mounts {
-			if container.Mounts[i].Destination == "/ca" {
-				volumeName = container.Mounts[i].Name
-			}
-		}
-		if volumeName == "" {
-			// We did not find a volume. This container might be created without a volume,
-			// or CI=true is passed but we are not running in a container.
-			// todo: log that we do not provide a CA volume mount?
-			return caMount, nil
-		}
-
-		caMount = mount.Mount{
-			Type:   mount.TypeVolume,
-			Source: volumeName,
-			Target: "/ca",
-		}
-	} else {
-		// When not in CI, our CA cert is placed in the current working dir.
-		// We bind mount this directory to all homeserver containers.
-		cwd, err := os.Getwd()
-		if err != nil {
-			return caMount, err
-		}
-		caCertificateDirHost := path.Join(cwd, "ca")
-		if _, err := os.Stat(caCertificateDirHost); os.IsNotExist(err) {
-			err = os.Mkdir(caCertificateDirHost, 0770)
-			if err != nil {
-				return caMount, err
-			}
-		}
-
-		caMount = mount.Mount{
-			Type:   mount.TypeBind,
-			Source: path.Join(cwd, "ca"),
-			Target: "/ca",
-		}
-	}
-	return caMount, nil
-}
-
-// getAppServiceVolume returns a volume mount for providing the `/appservice` directory to homeserver containers.
-// This directory will contain application service registration config files.
-// Returns an error if the volume failed to create
-func getAppServiceVolume(ctx context.Context, docker *client.Client) (asMount mount.Mount, err error) {
-	asVolume, err := docker.VolumeCreate(context.Background(), volume.VolumesCreateBody{
-		Name: "appservices",
-	})
-	if err != nil {
-		return asMount, err
-	}
-
-	asMount = mount.Mount{
-		Type:   mount.TypeVolume,
-		Source: asVolume.Name,
-		Target: "/appservices",
-	}
-
-	return asMount, err
-}
-
+// Multilines label using Dockerfile syntax is unsupported, let's inline \n instead
 func generateASRegistrationYaml(as b.ApplicationService) string {
-	return fmt.Sprintf("id: %s\n", as.ID) +
-		fmt.Sprintf("hs_token: %s\n", as.HSToken) +
-		fmt.Sprintf("as_token: %s\n", as.ASToken) +
-		fmt.Sprintf("url: '%s'\n", as.URL) +
-		fmt.Sprintf("sender_localpart: %s\n", as.SenderLocalpart) +
-		fmt.Sprintf("rate_limited: %v\n", as.RateLimited) +
-		"namespaces:\n" +
-		"  users:\n" +
-		"    - exclusive: false\n" +
-		"      regex: .*\n" +
-		"  rooms: []\n" +
-		"  aliases: []\n"
+	return fmt.Sprintf("id: %s\\n", as.ID) +
+		fmt.Sprintf("hs_token: %s\\n", as.HSToken) +
+		fmt.Sprintf("as_token: %s\\n", as.ASToken) +
+		fmt.Sprintf("url: '%s'\\n", as.URL) +
+		fmt.Sprintf("sender_localpart: %s\\n", as.SenderLocalpart) +
+		fmt.Sprintf("rate_limited: %v\\n", as.RateLimited) +
+		"namespaces:\\n" +
+		"  users:\\n" +
+		"    - exclusive: false\\n" +
+		"      regex: .*\\n" +
+		"  rooms: []\\n" +
+		"  aliases: []\\n"
 }
 
-func deployImage(
-	docker *client.Client, imageID string, csPort int, containerName, pkgNamespace, blueprintName, hsName string,
-	asIDToRegistrationMap map[string]string, contextStr, networkID string, spawnHSTimeout time.Duration,
-) (*HomeserverDeployment, error) {
-	ctx := context.Background()
-	var extraHosts []string
-	var mounts []mount.Mount
-	var err error
-
-	if runtime.GOOS == "linux" {
-		// By default docker for linux does not expose this, so do it now.
-		// When https://github.com/moby/moby/pull/40007 lands in Docker 20, we should
-		// change this to be  `host.docker.internal:host-gateway`
-		extraHosts = []string{HostnameRunningComplement + ":172.17.0.1"}
-	}
-
-	if os.Getenv("COMPLEMENT_CA") == "true" {
-		var caMount mount.Mount
-		caMount, err = getCaVolume(ctx, docker)
-		if err != nil {
-			return nil, err
-		}
-
-		mounts = append(mounts, caMount)
-	}
-
-	asMount, err := getAppServiceVolume(ctx, docker)
-	if err != nil {
-		return nil, err
-	}
-	mounts = append(mounts, asMount)
-
-	env := []string{
-		"SERVER_NAME=" + hsName,
-		"COMPLEMENT_CA=" + os.Getenv("COMPLEMENT_CA"),
-	}
-
-	body, err := docker.ContainerCreate(ctx, &container.Config{
-		Image: imageID,
-		Env:   env,
-		//Cmd:   d.ImageArgs,
-		Labels: map[string]string{
-			complementLabel:        contextStr,
-			"complement_blueprint": blueprintName,
-			"complement_pkg":       pkgNamespace,
-			"complement_hs_name":   hsName,
-		},
-	}, &container.HostConfig{
-		PublishAllPorts: true,
-		ExtraHosts:      extraHosts,
-		Mounts:          mounts,
-	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{
-			hsName: {
-				NetworkID: networkID,
-				Aliases:   []string{hsName},
-			},
-		},
-	}, containerName)
-	if err != nil {
-		return nil, err
-	}
-
-	containerID := body.ID
-
-	// Create the application service files
-	for asID, registration := range asIDToRegistrationMap {
-		// Create a fake/virtual file in memory that we can copy to the container
-		// via https://stackoverflow.com/a/52131297/796832
-		var buf bytes.Buffer
-		tw := tar.NewWriter(&buf)
-		err = tw.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("/appservices/%s.yaml", url.PathEscape(asID)),
-			Mode: 0777,
-			Size: int64(len(registration)),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("Failed to copy regstration to container: %v", err)
-		}
-		tw.Write([]byte(registration))
-		tw.Close()
-
-		// Put our new fake file in the container volume
-		err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
-			AllowOverwriteDirWithFile: false,
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
-	if err != nil {
-		return nil, err
-	}
-	inspect, err := docker.ContainerInspect(ctx, containerID)
-	if err != nil {
-		return nil, err
-	}
-	baseURL, fedBaseURL, err := endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
-	if err != nil {
-		return nil, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
-	}
-	versionsURL := fmt.Sprintf("%s/_matrix/client/versions", baseURL)
-	// hit /versions to check it is up
-	var lastErr error
-	stopTime := time.Now().Add(spawnHSTimeout)
-	for {
-		if time.Now().After(stopTime) {
-			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
-			break
-		}
-		res, err := http.Get(versionsURL)
-		if err != nil {
-			lastErr = fmt.Errorf("GET %s => error: %s", versionsURL, err)
-			time.Sleep(50 * time.Millisecond)
-			continue
-		}
-		if res.StatusCode != 200 {
-			lastErr = fmt.Errorf("GET %s => HTTP %s", versionsURL, res.Status)
-			time.Sleep(50 * time.Millisecond)
-			continue
-		}
-		lastErr = nil
-		break
-	}
-
-	d := &HomeserverDeployment{
-		BaseURL:             baseURL,
-		FedBaseURL:          fedBaseURL,
-		ContainerID:         containerID,
-		AccessTokens:        tokensFromLabels(inspect.Config.Labels),
-		ApplicationServices: asIDToRegistrationFromLabels(inspect.Config.Labels),
-	}
-	if lastErr != nil {
-		return d, fmt.Errorf("%s: failed to check server is up. %w", contextStr, lastErr)
-	}
-	return d, nil
-}
-
-// createNetworkIfNotExists creates a docker network and returns its id.
-// ID is guaranteed not to be empty when err == nil
-func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkID string, err error) {
+// createNetworkIfNotExists creates a docker network and returns its name.
+// Name is guaranteed not to be empty when err == nil
+func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkName string, err error) {
 	// check if a network already exists for this blueprint
 	nws, err := docker.NetworkList(context.Background(), types.NetworkListOptions{
 		Filters: label(
@@ -645,10 +440,14 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 	}
 	// return the existing network
 	if len(nws) > 0 {
-		return nws[0].ID, nil
+		if len(nws) > 1 {
+			log.Printf("WARNING: createNetworkIfNotExists got %d networks for pkg=%s blueprint=%s", len(nws), pkgNamespace, blueprintName)
+		}
+		return nws[0].Name, nil
 	}
+	networkName = "complement_" + pkgNamespace + "_" + blueprintName
 	// make a user-defined network so we get DNS based on the container name
-	nw, err := docker.NetworkCreate(context.Background(), "complement_"+pkgNamespace+"_"+blueprintName, types.NetworkCreate{
+	nw, err := docker.NetworkCreate(context.Background(), networkName, types.NetworkCreate{
 		Labels: map[string]string{
 			complementLabel:        blueprintName,
 			"complement_blueprint": blueprintName,
@@ -667,7 +466,7 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 	if nw.ID == "" {
 		return "", fmt.Errorf("%s: unexpected empty ID while creating networkID", blueprintName)
 	}
-	return nw.ID, nil
+	return networkName, nil
 }
 
 func printLogs(docker *client.Client, containerID, contextStr string) {
@@ -686,54 +485,14 @@ func printLogs(docker *client.Client, containerID, contextStr string) {
 	log.Printf("============== %s : END LOGS ==============\n\n\n", contextStr)
 }
 
-// label returns a filter for the presence of certain labels ("complement_context") or a match of
-// labels ("complement_blueprint=foo").
-func label(labelFilters ...string) filters.Args {
-	f := filters.NewArgs()
-	// label=<key> or label=<key>=<value>
-	for _, in := range labelFilters {
-		f.Add("label", in)
-	}
-	return f
-}
-
-func tokensFromLabels(labels map[string]string) map[string]string {
-	userIDToToken := make(map[string]string)
-	for k, v := range labels {
-		if strings.HasPrefix(k, "access_token_") {
-			userIDToToken[strings.TrimPrefix(k, "access_token_")] = v
-		}
-	}
-	return userIDToToken
-}
-
-func asIDToRegistrationFromLabels(labels map[string]string) map[string]string {
-	asMap := make(map[string]string)
-	for k, v := range labels {
-		if strings.HasPrefix(k, "application_service_") {
-			asMap[strings.TrimPrefix(k, "application_service_")] = v
-		}
-	}
-	return asMap
-}
-
-func labelsForApplicationServices(hs b.Homeserver) map[string]string {
-	labels := make(map[string]string)
-	// collect and store app service registrations as labels 'application_service_$as_id: $registration'
-	// collect and store app service access tokens as labels 'access_token_$sender_localpart: $as_token'
-	for _, as := range hs.ApplicationServices {
-		labels["application_service_"+as.ID] = generateASRegistrationYaml(as)
-
-		labels["access_token_@"+as.SenderLocalpart+":"+hs.Name] = as.ASToken
-	}
-	return labels
-}
-
 func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {
 	csapiPort := fmt.Sprintf("%d/tcp", csPort)
 	csapiPortInfo, ok := p[nat.Port(csapiPort)]
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", csapiPort, p)
+	}
+	if len(csapiPortInfo) == 0 {
+		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", csapiPort, p)
 	}
 	baseURL = fmt.Sprintf("http://"+HostnameRunningDocker+":%s", csapiPortInfo[0].HostPort)
 
@@ -741,6 +500,9 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
 	if !ok {
 		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", ssapiPort, p)
+	}
+	if len(ssapiPortInfo) == 0 {
+		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", ssapiPort, p)
 	}
 	fedBaseURL = fmt.Sprintf("https://"+HostnameRunningDocker+":%s", ssapiPortInfo[0].HostPort)
 	return
