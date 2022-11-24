@@ -1,9 +1,15 @@
 package tests
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"regexp"
 	"testing"
+	"time"
 
-	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/gorilla/mux"
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -13,62 +19,89 @@ import (
 )
 
 func TestFederationRoomsInvite(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	// deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	// bob := deployment.Client(t, "hs2", "@bob:hs2")
+	remoteCharlie := deployment.Client(t, "hs2", "@charlie:hs2")
 
 	t.Run("Parallel", func(t *testing.T) {
-		// sytest: Invited user can reject invite over federation
-		t.Run("Invited user can reject invite over federation", func(t *testing.T) {
+		t.Run("invite event over federation is seen by application service", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"preset": "private_chat",
-				"invite": []string{bob.UserID},
-			})
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.LeaveRoom(t, roomID)
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
-		})
 
-		// sytest: Invited user can reject invite over federation several times
-		t.Run("Invited user can reject invite over federation several times", func(t *testing.T) {
-			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"preset": "private_chat",
-			})
-			for i := 0; i < 3; i++ {
-				alice.InviteRoom(t, roomID, bob.UserID)
-				bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-				bob.LeaveRoom(t, roomID)
-				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+			// Find the URL and port of the application service in some registration yaml text
+			var asURLRegexp = regexp.MustCompile(`url: '(.+):(\d+)'`)
+
+			// Find the application service port defined in the registration file
+			asRegistration := deployment.HS["hs2"].ApplicationServices["my_as_on_hs2_id"]
+			asURLMatches := asURLRegexp.FindStringSubmatch(asRegistration)
+			if asURLMatches == nil {
+				t.Fatalf("Unable to find application service `url` in registration=%s", asRegistration)
 			}
-		})
+			asPort := asURLMatches[2]
 
-		// sytest: Invited user can reject invite over federation for empty room
-		t.Run("Invited user can reject invite over federation for empty room", func(t *testing.T) {
-			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"preset": "private_chat",
-				"invite": []string{bob.UserID},
-			})
-			aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-			bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			alice.LeaveRoom(t, roomID)
-			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomID))
-			bob.LeaveRoom(t, roomID)
-			bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncLeftFrom(bob.UserID, roomID))
-		})
+			// Create a listener and handler to stub an application service listening
+			// for transactions from a homeserver.
+			handler := mux.NewRouter()
+			// Application Service API: /_matrix/app/v1/transactions/{txnId}
+			waiter := NewWaiter()
+			var eventIDsWeSawOverTransactions []string
+			handler.HandleFunc("/transactions/{txnId}", func(w http.ResponseWriter, req *http.Request) {
+				must.MatchRequest(t, req, match.HTTPRequest{
+					JSON: []match.JSON{
+						match.JSONArrayEach("events", func(r gjson.Result) error {
+							// Add to our running list of events
+							eventIDsWeSawOverTransactions = append(eventIDsWeSawOverTransactions, r.Get("event_id").Str)
 
-		// sytest: Remote invited user can see room metadata
-		t.Run("Remote invited user can see room metadata", func(t *testing.T) {
-			t.Parallel()
+							logrus.WithFields(logrus.Fields{
+								"event_id":  r.Get("type").Str,
+								"state_key": r.Get("state_key").Str,
+								"content":   r.Get("content").Raw,
+							}).Error("Saw event on application service")
+
+							// If we found the event that occurs after our batch send. we can
+							// probably safely assume the historical events won't come later.
+							if r.Get("type").Str == "m.room.member" && r.Get("state_key").Str == remoteCharlie.UserID && r.Get("content").Get("membership").Str == "invite" {
+								defer waiter.Finish()
+							}
+
+							return nil
+						}),
+					},
+				})
+
+				// Acknowledge that we've seen the transaction
+				w.WriteHeader(200)
+				w.Write([]byte("{}"))
+			}).Methods("PUT")
+
+			srv := &http.Server{
+				Addr:    fmt.Sprintf(":%s", asPort),
+				Handler: handler,
+			}
+			go func() {
+				if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+					// Note that running s.t.FailNow is not allowed in a separate goroutine
+					// Tests will likely fail if the server is not listening anyways
+					t.Logf("Failed to listen and serve our fake application service: %s", err)
+				}
+			}()
+			defer func() {
+				err := srv.Shutdown(context.Background())
+				if err != nil {
+					t.Fatalf("Failed to shutdown our fake application service: %s", err)
+				}
+			}()
+			// ----------------------------------------------------------
+
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"name":   "Invites room",
-				"invite": []string{bob.UserID},
 			})
+
+			alice.InviteRoom(t, roomID, remoteCharlie.UserID)
 
 			wantFields := map[string]string{
 				"m.room.join_rules": "join_rule",
@@ -79,36 +112,17 @@ func TestFederationRoomsInvite(t *testing.T) {
 				"m.room.name":       "Invites room",
 			}
 
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			res, _ := bob.MustSync(t, client.SyncReq{})
+			remoteCharlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(remoteCharlie.UserID, roomID))
+			res, _ := remoteCharlie.MustSync(t, client.SyncReq{})
 			verifyState(t, res, wantFields, wantValues, roomID, alice)
-		})
 
-		t.Run("Invited user has 'is_direct' flag in prev_content after joining", func(t *testing.T) {
-			roomID := alice.CreateRoom(t, map[string]interface{}{
-				"preset": "private_chat",
-				"name":   "Invites room",
-				// invite Bob and make the room a DM, so we can verify m.direct flag is in the prev_content after joining
-				"invite":    []string{bob.UserID},
-				"is_direct": true,
-			})
-			bob.JoinRoom(t, roomID, []string{})
-			bob.MustSyncUntil(t, client.SyncReq{},
-				client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
-					// We expect a membership event ..
-					if result.Get("type").Str != gomatrixserverlib.MRoomMember {
-						return false
-					}
-					// .. for Bob
-					if result.Get("state_key").Str != bob.UserID {
-						return false
-					}
-					// Check that we've got tbe expected is_idrect flag
-					return result.Get("unsigned.prev_content.membership").Str == "invite" &&
-						result.Get("unsigned.prev_content.is_direct").Bool() == true &&
-						result.Get("unsigned.prev_sender").Str == alice.UserID
-				}),
-			)
+			// If not, wait 5 seconds for to see if it happens. The waiter will only
+			// resolve if we see the invite event, otherwise timeout
+			waiter.Waitf(t, 5*time.Second, "waiting for invite, eventIDsWeSawOverTransactions=%s", eventIDsWeSawOverTransactions)
+
+			logrus.WithFields(logrus.Fields{
+				"eventIDsWeSawOverTransactions": eventIDsWeSawOverTransactions,
+			}).Error("afewfeew")
 		})
 	})
 }

@@ -32,6 +32,13 @@ var BlueprintHSWithApplicationService = MustValidate(Blueprint{
 					DisplayName: "Charlie",
 				},
 			},
+			ApplicationServices: []ApplicationService{
+				{
+					ID:              "my_as_on_hs2_id",
+					SenderLocalpart: "the-bridge-user",
+					RateLimited:     false,
+				},
+			},
 		},
 	},
 })
