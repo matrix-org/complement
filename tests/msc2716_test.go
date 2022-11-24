@@ -344,7 +344,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			alice.JoinRoom(t, roomID, nil)
 
 			// Create the "live" event we are going to insert our historical events next to
-			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsBefore := createMessagesInRoom(t, alice, roomID, 1, "eventIDsBefore")
 			eventIdBefore := eventIDsBefore[0]
 			timeAfterEventBefore := time.Now()
 
@@ -365,7 +365,7 @@ func TestImportHistoricalMessages(t *testing.T) {
 			historicalStateEventIDs := client.GetJSONFieldStringArray(t, batchSendResBody, "state_event_ids")
 
 			// This is just a dummy event we search for after the historicalEventIDs/historicalStateEventIDs
-			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1)
+			eventIDsAfterHistoricalImport := createMessagesInRoom(t, alice, roomID, 1, "eventIDsAfterHistoricalImport")
 			eventIDAfterHistoricalImport = eventIDsAfterHistoricalImport[0]
 
 			// Check if eventIDAfterHistoricalImport already came over `/transactions`.
