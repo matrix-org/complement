@@ -15,6 +15,7 @@ func TestMembersLocal(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	_, incrementalSyncToken := alice.MustSync(t, client.SyncReq{})
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: New room members see their own join event
@@ -33,10 +34,23 @@ func TestMembersLocal(t *testing.T) {
 		})
 
 		// sytest: Existing members see new members' presence
-		t.Run("Existing members see new members' presence", func(t *testing.T) {
+		// Split into initial and incremental sync cases in Complement.
+		t.Run("Existing members see new members' presence in initial sync", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2803
 			t.Parallel()
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			alice.MustSyncUntil(t, client.SyncReq{},
+				client.SyncJoinedTo(bob.UserID, roomID),
+				client.SyncPresenceHas(bob.UserID, nil),
+			)
+		})
+
+		// sytest: Existing members see new members' presence
+		// Split into initial and incremental sync cases in Complement.
+		t.Run("Existing members see new members' presence in incremental sync", func(t *testing.T) {
+			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2803
+			t.Parallel()
+			alice.MustSyncUntil(t, client.SyncReq{Since: incrementalSyncToken},
 				client.SyncJoinedTo(bob.UserID, roomID),
 				client.SyncPresenceHas(bob.UserID, nil),
 			)
