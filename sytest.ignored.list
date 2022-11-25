@@ -12,6 +12,10 @@ Can quarantine media in rooms
 Shutdown room
 Can backfill purged history
 
+# Dummy test that exists only to prove a capability
+# (in 10apidoc/36room-levels)
+Both GET and PUT work
+
 # Not formalised by the spec: https://github.com/matrix-org/matrix-spec/issues/456
 Cannot send tombstone event that points to the same room
 Local and remote users' homeservers remove a room from their public directory on upgrade
