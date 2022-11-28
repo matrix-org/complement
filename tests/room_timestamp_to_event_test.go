@@ -316,8 +316,8 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 	}))
 	timestampToEventResBody := client.ParseJSON(t, timestampToEventRes)
 
-	// Only allow a 200 response meaning we found an event or when no `expectedEventId`, a
-	// 404 meaning we didn't find anything. Other status codes will throw and assumed to
+	// Only allow a 200 response meaning we found an event or when no `expectedEventId` is provided, a
+	// 404 meaning we didn't find anything. Other status codes will throw and are assumed to
 	// be application errors.
 	actualEventId := ""
 	if timestampToEventRes.StatusCode == 200 {
