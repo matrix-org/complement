@@ -15,6 +15,14 @@ func TestMembersLocal(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+
+	bob.MustDoFunc(
+		t, "PUT", []string{"_matrix", "client", "v3", "presence", bob.UserID, "status"},
+		client.WithJSONBody(t, map[string]interface{}{
+			"presence": "online",
+		}),
+	)
+
 	_, incrementalSyncToken := alice.MustSync(t, client.SyncReq{})
 
 	t.Run("Parallel", func(t *testing.T) {
