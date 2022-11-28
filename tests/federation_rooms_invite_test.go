@@ -24,8 +24,9 @@ func TestFederationRoomsInvite(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	// bob := deployment.Client(t, "hs2", "@bob:hs2")
+	// bob := deployment.Client(t, "hs1", "@bob:hs1")
 	remoteCharlie := deployment.Client(t, "hs2", "@charlie:hs2")
+	// remoteFrank := deployment.Client(t, "hs2", "@frank:hs2")
 
 	t.Run("Parallel", func(t *testing.T) {
 		t.Run("invite event over federation is seen by application service", func(t *testing.T) {
@@ -99,9 +100,15 @@ func TestFederationRoomsInvite(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"name":   "Invites room",
+				// "invite": []string{bob.UserID},
 			})
 
+			// Invite another local user
+			// alice.InviteRoom(t, roomID, bob.UserID)
+
+			// Invite some remote users
 			alice.InviteRoom(t, roomID, remoteCharlie.UserID)
+			// alice.InviteRoom(t, roomID, remoteFrank.UserID)
 
 			wantFields := map[string]string{
 				"m.room.join_rules": "join_rule",
