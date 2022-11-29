@@ -1126,16 +1126,6 @@ func TestImportHistoricalMessages(t *testing.T) {
 	})
 }
 
-var txnCounter int = 0
-
-func getTxnID(prefix string) (txnID string) {
-	txnId := fmt.Sprintf("%s-%d", prefix, txnCounter)
-
-	txnCounter++
-
-	return txnId
-}
-
 func makeInterfaceSlice(slice []string) []interface{} {
 	interfaceSlice := make([]interface{}, len(slice))
 	for i := range slice {
@@ -1162,42 +1152,6 @@ func includes(needle string, haystack []string) bool {
 	}
 
 	return false
-}
-
-func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string, check func(gjson.Result) bool) {
-	t.Helper()
-	start := time.Now()
-	checkCounter := 0
-	for {
-		if time.Since(start) > c.SyncUntilTimeout {
-			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", checkCounter)
-		}
-
-		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-			"dir":   []string{"b"},
-			"limit": []string{"100"},
-		}))
-		messsageResBody := client.ParseJSON(t, messagesRes)
-		wantKey := "chunk"
-		keyRes := gjson.GetBytes(messsageResBody, wantKey)
-		if !keyRes.Exists() {
-			t.Fatalf("missing key '%s'", wantKey)
-		}
-		if !keyRes.IsArray() {
-			t.Fatalf("key '%s' is not an array (was %s)", wantKey, keyRes.Type)
-		}
-
-		events := keyRes.Array()
-		for _, ev := range events {
-			if check(ev) {
-				return
-			}
-		}
-
-		checkCounter++
-		// Add a slight delay so we don't hammmer the messages endpoint
-		time.Sleep(500 * time.Millisecond)
-	}
 }
 
 // Paginate the /messages endpoint until we find all of the expectedEventIds

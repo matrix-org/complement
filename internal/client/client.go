@@ -141,7 +141,10 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 		query.Add("server_name", serverName)
 	}
 	// join the room
-	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias}, WithQueries(query))
+	res := c.MustDoFunc(
+		t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias},
+		WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
+	)
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
@@ -703,6 +706,43 @@ func SyncEphemeralHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt
 			return nil
 		}
 		return fmt.Errorf("SyncEphemeralHas(%s): %s", roomID, err)
+	}
+}
+
+// Check that the sync contains presence from a user, optionally with an expected presence (set to nil to not check),
+// and optionally with extra checks.
+func SyncPresenceHas(fromUser string, expectedPresence *string, checks ...func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		presenceEvents := topLevelSyncJSON.Get("presence.events")
+		if !presenceEvents.Exists() {
+			return fmt.Errorf("presence.events does not exist")
+		}
+		for _, x := range presenceEvents.Array() {
+			if !(x.Get("type").Exists() &&
+				x.Get("sender").Exists() &&
+				x.Get("content").Exists() &&
+				x.Get("content.presence").Exists()) {
+				return fmt.Errorf(
+					"malformatted presence event, expected the following fields: [sender, type, content, content.presence]: %s",
+					x.Raw,
+				)
+			} else if x.Get("sender").Str != fromUser {
+				continue
+			} else if expectedPresence != nil && x.Get("content.presence").Str != *expectedPresence {
+				return fmt.Errorf(
+					"found presence for user %s, but not expected presence: got %s, want %s",
+					fromUser, x.Get("content.presence").Str, *expectedPresence,
+				)
+			} else {
+				for i, check := range checks {
+					if !check(x) {
+						return fmt.Errorf("matched presence event to user %s, but check %d did not pass", fromUser, i)
+					}
+				}
+				return nil
+			}
+		}
+		return fmt.Errorf("did not find %s in presence events", fromUser)
 	}
 }
 
