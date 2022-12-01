@@ -220,11 +220,22 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to send events in the room, during the resync
 	t.Run("CanSendEventsDuringPartialStateJoin", func(t *testing.T) {
-		// See https://github.com/matrix-org/synapse/issues/12997
-		t.Skip("Cannot yet send events during resync")
 		alice := deployment.RegisterUser(t, "hs1", "t3alice", "secret", false)
 
-		server := createTestServer(t, deployment)
+		pdusChannel := make(chan *gomatrixserverlib.Event)
+		server := createTestServer(
+			t,
+			deployment,
+			federation.HandleTransactionRequests(
+				func(e *gomatrixserverlib.Event) {
+					pdusChannel <- e
+				},
+				// we don't expect EDUs
+				func(e gomatrixserverlib.EDU) {
+					t.Fatalf("Received unexpected EDU: %s", e.Content)
+				},
+			),
+		)
 		cancel := server.Listen()
 		defer cancel()
 		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
@@ -240,6 +251,15 @@ func TestPartialStateJoin(t *testing.T) {
 		body := gjson.ParseBytes(client.ParseJSON(t, res))
 		eventID := body.Get("event_id").Str
 		t.Logf("Alice sent event event ID %s", eventID)
+
+		select {
+		case pdu := <-pdusChannel:
+			if !(pdu.Type() == "m.room.message") {
+				t.Error("Received PDU is not of type m.room.message")
+			}
+		case <-time.After(1 * time.Second):
+			t.Error("Message PDU not received after one second")
+		}
 	})
 
 	// we should be able to receive typing EDU over federation during the resync
