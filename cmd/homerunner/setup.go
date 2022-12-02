@@ -82,7 +82,7 @@ func (r *Runtime) DestroyDeployment(blueprintName string) error {
 	if !ok {
 		return fmt.Errorf("no deployment with name '%s' exists", blueprintName)
 	}
-	d.Deployer.Destroy(d, false, "")
+	d.Deployer.Destroy(d, false, "", false)
 	delete(r.BlueprintToDeployment, blueprintName)
 	timer := r.BlueprintToTimer[blueprintName]
 	timer.Stop()
