@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/sirupsen/logrus"
 )
 
 type Runtime struct {
@@ -81,7 +82,7 @@ func (r *Runtime) DestroyDeployment(blueprintName string) error {
 	if !ok {
 		return fmt.Errorf("no deployment with name '%s' exists", blueprintName)
 	}
-	d.Deployer.Destroy(d, false)
+	d.Deployer.Destroy(d, false, "")
 	delete(r.BlueprintToDeployment, blueprintName)
 	timer := r.BlueprintToTimer[blueprintName]
 	timer.Stop()

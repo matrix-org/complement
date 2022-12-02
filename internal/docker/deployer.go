@@ -23,7 +23,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -146,7 +148,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 }
 
 // Destroy a deployment. This will kill all running containers.
-func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
+func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName string, failed bool) {
 	for _, hsDep := range dep.HS {
 		if printServerLogs {
 			// If we want the logs we gracefully stop the containers to allow
@@ -165,13 +167,30 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 			}
 		}
 
-		err := d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
+		result, err := d.executePostScript(hsDep, testName, failed)
+		if err != nil {
+			log.Printf("Failed to execute post test script: %s", err)
+		}
+		if printServerLogs && err == nil && result == nil {
+			log.Printf("Post test script result: %s", string(result))
+		}
+
+		err = d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
 			Force: true,
 		})
 		if err != nil {
 			log.Printf("Destroy: Failed to remove container %s : %s\n", hsDep.ContainerID, err)
 		}
 	}
+}
+
+func (d *Deployer) executePostScript(hsDep *HomeserverDeployment, testName string, failed bool) ([]byte, error) {
+	if d.config.PostTestScript == "" {
+		return nil, nil
+	}
+	cmd := exec.Command(d.config.PostTestScript, hsDep.ContainerID, testName, strconv.FormatBool(failed))
+
+	return cmd.CombinedOutput()
 }
 
 // Restart a homeserver deployment.
@@ -256,7 +275,7 @@ func deployImage(
 			"complement_hs_name":   hsName,
 		},
 	}, &container.HostConfig{
-		CapAdd: []string{"NET_ADMIN",}, // TODO : this should be some sort of option
+		CapAdd:          []string{"NET_ADMIN"}, // TODO : this should be some sort of option
 		PublishAllPorts: true,
 		PortBindings: nat.PortMap{
 			nat.Port("8008/tcp"): []nat.PortBinding{
