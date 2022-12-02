@@ -169,7 +169,7 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName strin
 
 		result, err := d.executePostScript(hsDep, testName, failed)
 		if err != nil {
-			log.Printf("Failed to execute post test script: %s", err)
+			log.Printf("Failed to execute post test script: %s - %s", err, string(result))
 		}
 		if printServerLogs && err == nil && result != nil {
 			log.Printf("Post test script result: %s", string(result))
