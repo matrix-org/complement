@@ -3197,6 +3197,47 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		must.MatchResponse(t, response, spec)
 	})
+
+	// we should be able to join a room that is already joined & resyncing
+	t.Run("CanFastJoinDuringPartialStateJoin", func(t *testing.T) {
+		alice := deployment.RegisterUser(t, "hs1", "t42alice", "secret", false)
+		bob := deployment.RegisterUser(t, "hs1", "t42bob", "secret", false)
+
+		server := createTestServer(
+			t,
+			deployment,
+			federation.HandleTransactionRequests(nil, nil),
+		)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy()
+
+		alice.Client.Timeout = 2 * time.Second
+		paths := []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "send", "m.room.message", "0"}
+		res := alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Hello world!",
+		}))
+		body := gjson.ParseBytes(client.ParseJSON(t, res))
+		eventID := body.Get("event_id").Str
+		t.Logf("Alice sent event event ID %s", eventID)
+
+		psj2Result := beginPartialStateJoin(t, server, serverRoom, bob)
+		defer psj2Result.Destroy()
+
+		bob.Client.Timeout = 2 * time.Second
+		paths = []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "send", "m.room.message", "0"}
+		res = alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Hello world!",
+		}))
+		body = gjson.ParseBytes(client.ParseJSON(t, res))
+		eventID = body.Get("event_id").Str
+		t.Logf("Bob sent event event ID %s", eventID)
+	})
 }
 
 // test reception of an event over federation during a resync
