@@ -34,6 +34,11 @@ A list of semicolon separated host mounts to mount on every container. The struc
 A list of space separated blueprint names to not clean up after running. For example, `one_to_one_room alice` would not delete the homeserver images for the blueprints `alice` and `one_to_one_room`. This can speed up homeserver runs if you frequently run the same base image over and over again. If the base image changes, this should not be set as it means an older version of the base image will be used for the named blueprints.  
 - Type: `[]string`
 
+#### `COMPLEMENT_POST_TEST_SCRIPT`
+An arbitrary script to execute after a test was executed and before the container is removed. This can be used to extract, for example, server logs or database files. The script is passed the parameters: ContainerID, TestName, TestFailed (true/false)  
+- Type: `string`
+- Default: ""
+
 #### `COMPLEMENT_SHARE_ENV_PREFIX`
 If set, all environment variables on the host with this prefix will be shared with every homeserver, with the prefix removed. For example, if the prefix was `FOO_` then setting `FOO_BAR=baz` on the host would translate to `BAR=baz` on the container. Useful for passing through extra Homeserver configuration options without sharing all host environment variables.  
 - Type: `string`

@@ -87,6 +87,13 @@ type Complement struct {
 	HostnameRunningComplement string
 
 	HSPortBindingIP string
+
+	// Name: COMPLEMENT_POST_TEST_SCRIPT
+	// Default: ""
+	// Description: An arbitrary script to execute after a test was executed and before the container is removed.
+	// This can be used to extract, for example, server logs or database files. The script is passed the parameters:
+	// ContainerID, TestName, TestFailed (true/false)
+	PostTestScript string
 }
 
 var hsRegex = regexp.MustCompile(`COMPLEMENT_BASE_IMAGE_(.+)=(.+)$`)
@@ -100,6 +107,7 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	cfg.DebugLoggingEnabled = os.Getenv("COMPLEMENT_DEBUG") == "1"
 	cfg.AlwaysPrintServerLogs = os.Getenv("COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS") == "1"
 	cfg.EnvVarsPropagatePrefix = os.Getenv("COMPLEMENT_SHARE_ENV_PREFIX")
+	cfg.PostTestScript = os.Getenv("COMPLEMENT_POST_TEST_SCRIPT")
 	cfg.SpawnHSTimeout = time.Duration(parseEnvWithDefault("COMPLEMENT_SPAWN_HS_TIMEOUT_SECS", 30)) * time.Second
 	if os.Getenv("COMPLEMENT_VERSION_CHECK_ITERATIONS") != "" {
 		fmt.Fprintln(os.Stderr, "Deprecated: COMPLEMENT_VERSION_CHECK_ITERATIONS will be removed in a later version. Use COMPLEMENT_SPAWN_HS_TIMEOUT_SECS instead which does the same thing and is clearer.")
