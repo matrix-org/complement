@@ -136,7 +136,7 @@ func MatchFederationRequest(t *testing.T, fedReq *gomatrixserverlib.FederationRe
 func MatchGJSON(t *testing.T, jsonResult gjson.Result, matchers ...match.JSON) {
 	t.Helper()
 
-	MatchJSON(t, jsonResult.Str, matchers...)
+	MatchJSON(t, jsonResult.Raw, matchers...)
 }
 
 // MatchJSON performs JSON assertions on a raw JSON string.

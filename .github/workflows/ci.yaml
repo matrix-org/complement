@@ -43,7 +43,7 @@ jobs:
             timeout: 20m
 
           - homeserver: Dendrite
-            tags: msc2836 dendrite_blacklist
+            tags: dendrite_blacklist
             env: ""
             timeout: 10m
 
