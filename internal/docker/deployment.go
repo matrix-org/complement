@@ -80,6 +80,13 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 	return client
 }
 
+// NewUser creates a new user as a convenience method to RegisterUser.
+//
+//It registers the user with a deterministic password, and without admin privileges.
+func (d *Deployment) NewUser(t *testing.T, localpart, hs string) *client.CSAPI {
+	return d.RegisterUser(t, hs, localpart, "complement_meets_min_pasword_req_"+localpart, false)
+}
+
 // RegisterUser within a homeserver and return an authenticatedClient, Fails the test if the hsName is not found.
 func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password string, isAdmin bool) *client.CSAPI {
 	t.Helper()
@@ -112,10 +119,10 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 }
 
 // Restart a deployment.
-func (dep *Deployment) Restart(t *testing.T) error {
+func (d *Deployment) Restart(t *testing.T) error {
 	t.Helper()
-	for _, hsDep := range dep.HS {
-		err := dep.Deployer.Restart(hsDep, dep.Config)
+	for _, hsDep := range d.HS {
+		err := d.Deployer.Restart(hsDep, d.Config)
 		if err != nil {
 			t.Errorf("Deployment.Restart: %s", err)
 			return err
