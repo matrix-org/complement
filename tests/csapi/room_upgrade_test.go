@@ -1,6 +1,7 @@
 package csapi_tests
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
+
+const roomUpgradeVersion = "6"
 
 // sytest: /upgrade creates a new room
 func TestUpgradeRoom(t *testing.T) {
@@ -31,7 +34,7 @@ func TestUpgradeRoom(t *testing.T) {
 		"POST",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"},
 		client.WithJSONBody(t, map[string]string{
-			"new_version": "6",
+			"new_version": roomUpgradeVersion,
 		}),
 	)
 
@@ -51,7 +54,9 @@ func TestUpgradeRoom(t *testing.T) {
 	// Check for and fetch the tombstone event ID
 	tombstoneEventId := ""
 	alice.MustSyncUntil(t, client.SyncReq{Since: tombstoneSinceToken}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-		if ev.Get("type").Str == "m.room.tombstone" && ev.Get("state_key").Exists() {
+		stateKey := ev.Get("state_key")
+
+		if ev.Get("type").Str == "m.room.tombstone" && stateKey.Exists() && stateKey.Type == gjson.String && stateKey.Str == "" {
 			repRoomRes := ev.Get("content.replacement_room")
 
 			if repRoomRes.Exists() {
@@ -69,9 +74,12 @@ func TestUpgradeRoom(t *testing.T) {
 	}))
 
 	// Convenience method to check for state event
-	stateExists := func(evType string) func(gjson.Result) bool {
+	stateExists := func(evType string, withStateKey string) func(gjson.Result) bool {
 		return func(ev gjson.Result) bool {
-			return ev.Get("type").Str == evType && ev.Get("state_key").Exists()
+			stateKey := ev.Get("state_key")
+
+			return ev.Get("type").Str == evType &&
+				stateKey.Exists() && stateKey.Type == gjson.String && stateKey.Str == withStateKey
 		}
 	}
 
@@ -80,9 +88,10 @@ func TestUpgradeRoom(t *testing.T) {
 	// - m.room.history_visibility
 	// - m.room.join_rules
 	alice.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncJoinedTo(alice.UserID, replacementRoom),
-		client.SyncTimelineHas(replacementRoom, stateExists("m.room.create")),
-		client.SyncTimelineHas(replacementRoom, stateExists("m.room.member")),
-		client.SyncTimelineHas(replacementRoom, stateExists("m.room.power_levels")),
+		// TODO: create internal/ function to assert m.room.create is the first event in the room, and use it here.
+		client.SyncTimelineHas(replacementRoom, stateExists("m.room.create", "")),
+		client.SyncTimelineHas(replacementRoom, stateExists("m.room.member", alice.UserID)),
+		client.SyncTimelineHas(replacementRoom, stateExists("m.room.power_levels", "")),
 
 		client.SyncTimelineHas(replacementRoom, func(ev gjson.Result) bool {
 			if ev.Get("type").Str == "m.room.create" && ev.Get("state_key").Exists() {
@@ -96,11 +105,28 @@ func TestUpgradeRoom(t *testing.T) {
 					if predecessor.Get("event_id").Str != tombstoneEventId {
 						t.Errorf("predecessor tombstone event id did not match: got %s, want %s", predecessor.Get("event_id").Str, tombstoneEventId)
 					}
-
-					return true
+				} else {
+					return false
 				}
+
+				roomVersion := ev.Get("content.room_version")
+
+				if roomVersion.Exists() {
+					if roomVersion.Type == gjson.String {
+						if roomVersion.Str != roomUpgradeVersion {
+							t.Error("upgraded room version does not match room version in create event")
+						}
+					} else {
+						t.Error("room version field in create event is not a string")
+					}
+				} else {
+					t.Error("room creation event content does not have room version field")
+				}
+
+				return true
+			} else {
+				return false
 			}
-			return false
 		}),
 	)
 }
@@ -153,7 +179,7 @@ func TestUpgradeMovesAliases(t *testing.T) {
 		"POST",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"},
 		client.WithJSONBody(t, map[string]string{
-			"new_version": "6",
+			"new_version": roomUpgradeVersion,
 		}),
 	)
 
@@ -198,10 +224,7 @@ func TestUpgradeMovesAliases(t *testing.T) {
 	)
 
 	for _, alias := range []string{localRoomAliasMain, localRoomAliasAlt} {
-		// We try to fetch the new alias 10 times, each with 1s backoff
-		for i := 0; i < 10; i++ {
-			resp := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", alias})
-
+		alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", alias}, client.WithRetryUntil(10*time.Second, func(resp *http.Response) bool {
 			if resp.StatusCode == 200 {
 				aliasJson := gjson.ParseBytes(must.ParseJSON(t, resp.Body))
 
@@ -213,18 +236,13 @@ func TestUpgradeMovesAliases(t *testing.T) {
 					if aliasRoomId != replacementRoom {
 						t.Logf("room_id %s did not match replacement room %s", aliasRoomId, replacementRoom)
 					} else {
-						break
+						return true
 					}
 				}
 			}
 
-			if i == 9 {
-				t.Error("room_id did not match replacement room after 10 tries")
-			} else {
-				t.Logf("try %d failed, sleeping 1 second...", i+1)
-				time.Sleep(1 * time.Second)
-			}
-		}
+			return false
+		}))
 	}
 }
 
@@ -248,7 +266,7 @@ func TestUpgradeRoomFailsNoPermission(t *testing.T) {
 		"POST",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"},
 		client.WithJSONBody(t, map[string]string{
-			"new_version": "6",
+			"new_version": roomUpgradeVersion,
 		}),
 	)
 
@@ -272,7 +290,7 @@ func TestUpgradeBogusRoomFails(t *testing.T) {
 		"POST",
 		[]string{"_matrix", "client", "v3", "rooms", "!fail:unknown", "upgrade"},
 		client.WithJSONBody(t, map[string]string{
-			"new_version": "6",
+			"new_version": roomUpgradeVersion,
 		}),
 	)
 

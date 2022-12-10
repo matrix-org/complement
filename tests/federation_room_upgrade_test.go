@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"net/http"
 	"reflect"
 	"testing"
 	"time"
@@ -78,15 +79,9 @@ func TestRoomUpgradeCopiesPushRules(t *testing.T) {
 		)
 
 		user.JoinRoom(t, replacementRoom, []string{"hs1"})
-		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(user.UserID, replacementRoom))
+		user.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(user.UserID, replacementRoom))
 
-		success := false
-
-		// We try to fetch the new alias 10 times, each with 1s backoff
-		for i := 0; i < 10; i++ {
-			time.Sleep(1 * time.Second)
-
-			resp = user.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", ""})
+		user.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", ""}, client.WithRetryUntil(10*time.Second, func(resp *http.Response) bool {
 			pushRuleJson := gjson.ParseBytes(must.ParseJSON(t, resp.Body))
 
 			t.Logf(pushRuleJson.Get("global.rooms").Raw)
@@ -96,21 +91,16 @@ func TestRoomUpgradeCopiesPushRules(t *testing.T) {
 
 			if !replacementPushRule.Exists() {
 				t.Logf("rule for %s did not exist, retrying...", replacementRoom)
-				continue
+				return false
 			}
 
 			if !reflect.DeepEqual(replacementPushRule.Value(), []interface{}{"notify"}) {
 				t.Logf("rule actions did not match pre-upgrade rule, retrying...")
-				continue
+				return false
 			} else {
-				success = true
-				break
+				return true
 			}
-		}
-
-		if !success {
-			t.Fatalf("could not get valid rule response")
-		}
+		}))
 	}
 
 	t.Run("local user gets push rules copied", func(t *testing.T) {
