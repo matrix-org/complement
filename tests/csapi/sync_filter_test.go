@@ -1,7 +1,6 @@
 package csapi_tests
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"testing"
 
@@ -19,31 +18,23 @@ func TestSyncFilter(t *testing.T) {
 	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
 	// sytest: Can create filter
 	t.Run("Can create filter", func(t *testing.T) {
-		reqBody, err := json.Marshal(map[string]interface{}{
+		createFilter(t, authedClient, map[string]interface{}{
 			"room": map[string]interface{}{
 				"timeline": map[string]int{
 					"limit": 10,
 				},
 			},
 		})
-		if err != nil {
-			t.Fatalf("failed to marshal JSON request body: %s", err)
-		}
-		createFilter(t, authedClient, reqBody, "@alice:hs1")
 	})
 	// sytest: Can download filter
 	t.Run("Can download filter", func(t *testing.T) {
-		reqBody, err := json.Marshal(map[string]interface{}{
+		filterID := createFilter(t, authedClient, map[string]interface{}{
 			"room": map[string]interface{}{
 				"timeline": map[string]int{
 					"limit": 10,
 				},
 			},
 		})
-		if err != nil {
-			t.Fatalf("failed to marshal JSON request body: %s", err)
-		}
-		filterID := createFilter(t, authedClient, reqBody, "@alice:hs1")
 		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", "@alice:hs1", "filter", filterID})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -55,9 +46,9 @@ func TestSyncFilter(t *testing.T) {
 	})
 }
 
-func createFilter(t *testing.T, authedClient *client.CSAPI, reqBody []byte, userID string) string {
+func createFilter(t *testing.T, c *client.CSAPI, filterContent map[string]interface{}) string {
 	t.Helper()
-	res := authedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user", userID, "filter"}, client.WithRawBody(reqBody))
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user", c.UserID, "filter"}, client.WithJSONBody(t, filterContent))
 	if res.StatusCode != 200 {
 		t.Fatalf("MatchResponse got status %d want 200", res.StatusCode)
 	}

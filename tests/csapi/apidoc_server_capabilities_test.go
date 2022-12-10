@@ -7,7 +7,6 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/tidwall/gjson"
 )
 
 func TestServerCapabilities(t *testing.T) {
@@ -19,13 +18,13 @@ func TestServerCapabilities(t *testing.T) {
 
 	// sytest: GET /capabilities is present and well formed for registered user
 	data := authedClient.GetCapabilities(t)
-	j := gjson.ParseBytes(data)
-	if !j.Get(`capabilities.m\.room_versions`).Exists() {
-		t.Fatal("expected m.room_versions not found")
-	}
-	if !j.Get(`capabilities.m\.change_password`).Exists() {
-		t.Fatal("expected m.change_password not found")
-	}
+
+	must.MatchJSONBytes(
+		t,
+		data,
+		match.JSONKeyPresent(`capabilities.m\.room_versions`),
+		match.JSONKeyPresent(`capabilities.m\.change_password`),
+	)
 
 	// sytest: GET /v3/capabilities is not public
 	res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
