@@ -141,7 +141,10 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 		query.Add("server_name", serverName)
 	}
 	// join the room
-	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias}, WithQueries(query))
+	res := c.MustDoFunc(
+		t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias},
+		WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
+	)
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
