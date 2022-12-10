@@ -3,4 +3,6 @@ complement
 .idea
 .bin
 .DS_Store
-homerunner
+# Homerunner can end up in various places
+/homerunner
+/cmd/homerunner/homerunner
