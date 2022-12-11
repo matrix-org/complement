@@ -18,6 +18,8 @@ import (
 
 // sytest: POSTed media can be thumbnailed
 func TestLocalPngThumbnail(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -33,6 +35,8 @@ func TestLocalPngThumbnail(t *testing.T) {
 
 // sytest: Remote media can be thumbnailed
 func TestRemotePngThumbnail(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 

@@ -13,6 +13,8 @@ import (
 )
 
 func TestFederationRoomsInvite(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -85,6 +87,8 @@ func TestFederationRoomsInvite(t *testing.T) {
 		})
 
 		t.Run("Invited user has 'is_direct' flag in prev_content after joining", func(t *testing.T) {
+		    t.Parallel()
+
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"name":   "Invites room",

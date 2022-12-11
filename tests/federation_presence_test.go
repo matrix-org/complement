@@ -10,6 +10,8 @@ import (
 )
 
 func TestRemotePresence(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 

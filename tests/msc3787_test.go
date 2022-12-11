@@ -22,16 +22,22 @@ var (
 
 // See TestKnocking
 func TestKnockingInMSC3787Room(t *testing.T) {
+    t.Parallel()
+
 	doTestKnocking(t, msc3787RoomVersion, msc3787JoinRule)
 }
 
 // See TestKnockRoomsInPublicRoomsDirectory
 func TestKnockRoomsInPublicRoomsDirectoryInMSC3787Room(t *testing.T) {
+    t.Parallel()
+
 	doTestKnockRoomsInPublicRoomsDirectory(t, msc3787RoomVersion, msc3787JoinRule)
 }
 
 // See TestCannotSendKnockViaSendKnock
 func TestCannotSendKnockViaSendKnockInMSC3787Room(t *testing.T) {
+    t.Parallel()
+
 	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v1/send_knock", "knock",
 		map[string]interface{}{
 			"preset":       "public_chat",
@@ -42,6 +48,8 @@ func TestCannotSendKnockViaSendKnockInMSC3787Room(t *testing.T) {
 
 // See TestRestrictedRoomsLocalJoin
 func TestRestrictedRoomsLocalJoinInMSC3787Room(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -57,6 +65,8 @@ func TestRestrictedRoomsLocalJoinInMSC3787Room(t *testing.T) {
 
 // See TestRestrictedRoomsRemoteJoin
 func TestRestrictedRoomsRemoteJoinInMSC3787Room(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -72,10 +82,14 @@ func TestRestrictedRoomsRemoteJoinInMSC3787Room(t *testing.T) {
 
 // See TestRestrictedRoomsRemoteJoinLocalUser
 func TestRestrictedRoomsRemoteJoinLocalUserInMSC3787Room(t *testing.T) {
+    t.Parallel()
+
 	doTestRestrictedRoomsRemoteJoinLocalUser(t, msc3787RoomVersion, msc3787JoinRule)
 }
 
 // See TestRestrictedRoomsRemoteJoinFailOver
 func TestRestrictedRoomsRemoteJoinFailOverInMSC3787Room(t *testing.T) {
+    t.Parallel()
+
 	doTestRestrictedRoomsRemoteJoinFailOver(t, msc3787RoomVersion, msc3787JoinRule)
 }

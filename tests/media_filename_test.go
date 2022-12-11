@@ -14,6 +14,8 @@ const asciiFileName = "ascii"
 const unicodeFileName = "\xf0\x9f\x90\x94"
 
 func TestMediaFilenames(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 

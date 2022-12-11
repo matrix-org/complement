@@ -17,6 +17,8 @@ import (
 // We check that delia sees the rejection.
 //
 func TestFederationRejectInvite(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")

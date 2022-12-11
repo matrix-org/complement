@@ -13,6 +13,8 @@ import (
 // received and can be accepted.
 func TestUnbanViaInvite(t *testing.T) {
 	runtime.SkipIf(t, runtime.Synapse) // FIXME: https://github.com/matrix-org/synapse/issues/1563
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 

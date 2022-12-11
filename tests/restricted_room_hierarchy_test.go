@@ -35,6 +35,8 @@ func requestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, exp
 // The user should be unable to see the room in the spaces summary unless they
 // are a member of the space.
 func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -116,6 +118,8 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 // different homeservers, and one might not have the proper information needed to
 // decide if a user is in a room.
 func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 

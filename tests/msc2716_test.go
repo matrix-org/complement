@@ -61,6 +61,8 @@ var createPrivateRoomOpts = map[string]interface{}{
 }
 
 func TestImportHistoricalMessages(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
