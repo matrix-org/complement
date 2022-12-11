@@ -13,6 +13,8 @@ import (
 )
 
 func TestLogout(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 

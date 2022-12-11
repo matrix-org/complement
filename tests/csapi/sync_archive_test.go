@@ -13,6 +13,7 @@ import (
 // sytest: Left rooms appear in the leave section of sync
 func TestSyncLeaveSection(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
+	t.Parallel()
 
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
@@ -74,6 +75,7 @@ func TestSyncLeaveSection(t *testing.T) {
 // sytest: Newly left rooms appear in the leave section of gapped sync
 func TestGappedSyncLeaveSection(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
+	t.Parallel()
 
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
@@ -115,6 +117,7 @@ func TestGappedSyncLeaveSection(t *testing.T) {
 // sytest: Archived rooms only contain history from before the user left
 func TestArchivedRoomsHistory(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
+	t.Parallel()
 
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
@@ -232,6 +235,7 @@ func TestArchivedRoomsHistory(t *testing.T) {
 // sytest: Previously left rooms don't appear in the leave section of sync
 func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
+	t.Parallel()
 
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
@@ -309,6 +313,7 @@ func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 //  restricted (SYN-662)
 func TestLeaveEventVisibility(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
+	t.Parallel()
 
 	// Note: this deviates from the sytest by introducing a second user,
 	//  this user is only meant to keep the room alive,
@@ -395,6 +400,7 @@ func TestLeaveEventVisibility(t *testing.T) {
 //  even if history_visibility is restricted (riot-web/3462)
 func TestLeaveEventInviteRejection(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
+	t.Parallel()
 
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)

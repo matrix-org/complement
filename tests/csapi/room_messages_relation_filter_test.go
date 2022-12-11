@@ -19,6 +19,8 @@ import (
 
 func TestFilterMessagesByRelType(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // flakey
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 

@@ -12,6 +12,8 @@ import (
 )
 
 func TestJson(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -21,49 +23,43 @@ func TestJson(t *testing.T) {
 		},
 	})
 
-	t.Run("Parallel", func(t *testing.T) {
-		// sytest: Invalid JSON integers
-		// sytest: Invalid JSON floats
-		t.Run("Invalid numerical values", func(t *testing.T) {
-			t.Parallel()
+    // sytest: Invalid JSON integers
+    // sytest: Invalid JSON floats
+    t.Run("Invalid numerical values", func(t *testing.T) {
+        testCases := [][]byte{
+            []byte(`{"body": 9007199254740992}`),
+            []byte(`{"body": -9007199254740992}`),
+            []byte(`{"body": 1.1}`),
+        }
 
-			testCases := [][]byte{
-				[]byte(`{"body": 9007199254740992}`),
-				[]byte(`{"body": -9007199254740992}`),
-				[]byte(`{"body": 1.1}`),
-			}
+        for _, testCase := range testCases {
+            res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
 
-			for _, testCase := range testCases {
-				res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
+            must.MatchResponse(t, res, match.HTTPResponse{
+                StatusCode: 400,
+                JSON: []match.JSON{
+                    match.JSONKeyEqual("errcode", "M_BAD_JSON"),
+                },
+            })
+        }
+    })
 
-				must.MatchResponse(t, res, match.HTTPResponse{
-					StatusCode: 400,
-					JSON: []match.JSON{
-						match.JSONKeyEqual("errcode", "M_BAD_JSON"),
-					},
-				})
-			}
-		})
+    // sytest: Invalid JSON special values
+    t.Run("Invalid JSON special values", func(t *testing.T) {
+        testCases := [][]byte{
+            []byte(`{"body": Infinity}`),
+            []byte(`{"body": -Infinity}`),
+            []byte(`{"body": NaN}`),
+        }
 
-		// sytest: Invalid JSON special values
-		t.Run("Invalid JSON special values", func(t *testing.T) {
-			t.Parallel()
+        for _, testCase := range testCases {
+            res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
 
-			testCases := [][]byte{
-				[]byte(`{"body": Infinity}`),
-				[]byte(`{"body": -Infinity}`),
-				[]byte(`{"body": NaN}`),
-			}
-
-			for _, testCase := range testCases {
-				res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
-
-				must.MatchResponse(t, res, match.HTTPResponse{
-					StatusCode: 400,
-				})
-			}
-		})
-	})
+            must.MatchResponse(t, res, match.HTTPResponse{
+                StatusCode: 400,
+            })
+        }
+    })
 }
 
 // small helper function to not bloat the main one
@@ -169,6 +165,7 @@ func getFilters() []map[string]interface{} {
 // sytest: Check creating invalid filters returns 4xx
 func TestFilter(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2067
+	t.Parallel()
 
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
@@ -187,6 +184,8 @@ func TestFilter(t *testing.T) {
 
 // sytest: Event size limits
 func TestEvent(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -196,34 +195,28 @@ func TestEvent(t *testing.T) {
 		},
 	})
 
-	t.Run("Parallel", func(t *testing.T) {
-		t.Run("Large Event", func(t *testing.T) {
-			t.Parallel()
+    t.Run("Large Event", func(t *testing.T) {
+        event := map[string]interface{}{
+            "msgtype": "m.text",
+            "body":    strings.Repeat("and they dont stop coming ", 2700), // 2700 * 26 == 70200
+        }
 
-			event := map[string]interface{}{
-				"msgtype": "m.text",
-				"body":    strings.Repeat("and they dont stop coming ", 2700), // 2700 * 26 == 70200
-			}
+        res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "1"}, client.WithJSONBody(t, event))
 
-			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "1"}, client.WithJSONBody(t, event))
+        must.MatchResponse(t, res, match.HTTPResponse{
+            StatusCode: 413,
+        })
+    })
 
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 413,
-			})
-		})
+    t.Run("Large State Event", func(t *testing.T) {
+        stateEvent := map[string]interface{}{
+            "body": strings.Repeat("Dormammu, I've Come To Bargain.\n", 2200), // 2200 * 32 == 70400
+        }
 
-		t.Run("Large State Event", func(t *testing.T) {
-			t.Parallel()
+        res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "marvel.universe.fate"}, client.WithJSONBody(t, stateEvent))
 
-			stateEvent := map[string]interface{}{
-				"body": strings.Repeat("Dormammu, I've Come To Bargain.\n", 2200), // 2200 * 32 == 70400
-			}
-
-			res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "marvel.universe.fate"}, client.WithJSONBody(t, stateEvent))
-
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 413,
-			})
-		})
-	})
+        must.MatchResponse(t, res, match.HTTPResponse{
+            StatusCode: 413,
+        })
+    })
 }

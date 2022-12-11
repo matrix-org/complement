@@ -16,6 +16,8 @@ import (
 // Check if this homeserver supports Synapse-style admin registration.
 // Not all images support this currently.
 func TestCanRegisterAdmin(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	deployment.RegisterUser(t, "hs1", "admin", "adminpassword", true)
@@ -23,6 +25,8 @@ func TestCanRegisterAdmin(t *testing.T) {
 
 // Test if the implemented /_synapse/admin/v1/send_server_notice behaves as expected
 func TestServerNotices(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	admin := deployment.RegisterUser(t, "hs1", "admin", "adminpassword", true)

@@ -13,6 +13,8 @@ import (
 )
 
 func TestSyncFilter(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	authedClient := deployment.Client(t, "hs1", "@alice:hs1")

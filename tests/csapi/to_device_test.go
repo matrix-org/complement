@@ -14,6 +14,8 @@ import (
 // sytest: Can recv a device message using /sync
 // sytest: Can send a to-device message to two users which both receive it using /sync
 func TestToDeviceMessages(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 

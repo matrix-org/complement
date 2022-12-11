@@ -11,6 +11,8 @@ import (
 
 // sytest: Users cannot kick users from a room they are not in
 func TestCannotKickNonPresentUser(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -35,6 +37,8 @@ func TestCannotKickNonPresentUser(t *testing.T) {
 
 // sytest: Users cannot kick users who have already left a room
 func TestCannotKickLeftUser(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 

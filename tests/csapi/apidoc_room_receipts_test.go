@@ -36,6 +36,8 @@ func syncHasReadReceipt(roomID, userID, eventID string) client.SyncCheckOpt {
 
 // sytest: POST /rooms/:room_id/receipt can create receipts
 func TestRoomReceipts(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -49,6 +51,8 @@ func TestRoomReceipts(t *testing.T) {
 
 // sytest: POST /rooms/:room_id/read_markers can create read marker
 func TestRoomReadMarkers(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")

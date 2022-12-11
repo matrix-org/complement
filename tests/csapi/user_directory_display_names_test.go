@@ -131,6 +131,8 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 }
 
 func TestRoomSpecificUsernameChange(t *testing.T) {
+	t.Parallel()
+
 	alice, bob, eve, cleanup := setupUsers(t)
 	defer cleanup(t)
 
@@ -159,6 +161,8 @@ func TestRoomSpecificUsernameChange(t *testing.T) {
 }
 
 func TestRoomSpecificUsernameAtJoin(t *testing.T) {
+	t.Parallel()
+
 	alice, bob, eve, cleanup := setupUsers(t)
 	defer cleanup(t)
 

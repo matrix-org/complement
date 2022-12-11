@@ -10,6 +10,8 @@ import (
 )
 
 func TestProfileAvatarURL(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")

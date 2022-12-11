@@ -13,6 +13,8 @@ import (
 // but this will actually validate against a present user in the room.
 // sytest: Non-present room members cannot ban others
 func TestNotPresentUserCannotBanOthers(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.MustValidate(b.Blueprint{
 		Name: "abc",
 		Homeservers: []b.Homeserver{

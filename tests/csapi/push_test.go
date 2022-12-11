@@ -15,6 +15,8 @@ import (
 
 // sytest: Getting push rules doesn't corrupt the cache SYN-390
 func TestPushRuleCacheHealth(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -43,6 +45,8 @@ func TestPushRuleCacheHealth(t *testing.T) {
 }
 
 func TestPushSync(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 

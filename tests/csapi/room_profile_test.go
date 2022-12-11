@@ -10,10 +10,14 @@ import (
 )
 
 func TestAvatarUrlUpdate(t *testing.T) {
+	t.Parallel()
+
 	testProfileFieldUpdate(t, "avatar_url")
 }
 
 func TestDisplayNameUpdate(t *testing.T) {
+	t.Parallel()
+
 	testProfileFieldUpdate(t, "displayname")
 }
 

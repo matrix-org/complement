@@ -15,6 +15,8 @@ import (
 )
 
 func TestChangePasswordPushers(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	password1 := "superuser"

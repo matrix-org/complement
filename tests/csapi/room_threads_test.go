@@ -32,6 +32,8 @@ func checkResults(t *testing.T, body []byte, expected []string) {
 // Test the /threads endpoint.
 func TestThreadsEndpoint(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // not supported
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 

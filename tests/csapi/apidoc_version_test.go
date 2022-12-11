@@ -21,6 +21,8 @@ const GlobalVersionRegex = `v[1-9]\d*\.\d+(?:-\S+)?`
 const r0Regex = `r0\.\d+\.\d+`
 
 func TestVersionStructure(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 

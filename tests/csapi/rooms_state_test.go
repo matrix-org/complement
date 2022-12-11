@@ -15,6 +15,8 @@ import (
 )
 
 func TestRoomCreationReportsEventsToMyself(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -23,114 +25,102 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bobpassword", false)
 	roomID := alice.CreateRoom(t, struct{}{})
 
-	t.Run("parallel", func(t *testing.T) {
-		// sytest: Room creation reports m.room.create to myself
-		t.Run("Room creation reports m.room.create to myself", func(t *testing.T) {
-			t.Parallel()
+    // sytest: Room creation reports m.room.create to myself
+    t.Run("Room creation reports m.room.create to myself", func(t *testing.T) {
+        alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+            if ev.Get("type").Str != "m.room.create" {
+                return false
+            }
+            must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
+            must.EqualStr(t, ev.Get("content").Get("creator").Str, userID, "wrong content.creator")
+            return true
+        }))
+    })
 
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.create" {
-					return false
-				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("content").Get("creator").Str, userID, "wrong content.creator")
-				return true
-			}))
-		})
+    // sytest: Room creation reports m.room.member to myself
+    t.Run("Room creation reports m.room.member to myself", func(t *testing.T) {
+        alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+            if ev.Get("type").Str != "m.room.member" {
+                return false
+            }
+            must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
+            must.EqualStr(t, ev.Get("state_key").Str, userID, "wrong state_key")
+            must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "wrong content.membership")
+            return true
+        }))
+    })
 
-		// sytest: Room creation reports m.room.member to myself
-		t.Run("Room creation reports m.room.member to myself", func(t *testing.T) {
-			t.Parallel()
+    // sytest: Setting room topic reports m.room.topic to myself
+    t.Run("Setting room topic reports m.room.topic to myself", func(t *testing.T) {
+        const roomTopic = "Testing topic for the new room"
 
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.member" {
-					return false
-				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("state_key").Str, userID, "wrong state_key")
-				must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "wrong content.membership")
-				return true
-			}))
-		})
+        alice.SendEventSynced(t, roomID, b.Event{
+            Type:     "m.room.topic",
+            StateKey: b.Ptr(""),
+            Content: map[string]interface{}{
+                "topic": roomTopic,
+            },
+        })
 
-		// sytest: Setting room topic reports m.room.topic to myself
-		t.Run("Setting room topic reports m.room.topic to myself", func(t *testing.T) {
-			t.Parallel()
+        alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+            if ev.Get("type").Str != "m.room.topic" {
+                return false
+            }
+            if !ev.Get("state_key").Exists() {
+                return false
+            }
+            must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
+            must.EqualStr(t, ev.Get("content").Get("topic").Str, roomTopic, "wrong content.topic")
+            return true
+        }))
+    })
 
-			const roomTopic = "Testing topic for the new room"
+    // sytest: Setting state twice is idempotent
+    t.Run("Setting state twice is idempotent", func(t *testing.T) {
+        stateEvent := b.Event{
+            Type:     "a.test.state.type",
+            StateKey: b.Ptr(""),
+            Content: map[string]interface{}{
+                "a_key": "a_value",
+            },
+        }
 
-			alice.SendEventSynced(t, roomID, b.Event{
-				Type:     "m.room.topic",
-				StateKey: b.Ptr(""),
-				Content: map[string]interface{}{
-					"topic": roomTopic,
-				},
-			})
+        firstID := alice.SendEventSynced(t, roomID, stateEvent)
+        secondID := alice.SendEventSynced(t, roomID, stateEvent)
 
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.topic" {
-					return false
-				}
-				if !ev.Get("state_key").Exists() {
-					return false
-				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("content").Get("topic").Str, roomTopic, "wrong content.topic")
-				return true
-			}))
-		})
+        if firstID != secondID {
+            t.Fatalf("Both Event IDs from supposedly-idempotent state-setting differ, %s != %s", firstID, secondID)
+        }
+    })
 
-		// sytest: Setting state twice is idempotent
-		t.Run("Setting state twice is idempotent", func(t *testing.T) {
-			t.Parallel()
+    // sytest: Joining room twice is idempotent
+    t.Run("Joining room twice is idempotent", func(t *testing.T) {
+        roomID := bob.CreateRoom(t, map[string]interface{}{
+            "visibility": "public",
+            "preset":     "public_chat",
+        })
 
-			stateEvent := b.Event{
-				Type:     "a.test.state.type",
-				StateKey: b.Ptr(""),
-				Content: map[string]interface{}{
-					"a_key": "a_value",
-				},
-			}
+        alice.JoinRoom(t, roomID, nil)
+        alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
-			firstID := alice.SendEventSynced(t, roomID, stateEvent)
-			secondID := alice.SendEventSynced(t, roomID, stateEvent)
+        firstID := *getEventIdForState(t, alice, roomID, "m.room.member", alice.UserID)
 
-			if firstID != secondID {
-				t.Fatalf("Both Event IDs from supposedly-idempotent state-setting differ, %s != %s", firstID, secondID)
-			}
-		})
+        alice.JoinRoom(t, roomID, nil)
 
-		// sytest: Joining room twice is idempotent
-		t.Run("Joining room twice is idempotent", func(t *testing.T) {
-			t.Parallel()
+        // Unfortunately there is no way to definitively wait
+        // for a 'potentially false second join event' without
+        // also failing the test on timeout, with the current APIs.
+        //
+        // So we take a conservative estimate of a 5-second sleep delay
+        // before we check on the server again.
+        time.Sleep(5 * time.Second)
 
-			roomID := bob.CreateRoom(t, map[string]interface{}{
-				"visibility": "public",
-				"preset":     "public_chat",
-			})
+        secondID := *getEventIdForState(t, alice, roomID, "m.room.member", alice.UserID)
 
-			alice.JoinRoom(t, roomID, nil)
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-
-			firstID := *getEventIdForState(t, alice, roomID, "m.room.member", alice.UserID)
-
-			alice.JoinRoom(t, roomID, nil)
-
-			// Unfortunately there is no way to definitively wait
-			// for a 'potentially false second join event' without
-			// also failing the test on timeout, with the current APIs.
-			//
-			// So we take a conservative estimate of a 5-second sleep delay
-			// before we check on the server again.
-			time.Sleep(5 * time.Second)
-
-			secondID := *getEventIdForState(t, alice, roomID, "m.room.member", alice.UserID)
-
-			if firstID != secondID {
-				t.Fatalf("Both Event IDs from supposedly-idempotent room joins differ, %s != %s", firstID, secondID)
-			}
-		})
-	})
+        if firstID != secondID {
+            t.Fatalf("Both Event IDs from supposedly-idempotent room joins differ, %s != %s", firstID, secondID)
+        }
+    })
 }
 
 func getEventIdForState(t *testing.T, client *client.CSAPI, roomID, evType, stateKey string) *string {

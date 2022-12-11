@@ -19,6 +19,8 @@ import (
 //  1. `/sync`'s `device_lists.changed/left` contain the correct user IDs.
 //  2. `/keys/query` returns the correct information after device list updates.
 func TestDeviceListUpdates(t *testing.T) {
+	t.Parallel()
+
 	localpartIndex := 0
 	// generateLocalpart generates a unique localpart based on the given name.
 	generateLocalpart := func(localpart string) string {

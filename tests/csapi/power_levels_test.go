@@ -16,6 +16,8 @@ import (
 // when that value is equal to the value of authorised user.
 // Regression test for https://github.com/matrix-org/gomatrixserverlib/pull/306
 func TestDemotingUsersViaUsersDefault(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -48,6 +50,8 @@ func TestDemotingUsersViaUsersDefault(t *testing.T) {
 }
 
 func TestPowerLevels(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 

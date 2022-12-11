@@ -20,6 +20,8 @@ func typeToStateKeyMapper(result gjson.Result) interface{} {
 
 // sytest: Can get rooms/{roomId}/members
 func TestGetRoomMembers(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -59,6 +61,8 @@ func TestGetRoomMembers(t *testing.T) {
 // Utilize ?at= to get room members at a point in sync.
 // sytest: Can get rooms/{roomId}/members at a given point
 func TestGetRoomMembersAtPoint(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -118,6 +122,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 
 // sytest: Can filter rooms/{roomId}/members
 func TestGetFilteredRoomMembers(t *testing.T) {
+	t.Parallel()
 
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)

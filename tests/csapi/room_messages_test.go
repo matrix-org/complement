@@ -19,6 +19,8 @@ import (
 // sytest: GET /rooms/:room_id/messages returns a message
 func TestSendAndFetchMessage(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // flakey
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -62,6 +64,8 @@ func TestSendAndFetchMessage(t *testing.T) {
 // With a non-existent room_id, GET /rooms/:room_id/messages returns 403
 // forbidden ("You aren't a member of the room").
 func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
@@ -80,6 +84,8 @@ func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
 // sytest: PUT /rooms/:room_id/send/:event_type/:txn_id sends a message
 // sytest: PUT /rooms/:room_id/send/:event_type/:txn_id deduplicates the same txn id
 func TestSendMessageWithTxn(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -107,6 +113,8 @@ func TestSendMessageWithTxn(t *testing.T) {
 }
 
 func TestRoomMessagesLazyLoading(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.MustValidate(b.Blueprint{
 		Name: "alice_bob_and_charlie",
 		Homeservers: []b.Homeserver{
@@ -196,6 +204,8 @@ func TestRoomMessagesLazyLoading(t *testing.T) {
 //  We should probably see if this should be removed.
 // sytest: GET /rooms/:room_id/messages lazy loads members correctly
 func TestRoomMessagesLazyLoadingLocalUser(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 

@@ -13,6 +13,8 @@ import (
 
 // sytest: PUT /rooms/:room_id/typing/:user_id sets typing notification
 func TestTyping(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -73,6 +75,8 @@ func TestTyping(t *testing.T) {
 
 // sytest: Typing notifications don't leak
 func TestLeakyTyping(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 

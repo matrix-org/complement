@@ -71,6 +71,8 @@ func syncHasThreadedReadReceipt(roomID, userID, eventID, threadID string) client
 // Notification counts and receipts are handled by bob.
 func TestThreadedReceipts(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // not supported
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 

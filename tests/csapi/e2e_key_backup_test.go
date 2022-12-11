@@ -25,6 +25,8 @@ type backupKey struct {
 //    if they have the same values for is_verified, then it will keep the key with a lower first_message_index;
 //    and finally, is is_verified and first_message_index are equal, then it will keep the key with a lower forwarded_count.
 func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
+    t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	userID := "@alice:hs1"
@@ -117,43 +119,40 @@ func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
 		},
 	}
 
-	t.Run("parallel", func(t *testing.T) {
-		for i := range testCases {
-			tc := testCases[i]
-			t.Run(fmt.Sprintf("%+v", tc.input), func(t *testing.T) {
-				t.Parallel()
-				// insert the key that will be tested against
-				alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "room_keys", "keys", roomID, tc.sessionID},
-					client.WithQueries(map[string][]string{"version": {backupVersion}}), client.WithJSONBody(t, map[string]interface{}{
-						"first_message_index": tc.input.firstMessageIndex,
-						"forwarded_count":     tc.input.forwardedCount,
-						"is_verified":         tc.input.isVerified,
-						"session_data":        map[string]interface{}{"a": "b"},
-					}),
-				)
-				// now check that each key in keysThatDontReplace do not replace this key
-				for _, testKey := range tc.keysThatDontReplace {
-					alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "room_keys", "keys", roomID, tc.sessionID},
-						client.WithQueries(map[string][]string{"version": {backupVersion}}), client.WithJSONBody(t, map[string]interface{}{
-							"first_message_index": testKey.firstMessageIndex,
-							"forwarded_count":     testKey.forwardedCount,
-							"is_verified":         testKey.isVerified,
-							"session_data":        map[string]interface{}{"a": "b"},
-						}),
-					)
-					checkResp := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "room_keys", "keys", roomID, tc.sessionID},
-						client.WithQueries(map[string][]string{"version": {backupVersion}}),
-					)
-					must.MatchResponse(t, checkResp, match.HTTPResponse{
-						StatusCode: 200,
-						JSON: []match.JSON{
-							match.JSONKeyEqual("first_message_index", tc.input.firstMessageIndex),
-							match.JSONKeyEqual("forwarded_count", tc.input.forwardedCount),
-							match.JSONKeyEqual("is_verified", tc.input.isVerified),
-						},
-					})
-				}
-			})
-		}
-	})
+    for i := range testCases {
+        tc := testCases[i]
+        t.Run(fmt.Sprintf("%+v", tc.input), func(t *testing.T) {
+            // insert the key that will be tested against
+            alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "room_keys", "keys", roomID, tc.sessionID},
+                client.WithQueries(map[string][]string{"version": {backupVersion}}), client.WithJSONBody(t, map[string]interface{}{
+                    "first_message_index": tc.input.firstMessageIndex,
+                    "forwarded_count":     tc.input.forwardedCount,
+                    "is_verified":         tc.input.isVerified,
+                    "session_data":        map[string]interface{}{"a": "b"},
+                }),
+            )
+            // now check that each key in keysThatDontReplace do not replace this key
+            for _, testKey := range tc.keysThatDontReplace {
+                alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "room_keys", "keys", roomID, tc.sessionID},
+                    client.WithQueries(map[string][]string{"version": {backupVersion}}), client.WithJSONBody(t, map[string]interface{}{
+                        "first_message_index": testKey.firstMessageIndex,
+                        "forwarded_count":     testKey.forwardedCount,
+                        "is_verified":         testKey.isVerified,
+                        "session_data":        map[string]interface{}{"a": "b"},
+                    }),
+                )
+                checkResp := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "room_keys", "keys", roomID, tc.sessionID},
+                    client.WithQueries(map[string][]string{"version": {backupVersion}}),
+                )
+                must.MatchResponse(t, checkResp, match.HTTPResponse{
+                    StatusCode: 200,
+                    JSON: []match.JSON{
+                        match.JSONKeyEqual("first_message_index", tc.input.firstMessageIndex),
+                        match.JSONKeyEqual("forwarded_count", tc.input.forwardedCount),
+                        match.JSONKeyEqual("is_verified", tc.input.isVerified),
+                    },
+                })
+            }
+        })
+    }
 }

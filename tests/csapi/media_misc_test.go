@@ -18,6 +18,7 @@ import (
 // sytest: Can fetch images in room
 func TestRoomImageRoundtrip(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1303
+	t.Parallel()
 
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
@@ -61,6 +62,8 @@ func TestRoomImageRoundtrip(t *testing.T) {
 
 // sytest: Can read configuration endpoint
 func TestMediaConfig(t *testing.T) {
+	t.Parallel()
+
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
