@@ -3180,6 +3180,76 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		must.MatchResponse(t, response, spec)
 	})
+
+	t.Run("Leaving a room immediately after joining does not wait for resync", func(T *testing.T) {
+		t.Skip("Not yet implemented (synapse#12802)")
+		// Prepare to listen for leave events from the HS under test.
+		// We're only expecting one leave event, but give the channel extra capacity
+		// to avoid deadlock if the HS does something silly.
+		leavesChannel := make(chan *gomatrixserverlib.Event, 10)
+		handleTransactions := federation.HandleTransactionRequests(
+			func(e *gomatrixserverlib.Event) {
+				if e.Type() == "m.room.member" {
+					if ok := gjson.ValidBytes(e.Content()); !ok {
+						t.Fatalf("Received event %s with invalid content: %v", e.EventID(), e.Content())
+					}
+					content := gjson.ParseBytes(e.Content())
+					membership := content.Get("membership")
+					if membership.Exists() && membership.Str == "leave" {
+						leavesChannel <- e
+					}
+				}
+			},
+			// we don't care about EDUs
+			func(e gomatrixserverlib.EDU) {},
+		)
+
+		t.Log("Alice begins a partial join to a room")
+		alice := deployment.RegisterUser(t, "hs1", "t42alice", "secret", false)
+		server := createTestServer(
+			t,
+			deployment,
+			handleTransactions,
+		)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy(t)
+
+		t.Log("Alice waits to see her join")
+		aliceNextBatch := alice.MustSyncUntil(
+			t,
+			client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		t.Log("Alice leaves and waits for confirmation")
+		alice.LeaveRoom(t, serverRoom.RoomID)
+		aliceNextBatch = alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+		)
+
+		t.Logf("Alice's leave is recieved by the resident server")
+		select {
+		case <-time.After(1 * time.Second):
+			t.Fatal("Resident server did not receive Alice's leave")
+		case e := <-leavesChannel:
+			if e.Sender() != alice.UserID {
+				t.Errorf("Unexpected leave event %s for %s", e.EventID(), e.Sender())
+			}
+		}
+	})
+
+	// TODO: tests which assert that:
+	//   - Join+Join+Leave+Leave works
+	//   - Join+Leave+Join works
+	//   - Join+Leave+Rejoin works
+	//   - Join + remote kick works
+	//   - Join + remote ban works, then cannot rejoin
 }
 
 // test reception of an event over federation during a resync
