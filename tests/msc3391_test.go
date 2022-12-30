@@ -36,45 +36,40 @@ func TestRemovingAccountData(t *testing.T) {
 
 	// Test deleting global account data.
 	t.Run("Deleting a user's account data via DELETE works", func(t *testing.T) {
-		createAndDeleteAccountData(t, alice, true, nil)
+		createAndDeleteUserAccountData(t, alice, true)
 	})
 	t.Run("Deleting a user's account data via PUT works", func(t *testing.T) {
-		createAndDeleteAccountData(t, alice, false, nil)
+		createAndDeleteUserAccountData(t, alice, false)
 	})
 
 	// Test deleting room account data.
 	t.Run("Deleting a user's room data via DELETE works", func(t *testing.T) {
-		createAndDeleteAccountData(t, alice, true, &roomID)
+		createAndDeleteRoomAccountData(t, alice, true, roomID)
 	})
 	t.Run("Deleting a user's room account data via PUT works", func(t *testing.T) {
-		createAndDeleteAccountData(t, alice, false, &roomID)
+		createAndDeleteRoomAccountData(t, alice, false, roomID)
 	})
 }
 
-func createAndDeleteAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID *string) {
+func createAndDeleteUserAccountData(t *testing.T, c *client.CSAPI, viaDelete bool) {
 	// Create the account data and check that it has been created successfully
-	createAccountData(t, c, roomID)
+	createUserAccountData(t, c)
 
 	// Delete the account data and check that it was deleted successfully
-	deleteAccountData(t, c, viaDelete, roomID)
+	deleteUserAccountData(t, c, viaDelete)
 }
 
-// createAccountData creates some account data for a user or a room, and checks that it was
+func createAndDeleteRoomAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID string) {
+	// Create the account data and check that it has been created successfully
+	createRoomAccountData(t, c, roomID)
+
+	// Delete the account data and check that it was deleted successfully
+	deleteRoomAccountData(t, c, viaDelete, roomID)
+}
+
+// createUserAccountData creates some account data for a user and checks that it was
 // created successfully by both querying the data afterwards, and ensuring it appears down /sync.
-func createAccountData(t *testing.T, c *client.CSAPI, roomID *string) {
-	// a function to check that the content of a user or account data object
-	// matches our test content.
-	checkAccountData := func(r gjson.Result) bool {
-		// Only listen for our test type
-		if r.Get("type").Str != testAccountDataType {
-			return false
-		}
-		content := r.Get("content")
-
-		// Ensure the content of this account data type is as we expect
-		return match.JSONDeepEqual([]byte(content.Raw), testAccountDataContent)
-	}
-
+func createUserAccountData(t *testing.T, c *client.CSAPI) {
 	// Retrieve a sync token for this user
 	_, nextBatchToken := c.MustSync(
 		t,
@@ -82,200 +77,230 @@ func createAccountData(t *testing.T, c *client.CSAPI, roomID *string) {
 	)
 
 	// Set and check the account data
-	if roomID != nil {
-		// Create room account data
-		c.SetRoomAccountData(t, *roomID, testAccountDataType, testAccountDataContent)
+	// Create user account data
+	c.SetGlobalAccountData(t, testAccountDataType, testAccountDataContent)
 
-		// Wait for the account data to appear down /sync
-		c.MustSyncUntil(
-			t,
-			client.SyncReq{
-				Since: nextBatchToken,
+	// Wait for the account data to appear down /sync
+	c.MustSyncUntil(
+		t,
+		client.SyncReq{
+			Since: nextBatchToken,
+		},
+		client.SyncGlobalAccountDataHas(checkAccountDataContent),
+	)
+
+	// Also check the account data content by querying the appropriate endpoint
+	res := c.GetGlobalAccountData(t, testAccountDataType)
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			func(body []byte) error {
+				if !match.JSONDeepEqual(body, testAccountDataContent) {
+					return fmt.Errorf(
+						"Expected %s for room account data content when, got '%s'",
+						testAccountDataType,
+						string(body),
+					)
+				}
+
+				return nil
 			},
-			client.SyncRoomAccountDataHas(*roomID, checkAccountData),
-		)
-
-		// Also check the account data content by querying the appropriate endpoint
-		res := c.GetRoomAccountData(t, *roomID, testAccountDataType)
-		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: []match.JSON{
-				func(body []byte) error {
-					if !match.JSONDeepEqual(body, testAccountDataContent) {
-						return fmt.Errorf(
-							"Expected %s for room account data content when, got '%s'",
-							testAccountDataType,
-							string(body),
-						)
-					}
-
-					return nil
-				},
-			},
-		})
-	} else {
-		// Create user account data
-		c.SetGlobalAccountData(t, testAccountDataType, testAccountDataContent)
-
-		// Wait for the account data to appear down /sync
-		c.MustSyncUntil(
-			t,
-			client.SyncReq{
-				Since: nextBatchToken,
-			},
-			client.SyncGlobalAccountDataHas(checkAccountData),
-		)
-
-		// Also check the account data content by querying the appropriate endpoint
-		res := c.GetGlobalAccountData(t, testAccountDataType)
-		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: []match.JSON{
-				func(body []byte) error {
-					if !match.JSONDeepEqual(body, testAccountDataContent) {
-						return fmt.Errorf(
-							"Expected %s for room account data content when, got '%s'",
-							testAccountDataType,
-							string(body),
-						)
-					}
-
-					return nil
-				},
-			},
-		})
-	}
+		},
+	})
 }
 
-// deleteAccountData removes account data for a user or room.
-//
-// If viaDelete is true, a request is made to the DELETE endpoint for user or
-// room account data. Otherwise, the PUT method is used with an empty content
-// dictionary instead. MSC3391 specifies that a PUT with an empty content body
-// is functionally equivalent to deleting an account data type directly.
-//
-// If roomID is not nil, room account data for the given room ID will be removed.
-// Otherwise, account data from the user will be removed instead.
-func deleteAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID *string) {
-	// a function to check that the content of a user or account data object
-	// matches our test content.
-	checkEmptyAccountData := func(r gjson.Result) bool {
-		// Only listen for our test type
-		if r.Get("type").Str != testAccountDataType {
-			return false
-		}
-		content := r.Get("content")
-
-		// Ensure the content of this account data type is an empty map.
-		// This means that it has been deleted.
-		return match.JSONDeepEqual([]byte(content.Raw), map[string]interface{}{})
-	}
-
-	// a function that checks that a given account data event type is not present
-	checkAccountDataTypeNotPresent := func(r gjson.Result) error {
-		// If we see our test type, return a failure
-		if r.Get("type").Str == testAccountDataType {
-			return fmt.Errorf(
-				"Found unexpected account data type '%s' in sync response",
-				testAccountDataType,
-			)
-		}
-
-		// We did not see our test type.
-		return nil
-	}
-
+// createUserAccountData creates some account data for a room and checks that it was
+// created successfully by both querying the data afterwards, and ensuring it appears down /sync.
+func createRoomAccountData(t *testing.T, c *client.CSAPI, roomID string) {
 	// Retrieve a sync token for this user
 	_, nextBatchToken := c.MustSync(
 		t,
 		client.SyncReq{},
 	)
 
-	if roomID != nil {
-		// Delete room account data
-		if viaDelete {
-			// Delete via the DELETE method
-			c.MustDoFunc(
-				t,
-				"DELETE",
-				[]string{"_matrix", "client", "unstable", "org.matrix.msc3391", "user", c.UserID, "rooms", *roomID, "account_data", testAccountDataType},
-			)
-		} else {
-			// Delete via the PUT method. PUT'ing with an empty dictionary will delete
-			// the account data type for this room.
-			c.SetRoomAccountData(t, *roomID, testAccountDataType, map[string]interface{}{})
-		}
+	// Create room account data
+	c.SetRoomAccountData(t, roomID, testAccountDataType, testAccountDataContent)
 
-		// Check that the content of the room account data for this type
-		// has been set to an empty dictionary.
-		c.MustSyncUntil(
-			t,
-			client.SyncReq{
-				Since: nextBatchToken,
+	// Wait for the account data to appear down /sync
+	c.MustSyncUntil(
+		t,
+		client.SyncReq{
+			Since: nextBatchToken,
+		},
+		client.SyncRoomAccountDataHas(roomID, checkAccountDataContent),
+	)
+
+	// Also check the account data content by querying the appropriate endpoint
+	res := c.GetRoomAccountData(t, roomID, testAccountDataType)
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			func(body []byte) error {
+				if !match.JSONDeepEqual(body, testAccountDataContent) {
+					return fmt.Errorf(
+						"Expected %s for room account data content when, got '%s'",
+						testAccountDataType,
+						string(body),
+					)
+				}
+
+				return nil
 			},
-			client.SyncRoomAccountDataHas(*roomID, checkEmptyAccountData),
-		)
+		},
+	})
+}
 
-		// Also check the account data item is no longer found
-		res := c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "room", *roomID, "account_data", testAccountDataType})
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 404,
-		})
+// deleteUserAccountData removes account data for a user.
+//
+// If viaDelete is true, a request is made to the DELETE endpoint for user
+// account data. Otherwise, the PUT method is used with an empty content
+// dictionary instead. MSC3391 specifies that a PUT with an empty content body
+// is functionally equivalent to deleting an account data type directly.
+func deleteUserAccountData(t *testing.T, c *client.CSAPI, viaDelete bool) {
+	// Retrieve a sync token for this user
+	_, nextBatchToken := c.MustSync(
+		t,
+		client.SyncReq{},
+	)
 
-		// Finally, check that the account data item does not appear at all in an initial sync
-		initialSyncResponse, _ := c.MustSync(
+	// Delete user account data
+	if viaDelete {
+		// Delete via the DELETE method
+		c.MustDoFunc(
 			t,
-			client.SyncReq{},
-		)
-		must.MatchGJSON(
-			t,
-			initialSyncResponse,
-			match.JSONArrayEach(
-				fmt.Sprintf("rooms.join.%s.account_data.events", *roomID),
-				checkAccountDataTypeNotPresent,
-			),
+			"DELETE",
+			[]string{"_matrix", "client", "unstable", "org.matrix.msc3391", "user", c.UserID, "account_data", testAccountDataType},
 		)
 	} else {
-		// Delete user account data
-		if viaDelete {
-			// Delete via the DELETE method
-			c.MustDoFunc(
-				t,
-				"DELETE",
-				[]string{"_matrix", "client", "unstable", "org.matrix.msc3391", "user", c.UserID, "account_data", testAccountDataType},
-			)
-		} else {
-			// Delete via the PUT method. PUT'ing with an empty dictionary will delete
-			// the account data type for this user.
-			c.SetGlobalAccountData(t, testAccountDataType, map[string]interface{}{})
-		}
+		// Delete via the PUT method. PUT'ing with an empty dictionary will delete
+		// the account data type for this user.
+		c.SetGlobalAccountData(t, testAccountDataType, map[string]interface{}{})
+	}
 
-		// Check that the content of the user account data for this type
-		// has been set to an empty dictionary.
-		c.MustSyncUntil(
+	// Check that the content of the user account data for this type
+	// has been set to an empty dictionary.
+	c.MustSyncUntil(
+		t,
+		client.SyncReq{
+			Since: nextBatchToken,
+		},
+		client.SyncGlobalAccountDataHas(checkEmptyAccountData),
+	)
+
+	// Also check the account data item is no longer found
+	res := c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", testAccountDataType})
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: 404,
+	})
+
+	// Finally, check that the account data item does not appear at all in an initial sync
+	initialSyncResponse, _ := c.MustSync(
+		t,
+		client.SyncReq{},
+	)
+	must.MatchGJSON(
+		t,
+		initialSyncResponse,
+		match.JSONArrayEach(
+			"account_data.events",
+			checkAccountDataTypeNotPresent,
+		),
+	)
+}
+
+// deleteRoomAccountData removes account data for a user.
+//
+// If viaDelete is true, a request is made to the DELETE endpoint for room
+// account data. Otherwise, the PUT method is used with an empty content
+// dictionary instead. MSC3391 specifies that a PUT with an empty content body
+// is functionally equivalent to deleting an account data type directly.
+func deleteRoomAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID string) {
+	// Retrieve a sync token for this user
+	_, nextBatchToken := c.MustSync(
+		t,
+		client.SyncReq{},
+	)
+
+	// Delete room account data
+	if viaDelete {
+		// Delete via the DELETE method
+		c.MustDoFunc(
 			t,
-			client.SyncReq{
-				Since: nextBatchToken,
-			},
-			client.SyncGlobalAccountDataHas(checkEmptyAccountData),
+			"DELETE",
+			[]string{"_matrix", "client", "unstable", "org.matrix.msc3391", "user", c.UserID, "rooms", roomID, "account_data", testAccountDataType},
 		)
+	} else {
+		// Delete via the PUT method. PUT'ing with an empty dictionary will delete
+		// the account data type for this room.
+		c.SetRoomAccountData(t, roomID, testAccountDataType, map[string]interface{}{})
+	}
 
-		// Also check the account data item is no longer found
-		res := c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", testAccountDataType})
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 404,
-		})
+	// Check that the content of the room account data for this type
+	// has been set to an empty dictionary.
+	c.MustSyncUntil(
+		t,
+		client.SyncReq{
+			Since: nextBatchToken,
+		},
+		client.SyncRoomAccountDataHas(roomID, checkEmptyAccountData),
+	)
 
-		// Finally, check that the account data item does not appear at all in an initial sync
-		initialSyncResponse, _ := c.MustSync(
-			t,
-			client.SyncReq{},
-		)
-		must.MatchGJSON(
-			t,
-			initialSyncResponse,
-			match.JSONArrayEach(
-				"account_data.events",
-				checkAccountDataTypeNotPresent,
-			),
+	// Also check the account data item is no longer found
+	res := c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "room", roomID, "account_data", testAccountDataType})
+	must.MatchResponse(t, res, match.HTTPResponse{
+		StatusCode: 404,
+	})
+
+	// Finally, check that the account data item does not appear at all in an initial sync
+	initialSyncResponse, _ := c.MustSync(
+		t,
+		client.SyncReq{},
+	)
+	must.MatchGJSON(
+		t,
+		initialSyncResponse,
+		match.JSONArrayEach(
+			fmt.Sprintf("rooms.join.%s.account_data.events", roomID),
+			checkAccountDataTypeNotPresent,
+		),
+	)
+}
+
+// checkAccountDataContent checks that the content of a user or account data object
+// matches our test content.
+func checkAccountDataContent(r gjson.Result) bool {
+	// Only listen for our test type
+	if r.Get("type").Str != testAccountDataType {
+		return false
+	}
+	content := r.Get("content")
+
+	// Ensure the content of this account data type is as we expect
+	return match.JSONDeepEqual([]byte(content.Raw), testAccountDataContent)
+}
+
+// checkEmptyAccountData checks that the content of a user or account data object
+// matches our test content.
+func checkEmptyAccountData(r gjson.Result) bool {
+	// Only listen for our test type
+	if r.Get("type").Str != testAccountDataType {
+		return false
+	}
+	content := r.Get("content")
+
+	// Ensure the content of this account data type is an empty map.
+	// This means that it has been deleted.
+	return match.JSONDeepEqual([]byte(content.Raw), map[string]interface{}{})
+}
+
+// checkAccountDataTypeNotPresent checks that a given account data event type is not present
+func checkAccountDataTypeNotPresent(r gjson.Result) error {
+	// If we see our test type, return a failure
+	if r.Get("type").Str == testAccountDataType {
+		return fmt.Errorf(
+			"Found unexpected account data type '%s' in sync response",
+			testAccountDataType,
 		)
 	}
+
+	// We did not see our test type.
+	return nil
 }
