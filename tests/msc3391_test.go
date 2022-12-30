@@ -34,14 +34,21 @@ func TestRemovingAccountData(t *testing.T) {
 	// And create a room with that user where we can store some room account data
 	roomID := alice.CreateRoom(t, map[string]interface{}{})
 
-	for _, httpMethod := range []string{"PUT", "DELETE"} {
-		t.Run(fmt.Sprintf("Deleting a user's account data via %s works", httpMethod), func(t *testing.T) {
-			createAndDeleteAccountData(t, alice, httpMethod == "DELETE", nil)
-		})
-		t.Run("Deleting a user's room account data via ", func(t *testing.T) {
-			createAndDeleteAccountData(t, alice, httpMethod == "DELETE", &roomID)
-		})
-	}
+	// Test deleting global account data.
+	t.Run("Deleting a user's account data via DELETE works", func(t *testing.T) {
+		createAndDeleteAccountData(t, alice, true, nil)
+	})
+	t.Run("Deleting a user's account data via PUT works", func(t *testing.T) {
+		createAndDeleteAccountData(t, alice, false, nil)
+	})
+
+	// Test deleting room account data.
+	t.Run("Deleting a user's room data via DELETE works", func(t *testing.T) {
+		createAndDeleteAccountData(t, alice, true, &roomID)
+	})
+	t.Run("Deleting a user's room account data via PUT works", func(t *testing.T) {
+		createAndDeleteAccountData(t, alice, false, &roomID)
+	})
 }
 
 func createAndDeleteAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID *string) {
