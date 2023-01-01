@@ -36,35 +36,23 @@ func TestRemovingAccountData(t *testing.T) {
 
 	// Test deleting global account data.
 	t.Run("Deleting a user's account data via DELETE works", func(t *testing.T) {
-		createAndDeleteUserAccountData(t, alice, true)
+		createUserAccountData(t, alice)
+		deleteUserAccountData(t, alice, true)
 	})
 	t.Run("Deleting a user's account data via PUT works", func(t *testing.T) {
-		createAndDeleteUserAccountData(t, alice, false)
+		createUserAccountData(t, alice)
+		deleteUserAccountData(t, alice, false)
 	})
 
 	// Test deleting room account data.
 	t.Run("Deleting a user's room data via DELETE works", func(t *testing.T) {
-		createAndDeleteRoomAccountData(t, alice, true, roomID)
+		createRoomAccountData(t, alice, roomID)
+		deleteRoomAccountData(t, alice, true, roomID)
 	})
 	t.Run("Deleting a user's room account data via PUT works", func(t *testing.T) {
-		createAndDeleteRoomAccountData(t, alice, false, roomID)
+		createRoomAccountData(t, alice, roomID)
+		deleteRoomAccountData(t, alice, false, roomID)
 	})
-}
-
-func createAndDeleteUserAccountData(t *testing.T, c *client.CSAPI, viaDelete bool) {
-	// Create the account data and check that it has been created successfully
-	createUserAccountData(t, c)
-
-	// Delete the account data and check that it was deleted successfully
-	deleteUserAccountData(t, c, viaDelete)
-}
-
-func createAndDeleteRoomAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID string) {
-	// Create the account data and check that it has been created successfully
-	createRoomAccountData(t, c, roomID)
-
-	// Delete the account data and check that it was deleted successfully
-	deleteRoomAccountData(t, c, viaDelete, roomID)
 }
 
 // createUserAccountData creates some account data for a user and checks that it was
@@ -108,7 +96,7 @@ func createUserAccountData(t *testing.T, c *client.CSAPI) {
 	})
 }
 
-// createUserAccountData creates some account data for a room and checks that it was
+// createRoomAccountData creates some account data for a room and checks that it was
 // created successfully by both querying the data afterwards, and ensuring it appears down /sync.
 func createRoomAccountData(t *testing.T, c *client.CSAPI, roomID string) {
 	// Retrieve a sync token for this user
