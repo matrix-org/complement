@@ -84,7 +84,7 @@ func createUserAccountData(t *testing.T, c *client.CSAPI) {
 			func(body []byte) error {
 				if !match.JSONDeepEqual(body, testAccountDataContent) {
 					return fmt.Errorf(
-						"Expected %s for room account data content when, got '%s'",
+						"Expected %s for room account data content, got '%s'",
 						testAccountDataType,
 						string(body),
 					)
@@ -124,7 +124,7 @@ func createRoomAccountData(t *testing.T, c *client.CSAPI, roomID string) {
 			func(body []byte) error {
 				if !match.JSONDeepEqual(body, testAccountDataContent) {
 					return fmt.Errorf(
-						"Expected %s for room account data content when, got '%s'",
+						"Expected %s for room account data content, got '%s'",
 						testAccountDataType,
 						string(body),
 					)
