@@ -1,9 +1,9 @@
-//go:build msc3030
-// +build msc3030
+//go:build !dendrite_blacklist
+// +build !dendrite_blacklist
 
-// This file contains tests for a jump to date API endpoint,
-// currently experimental feature defined by MSC3030, which you can read here:
-// https://github.com/matrix-org/matrix-doc/pull/3030
+// This file contains tests for the `/timestamp_to_event` client and federation API
+// endpoints (also known as *jump to date*). As defined by MSC3030, which you can read
+// here: https://github.com/matrix-org/matrix-doc/pull/3030
 
 package tests
 
@@ -118,7 +118,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
 			timestampString := strconv.FormatInt(timestamp, 10)
-			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc3030", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"ts":  []string{timestampString},
 				"dir": []string{"f"},
 			}))
@@ -146,7 +146,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
 			timestampString := strconv.FormatInt(timestamp, 10)
-			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc3030", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"ts":  []string{timestampString},
 				"dir": []string{"f"},
 			}))
@@ -236,6 +236,16 @@ type eventTime struct {
 	AfterTimestamp  time.Time
 }
 
+var txnCounter int = 0
+
+func getTxnID(prefix string) (txnID string) {
+	txnId := fmt.Sprintf("%s-%d", prefix, txnCounter)
+
+	txnCounter++
+
+	return txnId
+}
+
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
 	t.Helper()
 
@@ -300,19 +310,20 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 
 	givenTimestamp := makeTimestampFromTime(givenTime)
 	timestampString := strconv.FormatInt(givenTimestamp, 10)
-	timestampToEventRes := c.DoFunc(t, "GET", []string{"_matrix", "client", "unstable", "org.matrix.msc3030", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+	timestampToEventRes := c.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		"ts":  []string{timestampString},
 		"dir": []string{direction},
 	}))
 	timestampToEventResBody := client.ParseJSON(t, timestampToEventRes)
 
-	// Only allow a 200 response meaning we found an event or a 404 meaning we didn't.
-	// Other status codes will throw and assumed to be application errors.
+	// Only allow a 200 response meaning we found an event or when no `expectedEventId` is provided, a
+	// 404 meaning we didn't find anything. Other status codes will throw and are assumed to
+	// be application errors.
 	actualEventId := ""
 	if timestampToEventRes.StatusCode == 200 {
 		actualEventId = client.GetJSONFieldStr(t, timestampToEventResBody, "event_id")
-	} else if timestampToEventRes.StatusCode != 404 {
-		t.Fatalf("mustCheckEventisReturnedForTime: /timestamp_to_event request failed with status=%d", timestampToEventRes.StatusCode)
+	} else if timestampToEventRes.StatusCode != 404 || (timestampToEventRes.StatusCode == 404 && expectedEventId != "") {
+		t.Fatalf("mustCheckEventisReturnedForTime: /timestamp_to_event request failed with status=%d body=%s", timestampToEventRes.StatusCode, string(timestampToEventResBody))
 	}
 
 	if actualEventId != expectedEventId {
@@ -324,6 +335,42 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 			decorateStringWithAnsiColor(actualEventId, AnsiColorRed),
 			debugMessageList,
 		)
+	}
+}
+
+func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string, check func(gjson.Result) bool) {
+	t.Helper()
+	start := time.Now()
+	checkCounter := 0
+	for {
+		if time.Since(start) > c.SyncUntilTimeout {
+			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", checkCounter)
+		}
+
+		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			"dir":   []string{"b"},
+			"limit": []string{"100"},
+		}))
+		messsageResBody := client.ParseJSON(t, messagesRes)
+		wantKey := "chunk"
+		keyRes := gjson.GetBytes(messsageResBody, wantKey)
+		if !keyRes.Exists() {
+			t.Fatalf("missing key '%s'", wantKey)
+		}
+		if !keyRes.IsArray() {
+			t.Fatalf("key '%s' is not an array (was %s)", wantKey, keyRes.Type)
+		}
+
+		events := keyRes.Array()
+		for _, ev := range events {
+			if check(ev) {
+				return
+			}
+		}
+
+		checkCounter++
+		// Add a slight delay so we don't hammmer the messages endpoint
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 

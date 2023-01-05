@@ -7,3 +7,4 @@ duplication, we now point to dockerfiles in respective repositories rather than 
 
 - Dendrite: https://github.com/matrix-org/dendrite/blob/v0.8.2/build/scripts/Complement.Dockerfile
 - Synapse: https://github.com/matrix-org/synapse/blob/develop/docker/complement/Dockerfile
+- Conduit: https://gitlab.com/famedly/conduit/-/blob/next/tests/Complement.Dockerfile

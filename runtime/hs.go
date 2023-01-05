@@ -5,6 +5,7 @@ import "testing"
 const (
 	Dendrite = "dendrite"
 	Synapse  = "synapse"
+	Conduit  = "conduit"
 )
 
 var Homeserver string
