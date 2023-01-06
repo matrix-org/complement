@@ -188,6 +188,77 @@ func (c *CSAPI) SetRoomAccountData(t *testing.T, roomID string, eventType string
 	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "rooms", roomID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
+// GetAllPushRules fetches all configured push rules for a user from the homeserver.
+// Push rules are returned as a parsed gjson result
+//
+// Example of printing the IDs of all underride rules of the current user:
+//
+//	allPushRules := c.GetAllPushRules(t)
+//	globalUnderridePushRules := allPushRules.Get("global").Get("underride").Array()
+//
+//	for index, rule := range globalUnderridePushRules {
+//	  fmt.Printf("This rule's ID is: %s\n", rule.Get("rule_id").Str)
+//	}
+//
+// Push rules are returned in the same order received from the homeserver.
+func (c *CSAPI) GetAllPushRules(t *testing.T) gjson.Result {
+	t.Helper()
+
+	// We have to supply an empty string to the end of this path in order to generate a trailing slash.
+	// See https://github.com/matrix-org/matrix-spec/issues/457
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", ""})
+	pushRulesBytes := ParseJSON(t, res)
+	return gjson.ParseBytes(pushRulesBytes)
+}
+
+// GetPushRule queries the contents of a client's push rule by scope, kind and rule ID.
+// A parsed gjson result is returned. Fails the test if the query to server returns a non-2xx status code.
+//
+// Example of checking that a global underride rule contains the expected actions:
+//
+//	containsDisplayNameRule := c.GetPushRule(t, "global", "underride", ".m.rule.contains_display_name")
+//	must.MatchGJSON(
+//	  t,
+//	  containsDisplayNameRule,
+//	  match.JSONKeyEqual("actions", []interface{}{
+//	    "notify",
+//	    map[string]interface{}{"set_tweak": "sound", "value": "default"},
+//	    map[string]interface{}{"set_tweak": "highlight"},
+//	  }),
+//	)
+func (c *CSAPI) GetPushRule(t *testing.T, scope string, kind string, ruleID string) gjson.Result {
+	t.Helper()
+
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID})
+	pushRuleBytes := ParseJSON(t, res)
+	return gjson.ParseBytes(pushRuleBytes)
+}
+
+// SetPushRule creates a new push rule on the user, or modifies an existing one.
+// `before` and `after` parameters can be provided, which if set will map to the
+// `before` and `after` query parameters on the set push rules endpoint:
+// https://spec.matrix.org/v1.5/client-server-api/#get_matrixclientv3pushrules.
+//
+// Example of setting a push rule with ID 'com.example.rule2' that must come after 'com.example.rule1':
+//
+//	c.SetPushRule(t, "global", "underride", "com.example.rule2", map[string]interface{}{
+//	  "actions": []string{"dont_notify"},
+//	}, nil, "com.example.rule1")
+func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID string, body map[string]interface{}, before *string, after *string) *http.Response {
+	t.Helper()
+
+	// If the `before` or `after` arguments have been provided, construct same-named query parameters
+	queryParams := url.Values{}
+	if before != nil {
+		queryParams.Add("before", *before)
+	}
+	if after != nil {
+		queryParams.Add("after", *after)
+	}
+
+	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID}, WithJSONBody(t, body), WithQueries(queryParams))
+}
+
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
