@@ -23,7 +23,7 @@ func TestPushRuleCacheHealth(t *testing.T) {
 	// Set a global push rule
 	alice.SetPushRule(t, "global", "sender", alice.UserID, map[string]interface{}{
 		"actions": []string{"dont_notify"},
-	}, nil, nil)
+	}, "", "")
 
 	// Fetch the rule once and check its contents
 	must.MatchGJSON(t, alice.GetAllPushRules(t), match.JSONKeyEqual("global.sender.0.actions.0", "dont_notify"))

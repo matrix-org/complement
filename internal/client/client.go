@@ -235,8 +235,9 @@ func (c *CSAPI) GetPushRule(t *testing.T, scope string, kind string, ruleID stri
 }
 
 // SetPushRule creates a new push rule on the user, or modifies an existing one.
-// `before` and `after` parameters can be provided, which if set will map to the
-// `before` and `after` query parameters on the set push rules endpoint:
+// If `before` or `after` parameters are not set to an empty string, their values
+// will be set as the `before` and `after` query parameters respectively on the
+// "set push rules" client endpoint:
 // https://spec.matrix.org/v1.5/client-server-api/#get_matrixclientv3pushrules.
 //
 // Example of setting a push rule with ID 'com.example.rule2' that must come after 'com.example.rule1':
@@ -244,16 +245,16 @@ func (c *CSAPI) GetPushRule(t *testing.T, scope string, kind string, ruleID stri
 //	c.SetPushRule(t, "global", "underride", "com.example.rule2", map[string]interface{}{
 //	  "actions": []string{"dont_notify"},
 //	}, nil, "com.example.rule1")
-func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID string, body map[string]interface{}, before *string, after *string) *http.Response {
+func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID string, body map[string]interface{}, before string, after string) *http.Response {
 	t.Helper()
 
 	// If the `before` or `after` arguments have been provided, construct same-named query parameters
 	queryParams := url.Values{}
-	if before != nil {
-		queryParams.Add("before", *before)
+	if before != "" {
+		queryParams.Add("before", before)
 	}
-	if after != nil {
-		queryParams.Add("after", *after)
+	if after != "" {
+		queryParams.Add("after", after)
 	}
 
 	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID}, WithJSONBody(t, body), WithQueries(queryParams))
