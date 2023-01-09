@@ -238,7 +238,7 @@ func (c *CSAPI) GetPushRule(t *testing.T, scope string, kind string, ruleID stri
 // If `before` or `after` parameters are not set to an empty string, their values
 // will be set as the `before` and `after` query parameters respectively on the
 // "set push rules" client endpoint:
-// https://spec.matrix.org/v1.5/client-server-api/#get_matrixclientv3pushrules.
+// https://spec.matrix.org/v1.5/client-server-api/#put_matrixclientv3pushrulesscopekindruleid
 //
 // Example of setting a push rule with ID 'com.example.rule2' that must come after 'com.example.rule1':
 //
