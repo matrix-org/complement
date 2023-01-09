@@ -134,10 +134,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// attempts to sync should now block. Fire off a goroutine to try it.
 		syncResponseChan := make(chan gjson.Result)
-		defer close(syncResponseChan)
 		go func() {
 			response, _ := alice.MustSync(t, client.SyncReq{})
 			syncResponseChan <- response
+			close(syncResponseChan)
 		}()
 
 		// wait for the state_ids request to arrive
@@ -881,7 +881,6 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Fire off a goroutine to send the request, and write the response back to a channel.
 		clientMembersRequestResponseChan := make(chan *http.Response)
-		defer close(clientMembersRequestResponseChan)
 		go func() {
 			queryParams := url.Values{}
 			queryParams.Set("at", syncToken)
@@ -891,6 +890,7 @@ func TestPartialStateJoin(t *testing.T) {
 				[]string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "members"},
 				client.WithQueries(queryParams),
 			)
+			close(clientMembersRequestResponseChan)
 		}()
 
 		// release the federation /state response
@@ -941,10 +941,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// attempts to sync should block. Fire off a goroutine to try it.
 		syncResponseChan := make(chan gjson.Result)
-		defer close(syncResponseChan)
 		go func() {
 			response, _ := alice.MustSync(t, client.SyncReq{})
 			syncResponseChan <- response
+			close(syncResponseChan)
 		}()
 
 		// we expect another state_ids request to arrive.
@@ -1030,10 +1030,10 @@ func TestPartialStateJoin(t *testing.T) {
 		fedStateIdsRequestReceivedWaiter.Waitf(t, 5*time.Second, "Waiting for /state_ids request")
 
 		syncResponseChan := make(chan gjson.Result)
-		defer close(syncResponseChan)
 		go func() {
 			response, _ := charlie.MustSync(t, client.SyncReq{})
 			syncResponseChan <- response
+			close(syncResponseChan)
 		}()
 
 		// the client-side requests should still be waiting
@@ -1660,10 +1660,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// attempts to sync should now block. Fire off a goroutine to try it.
 		jmResponseChan := make(chan *http.Response)
-		defer close(jmResponseChan)
 		go func() {
 			response := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "joined_members"})
 			jmResponseChan <- response
+			close(jmResponseChan)
 		}()
 
 		// wait for the state_ids request to arrive

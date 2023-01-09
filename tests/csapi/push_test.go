@@ -111,6 +111,9 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 	errChan := make(chan error, 1)
 	syncStarted := make(chan struct{})
 	go func() {
+		defer close(errChan)
+		defer close(syncStarted)
+
 		var syncResp gjson.Result
 		syncStarted <- struct{}{}
 		syncResp, nextBatch = csapi.MustSync(t, syncReq)
@@ -142,7 +145,5 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 		t.Errorf("sync failed to return")
 	}
 
-	close(errChan)
-	close(syncStarted)
 	return nextBatch
 }
