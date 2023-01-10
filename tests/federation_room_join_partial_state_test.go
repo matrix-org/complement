@@ -3181,6 +3181,52 @@ func TestPartialStateJoin(t *testing.T) {
 		must.MatchResponse(t, response, spec)
 	})
 
+	t.Run("Leaving during resync are seen after the resync", func(T *testing.T) {
+		// Before testing that leaves during resyncs are seen during resyncs, sanity
+		// check that leaves during resyncs appear after the resync.
+		t.Log("Alice begins a partial join to a room")
+		alice := deployment.RegisterUser(t, "hs1", "t42alice", "secret", false)
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		t.Log("Alice partial-joins her room")
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy(t)
+
+		t.Log("Alice waits to see her join")
+		aliceNextBatch := alice.MustSyncUntil(
+			t,
+			client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		leaveCompleted := NewWaiter()
+		t.Log("Alice starts a leave request")
+		go func() {
+			alice.LeaveRoom(t, serverRoom.RoomID)
+			t.Log("Alice's leave request completed")
+			leaveCompleted.Finish()
+		}()
+
+		// We want Synapse to receive the leave before its resync completes.
+		// HACK: Use a sleep to try and ensure this.
+		time.Sleep(250 * time.Millisecond)
+		t.Log("The resync finishes")
+		psjResult.FinishStateRequest()
+
+		// Now that we've resynced, the leave call should be unblocked.
+		leaveCompleted.Wait(t, 1*time.Second)
+
+		t.Log("Alice waits to see her leave appear down /sync")
+		aliceNextBatch = alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+		)
+	})
+
 	t.Run("Leaving a room immediately after joining does not wait for resync", func(T *testing.T) {
 		t.Skip("Not yet implemented (synapse#12802)")
 		// Prepare to listen for leave events from the HS under test.
@@ -3205,7 +3251,7 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		t.Log("Alice begins a partial join to a room")
-		alice := deployment.RegisterUser(t, "hs1", "t42alice", "secret", false)
+		alice := deployment.RegisterUser(t, "hs1", "t43alice", "secret", false)
 		server := createTestServer(
 			t,
 			deployment,
