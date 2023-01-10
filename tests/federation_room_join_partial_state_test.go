@@ -3181,12 +3181,17 @@ func TestPartialStateJoin(t *testing.T) {
 		must.MatchResponse(t, response, spec)
 	})
 
-	t.Run("Leaving during resync are seen after the resync", func(T *testing.T) {
+	t.Run("Leaving during resync is seen after the resync", func(t *testing.T) {
 		// Before testing that leaves during resyncs are seen during resyncs, sanity
 		// check that leaves during resyncs appear after the resync.
 		t.Log("Alice begins a partial join to a room")
 		alice := deployment.RegisterUser(t, "hs1", "t42alice", "secret", false)
-		server := createTestServer(t, deployment)
+		handleTransactions := federation.HandleTransactionRequests(
+			// Accept all PDUs and EDUs
+			func(e *gomatrixserverlib.Event) {},
+			func(e gomatrixserverlib.EDU) {},
+		)
+		server := createTestServer(t, deployment, handleTransactions)
 		cancel := server.Listen()
 		defer cancel()
 
@@ -3227,7 +3232,7 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 	})
 
-	t.Run("Leaving a room immediately after joining does not wait for resync", func(T *testing.T) {
+	t.Run("Leaving a room immediately after joining does not wait for resync", func(t *testing.T) {
 		t.Skip("Not yet implemented (synapse#12802)")
 		// Prepare to listen for leave events from the HS under test.
 		// We're only expecting one leave event, but give the channel extra capacity
