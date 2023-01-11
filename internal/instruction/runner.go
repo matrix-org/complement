@@ -432,6 +432,11 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 		setIndex := indexFor(fmt.Sprintf("%d", roomIndex), r.roomConcurrency)
 		instrs := sets[setIndex]
 		var queryParams = make(map[string]string)
+
+		// If we're joining the room, we record a sender so that we can ensure
+		// that the HS has fully joined the room before returning.
+		var joiningSender = ""
+
 		if room.Creator != "" {
 			storeRes := map[string]string{
 				fmt.Sprintf("room_%d", roomIndex): ".room_id",
@@ -450,6 +455,8 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 				body:          room.CreateRoom,
 				storeResponse: storeRes,
 			})
+
+			joiningSender = room.Creator
 		} else if room.Ref == "" {
 			log.Printf("HS %s room index %d must either have a Ref or a Creator\n", hs.Name, roomIndex)
 			return nil
@@ -487,6 +494,9 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 							// good candidate to join the room through
 							queryParams["server_name"] = fmt.Sprintf(".room_ref_%s_server_name", room.Ref)
 						}
+
+						// Mark that we want to ensure we've finished joining the room.
+						joiningSender = event.Sender
 					case "leave":
 						path = "/_matrix/client/v3/rooms/$roomId/leave"
 						method = "POST"
@@ -533,6 +543,22 @@ func calculateRoomInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 				queryParams:   queryParams,
 			})
 		}
+
+		if joiningSender != "" {
+			// We specifically call the /members API to ensure that we have fully
+			// joined the room before continuing. Otherwise we'll stop and save the
+			// HS half way through the join
+			instrs = append(instrs, instruction{
+				method:      "GET",
+				path:        "/_matrix/client/v3/rooms/$roomId/members",
+				accessToken: "user_" + joiningSender,
+				substitutions: map[string]string{
+					"$roomId": fmt.Sprintf(".room_%d", roomIndex),
+				},
+				body: map[string]interface{}{},
+			})
+		}
+
 		sets[setIndex] = instrs
 	}
 
