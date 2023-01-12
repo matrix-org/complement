@@ -136,7 +136,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	// if we expect a partial-state join, the request should have a "partial_state" flag
 	queryParams := req.URL.Query()
-	partialState := queryParams.Get("org.matrix.msc3706.partial_state")
+	partialState := queryParams.Get("omit_members")
 	if expectPartialState && partialState != "true" {
 		log.Printf("Not a partial-state request: got %v, want %s",
 			partialState, "true")
