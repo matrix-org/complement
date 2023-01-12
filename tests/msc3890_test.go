@@ -9,7 +9,6 @@ package tests
 
 import (
 	"testing"
-	"time"
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
@@ -24,32 +23,26 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Create a user which we can log in to multiple times
+	aliceLocalpart := "alice"
 	alicePassword := "hunter2"
-	alice := deployment.RegisterUser(t, "hs1", "alice", alicePassword, false)
+	aliceDeviceOne := deployment.RegisterUser(t, "hs1", aliceLocalpart, alicePassword, false)
 
 	// Log in to another device on this user
-	_, secondDeviceAccessToken, secondDeviceID := alice.LoginUser(t, alicePassword)
-	secondDevice := &client.CSAPI{
-		AccessToken:      secondDeviceAccessToken,
-		BaseURL:          deployment.HS["hs1"].BaseURL,
-		Client:           client.NewLoggedClient(t, "hs1", nil),
-		SyncUntilTimeout: 5 * time.Second,
-		Debug:            alice.Debug,
-	}
+	aliceDeviceTwo := deployment.LoginUser(t, "hs1", aliceLocalpart, alicePassword)
 
-	accountDataType := "org.matrix.msc3890.local_notification_settings." + secondDeviceID
+	accountDataType := "org.matrix.msc3890.local_notification_settings." + aliceDeviceTwo.DeviceID
 	accountDataContent := map[string]interface{}{"is_silenced": true}
 
 	// Test deleting global account data.
 	t.Run("Deleting a user's device should delete any local notification settings entries from their account data", func(t *testing.T) {
 		// Retrieve a sync token for this user
-		_, nextBatchToken := alice.MustSync(
+		_, nextBatchToken := aliceDeviceOne.MustSync(
 			t,
 			client.SyncReq{},
 		)
 
 		// Using the first device, create some local notification settings in the user's account data for the second device.
-		alice.SetGlobalAccountData(
+		aliceDeviceOne.SetGlobalAccountData(
 			t,
 			accountDataType,
 			accountDataContent,
@@ -67,7 +60,7 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 		}
 
 		// Check that the content of the user account data for this type has been set successfully
-		alice.MustSyncUntil(
+		aliceDeviceOne.MustSyncUntil(
 			t,
 			client.SyncReq{
 				Since: nextBatchToken,
@@ -76,7 +69,7 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 		)
 		// Also check via the dedicated account data endpoint to ensure the similar check later is not 404'ing for some other reason.
 		// Using `MustDoFunc` ensures that the response code is 2xx.
-		res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", accountDataType})
+		res := aliceDeviceOne.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", aliceDeviceOne.UserID, "account_data", accountDataType})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyEqual("is_silenced", true),
@@ -84,10 +77,10 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 		})
 
 		// Log out the second device
-		secondDevice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
+		aliceDeviceTwo.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
 
 		// Using the first device, check that the local notification setting account data for the deleted device was removed.
-		res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", accountDataType})
+		res = aliceDeviceOne.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", aliceDeviceOne.UserID, "account_data", accountDataType})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 			JSON: []match.JSON{

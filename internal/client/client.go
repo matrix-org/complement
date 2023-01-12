@@ -333,13 +333,13 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 	}
 }
 
-// LoginUser will create a new device on the existing user.
-func (c *CSAPI) LoginUser(t *testing.T, password string) (userID, accessToken, deviceID string) {
+// LoginUser will log in to a homeserver and create a new device on an existing user.
+func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"identifier": map[string]interface{}{
 			"type": "m.id.user",
-			"user": c.UserID,
+			"user": localpart,
 		},
 		"password": password,
 		"type": "m.login.password",
