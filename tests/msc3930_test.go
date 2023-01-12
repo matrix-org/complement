@@ -7,7 +7,7 @@
 // Note that implementation of MSC3381 is not required by the homeserver to
 // pass the tests in this file.
 //
-// You can read either MSC using at the links below.
+// You can read either MSC using the links below.
 // Polls: https://github.com/matrix-org/matrix-doc/pull/3381
 // Push rules for polls: https://github.com/matrix-org/matrix-doc/pull/3930
 
@@ -22,7 +22,7 @@ import (
 	"github.com/matrix-org/complement/internal/must"
 )
 
-const pollResponsePushRuleID = ".org.matrix.msc3930.rule.poll_response"
+const pollResponseRuleID = ".org.matrix.msc3930.rule.poll_response"
 const pollStartOneToOneRuleID = ".org.matrix.msc3930.rule.poll_start_one_to_one"
 const pollEndOneToOneRuleID = ".org.matrix.msc3930.rule.poll_end_one_to_one"
 const pollStartRuleID = ".org.matrix.msc3930.rule.poll_start"
@@ -42,7 +42,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 		// Request each of the push rule IDs defined by MSC3930 and verify their structure.
 
 		// This push rule silences all poll responses.
-		pollResponseRule := alice.GetPushRule(t, "global", "override", pollResponsePushRuleID)
+		pollResponseRule := alice.GetPushRule(t, "global", "override", pollResponseRuleID)
 		must.MatchGJSON(
 			t,
 			pollResponseRule,
