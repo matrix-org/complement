@@ -23,7 +23,7 @@ func TestPushRuleCacheHealth(t *testing.T) {
 	// Set a global push rule
 	alice.SetPushRule(t, "global", "sender", alice.UserID, map[string]interface{}{
 		"actions": []string{"dont_notify"},
-	}, nil, nil)
+	}, "", "")
 
 	// Fetch the rule once and check its contents
 	must.MatchGJSON(t, alice.GetAllPushRules(t), match.JSONKeyEqual("global.sender.0.actions.0", "dont_notify"))
@@ -101,6 +101,9 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 	errChan := make(chan error, 1)
 	syncStarted := make(chan struct{})
 	go func() {
+		defer close(errChan)
+		defer close(syncStarted)
+
 		var syncResp gjson.Result
 		syncStarted <- struct{}{}
 		syncResp, nextBatch = csapi.MustSync(t, syncReq)
@@ -132,7 +135,5 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 		t.Errorf("sync failed to return")
 	}
 
-	close(errChan)
-	close(syncStarted)
 	return nextBatch
 }

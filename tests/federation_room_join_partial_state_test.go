@@ -134,10 +134,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// attempts to sync should now block. Fire off a goroutine to try it.
 		syncResponseChan := make(chan gjson.Result)
-		defer close(syncResponseChan)
 		go func() {
 			response, _ := alice.MustSync(t, client.SyncReq{})
 			syncResponseChan <- response
+			close(syncResponseChan)
 		}()
 
 		// wait for the state_ids request to arrive
@@ -881,7 +881,6 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Fire off a goroutine to send the request, and write the response back to a channel.
 		clientMembersRequestResponseChan := make(chan *http.Response)
-		defer close(clientMembersRequestResponseChan)
 		go func() {
 			queryParams := url.Values{}
 			queryParams.Set("at", syncToken)
@@ -891,6 +890,7 @@ func TestPartialStateJoin(t *testing.T) {
 				[]string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "members"},
 				client.WithQueries(queryParams),
 			)
+			close(clientMembersRequestResponseChan)
 		}()
 
 		// release the federation /state response
@@ -941,10 +941,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// attempts to sync should block. Fire off a goroutine to try it.
 		syncResponseChan := make(chan gjson.Result)
-		defer close(syncResponseChan)
 		go func() {
 			response, _ := alice.MustSync(t, client.SyncReq{})
 			syncResponseChan <- response
+			close(syncResponseChan)
 		}()
 
 		// we expect another state_ids request to arrive.
@@ -1030,10 +1030,10 @@ func TestPartialStateJoin(t *testing.T) {
 		fedStateIdsRequestReceivedWaiter.Waitf(t, 5*time.Second, "Waiting for /state_ids request")
 
 		syncResponseChan := make(chan gjson.Result)
-		defer close(syncResponseChan)
 		go func() {
 			response, _ := charlie.MustSync(t, client.SyncReq{})
 			syncResponseChan <- response
+			close(syncResponseChan)
 		}()
 
 		// the client-side requests should still be waiting
@@ -1660,10 +1660,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// attempts to sync should now block. Fire off a goroutine to try it.
 		jmResponseChan := make(chan *http.Response)
-		defer close(jmResponseChan)
 		go func() {
 			response := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "joined_members"})
 			jmResponseChan <- response
+			close(jmResponseChan)
 		}()
 
 		// wait for the state_ids request to arrive
@@ -3180,6 +3180,127 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		must.MatchResponse(t, response, spec)
 	})
+
+	t.Run("Leaving during resync is seen after the resync", func(t *testing.T) {
+		// Before testing that leaves during resyncs are seen during resyncs, sanity
+		// check that leaves during resyncs appear after the resync.
+		t.Log("Alice begins a partial join to a room")
+		alice := deployment.RegisterUser(t, "hs1", "t42alice", "secret", false)
+		handleTransactions := federation.HandleTransactionRequests(
+			// Accept all PDUs and EDUs
+			func(e *gomatrixserverlib.Event) {},
+			func(e gomatrixserverlib.EDU) {},
+		)
+		server := createTestServer(t, deployment, handleTransactions)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		t.Log("Alice partial-joins her room")
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy(t)
+
+		t.Log("Alice waits to see her join")
+		aliceNextBatch := alice.MustSyncUntil(
+			t,
+			client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		leaveCompleted := NewWaiter()
+		t.Log("Alice starts a leave request")
+		go func() {
+			alice.LeaveRoom(t, serverRoom.RoomID)
+			t.Log("Alice's leave request completed")
+			leaveCompleted.Finish()
+		}()
+
+		// We want Synapse to receive the leave before its resync completes.
+		// HACK: Use a sleep to try and ensure this.
+		time.Sleep(250 * time.Millisecond)
+		t.Log("The resync finishes")
+		psjResult.FinishStateRequest()
+
+		// Now that we've resynced, the leave call should be unblocked.
+		leaveCompleted.Wait(t, 1*time.Second)
+
+		t.Log("Alice waits to see her leave appear down /sync")
+		aliceNextBatch = alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+		)
+	})
+
+	t.Run("Leaving a room immediately after joining does not wait for resync", func(t *testing.T) {
+		t.Skip("Not yet implemented (synapse#12802)")
+		// Prepare to listen for leave events from the HS under test.
+		// We're only expecting one leave event, but give the channel extra capacity
+		// to avoid deadlock if the HS does something silly.
+		leavesChannel := make(chan *gomatrixserverlib.Event, 10)
+		handleTransactions := federation.HandleTransactionRequests(
+			func(e *gomatrixserverlib.Event) {
+				if e.Type() == "m.room.member" {
+					if ok := gjson.ValidBytes(e.Content()); !ok {
+						t.Fatalf("Received event %s with invalid content: %v", e.EventID(), e.Content())
+					}
+					content := gjson.ParseBytes(e.Content())
+					membership := content.Get("membership")
+					if membership.Exists() && membership.Str == "leave" {
+						leavesChannel <- e
+					}
+				}
+			},
+			// we don't care about EDUs
+			func(e gomatrixserverlib.EDU) {},
+		)
+
+		t.Log("Alice begins a partial join to a room")
+		alice := deployment.RegisterUser(t, "hs1", "t43alice", "secret", false)
+		server := createTestServer(
+			t,
+			deployment,
+			handleTransactions,
+		)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy(t)
+
+		t.Log("Alice waits to see her join")
+		aliceNextBatch := alice.MustSyncUntil(
+			t,
+			client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		t.Log("Alice leaves and waits for confirmation")
+		alice.LeaveRoom(t, serverRoom.RoomID)
+		aliceNextBatch = alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+		)
+
+		t.Logf("Alice's leave is recieved by the resident server")
+		select {
+		case <-time.After(1 * time.Second):
+			t.Fatal("Resident server did not receive Alice's leave")
+		case e := <-leavesChannel:
+			if e.Sender() != alice.UserID {
+				t.Errorf("Unexpected leave event %s for %s", e.EventID(), e.Sender())
+			}
+		}
+	})
+
+	// TODO: tests which assert that:
+	//   - Join+Join+Leave+Leave works
+	//   - Join+Leave+Join works
+	//   - Join+Leave+Rejoin works
+	//   - Join + remote kick works
+	//   - Join + remote ban works, then cannot rejoin
 }
 
 // test reception of an event over federation during a resync
