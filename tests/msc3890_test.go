@@ -74,14 +74,27 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 			},
 			client.SyncGlobalAccountDataHas(checkAccountDataContent),
 		)
+		// Also check via the dedicated account data endpoint to ensure the similar check later is not 404'ing for some other reason.
+		// Using `MustDoFunc` ensures that the response code is 2xx.
+		res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", accountDataType})
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("is_silenced", true),
+			},
+		})
 
 		// Log out the second device
 		secondDevice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
 
 		// Using the first device, check that the local notification setting account data for the deleted device was removed.
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", accountDataType})
+		res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", accountDataType})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
+			JSON: []match.JSON{
+				// A 404 can be generated for missing endpoints as well (which would have an errcode of `M_UNRECOGNIZED`).
+				// Ensure we're getting the error we expect.
+				match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
+			},
 		})
 	})
 }
