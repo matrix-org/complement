@@ -57,7 +57,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 			match.JSONKeyEqual("conditions.0.pattern", "org.matrix.msc3381.poll.response"),
 		)
 
-		// This push rule creates a sound when a poll is started in a one-to-one room.
+		// This push rule creates a sound and notifies the user when a poll is start in a one-to-one room.
 		pollStartOneToOneRule := alice.GetPushRule(t, "global", "underride", pollStartOneToOneRuleID)
 		must.MatchGJSON(
 			t,
@@ -80,7 +80,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 			match.JSONKeyEqual("conditions.#(kind==\"event_match\").pattern", "org.matrix.msc3381.poll.start"),
 		)
 
-		// This push rule creates a sound when a poll is ended in a one-to-one room.
+		// This push rule creates a sound and notifies the user when a poll is ended in a one-to-one room.
 		pollEndOneToOneRule := alice.GetPushRule(t, "global", "underride", pollEndOneToOneRuleID)
 		must.MatchGJSON(
 			t,
@@ -103,7 +103,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 			match.JSONKeyEqual("conditions.#(kind==\"event_match\").pattern", "org.matrix.msc3381.poll.end"),
 		)
 
-		// This push rule creates a sound when a poll is started in any room.
+		// This push rule notifies the user when a poll is started in any room.
 		pollStartRule := alice.GetPushRule(t, "global", "underride", pollStartRuleID)
 		must.MatchGJSON(
 			t,
@@ -120,7 +120,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 			match.JSONKeyEqual("conditions.0.pattern", "org.matrix.msc3381.poll.start"),
 		)
 
-		// This push rule creates a sound when a poll is ended in any room.
+		// This push rule notifies the user when a poll is ended in any room.
 		pollEndRule := alice.GetPushRule(t, "global", "underride", pollEndRuleID)
 		must.MatchGJSON(
 			t,
