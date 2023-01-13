@@ -138,7 +138,7 @@ func TestIsDirectFlagFederation(t *testing.T) {
 		t.Fatalf("failed to make invite request: %s", err)
 	}
 	_, since := alice.MustSync(t, client.SyncReq{})
-	_, err = srv.FederationClient(deployment).SendInviteV2(context.Background(), "hs1", inviteReq)
+	_, err = srv.FederationClient(deployment).SendInviteV2(context.Background(), gomatrixserverlib.ServerName(srv.ServerName()), "hs1", inviteReq)
 	if err != nil {
 		t.Fatalf("failed to send invite v2: %s", err)
 	}
