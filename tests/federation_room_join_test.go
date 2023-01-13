@@ -501,8 +501,8 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 		t.Fatalf("send_join failed: %v", err)
 	}
 
-		t.Skip("Server does not support partial_state")
 	if !sendJoinResp.MembersOmitted {
+		t.Skip("Server does not support partial_state")
 	}
 
 	// check the returned state events match those expected
