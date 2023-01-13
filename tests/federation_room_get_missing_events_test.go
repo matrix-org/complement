@@ -261,6 +261,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	fedClient := srv.FederationClient(deployment)
 	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "wut",
+		Origin:        gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:   gomatrixserverlib.ServerName("hs1"),
 		PDUs: []json.RawMessage{
 			sentEvent.JSON(),
@@ -306,6 +307,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 
 	resp, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "t2",
+		Origin:        gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:   gomatrixserverlib.ServerName("hs1"),
 		PDUs: []json.RawMessage{
 			message3.JSON(),
