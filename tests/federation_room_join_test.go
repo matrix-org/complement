@@ -266,8 +266,8 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		federation.HandleKeyRequests(),
 		federation.HandleTransactionRequests(nil, nil),
 	)
-	origin := gomatrixserverlib.ServerName(srv.ServerName())
 	cancel := srv.Listen()
+	origin := gomatrixserverlib.ServerName(srv.ServerName())
 	defer cancel()
 
 	fedClient := srv.FederationClient(deployment)
@@ -468,9 +468,9 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 		// accept incoming presence transactions, etc
 		federation.HandleTransactionRequests(nil, nil),
 	)
-	origin := gomatrixserverlib.ServerName(srv.ServerName())
 	cancel := srv.Listen()
 	defer cancel()
+	origin := gomatrixserverlib.ServerName(srv.ServerName())
 
 	// annoyingly we can't get to the room that alice and bob already share (see https://github.com/matrix-org/complement/issues/254)
 	// so we have to create a new one.

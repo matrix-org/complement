@@ -77,9 +77,9 @@ func TestInboundFederationProfile(t *testing.T) {
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 	)
-	origin := gomatrixserverlib.ServerName(srv.ServerName())
 	cancel := srv.Listen()
 	defer cancel()
+	origin := gomatrixserverlib.ServerName(srv.ServerName())
 
 	// sytest: Non-numeric ports in server names are rejected
 	t.Run("Non-numeric ports in server names are rejected", func(t *testing.T) {
