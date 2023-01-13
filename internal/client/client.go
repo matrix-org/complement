@@ -405,6 +405,30 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 	}
 }
 
+// LoginUser will log in to a homeserver and create a new device on an existing user.
+func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
+	t.Helper()
+	reqBody := map[string]interface{}{
+		"identifier": map[string]interface{}{
+			"type": "m.id.user",
+			"user": localpart,
+		},
+		"password": password,
+		"type": "m.login.password",
+	}
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, WithJSONBody(t, reqBody))
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+
+	userID = gjson.GetBytes(body, "user_id").Str
+	accessToken = gjson.GetBytes(body, "access_token").Str
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	return userID, accessToken, deviceID
+}
+
 //RegisterUser will register the user with given parameters and
 // return user ID & access token, and fail the test on network error
 func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {

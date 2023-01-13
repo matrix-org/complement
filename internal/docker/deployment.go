@@ -118,6 +118,30 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 	return client
 }
 
+// LoginUser within a homeserver and return an authenticatedClient. Fails the test if the hsName is not found.
+// Note that this will not change the access token of the client that is returned by `deployment.Client`.
+func (d *Deployment) LoginUser(t *testing.T, hsName, localpart, password string) *client.CSAPI {
+	t.Helper()
+	dep, ok := d.HS[hsName]
+	if !ok {
+		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)
+		return nil
+	}
+	client := &client.CSAPI{
+		BaseURL:          dep.BaseURL,
+		Client:           client.NewLoggedClient(t, hsName, nil),
+		SyncUntilTimeout: 5 * time.Second,
+		Debug:            d.Deployer.debugLogging,
+	}
+	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	userID, accessToken, deviceID := client.LoginUser(t, localpart, password)
+
+	client.UserID = userID
+	client.AccessToken = accessToken
+	client.DeviceID = deviceID
+	return client
+}
+
 // Restart a deployment.
 func (d *Deployment) Restart(t *testing.T) error {
 	t.Helper()
