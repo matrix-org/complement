@@ -18,7 +18,7 @@ import (
 func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
 	// Check federation signature
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), nil, s.keyRing,
 	)
 	if fedReq == nil {
 		w.WriteHeader(errResp.Code)
@@ -125,7 +125,7 @@ func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp gomatri
 // the current server is returned to the joining server.
 func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request, expectPartialState bool, omitServersInRoom bool) {
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), nil, s.keyRing,
 	)
 	if fedReq == nil {
 		w.WriteHeader(errResp.Code)
@@ -238,7 +238,7 @@ func HandleInviteRequests(inviteCallback func(*gomatrixserverlib.Event)) func(*S
 		// https://matrix.org/docs/spec/server_server/r0.1.4#put-matrix-federation-v2-invite-roomid-eventid
 		s.mux.Handle("/_matrix/federation/v2/invite/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), nil, s.keyRing,
 			)
 			if fedReq == nil {
 				w.WriteHeader(errResp.Code)
@@ -491,7 +491,7 @@ func HandleTransactionRequests(pduCallback func(*gomatrixserverlib.Event), eduCa
 
 			// Check federation signature
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), srv.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), nil, srv.keyRing,
 			)
 			if fedReq == nil {
 				log.Printf(
