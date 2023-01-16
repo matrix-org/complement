@@ -119,8 +119,8 @@ func TestPartialStateJoin(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// test that a regular /sync request made during a partial-state /send_join
-	// request blocks until the state is correctly synced.
-	t.Run("SyncBlocksDuringPartialStateJoin", func(t *testing.T) {
+	// request does not return the room until the state is correctly synced.
+	t.Run("RegularSyncDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.RegisterUser(t, "hs1", "t1alice", "secret", false)
 
 		server := createTestServer(t, deployment)
@@ -132,38 +132,26 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice has now joined the room, and the server is syncing the state in the background.
 
-		// attempts to sync should now block. Fire off a goroutine to try it.
-		syncResponseChan := make(chan gjson.Result)
-		go func() {
-			response, _ := alice.MustSync(t, client.SyncReq{})
-			syncResponseChan <- response
-			close(syncResponseChan)
-		}()
+		// Regular sync shouldn't include the room yet
+		response, nextBatch := alice.MustSync(t, client.SyncReq{})
+
+		syncJoinedRoomPath := "rooms.join." + client.GjsonEscape(serverRoom.RoomID)
+		if response.Get(syncJoinedRoomPath).Exists() {
+			t.Fatal("Regular sync shouldn't include the joined room until resync is over")
+		}
 
 		// wait for the state_ids request to arrive
 		psjResult.AwaitStateIdsRequest(t)
-
-		// the client-side requests should still be waiting
-		select {
-		case <-syncResponseChan:
-			t.Fatalf("Sync completed before state resync complete")
-		default:
-		}
 
 		// release the federation /state response
 		psjResult.FinishStateRequest()
 
 		// the /sync request should now complete, with the new room
-		var syncRes gjson.Result
-		select {
-		case <-time.After(1 * time.Second):
-			t.Fatalf("/sync request request did not complete")
-		case syncRes = <-syncResponseChan:
-		}
+		response, _ = alice.MustSync(t, client.SyncReq{Since: nextBatch})
 
-		roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID))
+		roomRes := response.Get(syncJoinedRoomPath)
 		if !roomRes.Exists() {
-			t.Fatalf("/sync completed without join to new room\n")
+			t.Fatal("Regular sync should now include the joined room since resync is over")
 		}
 
 		// check that the state includes both charlie and derek.
@@ -933,44 +921,35 @@ func TestPartialStateJoin(t *testing.T) {
 		// wait for the state_ids request to arrive
 		psjResult.AwaitStateIdsRequest(t)
 
+		// Regular sync shouldn't include the room yet
+		response, nextBatch := alice.MustSync(t, client.SyncReq{})
+
+		syncJoinedRoomPath := "rooms.join." + client.GjsonEscape(serverRoom.RoomID)
+		if response.Get(syncJoinedRoomPath).Exists() {
+			t.Fatal("Regular sync shouldn't include the joined room until resync is over")
+		}
+
 		// restart the homeserver
 		err := deployment.Restart(t)
 		if err != nil {
 			t.Errorf("Failed to restart homeserver: %s", err)
 		}
 
-		// attempts to sync should block. Fire off a goroutine to try it.
-		syncResponseChan := make(chan gjson.Result)
-		go func() {
-			response, _ := alice.MustSync(t, client.SyncReq{})
-			syncResponseChan <- response
-			close(syncResponseChan)
-		}()
+		// Regular sync still shouldn't include the room
+		response, nextBatch = alice.MustSync(t, client.SyncReq{Since: nextBatch})
 
-		// we expect another state_ids request to arrive.
-		// we'd do another AwaitStateIdsRequest, except it's single-use.
-
-		// the client-side requests should still be waiting
-		select {
-		case <-syncResponseChan:
-			t.Fatalf("Sync completed before state resync complete")
-		default:
+		if response.Get(syncJoinedRoomPath).Exists() {
+			t.Fatal("Regular sync shouldn't include the joined room until resync is over")
 		}
 
 		// release the federation /state response
 		psjResult.FinishStateRequest()
 
 		// the /sync request should now complete, with the new room
-		var syncRes gjson.Result
-		select {
-		case <-time.After(1 * time.Second):
-			t.Fatalf("/sync request request did not complete")
-		case syncRes = <-syncResponseChan:
-		}
+		response, _ = alice.MustSync(t, client.SyncReq{Since: nextBatch})
 
-		roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(serverRoom.RoomID))
-		if !roomRes.Exists() {
-			t.Fatalf("/sync completed without join to new room\n")
+		if !response.Get(syncJoinedRoomPath).Exists() {
+			t.Fatal("Regular sync should now include the joined room since resync is over")
 		}
 	})
 
@@ -1029,34 +1008,21 @@ func TestPartialStateJoin(t *testing.T) {
 		// wait until hs2 starts syncing state
 		fedStateIdsRequestReceivedWaiter.Waitf(t, 5*time.Second, "Waiting for /state_ids request")
 
-		syncResponseChan := make(chan gjson.Result)
-		go func() {
-			response, _ := charlie.MustSync(t, client.SyncReq{})
-			syncResponseChan <- response
-			close(syncResponseChan)
-		}()
+		response, nextBatch := charlie.MustSync(t, client.SyncReq{})
 
-		// the client-side requests should still be waiting
-		select {
-		case <-syncResponseChan:
-			t.Fatalf("hs2 sync completed before state resync complete")
-		default:
+		// the client-side requests shouldn't report the join yet
+		syncJoinedRoomPath := "rooms.join." + client.GjsonEscape(roomID)
+		if response.Get(syncJoinedRoomPath).Exists() {
+			t.Fatal("Regular sync shouldn't include the joined room yet")
 		}
 
 		// reply to hs2 with a bogus /state_ids response
 		fedStateIdsSendResponseWaiter.Finish()
 
-		// charlie's /sync request should now complete, with the new room
-		var syncRes gjson.Result
-		select {
-		case <-time.After(1 * time.Second):
-			t.Fatalf("hs2 /sync request request did not complete")
-		case syncRes = <-syncResponseChan:
-		}
+		response, _ = charlie.MustSync(t, client.SyncReq{Since: nextBatch})
 
-		roomRes := syncRes.Get("rooms.join." + client.GjsonEscape(roomID))
-		if !roomRes.Exists() {
-			t.Fatalf("hs2 /sync completed without join to new room\n")
+		if !response.Get(syncJoinedRoomPath).Exists() {
+			t.Fatal("hs2 /sync completed without join to new room")
 		}
 	})
 
@@ -1658,7 +1624,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice has now joined the room, and the server is syncing the state in the background.
 
-		// attempts to sync should now block. Fire off a goroutine to try it.
+		// attempts to joined_members should now block. Fire off a goroutine to try it.
 		jmResponseChan := make(chan *http.Response)
 		go func() {
 			response := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "joined_members"})
