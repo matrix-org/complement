@@ -118,9 +118,9 @@ func TestPartialStateJoin(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	// test that a regular /sync request made during a partial-state /send_join
+	// test that a non lazy /sync request made during a partial-state /send_join
 	// request does not return the room until the state is correctly synced.
-	t.Run("RegularSyncDuringPartialStateJoin", func(t *testing.T) {
+	t.Run("NonLazySyncDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.RegisterUser(t, "hs1", "t1alice", "secret", false)
 
 		server := createTestServer(t, deployment)
@@ -132,12 +132,12 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice has now joined the room, and the server is syncing the state in the background.
 
-		// Regular sync shouldn't include the room yet
+		// sync shouldn't include the room yet
 		response, nextBatch := alice.MustSync(t, client.SyncReq{})
 
 		syncJoinedRoomPath := "rooms.join." + client.GjsonEscape(serverRoom.RoomID)
 		if response.Get(syncJoinedRoomPath).Exists() {
-			t.Fatal("Regular sync shouldn't include the joined room until resync is over")
+			t.Fatal("Sync shouldn't include the joined room until resync is over")
 		}
 
 		// wait for the state_ids request to arrive
@@ -151,7 +151,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		roomRes := response.Get(syncJoinedRoomPath)
 		if !roomRes.Exists() {
-			t.Fatal("Regular sync should now include the joined room since resync is over")
+			t.Fatal("Sync should now include the joined room since resync is over")
 		}
 
 		// check that the state includes both charlie and derek.
@@ -905,7 +905,7 @@ func TestPartialStateJoin(t *testing.T) {
 	})
 
 	// test that a partial-state join continues syncing state after a restart
-	// the same as SyncBlocksDuringPartialStateJoin, with a restart in the middle
+	// the same as NonLazySyncDuringPartialStateJoin, with a restart in the middle
 	t.Run("PartialStateJoinContinuesAfterRestart", func(t *testing.T) {
 		alice := deployment.RegisterUser(t, "hs1", "t12alice", "secret", false)
 
@@ -921,12 +921,12 @@ func TestPartialStateJoin(t *testing.T) {
 		// wait for the state_ids request to arrive
 		psjResult.AwaitStateIdsRequest(t)
 
-		// Regular sync shouldn't include the room yet
+		// Non lazy sync shouldn't include the room yet
 		response, nextBatch := alice.MustSync(t, client.SyncReq{})
 
 		syncJoinedRoomPath := "rooms.join." + client.GjsonEscape(serverRoom.RoomID)
 		if response.Get(syncJoinedRoomPath).Exists() {
-			t.Fatal("Regular sync shouldn't include the joined room until resync is over")
+			t.Fatal("Sync shouldn't include the joined room until resync is over")
 		}
 
 		// restart the homeserver
@@ -935,11 +935,11 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Errorf("Failed to restart homeserver: %s", err)
 		}
 
-		// Regular sync still shouldn't include the room
+		// Sync still shouldn't include the room
 		response, nextBatch = alice.MustSync(t, client.SyncReq{Since: nextBatch})
 
 		if response.Get(syncJoinedRoomPath).Exists() {
-			t.Fatal("Regular sync shouldn't include the joined room until resync is over")
+			t.Fatal("Sync shouldn't include the joined room until resync is over")
 		}
 
 		// release the federation /state response
@@ -949,7 +949,7 @@ func TestPartialStateJoin(t *testing.T) {
 		response, _ = alice.MustSync(t, client.SyncReq{Since: nextBatch})
 
 		if !response.Get(syncJoinedRoomPath).Exists() {
-			t.Fatal("Regular sync should now include the joined room since resync is over")
+			t.Fatal("Sync should now include the joined room since resync is over")
 		}
 	})
 
@@ -1013,7 +1013,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// the client-side requests shouldn't report the join yet
 		syncJoinedRoomPath := "rooms.join." + client.GjsonEscape(roomID)
 		if response.Get(syncJoinedRoomPath).Exists() {
-			t.Fatal("Regular sync shouldn't include the joined room yet")
+			t.Fatal("Sync shouldn't include the joined room yet")
 		}
 
 		// reply to hs2 with a bogus /state_ids response
@@ -1049,7 +1049,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Logf("Alice successfully synced")
 
 		// wait for partial state to finish syncing,
-		// by waiting for the room to show up in a regular /sync.
+		// by waiting for the room to show up in /sync.
 		psjResult.AwaitStateIdsRequest(t)
 		psjResult.FinishStateRequest()
 		alice.MustSyncUntil(t,
@@ -1074,7 +1074,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
 		}
 
-		// wait for the events to come down a regular /sync.
+		// wait for the events to come down a /sync.
 		alice.MustSyncUntil(t,
 			client.SyncReq{},
 			client.SyncTimelineHasEventID(serverRoom.RoomID, lastEventID),
