@@ -3295,6 +3295,61 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 	})
 
+	t.Run("Room stats are correctly updated once state re-sync completes", func(t *testing.T) {
+		deployment := Deploy(t, b.BlueprintAlice)
+		defer deployment.Destroy(t)
+
+		// create a user with admin powers as we will need this power to make the remote room visible in the
+		// local room list
+		terry := deployment.RegisterUser(t, "hs1", "terry", "pass", true)
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, terry.GetDefaultRoomVersion(t))
+
+		// start a partial state join
+		psjResult := beginPartialStateJoin(t, server, serverRoom, terry)
+		defer psjResult.Destroy(t)
+
+		// make the remote room visible in the local room list
+		reqBody := client.WithJSONBody(t, map[string]interface{}{
+			"visibility": "public",
+		})
+		terry.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "directory", "list", "room", serverRoom.RoomID}, reqBody)
+
+		// sanity check - before the state has completed syncing state we would expect only one user
+		// to show up in the room list
+		res := terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"})
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatalf("something broke: %v", err)
+		}
+		numJoinedMembers := gjson.GetBytes(body, "chunk.0.num_joined_members")
+		if numJoinedMembers.Int() != 1 {
+			t.Fatalf("Expected 1 users, returned %s", numJoinedMembers)
+		}
+
+		// finish syncing the state
+		psjResult.FinishStateRequest()
+		terry.MustSyncUntil(t,
+			client.SyncReq{},
+			client.SyncJoinedTo(terry.UserID, psjResult.ServerRoom.RoomID),
+		)
+
+		// check the number of joined users, it should now be 3
+		res2 := terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"})
+		body2, err2 := ioutil.ReadAll(res2.Body)
+		if err2 != nil {
+			t.Fatalf("something broke: %v", err2)
+		}
+		numJoinedMembers2 := gjson.GetBytes(body2, "chunk.0.num_joined_members")
+		if numJoinedMembers2.Int() != 3 {
+			t.Fatalf("Expected 3 users, returned %s", numJoinedMembers2)
+		}
+
+	})
+
 	// TODO: tests which assert that:
 	//   - Join+Join+Leave+Leave works
 	//   - Join+Leave+Join works
