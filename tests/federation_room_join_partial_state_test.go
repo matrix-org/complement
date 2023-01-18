@@ -3295,6 +3295,85 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 	})
 
+	t.Run("User directory is correctly updated once state re-sync completes", func(t *testing.T) {
+		rocky := deployment.RegisterUser(t, "hs1", "rocky", "pass", false)
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, rocky.GetDefaultRoomVersion(t))
+
+		// start a partial state join
+		psjResult := beginPartialStateJoin(t, server, serverRoom, rocky)
+		defer psjResult.Destroy(t)
+
+		// sanity check - before the state has completed syncing state we would expect rocky to show up
+		reqBody := client.WithJSONBody(t, map[string]interface{}{
+			"search_term": rocky.UserID,
+		})
+		res := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("results.0.user_id", "@rocky:hs1"),
+			}})
+
+		// ...but not charlie's
+		reqBody2 := client.WithJSONBody(t, map[string]interface{}{
+			"search_term": "charlie",
+		})
+		res2 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody2)
+		must.MatchResponse(t, res2, match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("results", [0]string{}),
+			}})
+
+		// finish syncing the state
+		psjResult.FinishStateRequest()
+		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, rocky)
+
+		// the rooms stats are updated by a background job in Synapse which is not guaranteed to have completed by the time
+		// the state sync has completed. We check for up to 3 seconds that the job has completed, after which Charlie
+		// the job should have finished and Charlie and Derek should be visible in the user directory
+		time.Sleep(time.Second * 3)
+
+		reqBody3 := client.WithJSONBody(t, map[string]interface{}{
+			"search_term": "charlie",
+		})
+		charlieFullId := "@charlie:" + server.ServerName()
+		res3 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody3)
+		must.MatchResponse(t, res3, match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("results.0.user_id", charlieFullId),
+			}})
+
+		reqBody4 := client.WithJSONBody(t, map[string]interface{}{
+			"search_term": "derek",
+		})
+		derekFullId := "@derek:" + server.ServerName()
+		res4 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody4)
+		must.MatchResponse(t, res4, match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("results.0.user_id", derekFullId),
+			}})
+
+		//rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody3,
+		//	client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+		//		body, err := ioutil.ReadAll(res.Body)
+		//		if err != nil {
+		//			t.Fatalf("something broke: %v", err)
+		//		}
+		//		user_id := gjson.GetBytes(body, "results.user_id")
+		//		if user_id.Str == "@charlie" {
+		//			return true
+		//		}
+		//		return false
+		//	}))
+	})
+
 	// TODO: tests which assert that:
 	//   - Join+Join+Leave+Leave works
 	//   - Join+Leave+Join works
