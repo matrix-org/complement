@@ -57,7 +57,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 			match.JSONKeyEqual("conditions.0.pattern", "org.matrix.msc3381.poll.response"),
 		)
 
-		// This push rule creates a sound and notifies the user when a poll is start in a one-to-one room.
+		// This push rule creates a sound and notifies the user when a poll is started in a one-to-one room.
 		pollStartOneToOneRule := alice.GetPushRule(t, "global", "underride", pollStartOneToOneRuleID)
 		must.MatchGJSON(
 			t,
