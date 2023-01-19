@@ -3344,7 +3344,7 @@ func TestPartialStateJoin(t *testing.T) {
 				}
 				return false
 			}))
-	})
+		})
 
 	// TODO: tests which assert that:
 	//   - Join+Join+Leave+Leave works
