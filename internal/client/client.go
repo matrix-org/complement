@@ -260,9 +260,9 @@ func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID stri
 	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID}, WithJSONBody(t, body), WithQueries(queryParams))
 }
 
-// SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
+// SendEventUnsynced sends `e` into the room.
 // Returns the event ID of the sent event.
-func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
+func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
 	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
@@ -272,6 +272,14 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	res := c.MustDoFunc(t, "PUT", paths, WithJSONBody(t, e.Content))
 	body := ParseJSON(t, res)
 	eventID := GetJSONFieldStr(t, body, "event_id")
+	return eventID
+}
+
+// SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
+// Returns the event ID of the sent event.
+func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
+	t.Helper()
+	eventID := c.SendEventUnsynced(t, roomID, e)
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
 	c.MustSyncUntil(t, SyncReq{}, SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID
@@ -414,7 +422,7 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, acc
 			"user": localpart,
 		},
 		"password": password,
-		"type": "m.login.password",
+		"type":     "m.login.password",
 	}
 	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, WithJSONBody(t, reqBody))
 
