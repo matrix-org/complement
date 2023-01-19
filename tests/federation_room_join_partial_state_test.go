@@ -229,21 +229,26 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.FinishStateRequest()
 		awaitPartialStateJoinCompletion(t, serverRoom, alice)
 
-		t.Log("8. Have Alice eager-sync. She should see the remote room, including" +
-			"Charlie and Derek.")
-		remoteMembershipFor := func(localpart string) func(result gjson.Result) bool {
-			return func(result gjson.Result) bool {
-				return result.Get("type").Str == "m.room.member" && result.Get("state_key").Str == server.UserID(localpart)
-			}
+		t.Log("8. Have Alice eager-sync. She should see the remote room.")
+		response, eagerSyncToken = alice.MustSync(t, getEagerSyncReq())
+
+		roomRes := response.Get(syncJoinedRoomPath)
+		if !roomRes.Exists() {
+			t.Fatal("Sync should now include the joined room since resync is over")
 		}
 
-		_ = alice.MustSyncUntil(
-			t,
-			getEagerSyncReq(),
-			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
-			client.SyncStateHas(serverRoom.RoomID, remoteMembershipFor("charlie")),
-			client.SyncStateHas(serverRoom.RoomID, remoteMembershipFor("derek")),
+		// check that the state includes both charlie and derek.
+		matcher := match.JSONCheckOffAllowUnwanted("state.events",
+			[]interface{}{
+				"m.room.member|" + server.UserID("charlie"),
+				"m.room.member|" + server.UserID("derek"),
+			}, func(result gjson.Result) interface{} {
+				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
+			}, nil,
 		)
+		if err := matcher([]byte(roomRes.Raw)); err != nil {
+			t.Errorf("Did not find expected state events in /sync response: %s", err)
+		}
 	}
 
 	t.Run("EagerInitialSyncDuringPartialStateJoin", func(t *testing.T) {
