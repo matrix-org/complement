@@ -3311,17 +3311,22 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, rocky)
 		defer psjResult.Destroy(t)
 
-		// sanity check - before the state has completed syncing state we would expect rocky to show up
+		// sanity check - before the homeserver has completed syncing state we would expect rocky to show up
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"search_term": rocky.UserID,
 		})
-		time.Sleep(time.Second * 1)
-		res := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody)
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("results.0.user_id", "@rocky:hs1"),
-			}})
+		rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody,
+			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+				body, err := ioutil.ReadAll(res.Body)
+				if err != nil {
+					t.Fatalf("something broke: %v", err)
+				}
+				user_id := gjson.GetBytes(body, "results.0.user_id")
+				if user_id.Str == rocky.UserID {
+					return true
+				}
+				return false
+			}))
 
 		// .. but not rod's
 		reqBody2 := client.WithJSONBody(t, map[string]interface{}{
@@ -3338,45 +3343,36 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.FinishStateRequest()
 		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, rocky)
 
-		// the rooms stats are updated by a background job in Synapse which is not guaranteed to have completed by the time
-		// the state sync has completed. We check for up to 3 seconds that the job has completed, after which Charlie
-		// the job should have finished and Charlie and Derek should be visible in the user directory
-		time.Sleep(time.Second * 3)
-
+		// the user directory is updated by a background job in Synapse which is not guaranteed to have completed by the
+		// time the state sync has completed. We check for up to 3 seconds that the job has completed, after which the
+		// job should have finished and rod and todd should be visible in the user directory
 		reqBody3 := client.WithJSONBody(t, map[string]interface{}{
 			"search_term": "rod",
 		})
-		rodFullId := "@rod:" + server.ServerName()
-		res3 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody3)
-		must.MatchResponse(t, res3, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("results.0.user_id", rodFullId),
-			}})
+
+		rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody3,
+			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+				body, err := ioutil.ReadAll(res.Body)
+				if err != nil {
+					t.Fatalf("something broke: %v", err)
+				}
+				user_id := gjson.GetBytes(body, "results.0.user_id")
+				if user_id.Str == server.UserID("rod") {
+					return true
+				}
+				return false
+			}))
 
 		reqBody4 := client.WithJSONBody(t, map[string]interface{}{
 			"search_term": "todd",
 		})
-		toddFullId := "@todd:" + server.ServerName()
 		res4 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody4)
 		must.MatchResponse(t, res4, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
-				match.JSONKeyEqual("results.0.user_id", toddFullId),
+				match.JSONKeyEqual("results.0.user_id", server.UserID("todd")),
 			}})
 
-		//rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody3,
-		//	client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
-		//		body, err := ioutil.ReadAll(res.Body)
-		//		if err != nil {
-		//			t.Fatalf("something broke: %v", err)
-		//		}
-		//		user_id := gjson.GetBytes(body, "results.user_id")
-		//		if user_id.Str == "@charlie" {
-		//			return true
-		//		}
-		//		return false
-		//	}))
 	})
 
 	// TODO: tests which assert that:
