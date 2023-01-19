@@ -255,7 +255,7 @@ func TestPartialStateJoin(t *testing.T) {
 	})
 
 	t.Run("EagerIncrementalSyncDuringPartialStateJoin", func(t *testing.T) {
-		eagerSyncDuringPartialStateJoinTest(t, "initial", true)
+		eagerSyncDuringPartialStateJoinTest(t, "incremental", true)
 	})
 
 	// when Alice does a lazy-loading sync, she should see the room immediately
