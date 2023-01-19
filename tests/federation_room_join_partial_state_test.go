@@ -3315,6 +3315,7 @@ func TestPartialStateJoin(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"search_term": rocky.UserID,
 		})
+		time.Sleep(time.Second * 1)
 		res := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
