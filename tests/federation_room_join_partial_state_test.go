@@ -166,7 +166,15 @@ func TestPartialStateJoin(t *testing.T) {
 		_, eagerSyncToken = alice.MustSync(t, client.SyncReq{})
 
 		t.Log("1. Partial join Alice to a remote room.")
-		server := createTestServer(t, deployment)
+		server := createTestServer(
+			t,
+			deployment,
+			// Allow PDUs and EDUs, since Alice will send a message in the room.
+			federation.HandleTransactionRequests(
+				func(e *gomatrixserverlib.Event) {},
+				func(e gomatrixserverlib.EDU) {},
+			),
+		)
 		cancel := server.Listen()
 		defer cancel()
 		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
