@@ -3303,6 +3303,10 @@ func TestPartialStateJoin(t *testing.T) {
 		defer cancel()
 		serverRoom := createTestRoom(t, server, rocky.GetDefaultRoomVersion(t))
 
+		// add some new users to avoid the test being polluted by previous tests
+		serverRoom.AddEvent(createJoinEvent(t, server, serverRoom, server.UserID("rod")))
+		serverRoom.AddEvent(createJoinEvent(t, server, serverRoom, server.UserID("todd")))
+
 		// start a partial state join
 		psjResult := beginPartialStateJoin(t, server, serverRoom, rocky)
 		defer psjResult.Destroy(t)
@@ -3318,9 +3322,9 @@ func TestPartialStateJoin(t *testing.T) {
 				match.JSONKeyEqual("results.0.user_id", "@rocky:hs1"),
 			}})
 
-		// ...but not charlie's
+		// .. but not rod's
 		reqBody2 := client.WithJSONBody(t, map[string]interface{}{
-			"search_term": "charlie",
+			"search_term": "rod",
 		})
 		res2 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody2)
 		must.MatchResponse(t, res2, match.HTTPResponse{
@@ -3339,25 +3343,25 @@ func TestPartialStateJoin(t *testing.T) {
 		time.Sleep(time.Second * 3)
 
 		reqBody3 := client.WithJSONBody(t, map[string]interface{}{
-			"search_term": "charlie",
+			"search_term": "rod",
 		})
-		charlieFullId := "@charlie:" + server.ServerName()
+		rodFullId := "@rod:" + server.ServerName()
 		res3 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody3)
 		must.MatchResponse(t, res3, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
-				match.JSONKeyEqual("results.0.user_id", charlieFullId),
+				match.JSONKeyEqual("results.0.user_id", rodFullId),
 			}})
 
 		reqBody4 := client.WithJSONBody(t, map[string]interface{}{
-			"search_term": "derek",
+			"search_term": "todd",
 		})
-		derekFullId := "@derek:" + server.ServerName()
+		toddFullId := "@todd:" + server.ServerName()
 		res4 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody4)
 		must.MatchResponse(t, res4, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
-				match.JSONKeyEqual("results.0.user_id", derekFullId),
+				match.JSONKeyEqual("results.0.user_id", toddFullId),
 			}})
 
 		//rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody3,
