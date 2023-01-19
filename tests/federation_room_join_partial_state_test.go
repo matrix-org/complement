@@ -227,6 +227,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// release the federation /state response
 		psjResult.FinishStateRequest()
+		awaitPartialStateJoinCompletion(t, serverRoom, alice)
 
 		t.Log("8. Have Alice eager-sync. She should see the remote room, including" +
 			"Charlie and Derek.")
