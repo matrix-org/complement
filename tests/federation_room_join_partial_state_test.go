@@ -3295,6 +3295,57 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 	})
 
+	t.Run("Room stats are correctly updated once state re-sync completes", func(t *testing.T) {
+		// create a user with admin powers as we will need this power to make the remote room visible in the
+		// local room list
+		terry := deployment.RegisterUser(t, "hs1", "terry", "pass", true)
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, terry.GetDefaultRoomVersion(t))
+
+		// start a partial state join
+		psjResult := beginPartialStateJoin(t, server, serverRoom, terry)
+		defer psjResult.Destroy(t)
+
+		// make the remote room visible in the local room list
+		reqBody := client.WithJSONBody(t, map[string]interface{}{
+			"visibility": "public",
+		})
+		terry.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "directory", "list", "room", serverRoom.RoomID}, reqBody)
+
+		// sanity check - before the state has completed syncing state we would expect only one user
+		// to show up in the room list
+		res := terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"})
+
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("chunk.0.num_joined_members", 1),
+			}})
+
+		// finish syncing the state
+		psjResult.FinishStateRequest()
+		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, terry)
+
+		// In Synapse rooms stats are updated by a background job which is not guaranteed to have completed by the time
+		// the state sync has completed. To account for that, we check for up to 3 seconds that the job has completed.
+		// The number of joined users should now be 3: one local user (terry) and two remote (charlie and derek)
+		terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
+			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+				body, err := ioutil.ReadAll(res.Body)
+				if err != nil {
+					t.Fatalf("something broke: %v", err)
+				}
+				numJoinedMembers := gjson.GetBytes(body, "chunk.0.num_joined_members")
+				if numJoinedMembers.Int() == 3 {
+					return true
+				}
+				return false
+			}))
+		})
+
 	// TODO: tests which assert that:
 	//   - Join+Join+Leave+Leave works
 	//   - Join+Leave+Join works
