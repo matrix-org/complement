@@ -139,14 +139,14 @@ func TestPartialStateJoin(t *testing.T) {
 	// deliberately chosen to omit the remote room from the lazy-sync response.)
 
 	eagerSyncDuringPartialStateJoinTest := func(t *testing.T, usernameSuffix string, incremental bool) {
-		alice := deployment.RegisterUser(t, "hs1", "t1alice_" + usernameSuffix, "secret", false)
+		alice := deployment.RegisterUser(t, "hs1", "t1alice_"+usernameSuffix, "secret", false)
 
 		// Maintain two sync tokens: once for the eager syncs under test, and another
 		// for the lazy syncs which we use to avoid races.
 		var eagerSyncToken, lazySyncToken string
 
 		getEagerSyncReq := func() client.SyncReq {
-			// We track the `next_batch` returned by Alice's eager syncs. However we
+			// We track the `next_batch` returned by Alice's eager syncs. However, we
 			// will only _use_ it when we are testing the behaviour of incremental syncs.
 			if incremental {
 				return client.SyncReq{Since: eagerSyncToken}
@@ -157,16 +157,13 @@ func TestPartialStateJoin(t *testing.T) {
 
 		getLazySyncReq := func() client.SyncReq {
 			return client.SyncReq{
-				Since:         lazySyncToken,
-				Filter:        buildLazyLoadingSyncFilter(nil),
-			},
+				Since:  lazySyncToken,
+				Filter: buildLazyLoadingSyncFilter(nil),
+			}
 		}
-
 
 		t.Log("Do a one-off initial sync for Alice, so we have a next_batch token for future incremental syncs")
 		_, eagerSyncToken = alice.MustSync(t, client.SyncReq{})
-
-
 
 		t.Log("1. Partial join Alice to a remote room.")
 		server := createTestServer(t, deployment)
@@ -253,76 +250,12 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 	}
 
-	t.Run("EagerInitialSyndDuringPartialStateJoin", func(t *testing.T) {
+	t.Run("EagerInitialSyncDuringPartialStateJoin", func(t *testing.T) {
 		eagerSyncDuringPartialStateJoinTest(t, "initial", false)
 	})
 
-	t.Run("EagerIncrementalSyndDuringPartialStateJoin", func(t *testing.T) {
+	t.Run("EagerIncrementalSyncDuringPartialStateJoin", func(t *testing.T) {
 		eagerSyncDuringPartialStateJoinTest(t, "initial", true)
-	})
-
-	t.Run("NonLazyLongPollingSyncDuringPartialStateJoin", func(t *testing.T) {
-		alice := deployment.RegisterUser(t, "hs1", "t99alice", "secret", false)
-
-		server := createTestServer(t, deployment)
-		cancel := server.Listen()
-		defer cancel()
-		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
-		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
-		defer psjResult.Destroy(t)
-
-		// Alice has now joined the room, and the server is syncing the state in the background.
-
-		// initial sync shouldn't include the room yet, but still return immediatly
-		response, nextBatch := alice.MustSync(t, client.SyncReq{
-			TimeoutMillis: "10000",
-		})
-
-		syncJoinedRoomPath := "rooms.join." + client.GjsonEscape(serverRoom.RoomID)
-		if response.Get(syncJoinedRoomPath).Exists() {
-			t.Fatal("Sync shouldn't include the joined room until resync is over")
-		}
-
-		// Begin a long polling sync that shouldn't return yet since no change happened
-		responseChan := make(chan gjson.Result, 1)
-		syncStarted := make(chan struct{})
-		go func() {
-			defer close(responseChan)
-			defer close(syncStarted)
-
-			syncStarted <- struct{}{}
-			response, _ := alice.MustSync(t, client.SyncReq{
-				TimeoutMillis: "10000",
-				Since:         nextBatch,
-			})
-			responseChan <- response
-		}()
-
-		// Try to wait for the sync to actually start, then un-partial-state the room
-		select {
-		case <-syncStarted:
-			// wait for the state_ids request to arrive
-			psjResult.AwaitStateIdsRequest(t)
-			// release the federation /state response
-			psjResult.FinishStateRequest()
-		case <-time.After(time.Second * 5):
-			// even though this should mostly be impossible, make sure we have a timeout
-			t.Fatalf("goroutine didn't start")
-		}
-
-		// Try to wait for the sync to return or timeout after 15 seconds,
-		// as the above tests are using a timeout of 10 seconds
-		select {
-		case response = <-responseChan:
-		case <-time.After(time.Second * 5):
-			t.Errorf("sync should have returned before the timeout")
-		}
-
-		// the /sync request should now complete, with the new room
-		roomRes := response.Get(syncJoinedRoomPath)
-		if !roomRes.Exists() {
-			t.Fatal("Sync should now include the joined room since resync is over")
-		}
 	})
 
 	// when Alice does a lazy-loading sync, she should see the room immediately
@@ -1060,8 +993,10 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 	})
 
-	// test that a partial-state join continues syncing state after a restart
-	// the same as NonLazySyncDuringPartialStateJoin, with a restart in the middle
+	// Test that a partial-state join continues syncing state after a restart
+	// Similar to EagerIncrementalSyncDuringPartialStateJoin, with a restart in the
+	// middle. (But this test is slightly simpler: it doesn't lazy-sync before
+	// eager-syncing, and doesn't send a message to the partial-state room.)
 	t.Run("PartialStateJoinContinuesAfterRestart", func(t *testing.T) {
 		alice := deployment.RegisterUser(t, "hs1", "t12alice", "secret", false)
 
@@ -1077,7 +1012,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// wait for the state_ids request to arrive
 		psjResult.AwaitStateIdsRequest(t)
 
-		// Non lazy sync shouldn't include the room yet
+		// Eager sync shouldn't include the room yet
 		response, nextBatch := alice.MustSync(t, client.SyncReq{})
 
 		syncJoinedRoomPath := "rooms.join." + client.GjsonEscape(serverRoom.RoomID)
