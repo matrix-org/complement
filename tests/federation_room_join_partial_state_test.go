@@ -3329,9 +3329,9 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.FinishStateRequest()
 		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, terry)
 
-		// the rooms stats are updated by a background job which is not guaranteed to have completed by the time
-		// the state sync has completed. We check for up to 3 seconds that the job has completed. The number of joined
-		// users should now be 3: one local user (terry) and two remote (charlie and derek)
+		// In Synapse rooms stats are updated by a background job which is not guaranteed to have completed by the time
+		// the state sync has completed. To account for that, we check for up to 3 seconds that the job has completed.
+		// The number of joined users should now be 3: one local user (terry) and two remote (charlie and derek)
 		terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
 			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
 				body, err := ioutil.ReadAll(res.Body)
