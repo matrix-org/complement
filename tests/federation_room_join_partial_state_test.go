@@ -173,7 +173,7 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
 
-		// 2. Have Alice lazy-sync until she sees (1).
+		t.Log("2. Have Alice lazy-sync until she sees (1).")
 		lazySyncToken = alice.MustSyncUntil(
 			t,
 			getLazySyncReq(),
