@@ -151,6 +151,9 @@ func TestPartialStateJoin(t *testing.T) {
 			if incremental {
 				return client.SyncReq{Since: eagerSyncToken}
 			} else {
+				// TODO: making repeated initial syncs might mean Synapse gives us a
+				// sync result from cache. Can we prevent that somehow? Restart the
+				// server would do it, but seems nuclear.
 				return client.SyncReq{Since: ""}
 			}
 		}
