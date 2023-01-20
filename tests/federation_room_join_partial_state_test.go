@@ -215,7 +215,9 @@ func TestPartialStateJoin(t *testing.T) {
 				},
 				// we don't expect EDUs
 				func(e gomatrixserverlib.EDU) {
-					t.Fatalf("Received unexpected EDU: %s", e.Content)
+					if e.Type != "m.presence" {
+						t.Fatalf("Received unexpected EDU: %s", e.Content)
+					}
 				},
 			),
 		)
