@@ -242,7 +242,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		roomRes := response.Get(syncJoinedRoomPath)
 		if !roomRes.Exists() {
-			t.Fatal("Sync should now include the joined room since resync is over")
+			t.Fatal("Sync does NOT include the joined room after the resync, but should")
 		}
 
 		// check that the state includes both charlie and derek.
