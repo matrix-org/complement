@@ -270,9 +270,13 @@ func TestPartialStateJoin(t *testing.T) {
 		eagerSyncDuringPartialStateJoinTest(t, "incremental", true)
 	})
 
-	t.Run("NonLazyLongPollingSyncDuringPartialStateJoin", func(t *testing.T) {
-		alice := deployment.RegisterUser(t, "hs1", "t99alice", "secret", false)
+	// The tests above use long-polling syncs with a (complement-default) timeout of
+	// 1s. They don't test that the long-poll returns early when the partial state
+	// resync completes. This test does exactly that.
+	t.Run("EagerLongPollingSyncWokenWhenResyncCompletes", func(t *testing.T) {
+		alice := deployment.RegisterUser(t, "hs1", "t1alice_long_polling", "secret", false)
 
+		t.Log("Alice partial-joins a remote room.")
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
@@ -280,12 +284,8 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
 
-		// Alice has now joined the room, and the server is syncing the state in the background.
-
-		// initial sync shouldn't include the room yet, but still return immediatly
-		response, nextBatch := alice.MustSync(t, client.SyncReq{
-			TimeoutMillis: "10000",
-		})
+		t.Log("Alice eager-syncs. The response should not contain the remote room.")
+		response, nextBatch := alice.MustSync(t, client.SyncReq{})
 
 		syncJoinedRoomPath := "rooms.join." + client.GjsonEscape(serverRoom.RoomID)
 		if response.Get(syncJoinedRoomPath).Exists() {
@@ -330,7 +330,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// the /sync request should now complete, with the new room
 		roomRes := response.Get(syncJoinedRoomPath)
 		if !roomRes.Exists() {
-			t.Fatal("Sync should now include the joined room since resync is over")
+			t.Fatal("Sync does NOT include the joined room after resync")
 		}
 	})
 
