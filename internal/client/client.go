@@ -414,7 +414,7 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, acc
 			"user": localpart,
 		},
 		"password": password,
-		"type": "m.login.password",
+		"type":     "m.login.password",
 	}
 	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, WithJSONBody(t, reqBody))
 
@@ -521,7 +521,11 @@ func (c *CSAPI) GetDefaultRoomVersion(t *testing.T) gomatrixserverlib.RoomVersio
 // WithRawBody sets the HTTP request body to `body`
 func WithRawBody(body []byte) RequestOpt {
 	return func(req *http.Request) {
-		req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		req.Body = ioutil.NopCloser(bytes.NewReader(body))
+		req.GetBody = func() (io.ReadCloser, error) {
+			r := bytes.NewReader(body)
+			return ioutil.NopCloser(r), nil
+		}
 		// we need to manually set this because we don't set the body
 		// in http.NewRequest due to using functional options, and only in NewRequest
 		// does the stdlib set this for us.
