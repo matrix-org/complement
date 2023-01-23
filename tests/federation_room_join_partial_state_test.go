@@ -1114,11 +1114,11 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.FinishStateRequest()
 
 		// the /sync request should now complete, with the new room
-		response, _ = alice.MustSync(t, client.SyncReq{Since: nextBatch})
-
-		if !response.Get(syncJoinedRoomPath).Exists() {
-			t.Fatal("Sync should now include the joined room since resync is over")
-		}
+		nextBatch = alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: nextBatch},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
 	})
 
 	// test that a partial-state join can fall back to other homeservers when re-syncing
@@ -1187,11 +1187,11 @@ func TestPartialStateJoin(t *testing.T) {
 		// reply to hs2 with a bogus /state_ids response
 		fedStateIdsSendResponseWaiter.Finish()
 
-		response, _ = charlie.MustSync(t, client.SyncReq{Since: nextBatch})
-
-		if !response.Get(syncJoinedRoomPath).Exists() {
-			t.Fatal("hs2 /sync completed without join to new room")
-		}
+		nextBatch = charlie.MustSyncUntil(
+			t,
+			client.SyncReq{Since: nextBatch},
+			client.SyncJoinedTo(charlie.UserID, roomID),
+		)
 	})
 
 	// test a lazy-load-members sync while re-syncing partial state, followed by completion of state syncing,
