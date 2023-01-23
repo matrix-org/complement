@@ -1187,6 +1187,8 @@ func TestPartialStateJoin(t *testing.T) {
 		// reply to hs2 with a bogus /state_ids response
 		fedStateIdsSendResponseWaiter.Finish()
 
+		// We expect hs2 to fall back to requesting state from hs1, in order to
+		// complete the partial state join
 		nextBatch = charlie.MustSyncUntil(
 			t,
 			client.SyncReq{Since: nextBatch},
