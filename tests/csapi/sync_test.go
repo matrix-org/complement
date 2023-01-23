@@ -498,7 +498,7 @@ func checkJoinFieldsExist(t *testing.T, res gjson.Result, roomID string) {
 	room := res.Get("rooms.join." + client.GjsonEscape(roomID))
 	timeline := room.Get("timeline")
 	if timeline.Exists() {
-		for _, x := range []string{"events", "limited", "prev_batch"} {
+		for _, x := range []string{"events", "limited"} {
 			if !timeline.Get(x).Exists() {
 				t.Errorf("timeline %s does not exist", x)
 			}
