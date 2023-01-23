@@ -529,7 +529,11 @@ func (c *CSAPI) GetDefaultRoomVersion(t *testing.T) gomatrixserverlib.RoomVersio
 // WithRawBody sets the HTTP request body to `body`
 func WithRawBody(body []byte) RequestOpt {
 	return func(req *http.Request) {
-		req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		req.Body = ioutil.NopCloser(bytes.NewReader(body))
+		req.GetBody = func() (io.ReadCloser, error) {
+			r := bytes.NewReader(body)
+			return ioutil.NopCloser(r), nil
+		}
 		// we need to manually set this because we don't set the body
 		// in http.NewRequest due to using functional options, and only in NewRequest
 		// does the stdlib set this for us.

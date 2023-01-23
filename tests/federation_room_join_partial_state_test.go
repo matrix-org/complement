@@ -367,7 +367,9 @@ func TestPartialStateJoin(t *testing.T) {
 				},
 				// we don't expect EDUs
 				func(e gomatrixserverlib.EDU) {
-					t.Fatalf("Received unexpected EDU: %s", e.Content)
+					if e.Type != "m.presence" {
+						t.Fatalf("Received unexpected EDU: %s", e.Content)
+					}
 				},
 			),
 		)
@@ -3425,6 +3427,137 @@ func TestPartialStateJoin(t *testing.T) {
 				t.Errorf("Unexpected leave event %s for %s", e.EventID(), e.Sender())
 			}
 		}
+	})
+
+	t.Run("Room stats are correctly updated once state re-sync completes", func(t *testing.T) {
+		// create a user with admin powers as we will need this power to make the remote room visible in the
+		// local room list
+		terry := deployment.RegisterUser(t, "hs1", "terry", "pass", true)
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, terry.GetDefaultRoomVersion(t))
+
+		// start a partial state join
+		psjResult := beginPartialStateJoin(t, server, serverRoom, terry)
+		defer psjResult.Destroy(t)
+
+		// make the remote room visible in the local room list
+		reqBody := client.WithJSONBody(t, map[string]interface{}{
+			"visibility": "public",
+		})
+		terry.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "directory", "list", "room", serverRoom.RoomID}, reqBody)
+
+		// sanity check - before the state has completed syncing state we would expect only one user
+		// to show up in the room list
+		res := terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"})
+
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("chunk.0.num_joined_members", 1),
+			}})
+
+		// finish syncing the state
+		psjResult.FinishStateRequest()
+		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, terry)
+
+		// In Synapse rooms stats are updated by a background job which is not guaranteed to have completed by the time
+		// the state sync has completed. To account for that, we check for up to 3 seconds that the job has completed.
+		// The number of joined users should now be 3: one local user (terry) and two remote (charlie and derek)
+		terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
+			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+				body, err := ioutil.ReadAll(res.Body)
+				if err != nil {
+					t.Fatalf("something broke: %v", err)
+				}
+				numJoinedMembers := gjson.GetBytes(body, "chunk.0.num_joined_members")
+				if numJoinedMembers.Int() == 3 {
+					return true
+				}
+				return false
+			}))
+	})
+
+	t.Run("User directory is correctly updated once state re-sync completes", func(t *testing.T) {
+		rocky := deployment.RegisterUser(t, "hs1", "rocky", "pass", false)
+
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, rocky.GetDefaultRoomVersion(t))
+
+		// add some new users to avoid the test being polluted by previous tests
+		serverRoom.AddEvent(createJoinEvent(t, server, serverRoom, server.UserID("rod")))
+		serverRoom.AddEvent(createJoinEvent(t, server, serverRoom, server.UserID("todd")))
+
+		// start a partial state join
+		psjResult := beginPartialStateJoin(t, server, serverRoom, rocky)
+		defer psjResult.Destroy(t)
+
+		// sanity check - before the homeserver has completed syncing state we would expect rocky to show up
+		reqBody := client.WithJSONBody(t, map[string]interface{}{
+			"search_term": rocky.UserID,
+		})
+		rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody,
+			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+				body, err := ioutil.ReadAll(res.Body)
+				if err != nil {
+					t.Fatalf("something broke: %v", err)
+				}
+				user_id := gjson.GetBytes(body, "results.0.user_id")
+				if user_id.Str == rocky.UserID {
+					return true
+				}
+				return false
+			}))
+
+		// .. but not rod's
+		reqBody2 := client.WithJSONBody(t, map[string]interface{}{
+			"search_term": "rod",
+		})
+		res2 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody2)
+		must.MatchResponse(t, res2, match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("results", [0]string{}),
+			}})
+
+		// finish syncing the state
+		psjResult.FinishStateRequest()
+		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, rocky)
+
+		// the user directory is updated by a background job in Synapse which is not guaranteed to have completed by the
+		// time the state sync has completed. We check for up to 3 seconds that the job has completed, after which the
+		// job should have finished and rod and todd should be visible in the user directory
+		reqBody3 := client.WithJSONBody(t, map[string]interface{}{
+			"search_term": "rod",
+		})
+
+		rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody3,
+			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+				body, err := ioutil.ReadAll(res.Body)
+				if err != nil {
+					t.Fatalf("something broke: %v", err)
+				}
+				user_id := gjson.GetBytes(body, "results.0.user_id")
+				if user_id.Str == server.UserID("rod") {
+					return true
+				}
+				return false
+			}))
+
+		reqBody4 := client.WithJSONBody(t, map[string]interface{}{
+			"search_term": "todd",
+		})
+		res4 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody4)
+		must.MatchResponse(t, res4, match.HTTPResponse{
+			StatusCode: 200,
+			JSON: []match.JSON{
+				match.JSONKeyEqual("results.0.user_id", server.UserID("todd")),
+			}})
+
 	})
 
 	// TODO: tests which assert that:
