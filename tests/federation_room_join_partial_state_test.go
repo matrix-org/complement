@@ -292,13 +292,10 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 
 		// Begin a long polling sync that shouldn't return yet since no change happened
+
 		responseChan := make(chan gjson.Result, 1)
-		syncStarted := make(chan struct{})
 		go func() {
 			defer close(responseChan)
-			defer close(syncStarted)
-
-			syncStarted <- struct{}{}
 			response, _ := alice.MustSync(t, client.SyncReq{
 				TimeoutMillis: "10000",
 				Since:         nextBatch,
@@ -307,23 +304,27 @@ func TestPartialStateJoin(t *testing.T) {
 		}()
 
 		// Try to wait for the sync to actually start, then un-partial-state the room
+		time.Sleep(2 * time.Second)
+
+		// Sanity check that the sync hasn't completed
 		select {
-		case <-syncStarted:
-			// wait for the state_ids request to arrive
-			psjResult.AwaitStateIdsRequest(t)
-			// release the federation /state response
-			psjResult.FinishStateRequest()
-		case <-time.After(time.Second * 5):
-			// even though this should mostly be impossible, make sure we have a timeout
-			t.Fatalf("goroutine didn't start")
+		case response := <-responseChan:
+			t.Fatalf("Recieved sync response too soon: %s", response.Raw)
+		default:
+			t.Logf("No sync response yet")
 		}
+
+		// wait for the state_ids request to arrive
+		psjResult.AwaitStateIdsRequest(t)
+		// release the federation /state response
+		psjResult.FinishStateRequest()
 
 		// Try to wait for the sync to return or timeout after 15 seconds,
 		// as the above tests are using a timeout of 10 seconds
 		select {
 		case response = <-responseChan:
-		case <-time.After(time.Second * 5):
-			t.Errorf("sync should have returned before the timeout")
+		case <-time.After(time.Second * 10):
+			t.Fatal("sync should have returned before the timeout")
 		}
 
 		// the /sync request should now complete, with the new room
