@@ -3554,13 +3554,18 @@ func TestPartialStateJoin(t *testing.T) {
 		reqBody4 := client.WithJSONBody(t, map[string]interface{}{
 			"search_term": "todd",
 		})
-		res4 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody4)
-		must.MatchResponse(t, res4, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("results.0.user_id", server.UserID("todd")),
-			}})
-
+		rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody4,
+			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+				body, err := ioutil.ReadAll(res.Body)
+				if err != nil {
+					t.Fatalf("something broke: %v", err)
+				}
+				user_id := gjson.GetBytes(body, "results.0.user_id")
+				if user_id.Str == server.UserID("todd") {
+					return true
+				}
+				return false
+			}))
 	})
 
 	// TODO: tests which assert that:
