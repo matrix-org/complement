@@ -233,7 +233,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
-				"body":    fmt.Sprintf("reply %d", i),
+				"body":    fmt.Sprintf("reply %d before sync token", i),
 				"m.relates_to": map[string]interface{}{
 					"event_id": rootEventID,
 					"rel_type": "m.thread",
@@ -255,7 +255,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
-				"body":    fmt.Sprintf("reply %d", i),
+				"body":    fmt.Sprintf("reply %d after sync token", i),
 				"m.relates_to": map[string]interface{}{
 					"event_id": rootEventID,
 					"rel_type": "m.thread",
