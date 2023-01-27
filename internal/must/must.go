@@ -2,11 +2,11 @@
 package must
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -216,7 +216,7 @@ func HaveInOrder(t *testing.T, gots []string, wants []string) {
 //
 // if an item is not present, the test is failed.
 // if an item not present in the want list is present, the test is failed.
-// Items are compared using reflect.DeepEqual
+// Items are compared using match.JSONDeepEqual
 func CheckOffAll(t *testing.T, items []interface{}, wantItems []interface{}) {
 	t.Helper()
 	remaining := CheckOffAllAllowUnwanted(t, items, wantItems)
@@ -229,7 +229,7 @@ func CheckOffAll(t *testing.T, items []interface{}, wantItems []interface{}) {
 // The updated list with the matched items removed from it is returned.
 //
 // if an item is not present, the test is failed.
-// Items are compared using reflect.DeepEqual
+// Items are compared using match.JSONDeepEqual
 func CheckOffAllAllowUnwanted(t *testing.T, items []interface{}, wantItems []interface{}) []interface{} {
 	t.Helper()
 	for _, wantItem := range wantItems {
@@ -240,13 +240,14 @@ func CheckOffAllAllowUnwanted(t *testing.T, items []interface{}, wantItems []int
 
 // CheckOff an item from the list. If the item is not present the test is failed.
 // The updated list with the matched item removed from it is returned. Items are
-// compared using reflect.DeepEqual
+// compared using match.JSONDeepEqual
 func CheckOff(t *testing.T, items []interface{}, wantItem interface{}) []interface{} {
 	t.Helper()
 	// check off the item
 	want := -1
 	for i, w := range items {
-		if reflect.DeepEqual(w, wantItem) {
+		wBytes, _ := json.Marshal(w)
+		if match.JSONDeepEqual(wBytes, wantItem) {
 			want = i
 			break
 		}

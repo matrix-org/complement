@@ -20,26 +20,16 @@ func TestPushRuleCacheHealth(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "sender", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
+	// Set a global push rule
+	alice.SetPushRule(t, "global", "sender", alice.UserID, map[string]interface{}{
 		"actions": []string{"dont_notify"},
-	}))
+	}, "", "")
 
-	// the extra "" is to make sure the submitted URL ends with a trailing slash
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", ""})
+	// Fetch the rule once and check its contents
+	must.MatchGJSON(t, alice.GetAllPushRules(t), match.JSONKeyEqual("global.sender.0.actions.0", "dont_notify"))
 
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONKeyEqual("global.sender.0.actions.0", "dont_notify"),
-		},
-	})
-
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", ""})
-
-	must.MatchResponse(t, res, match.HTTPResponse{
-		JSON: []match.JSON{
-			match.JSONKeyEqual("global.sender.0.actions.0", "dont_notify"),
-		},
-	})
+	// Fetch the rule and check its contents again. It should not have changed.
+	must.MatchGJSON(t, alice.GetAllPushRules(t), match.JSONKeyEqual("global.sender.0.actions.0", "dont_notify"))
 }
 
 func TestPushSync(t *testing.T) {
@@ -111,6 +101,9 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 	errChan := make(chan error, 1)
 	syncStarted := make(chan struct{})
 	go func() {
+		defer close(errChan)
+		defer close(syncStarted)
+
 		var syncResp gjson.Result
 		syncStarted <- struct{}{}
 		syncResp, nextBatch = csapi.MustSync(t, syncReq)
@@ -142,7 +135,5 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 		t.Errorf("sync failed to return")
 	}
 
-	close(errChan)
-	close(syncStarted)
 	return nextBatch
 }

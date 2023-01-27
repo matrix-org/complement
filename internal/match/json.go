@@ -1,8 +1,9 @@
 package match
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -14,7 +15,7 @@ type JSON func(body []byte) error
 
 // JSONKeyEqual returns a matcher which will check that `wantKey` is present and its value matches `wantValue`.
 // `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
-// `wantValue` is matched via reflect.DeepEqual and the JSON takes the forms according to https://godoc.org/github.com/tidwall/gjson#Result.Value
+// `wantValue` is matched via JSONDeepEqual and the JSON takes the forms according to https://godoc.org/github.com/tidwall/gjson#Result.Value
 func JSONKeyEqual(wantKey string, wantValue interface{}) JSON {
 	return func(body []byte) error {
 		res := gjson.GetBytes(body, wantKey)
@@ -22,11 +23,26 @@ func JSONKeyEqual(wantKey string, wantValue interface{}) JSON {
 			return fmt.Errorf("key '%s' missing", wantKey)
 		}
 		gotValue := res.Value()
-		if !reflect.DeepEqual(gotValue, wantValue) {
-			return fmt.Errorf("key '%s' got '%v' want '%v'", wantKey, gotValue, wantValue)
+		if !JSONDeepEqual([]byte(res.Raw), wantValue) {
+			return fmt.Errorf(
+				"key '%s' got '%v' (type %T) want '%v' (type %T)",
+				wantKey, gotValue, gotValue, wantValue, wantValue,
+			)
+		} else {
+			return nil
 		}
-		return nil
 	}
+}
+
+// JSONDeepEqual compares raw json with a json-serializable value, seeing if they're equal.
+func JSONDeepEqual(gotJson []byte, wantValue interface{}) bool {
+	// marshal what the test gave us
+	wantBytes, _ := json.Marshal(wantValue)
+	// re-marshal what the network gave us to acount for key ordering
+	var gotVal interface{}
+	_ = json.Unmarshal(gotJson, &gotVal)
+	gotBytes, _ := json.Marshal(gotVal)
+	return bytes.Equal(gotBytes, wantBytes)
 }
 
 // JSONKeyPresent returns a matcher which will check that `wantKey` is present in the JSON object.
@@ -113,7 +129,8 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 			// check off the item
 			want := -1
 			for i, w := range wantItems {
-				if reflect.DeepEqual(w, item) {
+				wBytes, _ := json.Marshal(w)
+				if JSONDeepEqual(wBytes, item) {
 					want = i
 					break
 				}
@@ -154,7 +171,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 // are present exactly once in any order in `wantItems`. Allows unexpected items or items
 // appear that more than once. This matcher can be used to check off items in
 // an array/object. The `mapper` function should map the item to an interface which will be
-// comparable via `reflect.DeepEqual` with items in `wantItems`. The optional `fn` callback
+// comparable via JSONDeepEqual with items in `wantItems`. The optional `fn` callback
 // allows more checks to be performed other than checking off the item from the list. It is
 // called with 2 args: the result of the `mapper` function and the element itself (or value if
 // it's an object).
@@ -176,7 +193,7 @@ func JSONCheckOffAllowUnwanted(wantKey string, wantItems []interface{}, mapper f
 // are present exactly once in any order in `wantItems`. If there are unexpected items or items
 // appear more than once then the match fails. This matcher can be used to check off items in
 // an array/object. The `mapper` function should map the item to an interface which will be
-// comparable via `reflect.DeepEqual` with items in `wantItems`. The optional `fn` callback
+// comparable via JSONDeepEqual with items in `wantItems`. The optional `fn` callback
 // allows more checks to be performed other than checking off the item from the list. It is
 // called with 2 args: the result of the `mapper` function and the element itself (or value if
 // it's an object).

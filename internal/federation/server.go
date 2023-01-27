@@ -186,8 +186,13 @@ func (s *Server) FederationClient(deployment *docker.Deployment) *gomatrixserver
 	if !s.listening {
 		s.t.Fatalf("FederationClient() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the way federation requests are signed. Ensure you Listen() first!")
 	}
+	identity := gomatrixserverlib.SigningIdentity{
+		ServerName: gomatrixserverlib.ServerName(s.ServerName()),
+		KeyID:      s.KeyID,
+		PrivateKey: s.Priv,
+	}
 	f := gomatrixserverlib.NewFederationClient(
-		gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv,
+		[]*gomatrixserverlib.SigningIdentity{&identity},
 		gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}),
 	)
 	return f
@@ -336,17 +341,18 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 // It returns the resultant room.
 func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string) *ServerRoom {
 	t.Helper()
+	origin := gomatrixserverlib.ServerName(s.serverName)
 	fedClient := s.FederationClient(deployment)
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), remoteServer, roomID, userID, SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, remoteServer, roomID, userID, SupportedRoomVersions())
 	if err != nil {
 		t.Fatalf("MustJoinRoom: make_join failed: %v", err)
 	}
 	roomVer := makeJoinResp.RoomVersion
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv, roomVer)
+	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), origin, s.KeyID, s.Priv, roomVer)
 	if err != nil {
 		t.Fatalf("MustJoinRoom: failed to sign event: %v", err)
 	}
-	sendJoinResp, err := fedClient.SendJoin(context.Background(), gomatrixserverlib.ServerName(remoteServer), joinEvent)
+	sendJoinResp, err := fedClient.SendJoin(context.Background(), origin, remoteServer, joinEvent)
 	if err != nil {
 		t.Fatalf("MustJoinRoom: send_join failed: %v", err)
 	}
@@ -366,17 +372,18 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 // Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
 func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string) {
 	t.Helper()
+	origin := gomatrixserverlib.ServerName(s.serverName)
 	fedClient := s.FederationClient(deployment)
 	var leaveEvent *gomatrixserverlib.Event
 	room := s.rooms[roomID]
 	if room == nil {
 		// e.g rejecting an invite
-		makeLeaveResp, err := fedClient.MakeLeave(context.Background(), remoteServer, roomID, userID)
+		makeLeaveResp, err := fedClient.MakeLeave(context.Background(), origin, remoteServer, roomID, userID)
 		if err != nil {
 			t.Fatalf("MustLeaveRoom: (rejecting invite) make_leave failed: %v", err)
 		}
 		roomVer := makeLeaveResp.RoomVersion
-		leaveEvent, err = makeLeaveResp.LeaveEvent.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv, roomVer)
+		leaveEvent, err = makeLeaveResp.LeaveEvent.Build(time.Now(), origin, s.KeyID, s.Priv, roomVer)
 		if err != nil {
 			t.Fatalf("MustLeaveRoom: (rejecting invite) failed to sign event: %v", err)
 		}
@@ -391,7 +398,7 @@ func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remo
 			},
 		})
 	}
-	err := fedClient.SendLeave(context.Background(), gomatrixserverlib.ServerName(remoteServer), leaveEvent)
+	err := fedClient.SendLeave(context.Background(), origin, remoteServer, leaveEvent)
 	if err != nil {
 		t.Fatalf("MustLeaveRoom: send_leave failed: %v", err)
 	}
@@ -407,7 +414,7 @@ func (s *Server) ValidFederationRequest(t *testing.T, handler func(fr *gomatrixs
 	return func(w http.ResponseWriter, req *http.Request) {
 		// Check federation signature
 		fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-			req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+			req, time.Now(), gomatrixserverlib.ServerName(s.serverName), nil, s.keyRing,
 		)
 		if fedReq == nil {
 			t.Errorf(

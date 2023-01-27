@@ -45,7 +45,7 @@ func (hsDep *HomeserverDeployment) SetEndpoints(baseURL string, fedBaseURL strin
 // will print container logs before killing the container.
 func (d *Deployment) Destroy(t *testing.T) {
 	t.Helper()
-	d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs || t.Failed())
+	d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs || t.Failed(), t.Name(), t.Failed())
 }
 
 // Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
@@ -80,6 +80,13 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 	return client
 }
 
+// NewUser creates a new user as a convenience method to RegisterUser.
+//
+//It registers the user with a deterministic password, and without admin privileges.
+func (d *Deployment) NewUser(t *testing.T, localpart, hs string) *client.CSAPI {
+	return d.RegisterUser(t, hs, localpart, "complement_meets_min_pasword_req_"+localpart, false)
+}
+
 // RegisterUser within a homeserver and return an authenticatedClient, Fails the test if the hsName is not found.
 func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password string, isAdmin bool) *client.CSAPI {
 	t.Helper()
@@ -111,11 +118,35 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 	return client
 }
 
-// Restart a deployment.
-func (dep *Deployment) Restart(t *testing.T) error {
+// LoginUser within a homeserver and return an authenticatedClient. Fails the test if the hsName is not found.
+// Note that this will not change the access token of the client that is returned by `deployment.Client`.
+func (d *Deployment) LoginUser(t *testing.T, hsName, localpart, password string) *client.CSAPI {
 	t.Helper()
-	for _, hsDep := range dep.HS {
-		err := dep.Deployer.Restart(hsDep, dep.Config)
+	dep, ok := d.HS[hsName]
+	if !ok {
+		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)
+		return nil
+	}
+	client := &client.CSAPI{
+		BaseURL:          dep.BaseURL,
+		Client:           client.NewLoggedClient(t, hsName, nil),
+		SyncUntilTimeout: 5 * time.Second,
+		Debug:            d.Deployer.debugLogging,
+	}
+	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	userID, accessToken, deviceID := client.LoginUser(t, localpart, password)
+
+	client.UserID = userID
+	client.AccessToken = accessToken
+	client.DeviceID = deviceID
+	return client
+}
+
+// Restart a deployment.
+func (d *Deployment) Restart(t *testing.T) error {
+	t.Helper()
+	for _, hsDep := range d.HS {
+		err := d.Deployer.Restart(hsDep, d.Config)
 		if err != nil {
 			t.Errorf("Deployment.Restart: %s", err)
 			return err
