@@ -217,24 +217,30 @@ func TestRelationsPaginationSync(t *testing.T) {
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	_, token := alice.MustSync(t, client.SyncReq{})
 
-	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
-		"msgtype": "m.text",
-		"body":    "root",
-	}))
-	rootEventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
+	rootEventID := alice.SendEventUnsynced(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "root",
+		},
+		Sender: alice.UserID,
+	})
 
 	// Create some related events.
 	event_id := ""
 	for i := 0; i < 5; i++ {
-		res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", fmt.Sprintf("txn-%d", 1+i)}, client.WithJSONBody(t, map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    fmt.Sprintf("reply %d", i),
-			"m.relates_to": map[string]interface{}{
-				"event_id": rootEventID,
-				"rel_type": "m.thread",
+		event_id = alice.SendEventUnsynced(t, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    fmt.Sprintf("reply %d", i),
+				"m.relates_to": map[string]interface{}{
+					"event_id": rootEventID,
+					"rel_type": "m.thread",
+				},
 			},
-		}))
-		event_id = client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
+			Sender: alice.UserID,
+		})
 	}
 
 	// Sync and keep the token.
@@ -245,28 +251,29 @@ func TestRelationsPaginationSync(t *testing.T) {
 	// Create more related events.
 	event_ids := [5]string{}
 	for i := 0; i < 5; i++ {
-		res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", fmt.Sprintf("txn-%d", 6+i)}, client.WithJSONBody(t, map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    fmt.Sprintf("reply %d", i),
-			"m.relates_to": map[string]interface{}{
-				"event_id": rootEventID,
-				"rel_type": "m.thread",
+		event_ids[i] = alice.SendEventUnsynced(t, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    fmt.Sprintf("reply %d", i),
+				"m.relates_to": map[string]interface{}{
+					"event_id": rootEventID,
+					"rel_type": "m.thread",
+				},
 			},
-		}))
-		event_ids[i] = client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
+			Sender: alice.UserID,
+		})
 	}
 
 	// sync until the server has processed it
-	alice.MustSyncUntil(t, client.SyncReq{Since: token}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-		return r.Get("event_id").Str == event_ids[4]
-	}))
+	alice.MustSyncUntil(t, client.SyncReq{Since: token}, client.SyncTimelineHasEventID(roomID, event_ids[4]))
 
 	// Fetch the first page since the last sync.
 	queryParams := url.Values{}
 	queryParams.Set("limit", "3")
 	queryParams.Set("from", nextBatch)
 	queryParams.Set("dir", "f")
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	body := must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
