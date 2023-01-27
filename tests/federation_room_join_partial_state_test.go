@@ -3333,7 +3333,7 @@ func TestPartialStateJoin(t *testing.T) {
 		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
 
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
-		defer psjResult.Destroy()
+		defer psjResult.Destroy(t)
 
 		alice.Client.Timeout = 2 * time.Second
 		paths := []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "send", "m.room.message", "0"}
@@ -3346,7 +3346,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Logf("Alice sent event event ID %s", eventID)
 
 		psj2Result := beginPartialStateJoin(t, server, serverRoom, bob)
-		defer psj2Result.Destroy()
+		defer psj2Result.Destroy(t)
 
 		bob.Client.Timeout = 2 * time.Second
 		paths = []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "send", "m.room.message", "0"}
