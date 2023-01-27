@@ -226,7 +226,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 	// Create some related events.
 	event_id := ""
 	for i := 0; i < 5; i++ {
-		res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", fmt.Sprintf("txn-%d", 2+i)}, client.WithJSONBody(t, map[string]interface{}{
+		res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", fmt.Sprintf("txn-%d", 1+i)}, client.WithJSONBody(t, map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    fmt.Sprintf("reply %d", i),
 			"m.relates_to": map[string]interface{}{
@@ -245,7 +245,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 	// Create more related events.
 	event_ids := [5]string{}
 	for i := 0; i < 5; i++ {
-		res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", fmt.Sprintf("txn-%d", 2+i)}, client.WithJSONBody(t, map[string]interface{}{
+		res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", fmt.Sprintf("txn-%d", 6+i)}, client.WithJSONBody(t, map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    fmt.Sprintf("reply %d", i),
 			"m.relates_to": map[string]interface{}{
@@ -264,7 +264,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 	// Fetch the first page since the last sync.
 	queryParams := url.Values{}
 	queryParams.Set("limit", "3")
-	queryParams.Set("to", nextBatch)
+	queryParams.Set("from", nextBatch)
 	queryParams.Set("dir", "f")
 	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	body := must.MatchResponse(t, res, match.HTTPResponse{
