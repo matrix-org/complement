@@ -180,9 +180,89 @@ func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map
 	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
-// SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
+func (c *CSAPI) GetRoomAccountData(t *testing.T, roomID string, eventType string) *http.Response {
+	return c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "rooms", roomID, "account_data", eventType})
+}
+
+func (c *CSAPI) SetRoomAccountData(t *testing.T, roomID string, eventType string, content map[string]interface{}) *http.Response {
+	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "rooms", roomID, "account_data", eventType}, WithJSONBody(t, content))
+}
+
+// GetAllPushRules fetches all configured push rules for a user from the homeserver.
+// Push rules are returned as a parsed gjson result
+//
+// Example of printing the IDs of all underride rules of the current user:
+//
+//	allPushRules := c.GetAllPushRules(t)
+//	globalUnderridePushRules := allPushRules.Get("global").Get("underride").Array()
+//
+//	for index, rule := range globalUnderridePushRules {
+//	  fmt.Printf("This rule's ID is: %s\n", rule.Get("rule_id").Str)
+//	}
+//
+// Push rules are returned in the same order received from the homeserver.
+func (c *CSAPI) GetAllPushRules(t *testing.T) gjson.Result {
+	t.Helper()
+
+	// We have to supply an empty string to the end of this path in order to generate a trailing slash.
+	// See https://github.com/matrix-org/matrix-spec/issues/457
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", ""})
+	pushRulesBytes := ParseJSON(t, res)
+	return gjson.ParseBytes(pushRulesBytes)
+}
+
+// GetPushRule queries the contents of a client's push rule by scope, kind and rule ID.
+// A parsed gjson result is returned. Fails the test if the query to server returns a non-2xx status code.
+//
+// Example of checking that a global underride rule contains the expected actions:
+//
+//	containsDisplayNameRule := c.GetPushRule(t, "global", "underride", ".m.rule.contains_display_name")
+//	must.MatchGJSON(
+//	  t,
+//	  containsDisplayNameRule,
+//	  match.JSONKeyEqual("actions", []interface{}{
+//	    "notify",
+//	    map[string]interface{}{"set_tweak": "sound", "value": "default"},
+//	    map[string]interface{}{"set_tweak": "highlight"},
+//	  }),
+//	)
+func (c *CSAPI) GetPushRule(t *testing.T, scope string, kind string, ruleID string) gjson.Result {
+	t.Helper()
+
+	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID})
+	pushRuleBytes := ParseJSON(t, res)
+	return gjson.ParseBytes(pushRuleBytes)
+}
+
+// SetPushRule creates a new push rule on the user, or modifies an existing one.
+// If `before` or `after` parameters are not set to an empty string, their values
+// will be set as the `before` and `after` query parameters respectively on the
+// "set push rules" client endpoint:
+// https://spec.matrix.org/v1.5/client-server-api/#put_matrixclientv3pushrulesscopekindruleid
+//
+// Example of setting a push rule with ID 'com.example.rule2' that must come after 'com.example.rule1':
+//
+//	c.SetPushRule(t, "global", "underride", "com.example.rule2", map[string]interface{}{
+//	  "actions": []string{"dont_notify"},
+//	}, nil, "com.example.rule1")
+func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID string, body map[string]interface{}, before string, after string) *http.Response {
+	t.Helper()
+
+	// If the `before` or `after` arguments have been provided, construct same-named query parameters
+	queryParams := url.Values{}
+	if before != "" {
+		queryParams.Add("before", before)
+	}
+	if after != "" {
+		queryParams.Add("after", after)
+	}
+
+	return c.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID}, WithJSONBody(t, body), WithQueries(queryParams))
+}
+
+// SendEventUnsynced sends `e` into the room.
 // Returns the event ID of the sent event.
-func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
+func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	c.txnID++
 	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
@@ -192,6 +272,14 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 	res := c.MustDoFunc(t, "PUT", paths, WithJSONBody(t, e.Content))
 	body := ParseJSON(t, res)
 	eventID := GetJSONFieldStr(t, body, "event_id")
+	return eventID
+}
+
+// SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
+// Returns the event ID of the sent event.
+func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
+	t.Helper()
+	eventID := c.SendEventUnsynced(t, roomID, e)
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
 	c.MustSyncUntil(t, SyncReq{}, SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID
@@ -325,6 +413,30 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 	}
 }
 
+// LoginUser will log in to a homeserver and create a new device on an existing user.
+func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
+	t.Helper()
+	reqBody := map[string]interface{}{
+		"identifier": map[string]interface{}{
+			"type": "m.id.user",
+			"user": localpart,
+		},
+		"password": password,
+		"type":     "m.login.password",
+	}
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, WithJSONBody(t, reqBody))
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+
+	userID = gjson.GetBytes(body, "user_id").Str
+	accessToken = gjson.GetBytes(body, "access_token").Str
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	return userID, accessToken, deviceID
+}
+
 //RegisterUser will register the user with given parameters and
 // return user ID & access token, and fail the test on network error
 func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
@@ -417,7 +529,11 @@ func (c *CSAPI) GetDefaultRoomVersion(t *testing.T) gomatrixserverlib.RoomVersio
 // WithRawBody sets the HTTP request body to `body`
 func WithRawBody(body []byte) RequestOpt {
 	return func(req *http.Request) {
-		req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		req.Body = ioutil.NopCloser(bytes.NewReader(body))
+		req.GetBody = func() (io.ReadCloser, error) {
+			r := bytes.NewReader(body)
+			return ioutil.NopCloser(r), nil
+		}
 		// we need to manually set this because we don't set the body
 		// in http.NewRequest due to using functional options, and only in NewRequest
 		// does the stdlib set this for us.

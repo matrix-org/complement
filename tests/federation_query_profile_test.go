@@ -79,11 +79,13 @@ func TestInboundFederationProfile(t *testing.T) {
 	)
 	cancel := srv.Listen()
 	defer cancel()
+	origin := gomatrixserverlib.ServerName(srv.ServerName())
 
 	// sytest: Non-numeric ports in server names are rejected
 	t.Run("Non-numeric ports in server names are rejected", func(t *testing.T) {
 		fedReq := gomatrixserverlib.NewFederationRequest(
 			"GET",
+			origin,
 			"hs1",
 			"/_matrix/federation/v1/query/profile"+
 				"?user_id=@user1:localhost:http"+
@@ -114,6 +116,7 @@ func TestInboundFederationProfile(t *testing.T) {
 
 		fedReq := gomatrixserverlib.NewFederationRequest(
 			"GET",
+			origin,
 			"hs1",
 			"/_matrix/federation/v1/query/profile"+
 				"?user_id=@alice:hs1"+
