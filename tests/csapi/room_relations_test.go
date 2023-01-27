@@ -208,7 +208,7 @@ func TestRelationsPagination(t *testing.T) {
 }
 
 func TestRelationsPaginationSync(t *testing.T) {
-  runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2944
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2944
 
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
