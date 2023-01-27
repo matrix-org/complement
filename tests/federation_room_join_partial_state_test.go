@@ -3320,8 +3320,8 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to join a room that is already joined & resyncing
 	t.Run("CanFastJoinDuringPartialStateJoin", func(t *testing.T) {
-		alice := deployment.RegisterUser(t, "hs1", "t42alice", "secret", false)
-		bob := deployment.RegisterUser(t, "hs1", "t42bob", "secret", false)
+		alice := deployment.RegisterUser(t, "hs1", "t44alice", "secret", false)
+		bob := deployment.RegisterUser(t, "hs1", "t44bob", "secret", false)
 
 		server := createTestServer(
 			t,
