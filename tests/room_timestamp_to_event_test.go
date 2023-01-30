@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -236,12 +237,12 @@ type eventTime struct {
 	AfterTimestamp  time.Time
 }
 
-var txnCounter int = 0
+var txnCounter int64 = 0
 
 func getTxnID(prefix string) (txnID string) {
-	txnId := fmt.Sprintf("%s-%d", prefix, txnCounter)
+	txnId := fmt.Sprintf("%s-%d", prefix, atomic.LoadInt64(&txnCounter))
 
-	txnCounter++
+	atomic.AddInt64(&txnCounter, 1)
 
 	return txnId
 }
