@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -93,7 +94,7 @@ type CSAPI struct {
 	// True to enable verbose logging
 	Debug bool
 
-	txnID int
+	txnID int64
 }
 
 // UploadContent uploads the provided content with an optional file name. Fails the test on error. Returns the MXC URI.
@@ -264,8 +265,8 @@ func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID stri
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
-	c.txnID++
-	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(c.txnID)}
+	txnID := int(atomic.AddInt64(&c.txnID, 1))
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(txnID)}
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
@@ -290,8 +291,8 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 // SendRedaction sends a redaction request. Will fail if the returned HTTP request code is not 200
 func (c *CSAPI) SendRedaction(t *testing.T, roomID string, e b.Event, eventID string) string {
 	t.Helper()
-	c.txnID++
-	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, strconv.Itoa(c.txnID)}
+	txnID := int(atomic.AddInt64(&c.txnID, 1))
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, strconv.Itoa(txnID)}
 	res := c.MustDoFunc(t, "PUT", paths, WithJSONBody(t, e.Content))
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "event_id")
@@ -1008,11 +1009,11 @@ func SplitMxc(mxcUri string) (string, string) {
 // user_id -> device_id -> content (map[string]interface{})
 func (c *CSAPI) SendToDeviceMessages(t *testing.T, evType string, messages map[string]map[string]map[string]interface{}) {
 	t.Helper()
-	c.txnID++
+	txnID := int(atomic.AddInt64(&c.txnID, 1))
 	c.MustDoFunc(
 		t,
 		"PUT",
-		[]string{"_matrix", "client", "v3", "sendToDevice", evType, strconv.Itoa(c.txnID)},
+		[]string{"_matrix", "client", "v3", "sendToDevice", evType, strconv.Itoa(txnID)},
 		WithJSONBody(
 			t,
 			map[string]map[string]map[string]map[string]interface{}{
