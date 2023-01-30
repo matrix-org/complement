@@ -27,6 +27,7 @@ type HomeserverDeployment struct {
 	FedBaseURL          string            // e.g https://localhost:48373
 	ContainerID         string            // e.g 10de45efba
 	AccessTokens        map[string]string // e.g { "@alice:hs1": "myAcc3ssT0ken" }
+	accessTokensMutex   sync.RWMutex
 	ApplicationServices map[string]string // e.g { "my-as-id": "id: xxx\nas_token: xxx ..."} }
 	DeviceIDs           map[string]string // e.g { "@alice:hs1": "myDeviceID" }
 	CSAPIClients        []*client.CSAPI
@@ -60,7 +61,9 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)
 		return nil
 	}
+	dep.accessTokensMutex.RLock()
 	token := dep.AccessTokens[userID]
+	dep.accessTokensMutex.RUnlock()
 	if token == "" && userID != "" {
 		t.Fatalf("Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, userID)
 		return nil
@@ -119,7 +122,9 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 	}
 
 	// remember the token so subsequent calls to deployment.Client return the user
+	dep.accessTokensMutex.Lock()
 	dep.AccessTokens[userID] = accessToken
+	dep.accessTokensMutex.Unlock()
 
 	client.UserID = userID
 	client.AccessToken = accessToken
