@@ -163,6 +163,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	// build the state list *before* we insert the new event
 	var stateEvents []*gomatrixserverlib.Event
+	room.StateMutex.RLock()
 	for _, ev := range room.State {
 		// filter out non-critical memberships if this is a partial-state join
 		if expectPartialState {
@@ -172,6 +173,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		}
 		stateEvents = append(stateEvents, ev)
 	}
+	room.StateMutex.RUnlock()
 
 	authEvents := room.AuthChainForEvents(stateEvents)
 
