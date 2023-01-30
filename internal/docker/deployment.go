@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +30,7 @@ type HomeserverDeployment struct {
 	ApplicationServices map[string]string // e.g { "my-as-id": "id: xxx\nas_token: xxx ..."} }
 	DeviceIDs           map[string]string // e.g { "@alice:hs1": "myDeviceID" }
 	CSAPIClients        []*client.CSAPI
+	CSAPIClientsMutex   sync.Mutex
 }
 
 // Updates the client and federation base URLs of the homeserver deployment.
@@ -76,7 +78,11 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 	}
+	// Appending a slice is not thread-safe. Protect the write with a mutex.
+	dep.CSAPIClientsMutex.Lock()
 	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	dep.CSAPIClientsMutex.Unlock()
+
 	return client
 }
 
@@ -101,7 +107,10 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 	}
+	// Appending a slice is not thread-safe. Protect the write with a mutex.
+	dep.CSAPIClientsMutex.Lock()
 	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	dep.CSAPIClientsMutex.Unlock()
 	var userID, accessToken, deviceID string
 	if isAdmin {
 		userID, accessToken, deviceID = client.RegisterSharedSecret(t, localpart, password, isAdmin)
@@ -133,7 +142,10 @@ func (d *Deployment) LoginUser(t *testing.T, hsName, localpart, password string)
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 	}
+	// Appending a slice is not thread-safe. Protect the write with a mutex.
+	dep.CSAPIClientsMutex.Lock()
 	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	dep.CSAPIClientsMutex.Unlock()
 	userID, accessToken, deviceID := client.LoginUser(t, localpart, password)
 
 	client.UserID = userID
