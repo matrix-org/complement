@@ -3345,18 +3345,21 @@ func TestPartialStateJoin(t *testing.T) {
 		eventID := body.Get("event_id").Str
 		t.Logf("Alice sent event event ID %s", eventID)
 
-		psj2Result := beginPartialStateJoin(t, server, serverRoom, bob)
-		defer psj2Result.Destroy(t)
-
-		bob.Client.Timeout = 2 * time.Second
-		paths = []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "send", "m.room.message", "0"}
-		res = alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    "Hello world!",
-		}))
-		body = gjson.ParseBytes(client.ParseJSON(t, res))
-		eventID = body.Get("event_id").Str
-		t.Logf("Bob sent event event ID %s", eventID)
+		bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+		alice.MustSyncUntil(t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(bob.UserID, serverRoom.RoomID),
+		)
+		t.Logf("Alice saw Bob's join")
+		bob.MustSyncUntil(t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(bob.UserID, serverRoom.RoomID),
+		)
+		t.Logf("Bob saw Bob's join")
 	})
 
 	t.Run("Leaving during resync is seen after the resync", func(t *testing.T) {
