@@ -7,6 +7,7 @@ on:
 
 jobs:
   check-signoff:
+    if: "github.event_name == 'pull_request'"
     uses: "matrix-org/backend-meta/.github/workflows/sign-off.yml@v2"
 
   complement-internal:
