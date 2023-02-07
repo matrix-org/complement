@@ -64,19 +64,45 @@ func TestRoomState(t *testing.T) {
 				"visibility":      "public",
 				"preset":          "public_chat",
 				"room_alias_name": "room_alias",
+
+				// Add power level overrides so that it doesn't create the
+				// default power levels and forces the fields to exist.
+				"power_level_content_override": map[string]interface{}{
+					"ban": 51,
+					"events": map[string]interface{}{
+						"m.room.name": 59,
+					},
+					"events_default": 1,
+					"invite":         2,
+					"kick":           52,
+					"notifications": map[string]interface{}{
+						"room": 53,
+					},
+					"redact":        54,
+					"state_default": 55,
+					// An empty users map should get merged with the default
+					// events map which will include the creator as an admin.
+					"users":         map[string]interface{}{},
+					"users_default": 3,
+				},
 			})
 			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
-					match.JSONKeyPresent("ban"),
-					match.JSONKeyPresent("kick"),
-					match.JSONKeyPresent("redact"),
-					match.JSONKeyPresent("users_default"),
-					match.JSONKeyPresent("state_default"),
-					match.JSONKeyPresent("events_default"),
-					match.JSONKeyPresent("users"),
-					match.JSONKeyPresent("events"),
+					match.JSONKeyEqual("ban", 51),
+					match.JSONKeyEqual("events.m\\.room\\.name", 59),
+					match.JSONKeyEqual("events.m\\.room\\.power_levels", 100),
+					match.JSONKeyEqual("events_default", 1),
+					match.JSONKeyEqual("invite", 2),
+					match.JSONKeyEqual("kick", 52),
+					match.JSONKeyEqual("notifications.room", 53),
+					match.JSONKeyEqual("redact", 54),
+					match.JSONKeyEqual("state_default", 55),
+
+					// Verify that Alice got added as an admin.
+					match.JSONKeyEqual("users.@alice:hs1", 100),
+					match.JSONKeyEqual("users_default", 3),
 				},
 			})
 		})
