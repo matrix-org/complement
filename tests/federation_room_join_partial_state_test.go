@@ -3502,29 +3502,37 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, rocky)
 		defer psjResult.Destroy(t)
 
+		assertUserInDirectory := func(t *testing.T, localpart string, userID string) {
+			reqBody := client.WithJSONBody(t, map[string]interface{}{
+				"search_term": localpart,
+			})
+
+			// The user directory is updated by a background job in Synapse which runs
+			// asynchronously. We check for up to 3 seconds that the job has completed, after which
+			// the job should have finished and the user directory should be up to date.
+			rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody,
+				client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+					body, err := ioutil.ReadAll(res.Body)
+					if err != nil {
+						t.Fatalf("something broke: %v", err)
+					}
+					user_id := gjson.GetBytes(body, "results.0.user_id")
+					if user_id.Str == userID {
+						return true
+					}
+					return false
+				}))
+		}
+
 		// sanity check - before the homeserver has completed syncing state we would expect rocky to show up
-		reqBody := client.WithJSONBody(t, map[string]interface{}{
-			"search_term": rocky.UserID,
-		})
-		rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody,
-			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
-				body, err := ioutil.ReadAll(res.Body)
-				if err != nil {
-					t.Fatalf("something broke: %v", err)
-				}
-				user_id := gjson.GetBytes(body, "results.0.user_id")
-				if user_id.Str == rocky.UserID {
-					return true
-				}
-				return false
-			}))
+		assertUserInDirectory(t, "rocky", rocky.UserID)
 
 		// .. but not rod's
-		reqBody2 := client.WithJSONBody(t, map[string]interface{}{
+		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"search_term": "rod",
 		})
-		res2 := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody2)
-		must.MatchResponse(t, res2, match.HTTPResponse{
+		res := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody)
+		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
 				match.JSONKeyEqual("results", [0]string{}),
@@ -3534,41 +3542,8 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.FinishStateRequest()
 		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, rocky)
 
-		// the user directory is updated by a background job in Synapse which is not guaranteed to have completed by the
-		// time the state sync has completed. We check for up to 3 seconds that the job has completed, after which the
-		// job should have finished and rod and todd should be visible in the user directory
-		reqBody3 := client.WithJSONBody(t, map[string]interface{}{
-			"search_term": "rod",
-		})
-
-		rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody3,
-			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
-				body, err := ioutil.ReadAll(res.Body)
-				if err != nil {
-					t.Fatalf("something broke: %v", err)
-				}
-				user_id := gjson.GetBytes(body, "results.0.user_id")
-				if user_id.Str == server.UserID("rod") {
-					return true
-				}
-				return false
-			}))
-
-		reqBody4 := client.WithJSONBody(t, map[string]interface{}{
-			"search_term": "todd",
-		})
-		rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody4,
-			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
-				body, err := ioutil.ReadAll(res.Body)
-				if err != nil {
-					t.Fatalf("something broke: %v", err)
-				}
-				user_id := gjson.GetBytes(body, "results.0.user_id")
-				if user_id.Str == server.UserID("todd") {
-					return true
-				}
-				return false
-			}))
+		assertUserInDirectory(t, "rod", server.UserID("rod"))
+		assertUserInDirectory(t, "todd", server.UserID("todd"))
 	})
 
 	// TODO: tests which assert that:
