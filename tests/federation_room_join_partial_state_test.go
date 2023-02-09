@@ -3335,15 +3335,6 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
 
-		alice.Client.Timeout = 2 * time.Second
-		paths := []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "send", "m.room.message", "0"}
-		res := alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    "Hello world!",
-		}))
-		body := gjson.ParseBytes(client.ParseJSON(t, res))
-		eventID := body.Get("event_id").Str
-		t.Logf("Alice sent event event ID %s", eventID)
 
 		bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
 		alice.MustSyncUntil(t,
