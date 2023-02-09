@@ -1383,7 +1383,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// alice should be able to sync the room. We can't use SyncJoinedTo here because that looks for the
 		// membership event in the response (which we won't see, because all of the outlier events).
-		// instead let's just check for the presence of the room in the timeline
+		// instead let's just check for the presence of the room in the timeline.
+		// it can take a while for the homeserver to update its state for 100+ events, so raise
+		// the default timeout.
+		alice.SyncUntilTimeout = 20 * time.Second
 		alice.MustSyncUntil(t,
 			client.SyncReq{},
 			func(clientUserID string, topLevelSyncJSON gjson.Result) error {
