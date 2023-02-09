@@ -3335,7 +3335,6 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
 
-
 		bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
 		alice.MustSyncUntil(t,
 			client.SyncReq{
