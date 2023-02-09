@@ -3452,35 +3452,33 @@ func TestPartialStateJoin(t *testing.T) {
 		})
 		terry.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "directory", "list", "room", serverRoom.RoomID}, reqBody)
 
+		assertPublicRoomDirectoryMemberCountEquals := func(t *testing.T, expectedMemberCount int64) {
+			// In Synapse, rooms stats are updated by a background job which runs asynchronously.
+			// To account for that, we check for up to 3 seconds that the job has completed.
+			terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
+				client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
+					body, err := ioutil.ReadAll(res.Body)
+					if err != nil {
+						t.Fatalf("something broke: %v", err)
+					}
+					numJoinedMembers := gjson.GetBytes(body, "chunk.0.num_joined_members")
+					if numJoinedMembers.Int() == expectedMemberCount {
+						return true
+					}
+					return false
+				}))
+		}
+
 		// sanity check - before the state has completed syncing state we would expect only one user
 		// to show up in the room list
-		res := terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"})
-
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("chunk.0.num_joined_members", 1),
-			}})
+		assertPublicRoomDirectoryMemberCountEquals(t, 1)
 
 		// finish syncing the state
 		psjResult.FinishStateRequest()
 		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, terry)
 
-		// In Synapse rooms stats are updated by a background job which is not guaranteed to have completed by the time
-		// the state sync has completed. To account for that, we check for up to 3 seconds that the job has completed.
 		// The number of joined users should now be 3: one local user (terry) and two remote (charlie and derek)
-		terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
-			client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
-				body, err := ioutil.ReadAll(res.Body)
-				if err != nil {
-					t.Fatalf("something broke: %v", err)
-				}
-				numJoinedMembers := gjson.GetBytes(body, "chunk.0.num_joined_members")
-				if numJoinedMembers.Int() == 3 {
-					return true
-				}
-				return false
-			}))
+		assertPublicRoomDirectoryMemberCountEquals(t, 3)
 	})
 
 	t.Run("User directory is correctly updated once state re-sync completes", func(t *testing.T) {
