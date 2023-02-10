@@ -3321,6 +3321,92 @@ func TestPartialStateJoin(t *testing.T) {
 		must.MatchResponse(t, response, spec)
 	})
 
+	// we should be able to join a room that is already joined & resyncing
+	t.Run("CanFastJoinDuringPartialStateJoin", func(t *testing.T) {
+		alice := deployment.RegisterUser(t, "hs1", "t44alice", "secret", false)
+		bob := deployment.RegisterUser(t, "hs1", "t44bob", "secret", false)
+
+		server := createTestServer(
+			t,
+			deployment,
+			federation.HandleTransactionRequests(nil, nil),
+		)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy(t)
+
+		bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+		alice.MustSyncUntil(t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(bob.UserID, serverRoom.RoomID),
+		)
+		t.Logf("Alice saw Bob's join")
+		bob.MustSyncUntil(t,
+			client.SyncReq{
+				Filter: buildLazyLoadingSyncFilter(nil),
+			},
+			client.SyncJoinedTo(bob.UserID, serverRoom.RoomID),
+		)
+		t.Logf("Bob saw Bob's join")
+	})
+
+	// Test that display name changes do not block during a resync.
+	// Display name changes are represented by `m.room_membership` events with a membership of
+	// "join", and can be confused with join events.
+	t.Run("Can change display name during partial state join", func(t * testing.T) {
+		alice := deployment.RegisterUser(t, "hs1", "t45alice", "secret", false)
+
+		pdusChannel := make(chan *gomatrixserverlib.Event)
+		server := createTestServer(
+			t,
+			deployment,
+			federation.HandleTransactionRequests(
+				func(e *gomatrixserverlib.Event) {
+					pdusChannel <- e
+				},
+				// we don't expect EDUs
+				func(e gomatrixserverlib.EDU) {
+					if e.Type != "m.presence" {
+						t.Fatalf("Received unexpected EDU: %s", e.Content)
+					}
+				},
+			),
+		)
+		cancel := server.Listen()
+		defer cancel()
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy(t)
+
+		alice.MustDoFunc(t,
+			"PUT",
+			[]string{"_matrix", "client", "v3", "profile", alice.UserID, "displayname"},
+			client.WithJSONBody(t, map[string]interface{}{
+				"displayname": "alice 2",
+			}),
+		)
+		t.Logf("Alice changed display name")
+
+		select {
+		case pdu := <-pdusChannel:
+			content := gjson.ParseBytes(pdu.Content())
+			if pdu.Type() != "m.room.member" ||
+			   *pdu.StateKey() != alice.UserID ||
+			   content.Get("membership").Str != "join" ||
+			   content.Get("displayname").Str != "alice 2" {
+				t.Errorf("Did not receive expected display name change event: %s", pdu.JSON())
+			}
+		case <-time.After(1 * time.Second):
+			t.Error("Display name change event not received after one second")
+		}
+	})
+
 	t.Run("Leaving during resync is seen after the resync", func(t *testing.T) {
 		// Before testing that leaves during resyncs are seen during resyncs, sanity
 		// check that leaves during resyncs appear after the resync.
