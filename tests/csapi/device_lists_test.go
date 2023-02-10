@@ -2,6 +2,7 @@ package csapi_tests
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -19,11 +20,11 @@ import (
 //  1. `/sync`'s `device_lists.changed/left` contain the correct user IDs.
 //  2. `/keys/query` returns the correct information after device list updates.
 func TestDeviceListUpdates(t *testing.T) {
-	localpartIndex := 0
+	var localpartIndex int64 = 0
 	// generateLocalpart generates a unique localpart based on the given name.
 	generateLocalpart := func(localpart string) string {
-		localpartIndex++
-		return fmt.Sprintf("%s%d", localpart, localpartIndex)
+		index := atomic.AddInt64(&localpartIndex, 1)
+		return fmt.Sprintf("%s%d", localpart, index)
 	}
 
 	// uploadNewKeys uploads a new set of keys for a given client.
