@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
       - name: "Run internal Complement tests"
         run: |
-          go test ./internal/... 
+          go test ./internal/...
       - name: "Run Homerunner tests" # use a simple static dendrite image to sanity check homerunner works
         run: |
           mkdir -p homeserver
@@ -71,12 +71,14 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
           go get -v github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+          mkdir .gotestfmt/github -p
+          cp .ci/complement_package.gotpl .gotestfmt/github/package.gotpl
 
       - name: "Checkout corresponding ${{ matrix.homeserver }} branch"
         shell: bash
         run: |
           mkdir -p homeserver
-          
+
           # Attempt to use the version of the homeserver which best matches the
           # current build.
           #
@@ -84,7 +86,7 @@ jobs:
           #    similarly named branch (GITHUB_HEAD_REF for pull requests,
           #    otherwise GITHUB_REF).
           # 2. otherwise, use the default homeserver branch ("HEAD")
-          
+
           for BRANCH_NAME in "$GITHUB_HEAD_REF" "${GITHUB_REF#refs/heads/}" "HEAD"; do
             # Skip empty branch names, merge commits, and our default branch.
             # (If we are on complement's default branch, we want to fall through to the HS's default branch
@@ -119,7 +121,7 @@ jobs:
 
       - run: |
           set -o pipefail &&
-          ${{ matrix.env }} go test -v -json -tags "${{ matrix.tags }}" -timeout "${{ matrix.timeout }}" ./tests/... 2>&1 | gotestfmt
+          ${{ matrix.env }} go test -v -json -tags "${{ matrix.tags }}" -timeout "${{ matrix.timeout }}" ./tests/... | .ci/scripts/gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         name: Run Complement Tests
         env:
