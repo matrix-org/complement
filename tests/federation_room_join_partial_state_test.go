@@ -3645,7 +3645,7 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Skipf("Skipping test of Synapse-internal API on %s", runtime.Homeserver)
 		}
 		t.Log("Alice begins a partial join to a room")
-		alice := deployment.RegisterUser(t, "hs1", "t41alice", "secret", true)
+		alice := deployment.RegisterUser(t, "hs1", "t46alice", "secret", true)
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
