@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/matrix-org/complement/runtime"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -3636,6 +3637,49 @@ func TestPartialStateJoin(t *testing.T) {
 	//   - Join+Leave+Rejoin works
 	//   - Join + remote kick works
 	//   - Join + remote ban works, then cannot rejoin
+
+	t.Run("Purge during resync", func(t *testing.T) {
+		if runtime.Homeserver != runtime.Synapse {
+			// TOOD: Pull this into a Synapse-specific suite when someone figures out how
+			// to do that (https://github.com/matrix-org/complement/issues/226)
+			t.Skipf("Skipping test of Synapse-internal API on %s", runtime.Homeserver)
+		}
+		t.Log("Alice begins a partial join to a room")
+		alice := deployment.RegisterUser(t, "hs1", "t41alice", "secret", true)
+		server := createTestServer(t, deployment)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		defer psjResult.Destroy(t)
+
+		t.Log("Alice waits to see her join")
+		alice.MustSyncUntil(
+			t,
+			client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		t.Log("Alice purges that room")
+		alice.MustDoFunc(t, "DELETE", []string{"_synapse", "admin", "v1", "rooms", serverRoom.RoomID}, client.WithJSONBody(t, map[string]interface{}{}))
+
+		// Note: clients don't get told about purged rooms. No leave event for you!
+		t.Log("Alice does an initial sync after the purge")
+		result, _ := alice.MustSync(
+			t,
+			client.SyncReq{Since: "", Filter: buildLazyLoadingSyncFilter(nil)},
+		)
+
+		t.Log("The response should not include the purged room")
+		must.MatchGJSON(
+			t,
+			result,
+			match.JSONKeyMissing(
+				fmt.Sprintf("rooms.join.%s", client.GjsonEscape(serverRoom.RoomID)),
+			),
+		)
+	})
 }
 
 // test reception of an event over federation during a resync
