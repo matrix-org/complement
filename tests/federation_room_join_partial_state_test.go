@@ -3678,10 +3678,27 @@ func TestPartialStateJoin(t *testing.T) {
 		alice.MustDoFunc(t, "DELETE", []string{"_synapse", "admin", "v1", "rooms", serverRoom.RoomID}, client.WithJSONBody(t, map[string]interface{}{}))
 
 		// Note: clients don't get told about purged rooms. No leave event for you!
-		t.Log("Alice does an initial sync after the purge")
-		result, _ := alice.MustSync(
+		t.Log("Alice does an initial sync after the purge, until the response does not include the purged room")
+
+		// Note: we retry this sync a few times, because the purge may happen on another
+		// worker to that serving the sync response.
+		queryParams := url.Values{
+			"timeout": []string{"1000"},
+			"filter":  []string{buildLazyLoadingSyncFilter(nil)},
+		}
+		matcher := match.JSONKeyMissing(
+			fmt.Sprintf("rooms.join.%s", client.GjsonEscape(serverRoom.RoomID)),
+		)
+		alice.MustDoFunc(
 			t,
-			client.SyncReq{Since: "", Filter: buildLazyLoadingSyncFilter(nil)},
+			"GET",
+			[]string{"_matrix", "client", "v3", "sync"},
+			client.WithQueries(queryParams),
+			client.WithRetryUntil(5*time.Second, func(res *http.Response) bool {
+				body := client.ParseJSON(t, res)
+				err := matcher(body)
+				return err == nil
+			}),
 		)
 
 		// Send the state ids response now. Synapse will try to process it and fail
@@ -3689,15 +3706,6 @@ func TestPartialStateJoin(t *testing.T) {
 		// give up the resync process and not make any more requests to the complement
 		// HS, avoiding the flake described above.
 		psjResult.FinishStateRequest()
-
-		t.Log("The response should not include the purged room")
-		must.MatchGJSON(
-			t,
-			result,
-			match.JSONKeyMissing(
-				fmt.Sprintf("rooms.join.%s", client.GjsonEscape(serverRoom.RoomID)),
-			),
-		)
 	})
 }
 
