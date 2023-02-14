@@ -3646,7 +3646,12 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		t.Log("Alice begins a partial join to a room")
 		alice := deployment.RegisterUser(t, "hs1", "t46alice", "secret", true)
-		server := createTestServer(t, deployment)
+		// Ignore PDUs (leaves from shutting down the room) and EDUs (presence).
+		server := createTestServer(
+			t,
+			deployment,
+			federation.HandleTransactionRequests(nil, nil),
+		)
 		cancel := server.Listen()
 		defer cancel()
 
