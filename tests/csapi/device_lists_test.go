@@ -163,6 +163,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncJoinedTo(bob.UserID, roomID),
 			syncDeviceListsHas("changed", bob.UserID),
 		)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
@@ -209,6 +210,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncJoinedTo(alice.UserID, roomID),
 			syncDeviceListsHas("changed", bob.UserID),
 		)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
@@ -261,6 +263,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncLeftFrom(bob.UserID, roomID),
 			syncDeviceListsHas("left", bob.UserID),
 		)
 
@@ -311,6 +314,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncLeftFrom(alice.UserID, roomID),
 			syncDeviceListsHas("left", bob.UserID),
 		)
 
@@ -362,6 +366,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncLeftFrom(bob.UserID, roomID),
 			syncDeviceListsHas("left", bob.UserID),
 		)
 
@@ -382,6 +387,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncJoinedTo(bob.UserID, roomID),
 			syncDeviceListsHas("changed", bob.UserID),
 		)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
