@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/matrix-org/complement/runtime"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -3636,6 +3637,81 @@ func TestPartialStateJoin(t *testing.T) {
 	//   - Join+Leave+Rejoin works
 	//   - Join + remote kick works
 	//   - Join + remote ban works, then cannot rejoin
+
+	t.Run("Purge during resync", func(t *testing.T) {
+		if runtime.Homeserver != runtime.Synapse {
+			// TOOD: Pull this into a Synapse-specific suite when someone figures out how
+			// to do that (https://github.com/matrix-org/complement/issues/226)
+			t.Skipf("Skipping test of Synapse-internal API on %s", runtime.Homeserver)
+		}
+		t.Log("Alice begins a partial join to a room")
+		alice := deployment.RegisterUser(t, "hs1", "t46alice", "secret", true)
+		// Ignore PDUs (leaves from shutting down the room) and EDUs (presence).
+		server := createTestServer(
+			t,
+			deployment,
+			federation.HandleTransactionRequests(nil, nil),
+		)
+		cancel := server.Listen()
+		defer cancel()
+
+		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+		// NB: because we do not end up joined to this room at the end of the test,
+		// we do not `defer psjResult.Destroy(t)` as usual; see the comments below
+		// about races.
+
+		t.Log("Alice waits to see her join")
+		alice.MustSyncUntil(
+			t,
+			client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+		)
+
+		// Synapse's partial-state-resync process can race with the purge.
+		// If the purge completes and Synapse then makes a /state_ids request to us
+		// after we've shut down the complement test server, we can end up with flakey
+		// test failures (c.f. https://github.com/matrix-org/synapse/issues/13975)
+		// Avoid this by
+		// - waiting for Synapse to make a state_ids request
+		// - serving the response after the purge (see next comment).
+
+		t.Log("Wait for /state_ids request")
+		psjResult.AwaitStateIdsRequest(t)
+
+		t.Log("Alice purges that room")
+		alice.MustDoFunc(t, "DELETE", []string{"_synapse", "admin", "v1", "rooms", serverRoom.RoomID}, client.WithJSONBody(t, map[string]interface{}{}))
+
+		// Note: clients don't get told about purged rooms. No leave event for you!
+		t.Log("Alice does an initial sync after the purge, until the response does not include the purged room")
+
+		// Note: we retry this sync a few times, because the purge may happen on another
+		// worker to that serving the sync response.
+		queryParams := url.Values{
+			"timeout": []string{"1000"},
+			"filter":  []string{buildLazyLoadingSyncFilter(nil)},
+		}
+		matcher := match.JSONKeyMissing(
+			fmt.Sprintf("rooms.join.%s", client.GjsonEscape(serverRoom.RoomID)),
+		)
+		alice.MustDoFunc(
+			t,
+			"GET",
+			[]string{"_matrix", "client", "v3", "sync"},
+			client.WithQueries(queryParams),
+			client.WithRetryUntil(5*time.Second, func(res *http.Response) bool {
+				body := client.ParseJSON(t, res)
+				err := matcher(body)
+				return err == nil
+			}),
+		)
+
+		// Send the state ids response now. Synapse will try to process it and fail
+		// because of the purge. There are no other destinations here so Synapse should
+		// give up the resync process and not make any more requests to the complement
+		// HS, avoiding the flake described above.
+		psjResult.FinishStateRequest()
+	})
 }
 
 // test reception of an event over federation during a resync
