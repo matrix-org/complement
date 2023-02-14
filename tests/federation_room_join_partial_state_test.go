@@ -3652,7 +3652,9 @@ func TestPartialStateJoin(t *testing.T) {
 
 		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
-		defer psjResult.Destroy(t)
+		// NB: because we do not end up joined to this room at the end of the test,
+		// we do not `defer psjResult.Destroy(t)` as usual; see the comments below
+		// about races.
 
 		t.Log("Alice waits to see her join")
 		alice.MustSyncUntil(
@@ -3660,6 +3662,17 @@ func TestPartialStateJoin(t *testing.T) {
 			client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
 			client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
 		)
+
+		// Synapse's partial-state-resync process can race with the purge.
+		// If the purge completes and Synapse then makes a /state_ids request to us
+		// after we've shut down the complement test server, we can end up with flakey
+		// test failures (c.f. https://github.com/matrix-org/synapse/issues/13975)
+		// Avoid this by
+		// - waiting for Synapse to make a state_ids request
+		// - serving the response after the purge (see next comment).
+
+		t.Log("Wait for /state_ids request")
+		psjResult.AwaitStateIdsRequest(t)
 
 		t.Log("Alice purges that room")
 		alice.MustDoFunc(t, "DELETE", []string{"_synapse", "admin", "v1", "rooms", serverRoom.RoomID}, client.WithJSONBody(t, map[string]interface{}{}))
@@ -3670,6 +3683,12 @@ func TestPartialStateJoin(t *testing.T) {
 			t,
 			client.SyncReq{Since: "", Filter: buildLazyLoadingSyncFilter(nil)},
 		)
+
+		// Send the state ids response now. Synapse will try to process it and fail
+		// because of the purge. There are no other destinations here so Synapse should
+		// give up the resync process and not make any more requests to the complement
+		// HS, avoiding the flake described above.
+		psjResult.FinishStateRequest()
 
 		t.Log("The response should not include the purged room")
 		must.MatchGJSON(
