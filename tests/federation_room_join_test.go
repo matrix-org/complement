@@ -88,6 +88,36 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	})
 }
 
+// This tests that joining a room with multiple ?server_name=s works correctly.
+// The join should succeed even if the first server is not in the room.
+func TestJoinFederatedRoomFailOver(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs2", "@bob:hs2")
+
+	srv := federation.NewServer(t, deployment)
+	cancel := srv.Listen()
+	defer cancel()
+
+	srv.Mux().Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		t.Logf("Complement homeserver responds to /make_join with 404, M_NOT_FOUND.")
+		w.WriteHeader(404)
+		w.Write([]byte(`{
+			"errcode": "M_NOT_FOUND",
+			"error": "Unknown room."
+		}`))
+	})).Methods("GET")
+
+	roomID := bob.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	t.Logf("%s created room %s.", bob.UserID, roomID)
+
+	t.Logf("%s joins the room via {complement,hs2}.", alice.UserID)
+	alice.JoinRoom(t, roomID, []string{srv.ServerName(), "hs2"})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+}
+
 // This tests that joining a room over federation works in the presence of:
 // - Events with missing signatures
 // - Events with bad signatures
