@@ -143,8 +143,15 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
-		// check the membership seen over the federation
+		// wait for the membership to arrive over federation
+		start := time.Now()
 		knockerState := serverRoom.CurrentState("m.room.member", knockingUser.UserID)
+		for knockerState == nil && time.Since(start) < 5 * time.Second {
+			time.Sleep(100 * time.Millisecond)
+			knockerState = serverRoom.CurrentState("m.room.member", knockingUser.UserID)
+		}
+
+		// check the membership seen over the federation
 		if knockerState == nil {
 			t.Errorf("Did not get membership state for knocking user")
 		} else {
