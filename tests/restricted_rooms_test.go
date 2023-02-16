@@ -451,16 +451,10 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	// Charlie leaves the room (so they can rejoin).
 	charlie.LeaveRoom(t, room)
 
-	// Ensure the events have synced to hs2.
-	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
-				return false
-			}
-			return ev.Get("content").Get("membership").Str == "leave"
-		},
-	))
+	// Ensure the events have synced to hs1 and hs2, otherwise the joins below may
+	// happen before the leaves, from the perspective of hs1 and hs2.
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, room))
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, room))
 
 	// Bob leaves the allowed room so that hs2 doesn't know if Charlie is in the
 	// allowed room or not.
