@@ -3719,8 +3719,61 @@ func TestPartialStateJoin(t *testing.T) {
 			// Cleanup.
 			psjResult.FinishStateRequest()
 		})
-		// TODO: tests which assert that:
-		//   - Join + remote ban works, then cannot rejoin
+
+		t.Run("can be triggered by remote ban", func(t *testing.T) {
+			alice := deployment.RegisterUser(t, "hs1", "t51alice", "secret", false)
+			handleTransactions := federation.HandleTransactionRequests(
+				// Accept all PDUs and EDUs
+				func(e *gomatrixserverlib.Event) {},
+				func(e gomatrixserverlib.EDU) {},
+			)
+			server := createTestServer(t, deployment, handleTransactions)
+			cancel := server.Listen()
+			defer cancel()
+
+			serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+			t.Log("Alice partial-joins her room")
+			psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+			// Alice is not joined to the room at the end of the test, so we do not
+			// `defer psjResult.Destroy(t)`.
+
+			t.Log("Alice waits to see her join")
+			aliceNextBatch := alice.MustSyncUntil(
+				t,
+				client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+				client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+			)
+
+			t.Log("A resident server user bans Alice from the room.")
+			kickEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+				Type:     "m.room.member",
+				StateKey: b.Ptr(alice.UserID),
+				Sender:   server.UserID("charlie"),
+				Content:  map[string]interface{}{"membership": "ban"},
+				AuthEvents: serverRoom.EventIDsOrReferences([]*gomatrixserverlib.Event{
+					serverRoom.CurrentState("m.room.create", ""),
+					serverRoom.CurrentState("m.room.power_levels", ""),
+					serverRoom.CurrentState("m.room.member", alice.UserID),
+					serverRoom.CurrentState("m.room.member", server.UserID("charlie")),
+				}),
+			})
+			serverRoom.AddEvent(kickEvent)
+			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{kickEvent.JSON()}, nil)
+
+			// The kick occurs mid-resync, because we have not yet called
+			// psjResult.FinishStateRequest().
+			t.Log("Alice sees that she's been banned")
+			aliceNextBatch = alice.MustSyncUntil(
+				t,
+				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+				// TODO: introduce a SyncBannedFrom which checks the membership of the
+				// leave event
+				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+			)
+
+			// Cleanup.
+			psjResult.FinishStateRequest()
+		})
 	})
 
 	t.Run("Room stats are correctly updated once state re-sync completes", func(t *testing.T) {
