@@ -3575,9 +3575,52 @@ func TestPartialStateJoin(t *testing.T) {
 				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
 			)
 		})
+
+		t.Run("succeeds, then rejoin succeeds without resync completing", func(t *testing.T) {
+			alice := deployment.RegisterUser(t, "hs1", "t48alice", "secret", false)
+			handleTransactions := federation.HandleTransactionRequests(
+				// Accept all PDUs and EDUs
+				func(e *gomatrixserverlib.Event) {},
+				func(e gomatrixserverlib.EDU) {},
+			)
+			server := createTestServer(t, deployment, handleTransactions)
+			cancel := server.Listen()
+			defer cancel()
+
+			serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+			t.Log("Alice partial-joins her room")
+			psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+			defer psjResult.Destroy(t)
+
+			t.Log("Alice waits to see her join")
+			aliceNextBatch := alice.MustSyncUntil(
+				t,
+				client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+				client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+			)
+
+			t.Log("Alice leaves the room")
+			alice.LeaveRoom(t, serverRoom.RoomID)
+
+			t.Log("Alice sees Alice's leave")
+			aliceNextBatch = alice.MustSyncUntil(
+				t,
+				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+			)
+
+			// The resync has not completed because we have not called psjResult.FinishStateRequest()
+			t.Log("Alice rejoins her room")
+			alice.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			aliceNextBatch = alice.MustSyncUntil(
+				t,
+				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+				client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+			)
+
+		})
 		// TODO: tests which assert that:
 		//   - Join+Leave+Join works
-		//   - Join+Leave+Rejoin works
 		//   - Join + remote kick works
 		//   - Join + remote ban works, then cannot rejoin
 	})
