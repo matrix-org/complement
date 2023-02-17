@@ -3512,7 +3512,7 @@ func TestPartialStateJoin(t *testing.T) {
 				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
 			)
 
-			t.Logf("Alice's leave is recieved by the resident server")
+			t.Logf("Alice's leave is received by the resident server")
 			select {
 			case <-time.After(1 * time.Second):
 				t.Fatal("Resident server did not receive Alice's leave")
