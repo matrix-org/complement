@@ -3444,9 +3444,6 @@ func TestPartialStateJoin(t *testing.T) {
 				leaveCompleted.Finish()
 			}()
 
-			// We want Synapse to receive the leave before its resync completes.
-			// HACK: Use a sleep to try and ensure this.
-			time.Sleep(250 * time.Millisecond)
 			t.Log("The resync finishes")
 			psjResult.FinishStateRequest()
 
