@@ -3520,8 +3520,62 @@ func TestPartialStateJoin(t *testing.T) {
 			}
 		})
 
+		// Test that the original joiner can leave during the resync, even after someone else has joined
+		t.Run("works after a second partial join", func(t *testing.T) {
+			alice := deployment.RegisterUser(t, "hs1", "t47alice", "secret", false)
+			bob := deployment.RegisterUser(t, "hs1", "t47bob", "secret", false)
+			handleTransactions := federation.HandleTransactionRequests(
+				// Accept all PDUs and EDUs
+				func(e *gomatrixserverlib.Event) {},
+				func(e gomatrixserverlib.EDU) {},
+			)
+			server := createTestServer(t, deployment, handleTransactions)
+			cancel := server.Listen()
+			defer cancel()
+
+			serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+			t.Log("Alice partial-joins her room")
+			psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
+			// At the end of the test, keep Bob in the room. Have him make a /members
+			// call to ensure the resync has completed.
+			psjResult.User = bob
+			defer psjResult.Destroy(t)
+
+			t.Log("Alice sees her join")
+			aliceNextBatch := alice.MustSyncUntil(
+				t,
+				client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+				client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
+			)
+
+			t.Log("Bob joins too")
+			bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+
+			t.Log("Bob waits to see his join")
+			bobNextBatch := bob.MustSyncUntil(
+				t,
+				client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
+				client.SyncJoinedTo(bob.UserID, serverRoom.RoomID),
+			)
+
+			t.Log("Alice leaves the room")
+			alice.LeaveRoom(t, serverRoom.RoomID)
+
+			t.Log("Alice sees Alice's leave")
+			aliceNextBatch = alice.MustSyncUntil(
+				t,
+				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+			)
+
+			t.Log("Bob sees Alice's leave")
+			bobNextBatch = bob.MustSyncUntil(
+				t,
+				client.SyncReq{Since: bobNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+			)
+		})
 		// TODO: tests which assert that:
-		//   - Join+Join+Leave+Leave works
 		//   - Join+Leave+Join works
 		//   - Join+Leave+Rejoin works
 		//   - Join + remote kick works
