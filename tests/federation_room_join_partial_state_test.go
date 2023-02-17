@@ -3413,7 +3413,6 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Run("is seen after the resync", func(t *testing.T) {
 			// Before testing that leaves during resyncs are seen during resyncs, sanity
 			// check that leaves during resyncs appear after the resync.
-			t.Log("Alice begins a partial join to a room")
 			alice := deployment.RegisterUser(t, "hs1", "t42alice", "secret", false)
 			handleTransactions := federation.HandleTransactionRequests(
 				// Accept all PDUs and EDUs
@@ -3480,7 +3479,6 @@ func TestPartialStateJoin(t *testing.T) {
 				func(e gomatrixserverlib.EDU) {},
 			)
 
-			t.Log("Alice begins a partial join to a room")
 			alice := deployment.RegisterUser(t, "hs1", "t43alice", "secret", false)
 			server := createTestServer(
 				t,
@@ -3491,6 +3489,7 @@ func TestPartialStateJoin(t *testing.T) {
 			defer cancel()
 
 			serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+			t.Log("Alice begins a partial join to a room")
 			psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 			defer psjResult.Destroy(t)
 
