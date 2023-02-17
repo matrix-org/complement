@@ -3359,7 +3359,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// Test that display name changes do not block during a resync.
 	// Display name changes are represented by `m.room_membership` events with a membership of
 	// "join", and can be confused with join events.
-	t.Run("Can change display name during partial state join", func(t * testing.T) {
+	t.Run("Can change display name during partial state join", func(t *testing.T) {
 		alice := deployment.RegisterUser(t, "hs1", "t45alice", "secret", false)
 
 		pdusChannel := make(chan *gomatrixserverlib.Event)
@@ -3398,9 +3398,9 @@ func TestPartialStateJoin(t *testing.T) {
 		case pdu := <-pdusChannel:
 			content := gjson.ParseBytes(pdu.Content())
 			if pdu.Type() != "m.room.member" ||
-			   *pdu.StateKey() != alice.UserID ||
-			   content.Get("membership").Str != "join" ||
-			   content.Get("displayname").Str != "alice 2" {
+				*pdu.StateKey() != alice.UserID ||
+				content.Get("membership").Str != "join" ||
+				content.Get("displayname").Str != "alice 2" {
 				t.Errorf("Did not receive expected display name change event: %s", pdu.JSON())
 			}
 		case <-time.After(1 * time.Second):
