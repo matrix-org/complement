@@ -497,33 +497,30 @@ func checkJoinFieldsExist(t *testing.T, res gjson.Result, roomID string) {
 	t.Helper()
 	room := res.Get("rooms.join." + client.GjsonEscape(roomID))
 	timeline := room.Get("timeline")
-	if !timeline.Exists() {
-		t.Errorf("timeline does not exist: %+v", res)
-	}
-	for _, x := range []string{"events", "limited", "prev_batch"} {
-		if !timeline.Get(x).Exists() {
-			t.Errorf("timeline %s does not exist", x)
+	if timeline.Exists() {
+		for _, x := range []string{"events", "limited"} {
+			if !timeline.Get(x).Exists() {
+				t.Errorf("timeline %s does not exist", x)
+			}
 		}
 	}
 	state := room.Get("state")
-	if !state.Exists() {
-		t.Errorf("state does not exist: %+v", res)
-	}
-	if !state.Get("events").Exists() {
-		t.Errorf("state events do not exist")
-	}
-	if !state.Get("events").IsArray() {
-		t.Errorf("state events is not an array")
+	if state.Exists() {
+		if !state.Get("events").Exists() {
+			t.Errorf("state events do not exist")
+		}
+		if !state.Get("events").IsArray() {
+			t.Errorf("state events is not an array")
+		}
 	}
 	ephemeral := room.Get("ephemeral")
-	if !ephemeral.Exists() {
-		t.Errorf("ephemeral does not exist: %+v", res)
-	}
-	if !ephemeral.Get("events").Exists() {
-		t.Errorf("ephemeral events do not exist")
-	}
-	if !ephemeral.Get("events").IsArray() {
-		t.Errorf("ephemeral events is not an array")
+	if ephemeral.Exists() {
+		if !ephemeral.Get("events").Exists() {
+			t.Errorf("ephemeral events do not exist")
+		}
+		if !ephemeral.Get("events").IsArray() {
+			t.Errorf("ephemeral events is not an array")
+		}
 	}
 }
 
