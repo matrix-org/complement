@@ -37,13 +37,27 @@ import (
 
 type server struct {
 	*federation.Server
+
+	pduHandlers map[int]func(*gomatrixserverlib.Event) bool
+	eduHandlers map[int]func(gomatrixserverlib.EDU) bool
+
+	nextPDUHandlerKey int
+	nextEDUHandlerKey int
 }
 
 // createTestServer spins up a federation server suitable for the tests in this file
+//
+// The `federation.HandleTransactionRequests` handler must not be used.
+// Instead, `AddPDUHandler` and `AddEDUHandler` should be used.
 func createTestServer(t *testing.T, deployment *docker.Deployment, opts ...func(*federation.Server)) *server {
 	t.Helper()
 
-	server := &server{}
+	server := &server{
+		pduHandlers:       map[int]func(*gomatrixserverlib.Event) bool{},
+		eduHandlers:       map[int]func(gomatrixserverlib.EDU) bool{},
+		nextPDUHandlerKey: 0,
+		nextEDUHandlerKey: 0,
+	}
 	server.Server = federation.NewServer(t, deployment,
 		append(
 			opts,
@@ -52,15 +66,59 @@ func createTestServer(t *testing.T, deployment *docker.Deployment, opts ...func(
 			federation.HandleEventRequests(),
 			federation.HandleTransactionRequests(
 				func(e *gomatrixserverlib.Event) {
-					t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
+					expected := false
+					for _, pduHandler := range server.pduHandlers {
+						expected = pduHandler(e) || expected
+					}
+
+					if !expected {
+						t.Errorf("Received unexpected PDU: %s", string(e.JSON()))
+					}
 				},
-				// the homeserver under test may send us presence when the joining user syncs
-				nil,
+				func(edu gomatrixserverlib.EDU) {
+					expected := false
+					for _, eduHandler := range server.eduHandlers {
+						expected = eduHandler(edu) || expected
+					}
+
+					if !expected {
+						t.Errorf("Received unexpected EDU: %s: %s", edu.Type, string(edu.Content))
+					}
+				},
 			),
 		)...,
 	)
 
+	// the homeserver under test may send us presence when the joining user syncs
+	server.AddEDUHandler(func(edu gomatrixserverlib.EDU) bool { return edu.Type == "m.presence" })
+
 	return server
+}
+
+// AddPDUHandler adds a PDU callback that returns `true` if it expected the given PDU.
+// When a PDU is received which is not expected by any PDU callback, the ongoing test is failed.
+// Returns a function to remove the PDU callback.
+func (s *server) AddPDUHandler(pduHandler func(*gomatrixserverlib.Event) bool) func() {
+	pduHandlerKey := s.nextPDUHandlerKey
+	s.nextPDUHandlerKey++
+	s.pduHandlers[pduHandlerKey] = pduHandler
+
+	return func() {
+		delete(s.pduHandlers, pduHandlerKey)
+	}
+}
+
+// AddEDUHandler adds an EDU callback that returns `true` if it expected the given EDU.
+// When an EDU is received which is not expected by any EDU callback, the ongoing test is failed.
+// Returns a function to remove the EDU callback.
+func (s *server) AddEDUHandler(eduHandler func(gomatrixserverlib.EDU) bool) func() {
+	eduHandlerKey := s.nextEDUHandlerKey
+	s.nextEDUHandlerKey++
+	s.eduHandlers[eduHandlerKey] = eduHandler
+
+	return func() {
+		delete(s.eduHandlers, eduHandlerKey)
+	}
 }
 
 func TestPartialStateJoin(t *testing.T) {
@@ -176,15 +234,7 @@ func TestPartialStateJoin(t *testing.T) {
 		_, eagerSyncToken = alice.MustSync(t, client.SyncReq{})
 
 		t.Log("1. Partial join Alice to a remote room.")
-		server := createTestServer(
-			t,
-			deployment,
-			// Allow PDUs and EDUs, since Alice will send a message in the room.
-			federation.HandleTransactionRequests(
-				func(e *gomatrixserverlib.Event) {},
-				func(e gomatrixserverlib.EDU) {},
-			),
-		)
+		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
 		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
@@ -212,6 +262,8 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		t.Log("4. Have Alice send a message to the remote room.")
+		removePDUHandler := server.AddPDUHandler(func(*gomatrixserverlib.Event) bool { return true })
+		defer removePDUHandler()
 		messageId := alice.SendEventUnsynced(t, serverRoom.RoomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
@@ -366,27 +418,22 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("CanSendEventsDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.RegisterUser(t, "hs1", "t3alice", "secret", false)
 
-		pdusChannel := make(chan *gomatrixserverlib.Event)
-		server := createTestServer(
-			t,
-			deployment,
-			federation.HandleTransactionRequests(
-				func(e *gomatrixserverlib.Event) {
-					pdusChannel <- e
-				},
-				// we don't expect EDUs
-				func(e gomatrixserverlib.EDU) {
-					if e.Type != "m.presence" {
-						t.Fatalf("Received unexpected EDU: %s", e.Content)
-					}
-				},
-			),
-		)
+		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
 		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
+
+		pdusChannel := make(chan *gomatrixserverlib.Event)
+		removePDUHandler := server.AddPDUHandler(
+			func(e *gomatrixserverlib.Event) bool {
+				pdusChannel <- e
+
+				return true
+			},
+		)
+		defer removePDUHandler()
 
 		alice.Client.Timeout = 2 * time.Second
 		paths := []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "send", "m.room.message", "0"}
@@ -1988,30 +2035,27 @@ func TestPartialStateJoin(t *testing.T) {
 				deviceListUpdateChannel chan gomatrixserverlib.DeviceListUpdateEvent,
 				opts ...func(*federation.Server),
 			) *server {
-				return createTestServer(t, deployment,
+				server := createTestServer(t, deployment,
 					append(
 						opts, // `opts` goes first so that it can override any of the following handlers
 						federation.HandleEventAuthRequests(),
-						federation.HandleTransactionRequests(
-							func(e *gomatrixserverlib.Event) {
-								t.Fatalf("Received unexpected PDU: %s", string(e.JSON()))
-							},
-							func(e gomatrixserverlib.EDU) {
-								if e.Type == "m.presence" {
-									return
-								}
-								if e.Type != "m.device_list_update" {
-									t.Fatalf("Received unexpected EDU: %s", e)
-								}
-
-								t.Logf("Complement server received m.device_list_update: %v", string(e.Content))
-								var deviceListUpdate gomatrixserverlib.DeviceListUpdateEvent
-								json.Unmarshal(e.Content, &deviceListUpdate)
-								deviceListUpdateChannel <- deviceListUpdate
-							},
-						),
 					)...,
 				)
+
+				server.AddEDUHandler(func(edu gomatrixserverlib.EDU) bool {
+					if edu.Type != "m.device_list_update" {
+						return false
+					}
+
+					t.Logf("Complement server received m.device_list_update: %v", string(edu.Content))
+					var deviceListUpdate gomatrixserverlib.DeviceListUpdateEvent
+					json.Unmarshal(edu.Content, &deviceListUpdate)
+					deviceListUpdateChannel <- deviceListUpdate
+
+					return true
+				})
+
+				return server
 			}
 
 			server1 = createDeviceListUpdateTestServer(t, deployment, deviceListUpdateChannel1, opts...)
@@ -3334,11 +3378,7 @@ func TestPartialStateJoin(t *testing.T) {
 		alice := deployment.RegisterUser(t, "hs1", "t44alice", "secret", false)
 		bob := deployment.RegisterUser(t, "hs1", "t44bob", "secret", false)
 
-		server := createTestServer(
-			t,
-			deployment,
-			federation.HandleTransactionRequests(nil, nil),
-		)
+		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
 		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
@@ -3346,6 +3386,7 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
 
+		server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
 		bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
 		alice.MustSyncUntil(t,
 			client.SyncReq{
@@ -3369,28 +3410,23 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("Can change display name during partial state join", func(t *testing.T) {
 		alice := deployment.RegisterUser(t, "hs1", "t45alice", "secret", false)
 
-		pdusChannel := make(chan *gomatrixserverlib.Event)
-		server := createTestServer(
-			t,
-			deployment,
-			federation.HandleTransactionRequests(
-				func(e *gomatrixserverlib.Event) {
-					pdusChannel <- e
-				},
-				// we don't expect EDUs
-				func(e gomatrixserverlib.EDU) {
-					if e.Type != "m.presence" {
-						t.Fatalf("Received unexpected EDU: %s", e.Content)
-					}
-				},
-			),
-		)
+		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
 		serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
 
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
+
+		pdusChannel := make(chan *gomatrixserverlib.Event)
+		removePDUHandler := server.AddPDUHandler(
+			func(e *gomatrixserverlib.Event) bool {
+				pdusChannel <- e
+
+				return true
+			},
+		)
+		defer removePDUHandler()
 
 		alice.MustDoFunc(t,
 			"PUT",
@@ -3421,12 +3457,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// Before testing that leaves during resyncs are seen during resyncs, sanity
 			// check that leaves during resyncs appear after the resync.
 			alice := deployment.RegisterUser(t, "hs1", "t42alice", "secret", false)
-			handleTransactions := federation.HandleTransactionRequests(
-				// Accept all PDUs and EDUs
-				func(e *gomatrixserverlib.Event) {},
-				func(e gomatrixserverlib.EDU) {},
-			)
-			server := createTestServer(t, deployment, handleTransactions)
+			server := createTestServer(t, deployment)
 			cancel := server.Listen()
 			defer cancel()
 
@@ -3444,6 +3475,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			leaveCompleted := NewWaiter()
 			t.Log("Alice starts a leave request")
+			server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
 			go func() {
 				alice.LeaveRoom(t, serverRoom.RoomID)
 				t.Log("Alice's leave request completed")
@@ -3465,33 +3497,8 @@ func TestPartialStateJoin(t *testing.T) {
 		})
 
 		t.Run("does not wait for resync", func(t *testing.T) {
-			// Prepare to listen for leave events from the HS under test.
-			// We're only expecting one leave event, but give the channel extra capacity
-			// to avoid deadlock if the HS does something silly.
-			leavesChannel := make(chan *gomatrixserverlib.Event, 10)
-			handleTransactions := federation.HandleTransactionRequests(
-				func(e *gomatrixserverlib.Event) {
-					if e.Type() == "m.room.member" {
-						if ok := gjson.ValidBytes(e.Content()); !ok {
-							t.Fatalf("Received event %s with invalid content: %v", e.EventID(), e.Content())
-						}
-						content := gjson.ParseBytes(e.Content())
-						membership := content.Get("membership")
-						if membership.Exists() && membership.Str == "leave" {
-							leavesChannel <- e
-						}
-					}
-				},
-				// we don't care about EDUs
-				func(e gomatrixserverlib.EDU) {},
-			)
-
 			alice := deployment.RegisterUser(t, "hs1", "t43alice", "secret", false)
-			server := createTestServer(
-				t,
-				deployment,
-				handleTransactions,
-			)
+			server := createTestServer(t, deployment)
 			cancel := server.Listen()
 			defer cancel()
 
@@ -3516,6 +3523,26 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Logf("Alice's leave is received by the resident server")
+			// Prepare to listen for leave events from the HS under test.
+			// We're only expecting one leave event, but give the channel extra capacity
+			// to avoid deadlock if the HS does something silly.
+			leavesChannel := make(chan *gomatrixserverlib.Event, 10)
+			server.AddPDUHandler(
+				func(e *gomatrixserverlib.Event) bool {
+					if e.Type() == "m.room.member" {
+						if ok := gjson.ValidBytes(e.Content()); !ok {
+							t.Fatalf("Received event %s with invalid content: %v", e.EventID(), e.Content())
+						}
+						content := gjson.ParseBytes(e.Content())
+						membership := content.Get("membership")
+						if membership.Exists() && membership.Str == "leave" {
+							leavesChannel <- e
+						}
+					}
+
+					return true
+				},
+			)
 			select {
 			case <-time.After(1 * time.Second):
 				t.Fatal("Resident server did not receive Alice's leave")
@@ -3530,12 +3557,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Run("works after a second partial join", func(t *testing.T) {
 			alice := deployment.RegisterUser(t, "hs1", "t47alice", "secret", false)
 			bob := deployment.RegisterUser(t, "hs1", "t47bob", "secret", false)
-			handleTransactions := federation.HandleTransactionRequests(
-				// Accept all PDUs and EDUs
-				func(e *gomatrixserverlib.Event) {},
-				func(e gomatrixserverlib.EDU) {},
-			)
-			server := createTestServer(t, deployment, handleTransactions)
+			server := createTestServer(t, deployment)
 			cancel := server.Listen()
 			defer cancel()
 
@@ -3565,6 +3587,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Alice leaves the room")
+			server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
 			alice.LeaveRoom(t, serverRoom.RoomID)
 
 			t.Log("Alice sees Alice's leave")
@@ -3584,12 +3607,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Run("succeeds, then rejoin succeeds without resync completing", func(t *testing.T) {
 			alice := deployment.RegisterUser(t, "hs1", "t48alice", "secret", false)
-			handleTransactions := federation.HandleTransactionRequests(
-				// Accept all PDUs and EDUs
-				func(e *gomatrixserverlib.Event) {},
-				func(e gomatrixserverlib.EDU) {},
-			)
-			server := createTestServer(t, deployment, handleTransactions)
+			server := createTestServer(t, deployment)
 			cancel := server.Listen()
 			defer cancel()
 
@@ -3606,6 +3624,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Alice leaves the room")
+			server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
 			alice.LeaveRoom(t, serverRoom.RoomID)
 
 			t.Log("Alice sees Alice's leave")
@@ -3629,12 +3648,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Run("succeeds, then another user can join without resync completing", func(t *testing.T) {
 			alice := deployment.RegisterUser(t, "hs1", "t49alice", "secret", false)
 			bob := deployment.RegisterUser(t, "hs1", "t49bob", "secret", false)
-			handleTransactions := federation.HandleTransactionRequests(
-				// Accept all PDUs and EDUs
-				func(e *gomatrixserverlib.Event) {},
-				func(e gomatrixserverlib.EDU) {},
-			)
-			server := createTestServer(t, deployment, handleTransactions)
+			server := createTestServer(t, deployment)
 			cancel := server.Listen()
 			defer cancel()
 
@@ -3654,6 +3668,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Alice leaves the room")
+			server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
 			alice.LeaveRoom(t, serverRoom.RoomID)
 
 			t.Log("Alice sees Alice's leave")
@@ -3676,12 +3691,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Run("can be triggered by remote kick", func(t *testing.T) {
 			alice := deployment.RegisterUser(t, "hs1", "t50alice", "secret", false)
-			handleTransactions := federation.HandleTransactionRequests(
-				// Accept all PDUs and EDUs
-				func(e *gomatrixserverlib.Event) {},
-				func(e gomatrixserverlib.EDU) {},
-			)
-			server := createTestServer(t, deployment, handleTransactions)
+			server := createTestServer(t, deployment)
 			cancel := server.Listen()
 			defer cancel()
 
@@ -3729,12 +3739,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Run("can be triggered by remote ban", func(t *testing.T) {
 			alice := deployment.RegisterUser(t, "hs1", "t51alice", "secret", false)
-			handleTransactions := federation.HandleTransactionRequests(
-				// Accept all PDUs and EDUs
-				func(e *gomatrixserverlib.Event) {},
-				func(e gomatrixserverlib.EDU) {},
-			)
-			server := createTestServer(t, deployment, handleTransactions)
+			server := createTestServer(t, deployment)
 			cancel := server.Listen()
 			defer cancel()
 
@@ -3908,12 +3913,7 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		t.Log("Alice begins a partial join to a room")
 		alice := deployment.RegisterUser(t, "hs1", "t46alice", "secret", true)
-		// Ignore PDUs (leaves from shutting down the room) and EDUs (presence).
-		server := createTestServer(
-			t,
-			deployment,
-			federation.HandleTransactionRequests(nil, nil),
-		)
+		server := createTestServer(t, deployment)
 		cancel := server.Listen()
 		defer cancel()
 
@@ -3942,6 +3942,8 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.AwaitStateIdsRequest(t)
 
 		t.Log("Alice purges that room")
+		// Ignore PDUs (leaves from shutting down the room).
+		server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
 		alice.MustDoFunc(t, "DELETE", []string{"_synapse", "admin", "v1", "rooms", serverRoom.RoomID}, client.WithJSONBody(t, map[string]interface{}{}))
 
 		// Note: clients don't get told about purged rooms. No leave event for you!
