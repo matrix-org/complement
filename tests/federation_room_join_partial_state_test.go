@@ -3771,6 +3771,14 @@ func TestPartialStateJoin(t *testing.T) {
 				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
 			)
 
+			t.Log("Alice tries to rejoin...")
+			queryParams := url.Values{}
+			queryParams.Add("server_name", server.ServerName())
+			response := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
+
+			t.Log("... but Alice was forbidden from rejoining")
+			must.MatchResponse(t, response, match.HTTPResponse{StatusCode: http.StatusForbidden})
+
 			// Cleanup.
 			psjResult.FinishStateRequest()
 		})
