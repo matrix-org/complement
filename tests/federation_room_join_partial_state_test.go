@@ -3745,7 +3745,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("A resident server user bans Alice from the room.")
-			kickEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			banEvent := server.MustCreateEvent(t, serverRoom, b.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(alice.UserID),
 				Sender:   server.UserID("charlie"),
@@ -3757,10 +3757,10 @@ func TestPartialStateJoin(t *testing.T) {
 					serverRoom.CurrentState("m.room.member", server.UserID("charlie")),
 				}),
 			})
-			serverRoom.AddEvent(kickEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{kickEvent.JSON()}, nil)
+			serverRoom.AddEvent(banEvent)
+			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{banEvent.JSON()}, nil)
 
-			// The kick occurs mid-resync, because we have not yet called
+			// The ban occurs mid-resync, because we have not yet called
 			// psjResult.FinishStateRequest().
 			t.Log("Alice sees that she's been banned")
 			aliceNextBatch = alice.MustSyncUntil(
