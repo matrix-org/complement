@@ -1,6 +1,7 @@
 package csapi_tests
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"testing"
@@ -78,7 +79,12 @@ func TestRoomForget(t *testing.T) {
 					"body":    "Hello world!",
 				},
 			})
-			result, _ := alice.MustSync(t, client.SyncReq{})
+			includeLeaveFilter, _ := json.Marshal(map[string]interface{}{
+				"room": map[string]interface{}{
+					"include_leave": true,
+				},
+			})
+			result, _ := alice.MustSync(t, client.SyncReq{Filter: string(includeLeaveFilter)})
 			if result.Get("rooms.archived." + client.GjsonEscape(roomID)).Exists() {
 				t.Errorf("Did not expect room %s in archived", roomID)
 			}
@@ -87,6 +93,9 @@ func TestRoomForget(t *testing.T) {
 			}
 			if result.Get("rooms.invite." + client.GjsonEscape(roomID)).Exists() {
 				t.Errorf("Did not expect room %s in invited", roomID)
+			}
+			if result.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+				t.Errorf("Did not expect room %s in left", roomID)
 			}
 		})
 		// sytest: Can forget room you've been kicked from
