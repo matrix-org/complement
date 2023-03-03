@@ -57,7 +57,7 @@ func TestRoomForget(t *testing.T) {
 			})
 		})
 		// sytest: Forgetting room does not show up in v2 /sync
-		t.Run("Forgetting room does not show up in v2 /sync", func(t *testing.T) {
+		t.Run("Forgetting room does not show up in v2 initial /sync", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			bob.JoinRoom(t, roomID, []string{})
@@ -96,6 +96,47 @@ func TestRoomForget(t *testing.T) {
 			}
 			if result.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
 				t.Errorf("Did not expect room %s in left", roomID)
+			}
+		})
+		t.Run("Leave for forgotten room shows up in v2 incremental /sync", func(t *testing.T) {
+			// Note that this test runs counter to the wording of the spec. At the time of writing,
+			// the spec says that forgotten rooms should not show up in any /sync responses, but
+			// that would make it impossible for other devices to determine that a room has been
+			// left if it is forgotten quickly. This is arguably a bug in the spec.
+			t.Parallel()
+			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			bob.JoinRoom(t, roomID, []string{})
+			alice.SendEventSynced(t, roomID, b.Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    "Hello world!",
+				},
+			})
+			tokenBeforeLeave := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+			alice.LeaveRoom(t, roomID)
+			// Ensure Alice left the room
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
+			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			bob.SendEventSynced(t, roomID, b.Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    "Hello world!",
+				},
+			})
+			// The leave for the room is expected to show up in the next incremental /sync.
+			includeLeaveFilter, _ := json.Marshal(map[string]interface{}{
+				"room": map[string]interface{}{
+					"include_leave": true,
+				},
+			})
+			result, _ := alice.MustSync(t, client.SyncReq{
+				Since:  tokenBeforeLeave,
+				Filter: string(includeLeaveFilter),
+			})
+			if !result.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+				t.Errorf("Did not see room %s in left", roomID)
 			}
 		})
 		// sytest: Can forget room you've been kicked from
