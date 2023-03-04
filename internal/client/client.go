@@ -264,7 +264,6 @@ func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID stri
 // SendEventUnsynced sends `e` into the room.
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string {
-	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
 	return c.SendEventUnsyncedWithTxnID(t, roomID, e, strconv.Itoa(txnID))
 }
