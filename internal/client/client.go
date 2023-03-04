@@ -264,8 +264,14 @@ func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID stri
 // SendEventUnsynced sends `e` into the room.
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string {
-	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
+	return c.SendEventUnsyncedWithTxnID(t, roomID, e, txnID)
+}
+
+// SendEventUnsynced sends `e` into the room.
+// Returns the event ID of the sent event.
+func (c *CSAPI) SendEventUnsyncedWithTxnID(t *testing.T, roomID string, e b.Event, txnID int) string {
+	t.Helper()
 	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(txnID)}
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
@@ -438,7 +444,34 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, acc
 	return userID, accessToken, deviceID
 }
 
-//RegisterUser will register the user with given parameters and
+// LoginUserWithDeviceID will log in to a homeserver on an existing device
+func (c *CSAPI) LoginUserWithDeviceID(t *testing.T, localpart, password, deviceID string) (userID, accessToken string) {
+	t.Helper()
+	reqBody := map[string]interface{}{
+		"identifier": map[string]interface{}{
+			"type": "m.id.user",
+			"user": localpart,
+		},
+		"device_id": deviceID,
+		"password":  password,
+		"type":      "m.login.password",
+	}
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, WithJSONBody(t, reqBody))
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+
+	userID = gjson.GetBytes(body, "user_id").Str
+	accessToken = gjson.GetBytes(body, "access_token").Str
+	if gjson.GetBytes(body, "device_id").Str != deviceID {
+		t.Fatalf("device_id returned by login does not match the one requested")
+	}
+	return userID, accessToken
+}
+
+// RegisterUser will register the user with given parameters and
 // return user ID & access token, and fail the test on network error
 func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
