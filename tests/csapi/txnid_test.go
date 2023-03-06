@@ -11,6 +11,7 @@ import (
 // TestTxnInEvent checks that the transaction ID is present when getting the event from the /rooms/{roomID}/event/{eventID} endpoint.
 func TestTxnInEvent(t *testing.T) {
 	// Dendrite implementation is broken
+	// See https://github.com/matrix-org/dendrite/issues/3000
 	runtime.SkipIf(t, runtime.Dendrite)
 
 	deployment := Deploy(t, b.BlueprintCleanHS)
