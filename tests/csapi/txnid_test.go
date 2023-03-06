@@ -213,3 +213,52 @@ func TestTxnIdempotency(t *testing.T) {
 
 	must.NotEqualStr(t, eventID4, eventID3, "Expected eventID4 and eventID3 to be different, but they were not")
 }
+
+// TestTxnAfterRefresh tests that when a client refreshes its access token,
+// it still gets back a transaction ID in the sync response.
+func TestTxnAfterRefresh(t *testing.T) {
+  // Dendrite and Conduit don't support refresh tokens yet.
+	// Synapse has a broken implementation of refresh tokens: https://github.com/matrix-org/synapse/issues/15141
+  runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit, runtime.Synapse)
+
+  deployment := Deploy(t, b.BlueprintCleanHS)
+  defer deployment.Destroy(t)
+
+  deployment.RegisterUser(t, "hs1", "alice", "password", false)
+
+  c := deployment.Client(t, "hs1", "")
+
+  var refreshToken string
+  c.UserID, c.AccessToken, refreshToken, c.DeviceID, _ = c.LoginUserWithRefreshToken(t, "alice", "password")
+
+  // Create a room where we can send events.
+  roomID := c.CreateRoom(t, map[string]interface{}{})
+
+	txnId := "abcdef"
+  // Let's send an event, and wait for it to appear in the sync.
+  eventID := c.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
+    Type: "m.room.message",
+    Content: map[string]interface{}{
+      "msgtype": "m.text",
+      "body":    "first",
+    },
+  }, txnId)
+
+  // When syncing, we should find the event and it should have a transaction ID.
+  token := c.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionIDForEvent(t, roomID, eventID, txnId))
+
+  // Now do the same, but refresh the token before syncing.
+  eventID = c.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
+    Type: "m.room.message",
+    Content: map[string]interface{}{
+      "msgtype": "m.text",
+      "body":    "second",
+    },
+  }, txnId)
+
+  // Use the refresh token to get a new access token.
+  c.AccessToken, refreshToken, _ = c.ConsumeRefreshToken(t, refreshToken)
+
+  // When syncing, we should find the event and it should also have a transaction ID.
+  c.MustSyncUntil(t, client.SyncReq{Since: token}, mustHaveTransactionIDForEvent(t, roomID, eventID, txnId))
+}
