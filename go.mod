@@ -11,7 +11,6 @@ require (
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/gorilla/mux v1.8.0
-	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/matrix-org/gomatrix v0.0.0-20220926102614-ceba4d9f7530
 	github.com/matrix-org/gomatrixserverlib v0.0.0-20230113181222-67e060196d05
 	github.com/matrix-org/util v0.0.0-20221111132719-399730281e66
@@ -25,9 +24,8 @@ require (
 	github.com/tidwall/sjson v1.2.5
 	golang.org/x/crypto v0.5.0 // indirect
 	golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6 // indirect
-	golang.org/x/image v0.0.0-20220413100746-70e8d0d3baa9 // indirect
+	golang.org/x/image v0.5.0 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
-	golang.org/x/tools v0.1.12
 	gonum.org/v1/plot v0.11.0
 	gotest.tools/v3 v3.0.3 // indirect
 	maunium.net/go/mautrix v0.11.0
