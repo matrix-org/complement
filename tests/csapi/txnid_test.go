@@ -5,6 +5,7 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 )
@@ -23,30 +24,43 @@ func TestTxnInEvent(t *testing.T) {
 	// Create a room where we can send events.
 	roomID := c.CreateRoom(t, map[string]interface{}{})
 
+	txnId := "abcdefg"
 	// Let's send an event, and wait for it to appear in the timeline.
-	eventID := c.SendEventSynced(t, roomID, b.Event{
+	eventID := c.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "first",
 		},
-	})
+	}, txnId)
 
 	// The transaction ID should be present on the GET /rooms/{roomID}/event/{eventID} response.
 	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "event", eventID})
 	body := client.ParseJSON(t, res)
 	result := gjson.ParseBytes(body)
 	if !result.Get("unsigned.transaction_id").Exists() {
-		t.Fatalf("Event did not have a 'transaction_id' on the GET /rooms/%s/event/%s response", roomID, eventID)
+		t.Fatalf("Event did not have a 'unsigned.transaction_id' on the GET /rooms/%s/event/%s response", roomID, eventID)
+	}
+
+	txnIdFromResult:= result.Get("unsigned.transaction_id").Str
+
+	if txnIdFromResult != txnId {
+		t.Fatalf("Event did not have a 'unsigned.transaction_id' of %s on GET /rooms/%s/event/%s response. Found %s instead", txnId, eventID, roomID, txnIdFromResult)
 	}
 }
 
 
-func mustHaveTransactionID(t *testing.T, roomID, eventID string) client.SyncCheckOpt {
+func mustHaveTransactionID(t *testing.T, roomID, eventID, expectedTxnId string) client.SyncCheckOpt {
 	return client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		if r.Get("event_id").Str == eventID {
 			if !r.Get("unsigned.transaction_id").Exists() {
-				t.Fatalf("Event %s in room %s should have a 'transaction_id', but it did not", eventID, roomID)
+				t.Fatalf("Event %s in room %s should have a 'unsigned.transaction_id', but it did not", eventID, roomID)
+			}
+
+			txnIdFromSync := r.Get("unsigned.transaction_id").Str
+
+			if txnIdFromSync != expectedTxnId {
+				t.Fatalf("Event %s in room %s should have a 'unsigned.transaction_id' of %s but found %s", eventID, roomID, expectedTxnId, txnIdFromSync)
 			}
 
 			return true
@@ -61,7 +75,7 @@ func mustNotHaveTransactionID(t *testing.T, roomID, eventID string) client.SyncC
 		if r.Get("event_id").Str == eventID {
 			res := r.Get("unsigned.transaction_id")
 			if res.Exists() {
-				t.Fatalf("Event %s in room %s should NOT have a 'transaction_id', but it did (%s)", eventID, roomID, res.Str)
+				t.Fatalf("Event %s in room %s should NOT have a 'unsigned.transaction_id', but it did (%s)", eventID, roomID, res.Str)
 			}
 
 			return true
@@ -89,21 +103,22 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 	// Create a room where we can send events.
 	roomID := c1.CreateRoom(t, map[string]interface{}{})
 
+	txnId := "abdefgh"
 	// Let's send an event, and wait for it to appear in the timeline.
-	eventID := c1.SendEventUnsynced(t, roomID, b.Event{
+	eventID := c1.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "first",
 		},
-	})
+	}, txnId)
 
 	// When syncing, we should find the event and it should have a transaction ID on the first client.
-	c1.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionID(t, roomID, eventID))
+	c1.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionID(t, roomID, eventID, txnId))
 
 	// Create a second client, inheriting the first device ID.
 	c2 := deployment.Client(t, "hs1", "")
-	c2.UserID, c2.AccessToken = c2.LoginUserWithDeviceID(t, "alice", "password", c1.DeviceID)
+	c2.UserID, c2.AccessToken, _ = c2.LoginUser(t, "alice", "password", client.WithDeviceID(c1.DeviceID))
 	c2.DeviceID = c1.DeviceID
 
 	// When syncing, we should find the event and it should *not* have a transaction ID on the second client.
@@ -128,7 +143,7 @@ func TestTxnIdempotencyScopedToClientSession(t *testing.T) {
 	// Create a room where we can send events.
 	roomID := c1.CreateRoom(t, map[string]interface{}{})
 
-	txnId := 1
+	txnId := "abcdef"
 	event := b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
@@ -141,16 +156,14 @@ func TestTxnIdempotencyScopedToClientSession(t *testing.T) {
 
 	// Create a second client, inheriting the first device ID.
 	c2 := deployment.Client(t, "hs1", "")
-	c2.UserID, c2.AccessToken = c2.LoginUserWithDeviceID(t, "alice", "password", c1.DeviceID)
+	c2.UserID, c2.AccessToken, _ = c2.LoginUser(t, "alice", "password", client.WithDeviceID(c1.DeviceID))
 	c2.DeviceID = c1.DeviceID
 
 	// send another event with the same txnId
 	eventID2 := c2.SendEventUnsyncedWithTxnID(t, roomID, event, txnId)
 
 	// the two events should have different event IDs as they came from different clients
-	if eventID1 == eventID2 {
-		t.Fatalf("Expected event IDs to be different from two clients sharing the same device ID")
-	}
+	must.NotEqualStr(t, eventID2, eventID1, "Expected eventID1 and eventID2 to be different from two clients sharing the same device ID")
 }
 
 // TestTxnIdempotency tests that PUT requests idempotency follows required semantics
@@ -169,7 +182,7 @@ func TestTxnIdempotency(t *testing.T) {
 	roomID2 := c1.CreateRoom(t, map[string]interface{}{})
 
 	// choose a transaction ID
-	txnId := 1
+	txnId := "abc"
 	event1 := b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
@@ -191,21 +204,15 @@ func TestTxnIdempotency(t *testing.T) {
 	// we send the identical event again and should get back the same event ID
 	eventID2 := c1.SendEventUnsyncedWithTxnID(t, roomID1, event1, txnId)
 
-	if eventID1 != eventID2 {
-		t.Fatalf("Expected event IDs to be the same, but they were not")
-	}
+	must.EqualStr(t, eventID2, eventID1, "Expected eventID1 and eventID2 to be the same, but they were not")
 
 	// even if we change the content we should still get back the same event ID as transaction ID is the same
 	eventID3 := c1.SendEventUnsyncedWithTxnID(t, roomID1, event2, txnId)
 
-	if eventID1 != eventID3 {
-		t.Fatalf("Expected event IDs to be the same even with different content, but they were not")
-	}
+	must.EqualStr(t, eventID3, eventID1, "Expected eventID3 and eventID2 to be the same even with different content, but they were not")
 
 	// if we change the room ID we should be able to use the same transaction ID
 	eventID4 := c1.SendEventUnsyncedWithTxnID(t, roomID2, event1, txnId)
 
-	if eventID4 == eventID3 {
-		t.Fatalf("Expected event IDs to be the different, but they were not")
-	}
+	must.NotEqualStr(t, eventID4, eventID3, "Expected eventID4 and eventID3 to be different, but they were not")
 }

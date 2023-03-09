@@ -266,14 +266,14 @@ func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID stri
 func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
-	return c.SendEventUnsyncedWithTxnID(t, roomID, e, txnID)
+	return c.SendEventUnsyncedWithTxnID(t, roomID, e, strconv.Itoa(txnID))
 }
 
 // SendEventUnsynced sends `e` into the room.
 // Returns the event ID of the sent event.
-func (c *CSAPI) SendEventUnsyncedWithTxnID(t *testing.T, roomID string, e b.Event, txnID int) string {
+func (c *CSAPI) SendEventUnsyncedWithTxnID(t *testing.T, roomID string, e b.Event, txnID string) string {
 	t.Helper()
-	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(txnID)}
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, txnID}
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
@@ -421,8 +421,16 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 	}
 }
 
+type LoginOpt func(map[string]interface{})
+
+func WithDeviceID(deviceID string) LoginOpt {
+    return func(loginBody map[string]interface{}) {
+        loginBody["device_id"] = deviceID
+    }
+}
+
 // LoginUser will log in to a homeserver and create a new device on an existing user.
-func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
+func (c *CSAPI) LoginUser(t *testing.T, localpart, password string, opts ...LoginOpt) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"identifier": map[string]interface{}{
@@ -432,6 +440,11 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, acc
 		"password": password,
 		"type":     "m.login.password",
 	}
+
+	for _, opt := range opts {
+		opt(reqBody)
+	}
+
 	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, WithJSONBody(t, reqBody))
 
 	body, err := ioutil.ReadAll(res.Body)
@@ -443,33 +456,6 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, acc
 	accessToken = gjson.GetBytes(body, "access_token").Str
 	deviceID = gjson.GetBytes(body, "device_id").Str
 	return userID, accessToken, deviceID
-}
-
-// LoginUserWithDeviceID will log in to a homeserver on an existing device
-func (c *CSAPI) LoginUserWithDeviceID(t *testing.T, localpart, password, deviceID string) (userID, accessToken string) {
-	t.Helper()
-	reqBody := map[string]interface{}{
-		"identifier": map[string]interface{}{
-			"type": "m.id.user",
-			"user": localpart,
-		},
-		"device_id": deviceID,
-		"password":  password,
-		"type":      "m.login.password",
-	}
-	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, WithJSONBody(t, reqBody))
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
-	}
-
-	userID = gjson.GetBytes(body, "user_id").Str
-	accessToken = gjson.GetBytes(body, "access_token").Str
-	if gjson.GetBytes(body, "device_id").Str != deviceID {
-		t.Fatalf("device_id returned by login does not match the one requested")
-	}
-	return userID, accessToken
 }
 
 // RegisterUser will register the user with given parameters and
