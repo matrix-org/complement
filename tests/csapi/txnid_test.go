@@ -218,15 +218,12 @@ func TestTxnIdempotency(t *testing.T) {
 func mustHaveTransactionID(t *testing.T, roomID, eventID, expectedTxnId string) client.SyncCheckOpt {
 	return client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		if r.Get("event_id").Str == eventID {
-			if !r.Get("unsigned.transaction_id").Exists() {
+			unsignedTxnId := r.Get("unsigned.transaction_id")
+			if !unsignedTxnId.Exists() {
 				t.Fatalf("Event %s in room %s should have a 'unsigned.transaction_id', but it did not", eventID, roomID)
 			}
 
-			txnIdFromSync := r.Get("unsigned.transaction_id").Str
-
-			if txnIdFromSync != expectedTxnId {
-				t.Fatalf("Event %s in room %s should have a 'unsigned.transaction_id' of %s but found %s", eventID, roomID, expectedTxnId, txnIdFromSync)
-			}
+			must.EqualStr(t, unsignedTxnId.Str, expectedTxnId, fmt.Sprintf("Event %s in room %s should have a 'unsigned.transaction_id'", eventID, roomID))
 
 			return true
 		}
@@ -238,9 +235,9 @@ func mustHaveTransactionID(t *testing.T, roomID, eventID, expectedTxnId string) 
 func mustNotHaveTransactionID(t *testing.T, roomID, eventID string) client.SyncCheckOpt {
 	return client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		if r.Get("event_id").Str == eventID {
-			res := r.Get("unsigned.transaction_id")
-			if res.Exists() {
-				t.Fatalf("Event %s in room %s should NOT have a 'unsigned.transaction_id', but it did (%s)", eventID, roomID, res.Str)
+			unsignedTxnId := r.Get("unsigned.transaction_id")
+			if unsignedTxnId.Exists() {
+				t.Fatalf("Event %s in room %s should NOT have a 'unsigned.transaction_id', but it did (%s)", eventID, roomID, unsignedTxnId.Str)
 			}
 
 			return true
