@@ -339,7 +339,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 
 // MustJoinRoom will make the server send a make_join and a send_join to join a room
 // It returns the resultant room.
-func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string) *ServerRoom {
+func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string, partialState ...bool) *ServerRoom {
 	t.Helper()
 	origin := gomatrixserverlib.ServerName(s.serverName)
 	fedClient := s.FederationClient(deployment)
@@ -352,7 +352,13 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 	if err != nil {
 		t.Fatalf("MustJoinRoom: failed to sign event: %v", err)
 	}
-	sendJoinResp, err := fedClient.SendJoin(context.Background(), origin, remoteServer, joinEvent)
+	var sendJoinResp gomatrixserverlib.RespSendJoin
+	if len(partialState) == 0 || !partialState[0] {
+		// Default to doing a regular join.
+		sendJoinResp, err = fedClient.SendJoin(context.Background(), origin, remoteServer, joinEvent)
+	} else {
+		sendJoinResp, err = fedClient.SendJoinPartialState(context.Background(), origin, remoteServer, joinEvent)
+	}
 	if err != nil {
 		t.Fatalf("MustJoinRoom: send_join failed: %v", err)
 	}
