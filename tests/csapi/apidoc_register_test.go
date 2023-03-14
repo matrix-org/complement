@@ -301,23 +301,6 @@ func TestRegistration(t *testing.T) {
 				},
 			})
 		})
-		// Test that /_matrix/client/v3/register/available returns M_UNKNOWN for username containing non-ascii
-		t.Run("GET /register/available returns M_UNKNOWN for user name containing non-ascii", func(t *testing.T) {
-			t.Skipf("Test disabled because rate-limiting")
-			t.Parallel()
-			// testUserName gets encoded into http, is this right?
-			testUserName := "usérn@mé_should_not_bé_v@l!d_ch@r$"
-			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
-					"username": []string{testUserName},
-				}))
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 400,
-				JSON: []match.JSON{
-					match.JSONKeyEqual("errcode", "M_UNKNOWN"),
-					match.JSONKeyPresent("error"),
-				},
-			})
-		})
 	})
 }
 
