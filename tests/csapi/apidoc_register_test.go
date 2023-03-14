@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -253,6 +254,69 @@ func TestRegistration(t *testing.T) {
 			must.MatchResponse(t, resp2, match.HTTPResponse{JSON: []match.JSON{
 				match.JSONKeyPresent("access_token"),
 			}})
+		})
+		// Test that /_matrix/client/v3/register/available returns available for unregistered user
+		t.Run("GET /register/available returns available for unregistered user name", func(t *testing.T) {
+			t.Parallel()
+			testUserName := "username_should_be_available"
+			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
+				"username": []string{testUserName},
+			}))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("available", true),
+				},
+			})
+		})
+		// Test that /_matrix/client/v3/register/available returns M_USER_IN_USE for registered user
+		t.Run("GET /register/available returns M_USER_IN_USE for registered user name", func(t *testing.T) {
+			t.Parallel()
+			testUserName := "username_not_available"
+			// Don't need the return value here, just need a user to be registered to test against
+			_ = deployment.NewUser(t, testUserName, "hs1")
+			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
+					"username": []string{testUserName},
+				}))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 400,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_USER_IN_USE"),
+					match.JSONKeyPresent("error"),
+				},
+			})
+		})
+		// Test that /_matrix/client/v3/register/available returns M_USER_IN_USE for invalid user
+		t.Run("GET /register/available returns M_INVALID_USERNAME for invalid user name", func(t *testing.T) {
+			t.Parallel()
+			testUserName := "username,should_not_be_valid"
+			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
+					"username": []string{testUserName},
+				}))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 400,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
+					match.JSONKeyPresent("error"),
+				},
+			})
+		})
+		// Test that /_matrix/client/v3/register/available returns M_UNKNOWN for username containing non-ascii
+		t.Run("GET /register/available returns M_UNKNOWN for user name containing non-ascii", func(t *testing.T) {
+			t.Skipf("Test disabled because rate-limiting")
+			t.Parallel()
+			// testUserName gets encoded into http, is this right?
+			testUserName := "usérn@mé_should_not_bé_v@l!d_ch@r$"
+			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
+					"username": []string{testUserName},
+				}))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 400,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_UNKNOWN"),
+					match.JSONKeyPresent("error"),
+				},
+			})
 		})
 	})
 }
