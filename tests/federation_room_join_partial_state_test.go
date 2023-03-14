@@ -3718,6 +3718,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Cleanup.
 			psjResult.FinishStateRequest()
+			// Dirty hack to allow the homeserver under test to finish making requests to the
+			// Complement homeserver as part of syncing the full state.
+			psjResult.AwaitStateIdsRequest(t)
+			time.Sleep(time.Second / 2)
 		})
 
 		t.Run("can be triggered by remote ban", func(t *testing.T) {
@@ -3781,6 +3785,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Cleanup.
 			psjResult.FinishStateRequest()
+			// Dirty hack to allow the homeserver under test to finish making requests to the
+			// Complement homeserver as part of syncing the full state.
+			psjResult.AwaitStateIdsRequest(t)
+			time.Sleep(time.Second / 2)
 		})
 	})
 
