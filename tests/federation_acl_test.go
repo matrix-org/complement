@@ -6,6 +6,8 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/internal/must"
 )
 
 // Test for https://github.com/matrix-org/dendrite/issues/3004
@@ -63,13 +65,13 @@ func TestACLs(t *testing.T) {
 	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// create a different room used for a sentinel event
-	roomID2 := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(alice.UserID, roomID2))
-	bob.JoinRoom(t, roomID2, []string{"hs1"})
-	charlie.JoinRoom(t, roomID2, []string{"hs1"})
+	sentinelRoom := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(alice.UserID, sentinelRoom))
+	bob.JoinRoom(t, sentinelRoom, []string{"hs1"})
+	charlie.JoinRoom(t, sentinelRoom, []string{"hs1"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince},
-		client.SyncJoinedTo(bob.UserID, roomID2),
-		client.SyncJoinedTo(charlie.UserID, roomID2),
+		client.SyncJoinedTo(bob.UserID, sentinelRoom),
+		client.SyncJoinedTo(charlie.UserID, sentinelRoom),
 	)
 
 	// 4. Add deny rule, to block 2nd server from participating
@@ -103,7 +105,7 @@ func TestACLs(t *testing.T) {
 	})
 
 	// sentinel event in room2
-	eventID2 := bob.SendEventSynced(t, roomID2, b.Event{
+	sentinelEventID := bob.SendEventSynced(t, sentinelRoom, b.Event{
 		Type:   "m.room.message",
 		Sender: bob.UserID,
 		Content: map[string]interface{}{
@@ -112,8 +114,8 @@ func TestACLs(t *testing.T) {
 		},
 	})
 	// wait for the sentinel event to come down sync
-	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncTimelineHasEventID(roomID2, eventID2))
-	charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncTimelineHasEventID(roomID2, eventID2))
+	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncTimelineHasEventID(sentinelRoom, sentinelEventID))
+	charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncTimelineHasEventID(sentinelRoom, sentinelEventID))
 
 	// Verify with alice and charlie that we never received eventID
 	for _, user := range []*client.CSAPI{alice, charlie} {
@@ -126,5 +128,15 @@ func TestACLs(t *testing.T) {
 				t.Fatalf("unexpected eventID from ACLed room: %s", eventID)
 			}
 		}
+
+		// Validate the ACL event is actually in the rooms state
+		res := user.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.server_acl"})
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("allow", []string{"*"}),
+				match.JSONKeyEqual("deny", []string{"hs2"}),
+				match.JSONKeyEqual("allow_ip_literals", true),
+			},
+		})
 	}
 }
