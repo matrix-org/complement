@@ -2170,7 +2170,14 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @elsie:server2 joins the room before @t23alice:hs1.
-			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+			server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
 
 			// @t23alice:hs1 joins the room.
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
@@ -2211,10 +2218,15 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Log("@charlie and @derek received device list update.")
 
 			// @elsie:server2 joins the room.
-			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
-			// up right and it can't answer queries about events in the room.
-			joinEvent := createJoinEvent(t, server2, room, server2.UserID("elsie"))
-			room.AddEvent(joinEvent)
+			server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
+			joinEvent := room.CurrentState("m.room.member", server2.UserID("elsie"))
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
@@ -2245,15 +2257,22 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @elsie:server2 joins the room before @t25alice:hs1.
-			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+			server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
 
 			// @t25alice:hs1 joins the room.
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
 			defer psjResult.Destroy(t)
 
 			// @elsie:server2 leaves the room.
-			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
-			// up right and it can't answer queries about events in the room.
+			// Create and send the event to the homeserver using server1, since the test setup did
+			// not give server2 a complete or up to date copy of the room state.
 			leaveEvent := createLeaveEvent(t, server2, room, server2.UserID("elsie"))
 			room.AddEvent(leaveEvent)
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{leaveEvent.JSON()}, nil)
@@ -2312,10 +2331,15 @@ func TestPartialStateJoin(t *testing.T) {
 			psjResult = beginPartialStateJoin(t, server1, room, alice)
 
 			// @elsie:server2 joins the room.
-			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
-			// up right and it can't answer queries about events in the room.
-			joinEvent := createJoinEvent(t, server2, room, elsie)
-			room.AddEvent(joinEvent)
+			server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				elsie,
+				true,
+			)
+			joinEvent := room.CurrentState("m.room.member", elsie)
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
 			syncToken = awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
@@ -2370,8 +2394,8 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			// @elsie:server2 leaves the room.
-			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
-			// up right and it can't answer queries about events in the room.
+			// Make server1 send the event to the homeserver, since the test setup did not give
+			// server2 a complete or up to date copy of the room state.
 			leaveEvent := createLeaveEvent(t, server2, partialStateRoom, elsie)
 			partialStateRoom.AddEvent(leaveEvent)
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{leaveEvent.JSON()}, nil)
@@ -2482,7 +2506,14 @@ func TestPartialStateJoin(t *testing.T) {
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @elsie:server2 joins the room, followed by @t28alice:hs1.
 			// server1 does not tell hs1 that server2 is in the room.
-			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+			server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
 			defer psjResult.Destroy(t)
 
@@ -2506,7 +2537,14 @@ func TestPartialStateJoin(t *testing.T) {
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @elsie:server2 joins the room, followed by @t29alice:hs1.
 			// server1 does not tell hs1 that server2 is in the room.
-			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+			server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
 			defer psjResult.Destroy(t)
 
