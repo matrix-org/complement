@@ -121,6 +121,44 @@ func (s *server) AddEDUHandler(eduHandler func(gomatrixserverlib.EDU) bool) func
 	}
 }
 
+// WithWaitForLeave runs the given action and waits for the user to leave the room.
+func (s *server) WithWaitForLeave(
+	t *testing.T, room *federation.ServerRoom, userID string, leaveAction func(),
+) {
+	leaveChannel := make(chan *gomatrixserverlib.Event, 10)
+	removePDUHandler := s.AddPDUHandler(
+		func(e *gomatrixserverlib.Event) bool {
+			if membership, _ := e.Membership(); e.Type() == "m.room.member" &&
+				*e.StateKey() == userID &&
+				membership == "leave" {
+				leaveChannel <- e
+				return true
+			}
+			return false
+		},
+	)
+	defer removePDUHandler()
+
+	leaveAction()
+
+	memberEvent := room.CurrentState("m.room.member", userID)
+	membership := ""
+	if memberEvent != nil {
+		membership, _ = memberEvent.Membership()
+	}
+	if membership == "leave" {
+		t.Logf("%s has already seen %s leave test room %s.", s.ServerName(), userID, room.RoomID)
+	} else {
+		select {
+		case <-leaveChannel:
+			t.Logf("%s saw %s leave test room %s.", s.ServerName(), userID, room.RoomID)
+			break
+		case <-time.After(1 * time.Second):
+			t.Errorf("%s timed out waiting for %s to leave test room %s.", s.ServerName(), userID, room.RoomID)
+		}
+	}
+}
+
 func TestPartialStateJoin(t *testing.T) {
 	// createMemberEvent creates a membership event for the given user
 	createMembershipEvent := func(
@@ -4202,8 +4240,10 @@ func beginPartialStateJoin(t *testing.T, server *server, serverRoom *federation.
 	return result
 }
 
-// Destroy cleans up the resources associated with the join attempt. It must
-// be called once the test is finished
+// Destroy cleans up the resources associated with the join attempt.
+// It is idempotent and must be called once the test is finished.
+// Specifically, it ensures that the partial state join completes and makes the joining user leave
+// the room.
 func (psj *partialStateJoinResult) Destroy(t *testing.T) {
 	if psj.fedStateIdsSendResponseWaiter != nil {
 		psj.fedStateIdsSendResponseWaiter.Finish()
@@ -4217,7 +4257,18 @@ func (psj *partialStateJoinResult) Destroy(t *testing.T) {
 	// has finished all federation activity before tearing down the Complement server.
 	// Otherwise the homeserver at the Complement's hostname:port combination may be
 	// considered offline and interfere with subsequent tests.
+	t.Log("Cleaning up after test...")
+
 	awaitPartialStateJoinCompletion(t, psj.ServerRoom, psj.User)
+
+	// The caller is about to tear down the Complement homeserver. Leave the room, so
+	// that the homeserver under test stops sending it presence updates.
+	psj.Server.WithWaitForLeave(
+		t,
+		psj.ServerRoom,
+		psj.User.UserID,
+		func() { psj.User.LeaveRoom(t, psj.ServerRoom.RoomID) },
+	)
 }
 
 // send a message into the room without letting the homeserver under test know about it.
