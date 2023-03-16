@@ -3602,14 +3602,6 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Alice leaves and waits for confirmation")
-			alice.LeaveRoom(t, serverRoom.RoomID)
-			aliceNextBatch = alice.MustSyncUntil(
-				t,
-				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
-				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
-			)
-
-			t.Logf("Alice's leave is received by the resident server")
 			// Prepare to listen for leave events from the HS under test.
 			// We're only expecting one leave event, but give the channel extra capacity
 			// to avoid deadlock if the HS does something silly.
@@ -3630,6 +3622,14 @@ func TestPartialStateJoin(t *testing.T) {
 					return true
 				},
 			)
+			alice.LeaveRoom(t, serverRoom.RoomID)
+			aliceNextBatch = alice.MustSyncUntil(
+				t,
+				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
+				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+			)
+
+			t.Logf("Alice's leave is received by the resident server")
 			select {
 			case <-time.After(1 * time.Second):
 				t.Fatal("Resident server did not receive Alice's leave")
