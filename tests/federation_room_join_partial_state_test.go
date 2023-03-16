@@ -2170,11 +2170,18 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @elsie:server2 joins the room before @t23alice:hs1.
-			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+			server2Room := server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
 
 			// @t23alice:hs1 joins the room.
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
-			defer psjResult.Destroy(t)
+			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
 
 			// Both homeservers should receive device list updates.
 			renameDevice(t, alice, "A new device name 1")
@@ -2211,10 +2218,18 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Log("@charlie and @derek received device list update.")
 
 			// @elsie:server2 joins the room.
-			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
-			// up right and it can't answer queries about events in the room.
-			joinEvent := createJoinEvent(t, server2, room, server2.UserID("elsie"))
-			room.AddEvent(joinEvent)
+			server2Room := server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
+			// NB: We register the `psjResult.Destroy()` cleanup twice. This is alright because it
+			//     is idempotent. Here we wait for server 2 to observe the leave too.
+			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
+			joinEvent := room.CurrentState("m.room.member", server2.UserID("elsie"))
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
@@ -2245,15 +2260,22 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @elsie:server2 joins the room before @t25alice:hs1.
-			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+			server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
 
 			// @t25alice:hs1 joins the room.
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
 			defer psjResult.Destroy(t)
 
 			// @elsie:server2 leaves the room.
-			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
-			// up right and it can't answer queries about events in the room.
+			// Create and send the event to the homeserver using server1, since the test setup did
+			// not give server2 a complete or up to date copy of the room state.
 			leaveEvent := createLeaveEvent(t, server2, room, server2.UserID("elsie"))
 			room.AddEvent(leaveEvent)
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{leaveEvent.JSON()}, nil)
@@ -2287,7 +2309,7 @@ func TestPartialStateJoin(t *testing.T) {
 			deviceListUpdateChannel1 chan gomatrixserverlib.DeviceListUpdateEvent,
 			deviceListUpdateChannel2 chan gomatrixserverlib.DeviceListUpdateEvent,
 			room *federation.ServerRoom,
-		) (syncToken string, psjResult partialStateJoinResult) {
+		) (syncToken string, server2Room *federation.ServerRoom, psjResult partialStateJoinResult) {
 			derek := server1.UserID("derek")
 			elsie := server2.UserID("elsie")
 
@@ -2312,10 +2334,15 @@ func TestPartialStateJoin(t *testing.T) {
 			psjResult = beginPartialStateJoin(t, server1, room, alice)
 
 			// @elsie:server2 joins the room.
-			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
-			// up right and it can't answer queries about events in the room.
-			joinEvent := createJoinEvent(t, server2, room, elsie)
-			room.AddEvent(joinEvent)
+			server2Room = server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				elsie,
+				true,
+			)
+			joinEvent := room.CurrentState("m.room.member", elsie)
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
 			syncToken = awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
@@ -2343,7 +2370,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{badKickEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, badKickEvent.EventID(), syncToken)
 
-			return syncToken, psjResult
+			return syncToken, server2Room, psjResult
 		}
 
 		// setupAnotherSharedRoomThenLeave has @alice:hs1 create a public room, @elsie:server2 join
@@ -2353,14 +2380,14 @@ func TestPartialStateJoin(t *testing.T) {
 			t *testing.T, deployment *docker.Deployment, alice *client.CSAPI,
 			server1 *server, server2 *server,
 			partialStateRoom *federation.ServerRoom, syncToken string,
-		) string {
+		) (nextSyncToken string, leaveSharedRoom func()) {
 			elsie := server2.UserID("elsie")
 
 			// @alice:hs1 creates a public room.
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 			// @elsie:server2 joins the room.
-			server2.MustJoinRoom(t, deployment, "hs1", roomID, elsie)
+			server2Room := server2.MustJoinRoom(t, deployment, "hs1", roomID, elsie)
 			alice.MustSyncUntil(t,
 				client.SyncReq{
 					Since:  syncToken,
@@ -2370,14 +2397,20 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			// @elsie:server2 leaves the room.
-			// Make server1 send the event to the homeserver, since server2's rooms list isn't set
-			// up right and it can't answer queries about events in the room.
+			// Make server1 send the event to the homeserver, since the test setup did not give
+			// server2 a complete or up to date copy of the room state.
 			leaveEvent := createLeaveEvent(t, server2, partialStateRoom, elsie)
 			partialStateRoom.AddEvent(leaveEvent)
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{leaveEvent.JSON()}, nil)
 			syncToken = awaitEventViaSync(t, alice, partialStateRoom.RoomID, leaveEvent.EventID(), syncToken)
 
-			return syncToken
+			leaveSharedRoom = func() {
+				server2.WithWaitForLeave(t, server2Room, alice.UserID, func() {
+					alice.LeaveRoom(t, roomID)
+				})
+			}
+
+			return syncToken, leaveSharedRoom
 		}
 
 		// testMissedDeviceListUpdateSentOncePartialJoinCompletes takes a room where hs1 incorrectly
@@ -2403,7 +2436,8 @@ func TestPartialStateJoin(t *testing.T) {
 				// The homeserver under test cannot simply use the current state of the room to
 				// determine which device list updates it must send out once the partial state join
 				// completes.
-				setupAnotherSharedRoomThenLeave(t, deployment, alice, server1, server2, room, syncToken)
+				_, leaveSharedRoom := setupAnotherSharedRoomThenLeave(t, deployment, alice, server1, server2, room, syncToken)
+				defer leaveSharedRoom()
 			}
 
 			// Finish the partial state join.
@@ -2430,8 +2464,8 @@ func TestPartialStateJoin(t *testing.T) {
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @t26alice:hs1 joins the room, followed by @elsie:server2.
 			// @elsie:server2 is kicked with an invalid event.
-			syncToken, psjResult := setupIncorrectlyAcceptedKick(t, deployment, alice, server1, server2, deviceListUpdateChannel1, deviceListUpdateChannel2, room)
-			defer psjResult.Destroy(t)
+			syncToken, server2Room, psjResult := setupIncorrectlyAcceptedKick(t, deployment, alice, server1, server2, deviceListUpdateChannel1, deviceListUpdateChannel2, room)
+			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
 
 			// @t26alice:hs1 sends out a device list update which is missed by @elsie:server2.
 			// @elsie:server2 must receive missed device list updates once the partial state join finishes.
@@ -2451,7 +2485,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @t27alice:hs1 joins the room, followed by @elsie:server2.
 			// @elsie:server2 is kicked with an invalid event.
-			syncToken, psjResult := setupIncorrectlyAcceptedKick(t, deployment, alice, server1, server2, deviceListUpdateChannel1, deviceListUpdateChannel2, room)
+			syncToken, _, psjResult := setupIncorrectlyAcceptedKick(t, deployment, alice, server1, server2, deviceListUpdateChannel1, deviceListUpdateChannel2, room)
 			defer psjResult.Destroy(t)
 
 			// @t27alice:hs1 sends out a device list update which is missed by @elsie:server2.
@@ -2482,9 +2516,16 @@ func TestPartialStateJoin(t *testing.T) {
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @elsie:server2 joins the room, followed by @t28alice:hs1.
 			// server1 does not tell hs1 that server2 is in the room.
-			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+			server2Room := server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
-			defer psjResult.Destroy(t)
+			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
 
 			// @t28alice:hs1 sends out a device list update which is missed by @elsie:server2.
 			// @elsie:server2 must receive missed device list updates once the partial state join finishes.
@@ -2506,7 +2547,14 @@ func TestPartialStateJoin(t *testing.T) {
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @elsie:server2 joins the room, followed by @t29alice:hs1.
 			// server1 does not tell hs1 that server2 is in the room.
-			room.AddEvent(createJoinEvent(t, server2, room, server2.UserID("elsie")))
+			server2.MustJoinRoom(
+				t,
+				deployment,
+				gomatrixserverlib.ServerName(server1.ServerName()),
+				room.RoomID,
+				server2.UserID("elsie"),
+				true,
+			)
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
 			defer psjResult.Destroy(t)
 
@@ -2869,7 +2917,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// @charlie joins the room.
 			// Now @charlie's device list is definitely being tracked.
-			server.MustJoinRoom(t, deployment, "hs1", otherRoomID, server.UserID("charlie"))
+			otherRoom := server.MustJoinRoom(t, deployment, "hs1", otherRoomID, server.UserID("charlie"))
 			alice.MustSyncUntil(t,
 				client.SyncReq{
 					Since:  syncToken,
@@ -2877,6 +2925,7 @@ func TestPartialStateJoin(t *testing.T) {
 				},
 				client.SyncJoinedTo(server.UserID("charlie"), otherRoomID),
 			)
+			defer server.WithWaitForLeave(t, otherRoom, alice.UserID, func() { alice.LeaveRoom(t, otherRoomID) })
 
 			// Depending on the homeserver implementation, @t31alice:hs1 must have been told that either:
 			//  * charlie updated their device list, or
