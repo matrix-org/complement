@@ -496,15 +496,23 @@ type RoundTripper struct {
 func (t *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	// map HS names to localhost:port combos
 	hsName := req.URL.Hostname()
-	dep, ok := t.Deployment.HS[hsName]
-	if !ok {
-		return nil, fmt.Errorf("dockerRoundTripper unknown hostname: '%s'", hsName)
+	if hsName == t.Deployment.Config.HostnameRunningComplement {
+		if req.URL.Port() == "" {
+			req.URL.Host = "localhost"
+		} else {
+			req.URL.Host = "localhost:" + req.URL.Port()
+		}
+	} else {
+		dep, ok := t.Deployment.HS[hsName]
+		if !ok {
+			return nil, fmt.Errorf("dockerRoundTripper unknown hostname: '%s'", hsName)
+		}
+		newURL, err := url.Parse(dep.FedBaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("dockerRoundTripper: failed to parase fedbaseurl for hs: %s", err)
+		}
+		req.URL.Host = newURL.Host
 	}
-	newURL, err := url.Parse(dep.FedBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("dockerRoundTripper: failed to parase fedbaseurl for hs: %s", err)
-	}
-	req.URL.Host = newURL.Host
 	req.URL.Scheme = "https"
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{

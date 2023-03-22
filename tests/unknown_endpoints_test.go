@@ -8,7 +8,6 @@ import (
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
-	"github.com/matrix-org/complement/runtime"
 )
 
 func queryUnknownEndpoint(t *testing.T, user *client.CSAPI, paths []string) {
@@ -38,8 +37,6 @@ func queryUnknownMethod(t *testing.T, user *client.CSAPI, method string, paths [
 // Homeservers should return a 404 for unknown endpoints and 405 for incorrect
 // methods to known endpoints.
 func TestUnknownEndpoints(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2903
-
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
