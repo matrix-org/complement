@@ -12,6 +12,7 @@ import (
 
 // Test for https://github.com/matrix-org/dendrite/issues/3004
 func TestACLs(t *testing.T) {
+	// runtime.SkipIf(t, runtime.Dendrite) // needs https://github.com/matrix-org/dendrite/pull/3008
 	// 1. Prepare 3 or more servers. 1st will be room host, 2nd will be blocked with m.room.server_acl and 3rd server will be affected by this issue. 1st and 2nd servers don't have to be powered by dendrite.
 	deployment := Deploy(t, b.Blueprint{
 		Name: "federation_three_homeservers",
@@ -51,10 +52,6 @@ func TestACLs(t *testing.T) {
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 	charlie := deployment.Client(t, "hs3", "@charlie:hs3")
 
-	/*
-	   You can set m.room.server_acl again, to "fix" this.
-	*/
-
 	// 2. Create room on 1st server
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
@@ -89,7 +86,7 @@ func TestACLs(t *testing.T) {
 	// wait for the ACL to show up on hs2
 	bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncTimelineHasEventID(roomID, eventID))
 
-	// 5. Join from 3rd (dendrite) server.
+	// 5. Join from 3rd server.
 	charlie.JoinRoom(t, roomID, []string{"hs1"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(charlie.UserID, roomID))
 	charlieSince := charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
@@ -127,6 +124,20 @@ func TestACLs(t *testing.T) {
 			if ev.Get("event_id").Str == eventID {
 				t.Fatalf("unexpected eventID from ACLed room: %s", eventID)
 			}
+		}
+
+		// also check that our sentinel event is present
+		var seenSentinelEvent bool
+		events = syncResp.Get(fmt.Sprintf("rooms.join.%s.timeline.events", client.GjsonEscape(sentinelRoom))).Array()
+		for _, ev := range events {
+			if ev.Get("event_id").Str == sentinelEventID {
+				seenSentinelEvent = true
+				break
+			}
+		}
+
+		if !seenSentinelEvent {
+			t.Fatalf("expected to see sentinel event but didn't")
 		}
 
 		// Validate the ACL event is actually in the rooms state
