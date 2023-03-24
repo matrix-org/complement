@@ -32,6 +32,7 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+	complementRuntime "github.com/matrix-org/complement/runtime"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -161,7 +162,7 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName strin
 
 			printLogs(d.Docker, hsDep.ContainerID, hsDep.ContainerID)
 		} else {
-			err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
+			err := complementRuntime.ContainerKillFunc(d.Docker, hsDep.ContainerID)
 			if err != nil {
 				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
 			}
