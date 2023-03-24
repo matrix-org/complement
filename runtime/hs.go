@@ -1,6 +1,11 @@
 package runtime
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/docker/docker/client"
+)
 
 const (
 	Dendrite = "dendrite"
@@ -10,10 +15,18 @@ const (
 
 var Homeserver string
 
+// ContainerKillFunc is used to destroy a container, it can be overwritten by Homeserver implementations
+// to e.g. gracefully stop a container.
+var ContainerKillFunc = func(client *client.Client, containerID string) error {
+	return client.ContainerKill(context.Background(), containerID, "KILL")
+}
+
 // Skip the test (via t.Skipf) if the homeserver being tested matches one of the homeservers, else return.
 //
 // The homeserver being tested is detected via the presence of a `*_blacklist` tag e.g:
-//   go test -tags="dendrite_blacklist"
+//
+//	go test -tags="dendrite_blacklist"
+//
 // This means it is important to always specify this tag when running tests. Failure to do
 // so will result in a warning being printed to stdout, and the test will be run. When a new server
 // implementation is added, a respective `hs_$name.go` needs to be created in this directory. This
