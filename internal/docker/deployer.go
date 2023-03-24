@@ -147,18 +147,24 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	return dep, lastErr
 }
 
-// Destroy a deployment. This will stop/kill all running containers.
+// Destroy a deployment. This will kill all running containers.
 func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName string, failed bool) {
-	timeout := 1 * time.Second
 	for _, hsDep := range dep.HS {
-		// Stop the container gracefully, if it fails to do so after `timeout`, it
-		// will be forcibly killed.
-		err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, &timeout)
-		if err != nil {
-			log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
-		}
 		if printServerLogs {
+			// If we want the logs we gracefully stop the containers to allow
+			// the logs to be flushed.
+			timeout := 1 * time.Second
+			err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, &timeout)
+			if err != nil {
+				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
+			}
+
 			printLogs(d.Docker, hsDep.ContainerID, hsDep.ContainerID)
+		} else {
+			err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
+			if err != nil {
+				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
+			}
 		}
 
 		result, err := d.executePostScript(hsDep, testName, failed)
