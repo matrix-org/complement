@@ -61,6 +61,7 @@ jobs:
           go get -v github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
           mkdir .gotestfmt/github -p
           cp .ci/complement_package.gotpl .gotestfmt/github/package.gotpl
+          gotestfmt -help
 
       - name: "Checkout corresponding ${{ matrix.homeserver }} branch"
         shell: bash
