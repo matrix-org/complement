@@ -14,7 +14,7 @@ jobs:
   complement-internal:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2 # Checkout complement
+      - uses: actions/checkout@v3 # Checkout complement
       - uses: actions/setup-go@v4
       - name: "Install Complement Dependencies"
         run: |
@@ -48,7 +48,7 @@ jobs:
             timeout: 10m
 
     steps:
-      - uses: actions/checkout@v2 # Checkout complement
+      - uses: actions/checkout@v3 # Checkout complement
 
       - uses: actions/setup-go@v4
       # Similar steps as dockerfiles/ComplementCIBuildkite.Dockerfile but on the host. We need
