@@ -23,13 +23,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+	complementRuntime "github.com/matrix-org/complement/runtime"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -146,7 +149,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 }
 
 // Destroy a deployment. This will kill all running containers.
-func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
+func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName string, failed bool) {
 	for _, hsDep := range dep.HS {
 		if printServerLogs {
 			// If we want the logs we gracefully stop the containers to allow
@@ -159,19 +162,36 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool) {
 
 			printLogs(d.Docker, hsDep.ContainerID, hsDep.ContainerID)
 		} else {
-			err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
+			err := complementRuntime.ContainerKillFunc(d.Docker, hsDep.ContainerID)
 			if err != nil {
 				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
 			}
 		}
 
-		err := d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
+		result, err := d.executePostScript(hsDep, testName, failed)
+		if err != nil {
+			log.Printf("Failed to execute post test script: %s - %s", err, string(result))
+		}
+		if printServerLogs && err == nil && result != nil {
+			log.Printf("Post test script result: %s", string(result))
+		}
+
+		err = d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
 			Force: true,
 		})
 		if err != nil {
 			log.Printf("Destroy: Failed to remove container %s : %s\n", hsDep.ContainerID, err)
 		}
 	}
+}
+
+func (d *Deployer) executePostScript(hsDep *HomeserverDeployment, testName string, failed bool) ([]byte, error) {
+	if d.config.PostTestScript == "" {
+		return nil, nil
+	}
+	cmd := exec.Command(d.config.PostTestScript, hsDep.ContainerID, testName, strconv.FormatBool(failed))
+
+	return cmd.CombinedOutput()
 }
 
 // Restart a homeserver deployment.
@@ -256,16 +276,17 @@ func deployImage(
 			"complement_hs_name":   hsName,
 		},
 	}, &container.HostConfig{
+		CapAdd:          []string{"NET_ADMIN"}, // TODO : this should be some sort of option
 		PublishAllPorts: true,
 		PortBindings: nat.PortMap{
 			nat.Port("8008/tcp"): []nat.PortBinding{
 				{
-					HostIP: "127.0.0.1",
+					HostIP: cfg.HSPortBindingIP,
 				},
 			},
 			nat.Port("8448/tcp"): []nat.PortBinding{
 				{
-					HostIP: "127.0.0.1",
+					HostIP: cfg.HSPortBindingIP,
 				},
 			},
 		},
@@ -476,15 +497,23 @@ type RoundTripper struct {
 func (t *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	// map HS names to localhost:port combos
 	hsName := req.URL.Hostname()
-	dep, ok := t.Deployment.HS[hsName]
-	if !ok {
-		return nil, fmt.Errorf("dockerRoundTripper unknown hostname: '%s'", hsName)
+	if hsName == t.Deployment.Config.HostnameRunningComplement {
+		if req.URL.Port() == "" {
+			req.URL.Host = "localhost"
+		} else {
+			req.URL.Host = "localhost:" + req.URL.Port()
+		}
+	} else {
+		dep, ok := t.Deployment.HS[hsName]
+		if !ok {
+			return nil, fmt.Errorf("dockerRoundTripper unknown hostname: '%s'", hsName)
+		}
+		newURL, err := url.Parse(dep.FedBaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("dockerRoundTripper: failed to parase fedbaseurl for hs: %s", err)
+		}
+		req.URL.Host = newURL.Host
 	}
-	newURL, err := url.Parse(dep.FedBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("dockerRoundTripper: failed to parase fedbaseurl for hs: %s", err)
-	}
-	req.URL.Host = newURL.Host
 	req.URL.Scheme = "https"
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{

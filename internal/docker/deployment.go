@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -26,9 +27,11 @@ type HomeserverDeployment struct {
 	FedBaseURL          string            // e.g https://localhost:48373
 	ContainerID         string            // e.g 10de45efba
 	AccessTokens        map[string]string // e.g { "@alice:hs1": "myAcc3ssT0ken" }
+	accessTokensMutex   sync.RWMutex
 	ApplicationServices map[string]string // e.g { "my-as-id": "id: xxx\nas_token: xxx ..."} }
 	DeviceIDs           map[string]string // e.g { "@alice:hs1": "myDeviceID" }
 	CSAPIClients        []*client.CSAPI
+	CSAPIClientsMutex   sync.Mutex
 }
 
 // Updates the client and federation base URLs of the homeserver deployment.
@@ -45,7 +48,7 @@ func (hsDep *HomeserverDeployment) SetEndpoints(baseURL string, fedBaseURL strin
 // will print container logs before killing the container.
 func (d *Deployment) Destroy(t *testing.T) {
 	t.Helper()
-	d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs || t.Failed())
+	d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs || t.Failed(), t.Name(), t.Failed())
 }
 
 // Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
@@ -58,7 +61,9 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)
 		return nil
 	}
+	dep.accessTokensMutex.RLock()
 	token := dep.AccessTokens[userID]
+	dep.accessTokensMutex.RUnlock()
 	if token == "" && userID != "" {
 		t.Fatalf("Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, userID)
 		return nil
@@ -76,8 +81,19 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 	}
+	// Appending a slice is not thread-safe. Protect the write with a mutex.
+	dep.CSAPIClientsMutex.Lock()
 	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	dep.CSAPIClientsMutex.Unlock()
+
 	return client
+}
+
+// NewUser creates a new user as a convenience method to RegisterUser.
+//
+//It registers the user with a deterministic password, and without admin privileges.
+func (d *Deployment) NewUser(t *testing.T, localpart, hs string) *client.CSAPI {
+	return d.RegisterUser(t, hs, localpart, "complement_meets_min_pasword_req_"+localpart, false)
 }
 
 // RegisterUser within a homeserver and return an authenticatedClient, Fails the test if the hsName is not found.
@@ -94,7 +110,10 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 	}
+	// Appending a slice is not thread-safe. Protect the write with a mutex.
+	dep.CSAPIClientsMutex.Lock()
 	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	dep.CSAPIClientsMutex.Unlock()
 	var userID, accessToken, deviceID string
 	if isAdmin {
 		userID, accessToken, deviceID = client.RegisterSharedSecret(t, localpart, password, isAdmin)
@@ -103,7 +122,36 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 	}
 
 	// remember the token so subsequent calls to deployment.Client return the user
+	dep.accessTokensMutex.Lock()
 	dep.AccessTokens[userID] = accessToken
+	dep.accessTokensMutex.Unlock()
+
+	client.UserID = userID
+	client.AccessToken = accessToken
+	client.DeviceID = deviceID
+	return client
+}
+
+// LoginUser within a homeserver and return an authenticatedClient. Fails the test if the hsName is not found.
+// Note that this will not change the access token of the client that is returned by `deployment.Client`.
+func (d *Deployment) LoginUser(t *testing.T, hsName, localpart, password string) *client.CSAPI {
+	t.Helper()
+	dep, ok := d.HS[hsName]
+	if !ok {
+		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)
+		return nil
+	}
+	client := &client.CSAPI{
+		BaseURL:          dep.BaseURL,
+		Client:           client.NewLoggedClient(t, hsName, nil),
+		SyncUntilTimeout: 5 * time.Second,
+		Debug:            d.Deployer.debugLogging,
+	}
+	// Appending a slice is not thread-safe. Protect the write with a mutex.
+	dep.CSAPIClientsMutex.Lock()
+	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	dep.CSAPIClientsMutex.Unlock()
+	userID, accessToken, deviceID := client.LoginUser(t, localpart, password)
 
 	client.UserID = userID
 	client.AccessToken = accessToken
@@ -112,10 +160,10 @@ func (d *Deployment) RegisterUser(t *testing.T, hsName, localpart, password stri
 }
 
 // Restart a deployment.
-func (dep *Deployment) Restart(t *testing.T) error {
+func (d *Deployment) Restart(t *testing.T) error {
 	t.Helper()
-	for _, hsDep := range dep.HS {
-		err := dep.Deployer.Restart(hsDep, dep.Config)
+	for _, hsDep := range d.HS {
+		err := d.Deployer.Restart(hsDep, d.Config)
 		if err != nil {
 			t.Errorf("Deployment.Restart: %s", err)
 			return err

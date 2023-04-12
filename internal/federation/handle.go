@@ -18,7 +18,7 @@ import (
 func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
 	// Check federation signature
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), nil, s.keyRing,
 	)
 	if fedReq == nil {
 		w.WriteHeader(errResp.Code)
@@ -125,7 +125,7 @@ func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp gomatri
 // the current server is returned to the joining server.
 func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request, expectPartialState bool, omitServersInRoom bool) {
 	fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+		req, time.Now(), gomatrixserverlib.ServerName(s.serverName), nil, s.keyRing,
 	)
 	if fedReq == nil {
 		w.WriteHeader(errResp.Code)
@@ -136,7 +136,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	// if we expect a partial-state join, the request should have a "partial_state" flag
 	queryParams := req.URL.Query()
-	partialState := queryParams.Get("org.matrix.msc3706.partial_state")
+	partialState := queryParams.Get("omit_members")
 	if expectPartialState && partialState != "true" {
 		log.Printf("Not a partial-state request: got %v, want %s",
 			partialState, "true")
@@ -163,6 +163,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	// build the state list *before* we insert the new event
 	var stateEvents []*gomatrixserverlib.Event
+	room.StateMutex.RLock()
 	for _, ev := range room.State {
 		// filter out non-critical memberships if this is a partial-state join
 		if expectPartialState {
@@ -172,6 +173,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		}
 		stateEvents = append(stateEvents, ev)
 	}
+	room.StateMutex.RUnlock()
 
 	authEvents := room.AuthChainForEvents(stateEvents)
 
@@ -187,11 +189,11 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 
 	// return state and auth chain
 	b, err := json.Marshal(gomatrixserverlib.RespSendJoin{
-		Origin:        gomatrixserverlib.ServerName(s.serverName),
-		AuthEvents:    gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
-		StateEvents:   gomatrixserverlib.NewEventJSONsFromEvents(stateEvents),
-		PartialState:  expectPartialState,
-		ServersInRoom: serversInRoom,
+		Origin:         gomatrixserverlib.ServerName(s.serverName),
+		AuthEvents:     gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
+		StateEvents:    gomatrixserverlib.NewEventJSONsFromEvents(stateEvents),
+		MembersOmitted: expectPartialState,
+		ServersInRoom:  serversInRoom,
 	})
 	if err != nil {
 		w.WriteHeader(500)
@@ -238,7 +240,7 @@ func HandleInviteRequests(inviteCallback func(*gomatrixserverlib.Event)) func(*S
 		// https://matrix.org/docs/spec/server_server/r0.1.4#put-matrix-federation-v2-invite-roomid-eventid
 		s.mux.Handle("/_matrix/federation/v2/invite/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), s.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(s.serverName), nil, s.keyRing,
 			)
 			if fedReq == nil {
 				w.WriteHeader(errResp.Code)
@@ -491,7 +493,7 @@ func HandleTransactionRequests(pduCallback func(*gomatrixserverlib.Event), eduCa
 
 			// Check federation signature
 			fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), srv.keyRing,
+				req, time.Now(), gomatrixserverlib.ServerName(srv.serverName), nil, srv.keyRing,
 			)
 			if fedReq == nil {
 				log.Printf(

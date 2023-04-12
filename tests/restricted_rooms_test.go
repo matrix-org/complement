@@ -390,8 +390,11 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 
 	// Setup the user, allowed room, and restricted room.
 	alice, allowed_room, room := setupRestrictedRoom(t, deployment, roomVersion, joinRule)
+	t.Logf("%s created authorizing room %s.", alice.UserID, allowed_room)
+	t.Logf("%s created restricted room %s.", alice.UserID, room)
 
 	// Raise the power level so that only alice can invite.
+	t.Logf("%s restricts invites to themself only.", alice.UserID)
 	state_key := ""
 	alice.SendEventSynced(t, room, b.Event{
 		Type:     "m.room.power_levels",
@@ -408,17 +411,22 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
 	// Bob joins the room and allowed room.
+	t.Logf("%s joins the authorizing room via hs1.", bob.UserID)
+	t.Logf("%s joins the restricted room via hs1.", bob.UserID)
 	bob.JoinRoom(t, allowed_room, []string{"hs1"})
 	bob.JoinRoom(t, room, []string{"hs1"})
 
 	// Charlie should join the allowed room (which gives access to the room).
 	charlie := deployment.Client(t, "hs3", "@charlie:hs3")
+	t.Logf("%s joins the authorizing room via hs1.", charlie.UserID)
 	charlie.JoinRoom(t, allowed_room, []string{"hs1"})
 
 	// hs2 doesn't have anyone to invite from, so the join fails.
+	t.Logf("%s joins the restricted room via hs2, which is expected to fail.", charlie.UserID)
 	failJoinRoom(t, charlie, room, "hs2")
 
 	// Including hs1 (and failing over to it) allows the join to succeed.
+	t.Logf("%s joins the restricted room via {hs2,hs1}.", charlie.UserID)
 	charlie.JoinRoom(t, room, []string{"hs2", "hs1"})
 
 	// Double check that the join was authorised via hs1.
@@ -436,6 +444,7 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	))
 
 	// Bump the power-level of bob.
+	t.Logf("%s allows %s to send invites.", alice.UserID, bob.UserID)
 	alice.SendEventSynced(t, room, b.Event{
 		Type:     "m.room.power_levels",
 		StateKey: &state_key,
@@ -449,28 +458,26 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	})
 
 	// Charlie leaves the room (so they can rejoin).
+	t.Logf("%s leaves the restricted room.", charlie.UserID)
 	charlie.LeaveRoom(t, room)
 
-	// Ensure the events have synced to hs2.
-	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
-				return false
-			}
-			return ev.Get("content").Get("membership").Str == "leave"
-		},
-	))
+	// Ensure the events have synced to hs1 and hs2, otherwise the joins below may
+	// happen before the leaves, from the perspective of hs1 and hs2.
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, room))
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, room))
 
 	// Bob leaves the allowed room so that hs2 doesn't know if Charlie is in the
 	// allowed room or not.
+	t.Logf("%s leaves the authorizing room.", bob.UserID)
 	bob.LeaveRoom(t, allowed_room)
 
 	// hs2 cannot complete the join since they do not know if Charlie meets the
 	// requirements (since it is no longer in the allowed room).
+	t.Logf("%s joins the restricted room via hs2, which is expected to fail.", charlie.UserID)
 	failJoinRoom(t, charlie, room, "hs2")
 
 	// Including hs1 (and failing over to it) allows the join to succeed.
+	t.Logf("%s joins the restricted room via {hs2,hs1}.", charlie.UserID)
 	charlie.JoinRoom(t, room, []string{"hs2", "hs1"})
 
 	// Double check that the join was authorised via hs1.

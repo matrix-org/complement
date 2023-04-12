@@ -198,20 +198,20 @@ update-ca-certificates
 
 ## Sytest parity
 
-As of 20 September 2022:
+As of 10 February 2023:
 ```
 $ go build ./cmd/sytest-coverage
 $ ./sytest-coverage -v
 10apidoc/01register 10/10 tests
-    ✓ GET /register yields a set of flows
     ✓ POST $ep_name admin with shared secret
-    ✓ POST $ep_name with shared secret
     ✓ POST $ep_name with shared secret disallows symbols
     ✓ POST $ep_name with shared secret downcases capitals
+    ✓ POST $ep_name with shared secret
     ✓ POST /register allows registration of usernames with '$chr'
+    ✓ POST /register rejects registration of usernames with '$q'
+    ✓ GET /register yields a set of flows
     ✓ POST /register can create a user
     ✓ POST /register downcases capitals in usernames
-    ✓ POST /register rejects registration of usernames with '$q'
     ✓ POST /register returns the same device_id as that in the request
 
 10apidoc/01request-encoding 1/1 tests
@@ -220,8 +220,8 @@ $ ./sytest-coverage -v
 10apidoc/02login 6/6 tests
     ✓ GET /login yields a set of flows
     ✓ POST /login as non-existing user is rejected
-    ✓ POST /login can log in as a user
     ✓ POST /login can log in as a user with just the local part of the id
+    ✓ POST /login can log in as a user
     ✓ POST /login returns the same device_id as that in the request
     ✓ POST /login wrong password is rejected
 
@@ -237,11 +237,11 @@ $ ./sytest-coverage -v
     ✓ PUT /profile/:user_id/avatar_url sets my avatar
 
 10apidoc/12device_management 8/8 tests
-    ✓ DELETE /device/{deviceId}
     ✓ DELETE /device/{deviceId} requires UI auth user to match device owner
     ✓ DELETE /device/{deviceId} with no body gives a 401
-    ✓ GET /device/{deviceId}
+    ✓ DELETE /device/{deviceId}
     ✓ GET /device/{deviceId} gives a 404 for unknown devices
+    ✓ GET /device/{deviceId}
     ✓ GET /devices
     ✓ PUT /device/{deviceId} gives a 404 for unknown devices
     ✓ PUT /device/{deviceId} updates device fields
@@ -255,8 +255,8 @@ $ ./sytest-coverage -v
     ✓ Can /sync newly created room
     ✓ POST /createRoom creates a room with the given version
     ✓ POST /createRoom ignores attempts to set the room version via creation_content
-    ✓ POST /createRoom makes a private room
     ✓ POST /createRoom makes a private room with invites
+    ✓ POST /createRoom makes a private room
     ✓ POST /createRoom makes a public room
     ✓ POST /createRoom makes a room with a name
     ✓ POST /createRoom makes a room with a topic
@@ -283,10 +283,10 @@ $ ./sytest-coverage -v
     ✓ PUT /directory/room/:room_alias creates alias
 
 10apidoc/33room-members 8/8 tests
-    ✓ POST /join/:room_alias can join a room
     ✓ POST /join/:room_alias can join a room with custom content
-    ✓ POST /join/:room_id can join a room
+    ✓ POST /join/:room_alias can join a room
     ✓ POST /join/:room_id can join a room with custom content
+    ✓ POST /join/:room_id can join a room
     ✓ POST /rooms/:room_id/ban can ban a user
     ✓ POST /rooms/:room_id/invite can send an invite
     ✓ POST /rooms/:room_id/join can join a room
@@ -302,7 +302,11 @@ $ ./sytest-coverage -v
 10apidoc/35room-typing 1/1 tests
     ✓ PUT /rooms/:room_id/typing/:user_id sets typing notification
 
-10apidoc/36room-levels 0/4 tests
+10apidoc/36room-levels 3/3 tests
+    ✓ GET /rooms/:room_id/state/m.room.power_levels can fetch levels
+    ✓ PUT /rooms/:room_id/state/m.room.power_levels can set levels
+    ✓ PUT power_levels should not explode if the old power levels were empty
+
 10apidoc/37room-receipts 1/1 tests
     ✓ POST /rooms/:room_id/receipt can create receipts
 
@@ -321,8 +325,8 @@ $ ./sytest-coverage -v
     × Register with a recaptcha
     × Can register using an email address
     ✓ registration accepts non-ascii passwords
-    × registration is idempotent, without username specified
     × registration is idempotent, with username specified
+    × registration is idempotent, without username specified
     × registration remembers parameters
     × registration with inhibit_login inhibits login
 
@@ -350,14 +354,12 @@ $ ./sytest-coverage -v
     ✓ Can't deactivate account with wrong password
 
 21presence-events 0/2 tests
-30rooms/01state 2/7 tests
-    × Global initialSync
-    × Global initialSync with limit=0 gives no messages
-    × Joining room twice is idempotent
+30rooms/01state 5/5 tests
+    ✓ Joining room twice is idempotent
     ✓ Room creation reports m.room.create to myself
     ✓ Room creation reports m.room.member to myself
-    × Setting room topic reports m.room.topic to myself
-    × Setting state twice is idempotent
+    ✓ Setting room topic reports m.room.topic to myself
+    ✓ Setting state twice is idempotent
 
 30rooms/02members-local 3/3 tests
     ✓ Existing members see new members' join events
@@ -365,36 +367,36 @@ $ ./sytest-coverage -v
     ✓ New room members see their own join event
 
 30rooms/03members-remote 2/5 tests
-    ✓ Existing members see new members' join events
     × Existing members see new member's presence
+    ✓ Existing members see new members' join events
     ✓ New room members see their own join event
     × Remote users can join room by alias
     × Remote users may not join unfederated rooms
 
 30rooms/04messages 0/9 tests
-30rooms/05aliases 6/13 tests
+30rooms/05aliases 13/13 tests
     ✓ Canonical alias can be set
     ✓ Canonical alias can include alt_aliases
     ✓ Alias creators can delete alias with no ops
     ✓ Alias creators can delete canonical alias with no ops
-    × Can delete canonical alias
+    ✓ Can delete canonical alias
     ✓ Deleting a non-existent alias should return a 404
     ✓ Only room members can list aliases of a room
-    × Regular users can add and delete aliases in the default room configuration
-    × Regular users can add and delete aliases when m.room.aliases is restricted
-    × Remote room alias queries can handle Unicode
-    × Room aliases can contain Unicode
-    × Users can't delete other's aliases
-    × Users with sufficient power-level can delete other's aliases
+    ✓ Regular users can add and delete aliases in the default room configuration
+    ✓ Regular users can add and delete aliases when m.room.aliases is restricted
+    ✓ Remote room alias queries can handle Unicode
+    ✓ Room aliases can contain Unicode
+    ✓ Users can't delete other's aliases
+    ✓ Users with sufficient power-level can delete other's aliases
 
 30rooms/06invite 13/13 tests
     ✓ Can invite users to invite-only rooms
     ✓ Test that we can be reinvited to a room we created
-    ✓ Invited user can reject invite
     ✓ Invited user can reject invite for empty room
-    ✓ Invited user can reject invite over federation
     ✓ Invited user can reject invite over federation for empty room
     ✓ Invited user can reject invite over federation several times
+    ✓ Invited user can reject invite over federation
+    ✓ Invited user can reject invite
     ✓ Invited user can reject local invite after originator leaves
     ✓ Invited user can see room metadata
     ✓ Remote invited user can see room metadata
@@ -406,14 +408,29 @@ $ ./sytest-coverage -v
 30rooms/08levels 0/3 tests
 30rooms/09eventstream 0/2 tests
 30rooms/10redactions 0/6 tests
-30rooms/11leaving 0/5 tests
+30rooms/11leaving 5/5 tests
+    ✓ Can get 'm.room.name' state for a departed room (SPEC-216)
+    ✓ Can get rooms/{roomId}/members for a departed room (SPEC-216)
+    ✓ Can get rooms/{roomId}/messages for a departed room (SPEC-216)
+    ✓ Can get rooms/{roomId}/state for a departed room (SPEC-216)
+    ✓ Getting messages going forward is limited for a departed room (SPEC-216)
+
 30rooms/12thirdpartyinvite 0/13 tests
 30rooms/13guestaccess 0/11 tests
 30rooms/14override-per-room 0/2 tests
-30rooms/15kick 0/2 tests
-30rooms/20typing 0/3 tests
+30rooms/15kick 2/2 tests
+    ✓ Users cannot kick users from a room they are not in
+    ✓ Users cannot kick users who have already left a room
+
+30rooms/20typing 3/3 tests
+    ✓ Typing can be explicitly stopped
+    ✓ Typing notification sent to local room members
+    ✓ Typing notifications also sent to remote room members
+
 30rooms/21receipts 0/2 tests
-30rooms/22profile 0/1 tests
+30rooms/22profile 1/1 tests
+    ✓ $datum updates affect room member events
+
 30rooms/30history-visibility 0/2 tests
 30rooms/31forget 5/5 tests
     ✓ Can forget room you've been kicked from
@@ -430,7 +447,11 @@ $ ./sytest-coverage -v
     ✓ /event/ on joined room works
     ✓ /event/ on non world readable room does not work
 
-30rooms/52members 0/3 tests
+30rooms/52members 3/3 tests
+    ✓ Can filter rooms/{roomId}/members
+    ✓ Can get rooms/{roomId}/members at a given point
+    ✓ Can get rooms/{roomId}/members
+
 30rooms/60version_upgrade 0/19 tests
 30rooms/70publicroomslist 0/5 tests
 31sync/01filter 2/2 tests
@@ -453,7 +474,16 @@ $ ./sytest-coverage -v
 31sync/06state 0/14 tests
 31sync/07invited 0/3 tests
 31sync/08polling 0/2 tests
-31sync/09archived 0/8 tests
+31sync/09archived 8/8 tests
+    ✓ Archived rooms only contain history from before the user left
+    ✓ Left rooms appear in the leave section of full state sync
+    ✓ Left rooms appear in the leave section of sync
+    ✓ Newly left rooms appear in the leave section of gapped sync
+    ✓ Newly left rooms appear in the leave section of incremental sync
+    ✓ Previously left rooms don't appear in the leave section of sync
+    ✓ We should see our own leave event when rejecting an invite,
+    ✓ We should see our own leave event, even if history_visibility is
+
 31sync/10archived-ban 0/3 tests
 31sync/11typing 0/3 tests
 31sync/12receipts 0/2 tests
@@ -463,14 +493,20 @@ $ ./sytest-coverage -v
 31sync/16room-summary 0/4 tests
 31sync/17peeking 0/4 tests
 32room-versions 0/6 tests
-40presence 0/5 tests
+40presence 5/5 tests
+    ✓ Presence can be set from sync
+    ✓ Presence changes are also reported to remote room members
+    ✓ Presence changes are reported to local room members
+    ✓ Presence changes to UNAVAILABLE are reported to local room members
+    ✓ Presence changes to UNAVAILABLE are reported to remote room members
+
 41end-to-end-keys/01-upload-key 6/6 tests
     ✓ Can query device keys using POST
     ✓ Can query specific device keys using POST
     ✓ Can upload device keys
-    ✓ query for user with no keys returns empty key dict
     ✓ Rejects invalid device keys
     ✓ Should reject keys claiming to belong to a different user
+    ✓ query for user with no keys returns empty key dict
 
 41end-to-end-keys/03-one-time-keys 1/1 tests
     ✓ Can claim one time key using POST
@@ -485,40 +521,45 @@ $ ./sytest-coverage -v
 41end-to-end-keys/07-backup 0/10 tests
 41end-to-end-keys/08-cross-signing 0/8 tests
 42tags 0/7 tests
-43search 5/5 tests
-    ✓ Can back-paginate search results
-    ✓ Can get context around search results
-    ✓ Can search for an event by body
-    ✓ Search results with $ordering_type ordering do not include redacted events
-    ✓ Search works across an upgraded room and its predecessor
+44account_data 4/6 tests
+    ✓ Can add account data to room
+    ✓ Can add account data
+    ✓ Can get account data without syncing
+    ✓ Can get room account data without syncing
+    × Latest account data appears in v2 /sync
+    × New account data appears in incremental v2 /sync
 
-44account_data 0/6 tests
 45openid 0/3 tests
-46direct/01directmessage 0/3 tests
+46direct/01directmessage 3/3 tests
+    ✓ Can recv a device message using /sync
+    ✓ Can send a message directly to a device using PUT /sendToDevice
+    ✓ Can send a to-device message to two users which both receive it using /sync
+
 46direct/02reliability 0/2 tests
 46direct/03polling 0/1 tests
 46direct/04federation 0/2 tests
 46direct/05wildcard 0/4 tests
-48admin 0/5 tests
+48admin 0/1 tests
 49ignore 0/3 tests
-50federation/00prepare 0/1 tests
 50federation/01keys 1/4 tests
-    ✓ Federation key API allows unsigned requests for keys
     × Federation key API can act as a notary server via a $method request
+    ✓ Federation key API allows unsigned requests for keys
     × Key notary server must not overwrite a valid key with a spurious result from the origin server
     × Key notary server should return an expired key if it can't find any others
 
-50federation/02server-names 0/1 tests
-50federation/10query-profile 1/2 tests
-    × Inbound federation can query profile data
+50federation/02server-names 1/1 tests
+    ✓ Non-numeric ports in server names are rejected
+
+50federation/10query-profile 2/2 tests
+    ✓ Inbound federation can query profile data
     ✓ Outbound federation can query profile data
 
 50federation/11query-directory 0/2 tests
 50federation/30room-join 0/19 tests
 50federation/31room-send 0/5 tests
 50federation/32room-getevent 0/2 tests
-50federation/33room-get-missing-events 1/4 tests
-    × Inbound federation can return missing events for $vis visibility
+50federation/33room-get-missing-events 2/4 tests
+    ✓ Inbound federation can return missing events for $vis visibility
     × Outbound federation can request missing events
     ✓ Outbound federation will ignore a missing event with bad JSON for room version 6
     × outliers whose auth_events are in a different room are correctly rejected
@@ -561,7 +602,9 @@ $ ./sytest-coverage -v
     ✓ POSTed media can be thumbnailed
     ✓ Remote media can be thumbnailed
 
-51media/20urlpreview 0/1 tests
+51media/20urlpreview 1/1 tests
+    ✓ Test URL preview
+
 51media/30config 1/1 tests
     ✓ Can read configuration endpoint
 
@@ -580,7 +623,6 @@ $ ./sytest-coverage -v
 61push/03_unread_count 0/2 tests
 61push/05_set_actions 0/4 tests
 61push/06_get_pusher 0/1 tests
-61push/06_push_rules_in_sync 0/4 tests
 61push/07_set_enabled 0/2 tests
 61push/08_rejected_pushers 0/1 tests
 61push/09_notifications_api 0/1 tests
@@ -599,7 +641,9 @@ $ ./sytest-coverage -v
 90jira/SYN-205 1/1 tests
     ✓ Rooms can be created with an initial invite list (SYN-205)
 
-90jira/SYN-328 0/1 tests
+90jira/SYN-328 1/1 tests
+    ✓ Typing notifications don't leak
+
 90jira/SYN-343 1/1 tests
     ✓ Non-present room members cannot ban others
 
@@ -609,5 +653,5 @@ $ ./sytest-coverage -v
 90jira/SYN-516 0/1 tests
 90jira/SYN-627 0/1 tests
 
-TOTAL: 173/627 tests converted
+TOTAL: 220/610 tests converted
 ```
