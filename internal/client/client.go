@@ -269,7 +269,8 @@ func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string
 	return c.SendEventUnsyncedWithTxnID(t, roomID, e, strconv.Itoa(txnID))
 }
 
-// SendEventUnsynced sends `e` into the room.
+// SendEventUnsyncedWithTxnID sends `e` into the room with a prescribed transaction ID.
+// This is useful for writing tests that interrogate transaction semantics.
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventUnsyncedWithTxnID(t *testing.T, roomID string, e b.Event, txnID string) string {
 	t.Helper()
@@ -459,7 +460,7 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string, opts ...Logi
 }
 
 // RegisterUser will register the user with given parameters and
-// return user ID & access token, and fail the test on network error
+// return user ID, access token and device ID. It fails the test on network error.
 func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
