@@ -266,7 +266,15 @@ func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID stri
 func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string {
 	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
-	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(txnID)}
+	return c.SendEventUnsyncedWithTxnID(t, roomID, e, strconv.Itoa(txnID))
+}
+
+// SendEventUnsyncedWithTxnID sends `e` into the room with a prescribed transaction ID.
+// This is useful for writing tests that interrogate transaction semantics.
+// Returns the event ID of the sent event.
+func (c *CSAPI) SendEventUnsyncedWithTxnID(t *testing.T, roomID string, e b.Event, txnID string) string {
+	t.Helper()
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, txnID}
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
@@ -414,8 +422,16 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 	}
 }
 
+type LoginOpt func(map[string]interface{})
+
+func WithDeviceID(deviceID string) LoginOpt {
+    return func(loginBody map[string]interface{}) {
+        loginBody["device_id"] = deviceID
+    }
+}
+
 // LoginUser will log in to a homeserver and create a new device on an existing user.
-func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
+func (c *CSAPI) LoginUser(t *testing.T, localpart, password string, opts ...LoginOpt) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"identifier": map[string]interface{}{
@@ -425,6 +441,11 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, acc
 		"password": password,
 		"type":     "m.login.password",
 	}
+
+	for _, opt := range opts {
+		opt(reqBody)
+	}
+
 	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, WithJSONBody(t, reqBody))
 
 	body, err := ioutil.ReadAll(res.Body)
@@ -438,8 +459,8 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string) (userID, acc
 	return userID, accessToken, deviceID
 }
 
-//RegisterUser will register the user with given parameters and
-// return user ID & access token, and fail the test on network error
+// RegisterUser will register the user with given parameters and
+// return user ID, access token and device ID. It fails the test on network error.
 func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
