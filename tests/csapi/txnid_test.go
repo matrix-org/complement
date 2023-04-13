@@ -44,11 +44,11 @@ func TestTxnInEvent(t *testing.T) {
 		t.Fatalf("Event did not have a 'unsigned.transaction_id' on the GET /rooms/%s/event/%s response", roomID, eventID)
 	}
 
-	must.EqualStr(t, unsignedTxnId.Str, txnId, fmt.Sprintf("Event did not have a 'unsigned.transaction_id' on GET /rooms/%s/event/%s response", eventID, roomID))
+	must.EqualStr(t, unsignedTxnId.Str, txnId, fmt.Sprintf("Event had an incorrect 'unsigned.transaction_id' on GET /rooms/%s/event/%s response", eventID, roomID))
 }
 
 
-func mustHaveTransactionID(t *testing.T, roomID, eventID, expectedTxnId string) client.SyncCheckOpt {
+func mustHaveTransactionIDForEvent(t *testing.T, roomID, eventID, expectedTxnId string) client.SyncCheckOpt {
 	return client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		if r.Get("event_id").Str == eventID {
 			unsignedTxnId := r.Get("unsigned.transaction_id")
@@ -56,7 +56,7 @@ func mustHaveTransactionID(t *testing.T, roomID, eventID, expectedTxnId string) 
 				t.Fatalf("Event %s in room %s should have a 'unsigned.transaction_id', but it did not", eventID, roomID)
 			}
 
-			must.EqualStr(t, unsignedTxnId.Str, expectedTxnId, fmt.Sprintf("Event %s in room %s should have a 'unsigned.transaction_id'", eventID, roomID))
+			must.EqualStr(t, unsignedTxnId.Str, expectedTxnId, fmt.Sprintf("Event %s in room %s had an incorrect 'unsigned.transaction_id'", eventID, roomID))
 
 			return true
 		}
@@ -65,7 +65,7 @@ func mustHaveTransactionID(t *testing.T, roomID, eventID, expectedTxnId string) 
 	})
 }
 
-func mustNotHaveTransactionID(t *testing.T, roomID, eventID string) client.SyncCheckOpt {
+func mustNotHaveTransactionIDForEvent(t *testing.T, roomID, eventID string) client.SyncCheckOpt {
 	return client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		if r.Get("event_id").Str == eventID {
 			unsignedTxnId := r.Get("unsigned.transaction_id")
@@ -80,8 +80,7 @@ func mustNotHaveTransactionID(t *testing.T, roomID, eventID string) client.SyncC
 	})
 }
 
-// TestTxnScopeOnLocalEcho tests that transaction IDs are scoped to the access token, not the device
-// on the sync response
+// TestTxnScopeOnLocalEcho tests that transaction IDs in the sync response are scoped to the "client session", not the device
 func TestTxnScopeOnLocalEcho(t *testing.T) {
 	// Conduit scope transaction IDs to the device ID, not the access token.
 	runtime.SkipIf(t, runtime.Conduit)
@@ -109,15 +108,15 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 	}, txnId)
 
 	// When syncing, we should find the event and it should have a transaction ID on the first client.
-	c1.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionID(t, roomID, eventID, txnId))
+	c1.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionIDForEvent(t, roomID, eventID, txnId))
 
 	// Create a second client, inheriting the first device ID.
 	c2 := deployment.Client(t, "hs1", "")
-	c2.UserID, c2.AccessToken, _ = c2.LoginUser(t, "alice", "password", client.WithDeviceID(c1.DeviceID))
-	c2.DeviceID = c1.DeviceID
+	c2.UserID, c2.AccessToken, c2.DeviceID = c2.LoginUser(t, "alice", "password", client.WithDeviceID(c1.DeviceID))
+	must.EqualStr(t, c1.DeviceID, c2.DeviceID, "Device ID should be the same")
 
 	// When syncing, we should find the event and it should *not* have a transaction ID on the second client.
-	c2.MustSyncUntil(t, client.SyncReq{}, mustNotHaveTransactionID(t, roomID, eventID))
+	c2.MustSyncUntil(t, client.SyncReq{}, mustNotHaveTransactionIDForEvent(t, roomID, eventID))
 }
 
 // TestTxnIdempotencyScopedToClientSession tests that transaction IDs are scoped to a "client session"
@@ -151,10 +150,10 @@ func TestTxnIdempotencyScopedToClientSession(t *testing.T) {
 
 	// Create a second client, inheriting the first device ID.
 	c2 := deployment.Client(t, "hs1", "")
-	c2.UserID, c2.AccessToken, _ = c2.LoginUser(t, "alice", "password", client.WithDeviceID(c1.DeviceID))
-	c2.DeviceID = c1.DeviceID
+	c2.UserID, c2.AccessToken, c2.DeviceID = c2.LoginUser(t, "alice", "password", client.WithDeviceID(c1.DeviceID))
+	must.EqualStr(t, c1.DeviceID, c2.DeviceID, "Device ID should be the same")
 
-	// send another event with the same txnId
+	// send another event with the same txnId via the second client
 	eventID2 := c2.SendEventUnsyncedWithTxnID(t, roomID, event, txnId)
 
 	// the two events should have different event IDs as they came from different clients
