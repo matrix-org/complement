@@ -27,6 +27,7 @@ jobs:
           DOCKER_BUILDKIT: 1
         run: |
           mkdir -p homeserver
+          # Latest official dendrite release is still using Debian Stretch as a base, hence the specific commit
           wget -O - "https://github.com/matrix-org/dendrite/archive/0489d16f95a3d9f1f5bc532e2060bd2482d7b156.tar.gz" | tar -xz --strip-components=1 -C homeserver
           (cd homeserver && docker build -t complement-dendrite -f build/scripts/Complement.Dockerfile .)
           (cd cmd/homerunner/test && ./test.sh)
