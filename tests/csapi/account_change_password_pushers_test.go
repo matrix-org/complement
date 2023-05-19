@@ -59,7 +59,7 @@ func TestChangePasswordPushers(t *testing.T) {
 	})
 
 	// sytest: Pushers created with a the same access token are not deleted on password change
-	t.Run("Pushers created with a the same access token are not deleted on password change", func(t *testing.T) {
+	t.Run("Pushers created with the same access token are not deleted on password change", func(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"data": map[string]interface{}{
 				"url": "https://dummy.url/_matrix/push/v1/notify",

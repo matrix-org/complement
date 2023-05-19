@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1446,7 +1447,7 @@ func createMessageEventsForBatchSendRequest(
 			"origin_server_ts": insertOriginServerTs + (timeBetweenMessagesMS * uint64(i)),
 			"content": map[string]interface{}{
 				"msgtype":              "m.text",
-				"body":                 fmt.Sprintf("Historical %d (batch=%d)", i, batchCount),
+				"body":                 fmt.Sprintf("Historical %d (batch=%d)", i, atomic.LoadInt64(&batchCount)),
 				historicalContentField: true,
 			},
 		}
@@ -1514,7 +1515,7 @@ func batchSendHistoricalMessages(
 		t.Fatalf("msc2716.batchSendHistoricalMessages got %d HTTP status code from batch send response but want %d", res.StatusCode, expectedStatus)
 	}
 
-	batchCount++
+	atomic.AddInt64(&batchCount, 1)
 
 	return res
 }

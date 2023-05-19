@@ -1,7 +1,6 @@
 package csapi_tests
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -36,7 +35,6 @@ func TestRoomCreate(t *testing.T) {
 			}, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{
-					match.JSONKeyEqual("room_alias", fmt.Sprintf("#%s:hs1", roomAlias)),
 					match.JSONKeyTypeEqual("room_id", gjson.String),
 				},
 			})

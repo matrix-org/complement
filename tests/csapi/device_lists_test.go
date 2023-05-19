@@ -2,6 +2,7 @@ package csapi_tests
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -19,11 +20,11 @@ import (
 //  1. `/sync`'s `device_lists.changed/left` contain the correct user IDs.
 //  2. `/keys/query` returns the correct information after device list updates.
 func TestDeviceListUpdates(t *testing.T) {
-	localpartIndex := 0
+	var localpartIndex int64 = 0
 	// generateLocalpart generates a unique localpart based on the given name.
 	generateLocalpart := func(localpart string) string {
-		localpartIndex++
-		return fmt.Sprintf("%s%d", localpart, localpartIndex)
+		index := atomic.AddInt64(&localpartIndex, 1)
+		return fmt.Sprintf("%s%d", localpart, index)
 	}
 
 	// uploadNewKeys uploads a new set of keys for a given client.
@@ -98,6 +99,44 @@ func TestDeviceListUpdates(t *testing.T) {
 		}
 	}
 
+	// makeBarrier returns a function which tries to act as a barrier for `device_lists.changed`
+	// updates.
+	//
+	// When a remote user has a device list update, an entry is expected to appear in
+	// `device_lists.changed` in the `/sync` response. The local homeserver may then query the
+	// remote homeserver for the update. Some homeservers (Synapse) may emit extra
+	// `device_lists.changed` updates in `/sync` responses after querying keys.
+	//
+	// The barrier tries to ensure that `device_lists.changed` entries resulting from device list
+	// updates and queries before the barrier do not appear in `/sync` responses after the barrier.
+	makeBarrier := func(
+		t *testing.T,
+		deployment *docker.Deployment,
+		observingUser *client.CSAPI,
+		otherHSName string,
+	) func(t *testing.T, nextBatch string) string {
+		t.Helper()
+
+		barry := deployment.RegisterUser(t, otherHSName, generateLocalpart("barry"), "password", false)
+
+		// The observing user must share a room with the dummy barrier user.
+		roomID := barry.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		observingUser.JoinRoom(t, roomID, []string{otherHSName})
+		observingUser.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(observingUser.UserID, roomID))
+
+		return func(t *testing.T, nextBatch string) string {
+			// Publish a device list update from the barrier user and wait until the observing user
+			// sees it.
+			t.Logf("Sending and waiting for dummy device list update...")
+			uploadNewKeys(t, barry)
+			return observingUser.MustSyncUntil(
+				t,
+				client.SyncReq{Since: nextBatch},
+				syncDeviceListsHas("changed", barry.UserID),
+			)
+		}
+	}
+
 	// In all of these test scenarios, there are two users: Alice and Bob.
 	// We only care about what Alice sees.
 
@@ -105,32 +144,39 @@ func TestDeviceListUpdates(t *testing.T) {
 	testOtherUserJoin := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
 		roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Alice performs an initial sync
 		_, aliceNextBatch := alice.MustSync(t, client.SyncReq{})
 
 		// Bob joins the room
+		t.Logf("%s joins the test room.", bob.UserID)
 		bob.JoinRoom(t, roomID, []string{hsName})
 		bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		// Check that Alice receives a device list update from Bob
-		alice.MustSyncUntil(
+		t.Logf("%s expects a device list change for %s...", alice.UserID, bob.UserID)
+		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncJoinedTo(bob.UserID, roomID),
 			syncDeviceListsHas("changed", bob.UserID),
 		)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
 		// Some homeservers (Synapse) may emit another `changed` update after querying keys.
-		_, aliceNextBatch = alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+		aliceNextBatch = barrier(t, aliceNextBatch)
 
 		// Both homeservers think Bob has joined now
 		// Bob then updates their device list
+		t.Logf("%s updates their device list.", bob.UserID)
 		checkBobKeys = uploadNewKeys(t, bob)
 
 		// Check that Alice receives a device list update from Bob
+		t.Logf("%s expects a device list change for %s...", alice.UserID, bob.UserID)
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
@@ -145,32 +191,39 @@ func TestDeviceListUpdates(t *testing.T) {
 	) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
 		roomID := bob.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		t.Logf("%s created test room %s.", bob.UserID, roomID)
 
 		// Alice performs an initial sync
 		_, aliceNextBatch := alice.MustSync(t, client.SyncReq{})
 
 		// Alice joins the room
+		t.Logf("%s joins the test room.", alice.UserID)
 		alice.JoinRoom(t, roomID, []string{otherHSName})
 		bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 		// Check that Alice receives a device list update from Bob
-		alice.MustSyncUntil(
+		t.Logf("%s expects a device list change for %s...", alice.UserID, bob.UserID)
+		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncJoinedTo(alice.UserID, roomID),
 			syncDeviceListsHas("changed", bob.UserID),
 		)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
 		// Some homeservers (Synapse) may emit another `changed` update after querying keys.
-		_, aliceNextBatch = alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+		aliceNextBatch = barrier(t, aliceNextBatch)
 
 		// Both homeservers think Alice has joined now
 		// Bob then updates their device list
+		t.Logf("%s updates their device list.", bob.UserID)
 		checkBobKeys = uploadNewKeys(t, bob)
 
 		// Check that Alice receives a device list update from Bob
+		t.Logf("%s expects a device list change for %s...", alice.UserID, bob.UserID)
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
@@ -183,28 +236,34 @@ func TestDeviceListUpdates(t *testing.T) {
 	testOtherUserLeave := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
 		roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Bob joins the room
+		t.Logf("%s joins the test room.", bob.UserID)
 		bob.JoinRoom(t, roomID, []string{hsName})
 		bobNextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		// Alice performs an initial sync
-		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+		aliceNextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
 		// Some homeservers (Synapse) may emit another `changed` update after querying keys.
-		_, aliceNextBatch := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+		aliceNextBatch = barrier(t, aliceNextBatch)
 
 		// Bob leaves the room
+		t.Logf("%s leaves the test room.", bob.UserID)
 		bob.LeaveRoom(t, roomID)
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(bob.UserID, roomID))
 
 		// Check that Alice is notified that she will no longer receive updates about Bob's devices
+		t.Logf("%s expects a device list left for %s...", alice.UserID, bob.UserID)
 		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncLeftFrom(bob.UserID, roomID),
 			syncDeviceListsHas("left", bob.UserID),
 		)
 
@@ -212,10 +271,12 @@ func TestDeviceListUpdates(t *testing.T) {
 		// Bob then updates their device list
 		// Alice's homeserver is not expected to get the device list update and must not return a
 		// cached device list for Bob.
+		t.Logf("%s updates their device list.", bob.UserID)
 		checkBobKeys = uploadNewKeys(t, bob)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
 
 		// Check that Alice is not notified about Bob's device update
+		t.Logf("%s expects no device list change for %s...", alice.UserID, bob.UserID)
 		syncResult, _ := alice.MustSync(t, client.SyncReq{Since: aliceNextBatch})
 		if syncDeviceListsHas("changed", bob.UserID)(alice.UserID, syncResult) == nil {
 			t.Fatalf("Alice was unexpectedly notified about Bob's device update even though they share no rooms")
@@ -226,28 +287,34 @@ func TestDeviceListUpdates(t *testing.T) {
 	testLeave := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
 		roomID := bob.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		t.Logf("%s created test room %s.", bob.UserID, roomID)
 
 		// Alice joins the room
+		t.Logf("%s joins the test room.", alice.UserID)
 		alice.JoinRoom(t, roomID, []string{otherHSName})
 		bobNextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 		// Alice performs an initial sync
-		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+		aliceNextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
 		// Some homeservers (Synapse) may emit another `changed` update after querying keys.
-		_, aliceNextBatch := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+		aliceNextBatch = barrier(t, aliceNextBatch)
 
 		// Alice leaves the room
+		t.Logf("%s leaves the test room.", alice.UserID)
 		alice.LeaveRoom(t, roomID)
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(alice.UserID, roomID))
 
 		// Check that Alice is notified that she will no longer receive updates about Bob's devices
+		t.Logf("%s expects a device list left for %s...", alice.UserID, bob.UserID)
 		aliceNextBatch = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncLeftFrom(alice.UserID, roomID),
 			syncDeviceListsHas("left", bob.UserID),
 		)
 
@@ -255,10 +322,12 @@ func TestDeviceListUpdates(t *testing.T) {
 		// Bob then updates their device list
 		// Alice's homeserver is not expected to get the device list update and must not return a
 		// cached device list for Bob.
+		t.Logf("%s updates their device list.", bob.UserID)
 		checkBobKeys = uploadNewKeys(t, bob)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
 
 		// Check that Alice is not notified about Bob's device update
+		t.Logf("%s expects no device list change for %s...", alice.UserID, bob.UserID)
 		syncResult, _ := alice.MustSync(t, client.SyncReq{Since: aliceNextBatch})
 		if syncDeviceListsHas("changed", bob.UserID)(alice.UserID, syncResult) == nil {
 			t.Fatalf("Alice was unexpectedly notified about Bob's device update even though they share no rooms")
@@ -269,46 +338,56 @@ func TestDeviceListUpdates(t *testing.T) {
 	testOtherUserRejoin := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
 		roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Bob joins the room
+		t.Logf("%s joins the test room.", bob.UserID)
 		bob.JoinRoom(t, roomID, []string{hsName})
 		bobNextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		// Alice performs an initial sync
-		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+		aliceNextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)
 		// Some homeservers (Synapse) may emit another `changed` update after querying keys.
-		_, aliceNextBatch := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+		aliceNextBatch = barrier(t, aliceNextBatch)
 
 		// Both homeservers think Bob has joined now
 		// Bob leaves the room
+		t.Logf("%s leaves the test room.", bob.UserID)
 		bob.LeaveRoom(t, roomID)
 		bobNextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(bob.UserID, roomID))
 
 		// Check that Alice is notified that she will no longer receive updates about Bob's devices
+		t.Logf("%s expects a device list left for %s...", alice.UserID, bob.UserID)
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncLeftFrom(bob.UserID, roomID),
 			syncDeviceListsHas("left", bob.UserID),
 		)
 
 		// Both homeservers think Bob has left now
 		// Bob then updates their device list before rejoining the room
 		// Alice's homeserver is not expected to get the device list update.
+		t.Logf("%s updates their device list.", bob.UserID)
 		checkBobKeys = uploadNewKeys(t, bob)
 
 		// Bob rejoins the room
+		t.Logf("%s joins the test room.", bob.UserID)
 		bob.JoinRoom(t, roomID, []string{hsName})
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		// Check that Alice is notified that Bob's devices have a change
 		// Alice's homeserver must not return a cached device list for Bob.
+		t.Logf("%s expects a device list change for %s...", alice.UserID, bob.UserID)
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: aliceNextBatch},
+			client.SyncJoinedTo(bob.UserID, roomID),
 			syncDeviceListsHas("changed", bob.UserID),
 		)
 		mustQueryKeys(t, alice, bob.UserID, checkBobKeys)

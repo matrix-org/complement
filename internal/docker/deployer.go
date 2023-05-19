@@ -32,6 +32,7 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+	complementRuntime "github.com/matrix-org/complement/runtime"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -161,7 +162,7 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName strin
 
 			printLogs(d.Docker, hsDep.ContainerID, hsDep.ContainerID)
 		} else {
-			err := d.Docker.ContainerKill(context.Background(), hsDep.ContainerID, "KILL")
+			err := complementRuntime.ContainerKillFunc(d.Docker, hsDep.ContainerID)
 			if err != nil {
 				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
 			}
@@ -496,15 +497,23 @@ type RoundTripper struct {
 func (t *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	// map HS names to localhost:port combos
 	hsName := req.URL.Hostname()
-	dep, ok := t.Deployment.HS[hsName]
-	if !ok {
-		return nil, fmt.Errorf("dockerRoundTripper unknown hostname: '%s'", hsName)
+	if hsName == t.Deployment.Config.HostnameRunningComplement {
+		if req.URL.Port() == "" {
+			req.URL.Host = "localhost"
+		} else {
+			req.URL.Host = "localhost:" + req.URL.Port()
+		}
+	} else {
+		dep, ok := t.Deployment.HS[hsName]
+		if !ok {
+			return nil, fmt.Errorf("dockerRoundTripper unknown hostname: '%s'", hsName)
+		}
+		newURL, err := url.Parse(dep.FedBaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("dockerRoundTripper: failed to parase fedbaseurl for hs: %s", err)
+		}
+		req.URL.Host = newURL.Host
 	}
-	newURL, err := url.Parse(dep.FedBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("dockerRoundTripper: failed to parase fedbaseurl for hs: %s", err)
-	}
-	req.URL.Host = newURL.Host
 	req.URL.Scheme = "https"
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{

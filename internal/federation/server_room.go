@@ -3,6 +3,7 @@ package federation
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/matrix-org/gomatrixserverlib"
@@ -15,7 +16,9 @@ type ServerRoom struct {
 	Version            gomatrixserverlib.RoomVersion
 	RoomID             string
 	State              map[string]*gomatrixserverlib.Event
+	StateMutex         sync.RWMutex
 	Timeline           []*gomatrixserverlib.Event
+	TimelineMutex      sync.RWMutex
 	ForwardExtremities []string
 	Depth              int64
 }
@@ -36,7 +39,9 @@ func (r *ServerRoom) AddEvent(ev *gomatrixserverlib.Event) {
 	if ev.StateKey() != nil {
 		r.replaceCurrentState(ev)
 	}
+	r.TimelineMutex.Lock()
 	r.Timeline = append(r.Timeline, ev)
+	r.TimelineMutex.Unlock()
 	// update extremities and depth
 	if ev.Depth() > r.Depth {
 		r.Depth = ev.Depth()
@@ -75,20 +80,27 @@ func (r *ServerRoom) AuthEvents(sn gomatrixserverlib.StateNeeded) (eventIDs []st
 // on the (type, state_key) provided.
 func (r *ServerRoom) replaceCurrentState(ev *gomatrixserverlib.Event) {
 	tuple := fmt.Sprintf("%s\x1f%s", ev.Type(), *ev.StateKey())
+	r.StateMutex.Lock()
 	r.State[tuple] = ev
+	r.StateMutex.Unlock()
 }
 
 // CurrentState returns the state event for the given (type, state_key) or nil.
 func (r *ServerRoom) CurrentState(evType, stateKey string) *gomatrixserverlib.Event {
 	tuple := fmt.Sprintf("%s\x1f%s", evType, stateKey)
-	return r.State[tuple]
+	r.StateMutex.RLock()
+	state := r.State[tuple]
+	r.StateMutex.RUnlock()
+	return state
 }
 
 // AllCurrentState returns all the current state events
 func (r *ServerRoom) AllCurrentState() (events []*gomatrixserverlib.Event) {
+	r.StateMutex.RLock()
 	for _, ev := range r.State {
 		events = append(events, ev)
 	}
+	r.StateMutex.RUnlock()
 	return
 }
 
@@ -104,12 +116,16 @@ func (r *ServerRoom) AuthChainForEvents(events []*gomatrixserverlib.Event) (chai
 	// build a map of all events in the room
 	// Timeline and State contain different sets of events, so check them both.
 	eventsByID := map[string]*gomatrixserverlib.Event{}
+	r.TimelineMutex.RLock()
 	for _, ev := range r.Timeline {
 		eventsByID[ev.EventID()] = ev
 	}
+	r.TimelineMutex.RUnlock()
+	r.StateMutex.RLock()
 	for _, ev := range r.State {
 		eventsByID[ev.EventID()] = ev
 	}
+	r.StateMutex.RUnlock()
 
 	// a queue of events whose auth events are to be included in the auth chain
 	queue := []*gomatrixserverlib.Event{}
@@ -156,6 +172,7 @@ func (r *ServerRoom) MustHaveMembershipForUser(t *testing.T, userID, wantMembers
 func (r *ServerRoom) ServersInRoom() (servers []string) {
 	serverSet := make(map[string]struct{})
 
+	r.StateMutex.RLock()
 	for _, ev := range r.State {
 		if ev.Type() != "m.room.member" {
 			continue
@@ -171,6 +188,7 @@ func (r *ServerRoom) ServersInRoom() (servers []string) {
 
 		serverSet[string(server)] = struct{}{}
 	}
+	r.StateMutex.RUnlock()
 
 	for server := range serverSet {
 		servers = append(servers, server)

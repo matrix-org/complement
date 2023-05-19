@@ -77,7 +77,7 @@ func TestEventAuth(t *testing.T) {
 	getEventAuth := func(t *testing.T, eventID string, wantAuthEventIDs []string) {
 		t.Helper()
 		t.Logf("/event_auth for %s - want %v", eventID, wantAuthEventIDs)
-		eventAuthResp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), "hs1", room.Version, roomID, eventID)
+		eventAuthResp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), gomatrixserverlib.ServerName(srv.ServerName()), "hs1", room.Version, roomID, eventID)
 		must.NotError(t, "failed to /event_auth", err)
 		if len(eventAuthResp.AuthEvents) == 0 {
 			t.Fatalf("/event_auth returned 0 auth events")

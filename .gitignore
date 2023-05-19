@@ -6,3 +6,7 @@ complement
 # Homerunner can end up in various places
 /homerunner
 /cmd/homerunner/homerunner
+
+# For direnv users
+/.envrc
+.direnv/

@@ -88,6 +88,36 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	})
 }
 
+// This tests that joining a room with multiple ?server_name=s works correctly.
+// The join should succeed even if the first server is not in the room.
+func TestJoinFederatedRoomFailOver(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs2", "@bob:hs2")
+
+	srv := federation.NewServer(t, deployment)
+	cancel := srv.Listen()
+	defer cancel()
+
+	srv.Mux().Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		t.Logf("Complement homeserver responds to /make_join with 404, M_NOT_FOUND.")
+		w.WriteHeader(404)
+		w.Write([]byte(`{
+			"errcode": "M_NOT_FOUND",
+			"error": "Unknown room."
+		}`))
+	})).Methods("GET")
+
+	roomID := bob.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	t.Logf("%s created room %s.", bob.UserID, roomID)
+
+	t.Logf("%s joins the room via {complement,hs2}.", alice.UserID)
+	alice.JoinRoom(t, roomID, []string{srv.ServerName(), "hs2"})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+}
+
 // This tests that joining a room over federation works in the presence of:
 // - Events with missing signatures
 // - Events with bad signatures
@@ -267,6 +297,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
+	origin := gomatrixserverlib.ServerName(srv.ServerName())
 	defer cancel()
 
 	fedClient := srv.FederationClient(deployment)
@@ -289,7 +320,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	})
 
 	// charlie sends a make_join for a different user
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), "hs1", roomID, srv.UserID("charlie2"), federation.SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, srv.UserID("charlie2"), federation.SupportedRoomVersions())
 	must.NotError(t, "MakeJoin", err)
 
 	// ... and does a switcheroo to turn it into a join for himself
@@ -299,7 +330,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	must.NotError(t, "JoinEvent.Build", err)
 
 	// SendJoin should return a 403.
-	_, err = fedClient.SendJoin(context.Background(), "hs1", joinEvent)
+	_, err = fedClient.SendJoin(context.Background(), origin, "hs1", joinEvent)
 	if err == nil {
 		t.Errorf("SendJoin returned 200, want 403")
 	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -380,7 +411,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 			url.PathEscape(event.EventID()),
 		)
 		t.Logf("PUT %s", path)
-		req := gomatrixserverlib.NewFederationRequest("PUT", "hs1", path)
+		req := gomatrixserverlib.NewFederationRequest("PUT", gomatrixserverlib.ServerName(srv.ServerName()), "hs1", path)
 		if err := req.SetContent(event); err != nil {
 			t.Errorf("req.SetContent: %v", err)
 			return
@@ -469,6 +500,7 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	)
 	cancel := srv.Listen()
 	defer cancel()
+	origin := gomatrixserverlib.ServerName(srv.ServerName())
 
 	// annoyingly we can't get to the room that alice and bob already share (see https://github.com/matrix-org/complement/issues/254)
 	// so we have to create a new one.
@@ -481,25 +513,25 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	// now we send a make_join...
 	charlie := srv.UserID("charlie")
 	fedClient := srv.FederationClient(deployment)
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), "hs1", roomID, charlie, federation.SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, charlie, federation.SupportedRoomVersions())
 	if err != nil {
 		t.Fatalf("make_join failed: %v", err)
 	}
 
 	// ... construct a signed join event ...
 	roomVer := makeJoinResp.RoomVersion
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName()), srv.KeyID, srv.Priv, roomVer)
+	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), origin, srv.KeyID, srv.Priv, roomVer)
 	if err != nil {
 		t.Fatalf("failed to sign join event: %v", err)
 	}
 
 	// and send_join it, with the magic param
-	sendJoinResp, err := fedClient.SendJoinPartialState(context.Background(), "hs1", joinEvent)
+	sendJoinResp, err := fedClient.SendJoinPartialState(context.Background(), origin, "hs1", joinEvent)
 	if err != nil {
 		t.Fatalf("send_join failed: %v", err)
 	}
 
-	if !sendJoinResp.PartialState {
+	if !sendJoinResp.MembersOmitted {
 		t.Skip("Server does not support partial_state")
 	}
 
@@ -519,8 +551,8 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	})
 
 	// check the returned auth events match those expected.
-    // Now that we include heroes in the partial join response,
-    // all of the events are included under "state" and so we don't expect any
+	// Now that we include heroes in the partial join response,
+	// all of the events are included under "state" and so we don't expect any
 	// extra auth_events.
 	// TODO: add in a second e.g. power_levels event so that we add stuff to the
 	// auth chain.
@@ -528,7 +560,7 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	for _, ev := range sendJoinResp.AuthEvents {
 		returnedAuthEventKeys = append(returnedAuthEventKeys, typeAndStateKeyForEvent(gjson.ParseBytes(ev)))
 	}
-	must.CheckOffAll(t, returnedAuthEventKeys, []interface{}{ })
+	must.CheckOffAll(t, returnedAuthEventKeys, []interface{}{})
 
 	// check the server list. Only one, so we can use HaveInOrder even though the list is unordered
 	must.HaveInOrder(t, sendJoinResp.ServersInRoom, []string{"hs1"})

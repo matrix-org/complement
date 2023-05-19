@@ -261,6 +261,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	fedClient := srv.FederationClient(deployment)
 	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "wut",
+		Origin:        gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:   gomatrixserverlib.ServerName("hs1"),
 		PDUs: []json.RawMessage{
 			sentEvent.JSON(),
@@ -306,6 +307,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 
 	resp, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "t2",
+		Origin:        gomatrixserverlib.ServerName(srv.ServerName()),
 		Destination:   gomatrixserverlib.ServerName("hs1"),
 		PDUs: []json.RawMessage{
 			message3.JSON(),
@@ -367,7 +369,10 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie, roomID))
 
-			req := gomatrixserverlib.NewFederationRequest("POST", "hs1",
+			req := gomatrixserverlib.NewFederationRequest(
+				"POST",
+				gomatrixserverlib.ServerName(srv.ServerName()),
+				"hs1",
 				fmt.Sprintf("/_matrix/federation/v1/get_missing_events/%s", roomID),
 			)
 
