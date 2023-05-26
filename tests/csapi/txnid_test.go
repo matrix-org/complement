@@ -65,25 +65,10 @@ func mustHaveTransactionIDForEvent(t *testing.T, roomID, eventID, expectedTxnId 
 	})
 }
 
-func mustNotHaveTransactionIDForEvent(t *testing.T, roomID, eventID string) client.SyncCheckOpt {
-	return client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-		if r.Get("event_id").Str == eventID {
-			unsignedTxnId := r.Get("unsigned.transaction_id")
-			if unsignedTxnId.Exists() {
-				t.Fatalf("Event %s in room %s should NOT have a 'unsigned.transaction_id', but it did (%s)", eventID, roomID, unsignedTxnId.Str)
-			}
-
-			return true
-		}
-
-		return false
-	})
-}
-
-// TestTxnScopeOnLocalEcho tests that transaction IDs in the sync response are scoped to the "client session", not the device
+// TestTxnScopeOnLocalEcho tests that transaction IDs in the sync response are scoped to the device
 func TestTxnScopeOnLocalEcho(t *testing.T) {
-	// Conduit scope transaction IDs to the device ID, not the access token.
-	runtime.SkipIf(t, runtime.Conduit)
+	// Synapse will support this once https://github.com/matrix-org/synapse/pull/15629 is merged
+	runtime.SkipIf(t, runtime.Dendrite, runtime.Synapse)
 
 	deployment := Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
@@ -115,15 +100,15 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 	c2.UserID, c2.AccessToken, c2.DeviceID = c2.LoginUser(t, "alice", "password", client.WithDeviceID(c1.DeviceID))
 	must.EqualStr(t, c1.DeviceID, c2.DeviceID, "Device ID should be the same")
 
-	// When syncing, we should find the event and it should *not* have a transaction ID on the second client.
-	c2.MustSyncUntil(t, client.SyncReq{}, mustNotHaveTransactionIDForEvent(t, roomID, eventID))
+	// When syncing, we should find the event and it should have the same transaction ID on the second client.
+	c2.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionIDForEvent(t, roomID, eventID, txnId))
 }
 
-// TestTxnIdempotencyScopedToClientSession tests that transaction IDs are scoped to a "client session"
-// and behave as expected across multiple clients even if they use the same device ID
-func TestTxnIdempotencyScopedToClientSession(t *testing.T) {
-	// Conduit scope transaction IDs to the device ID, not the client session.
-	runtime.SkipIf(t, runtime.Conduit)
+// TestTxnIdempotencyScopedToDevice tests that transaction IDs are scoped to a device
+// and behave as expected across multiple clients if they use the same device ID
+func TestTxnIdempotencyScopedToDevice(t *testing.T) {
+	// Synapse will support this once https://github.com/matrix-org/synapse/pull/15629 is merged
+	runtime.SkipIf(t, runtime.Dendrite, runtime.Synapse)
 
 	deployment := Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
@@ -156,8 +141,8 @@ func TestTxnIdempotencyScopedToClientSession(t *testing.T) {
 	// send another event with the same txnId via the second client
 	eventID2 := c2.SendEventUnsyncedWithTxnID(t, roomID, event, txnId)
 
-	// the two events should have different event IDs as they came from different clients
-	must.NotEqualStr(t, eventID2, eventID1, "Expected eventID1 and eventID2 to be different from two clients sharing the same device ID")
+	// the two events should have the same event IDs as they came from the same device
+	must.EqualStr(t, eventID2, eventID1, "Expected eventID1 and eventID2 to be the same from two clients sharing the same device ID")
 }
 
 // TestTxnIdempotency tests that PUT requests idempotency follows required semantics
@@ -212,4 +197,54 @@ func TestTxnIdempotency(t *testing.T) {
 	eventID4 := c1.SendEventUnsyncedWithTxnID(t, roomID2, event1, txnId)
 
 	must.NotEqualStr(t, eventID4, eventID3, "Expected eventID4 and eventID3 to be different, but they were not")
+}
+
+// TestTxnIdWithRefreshToken tests that when a client refreshes its access token,
+// it still gets back a transaction ID in the sync response and idempotency is respected.
+func TestTxnIdWithRefreshToken(t *testing.T) {
+  // Dendrite and Conduit don't support refresh tokens yet.
+	// Synapse will pass once https://github.com/matrix-org/synapse/pull/15629 is merged
+  runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit, runtime.Synapse)
+
+  deployment := Deploy(t, b.BlueprintCleanHS)
+  defer deployment.Destroy(t)
+
+  deployment.RegisterUser(t, "hs1", "alice", "password", false)
+
+  c := deployment.Client(t, "hs1", "")
+
+  var refreshToken string
+  c.UserID, c.AccessToken, refreshToken, c.DeviceID, _ = c.LoginUserWithRefreshToken(t, "alice", "password")
+
+  // Create a room where we can send events.
+  roomID := c.CreateRoom(t, map[string]interface{}{})
+
+	txnId := "abcdef"
+	// We send an event
+  eventID1 := c.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
+    Type: "m.room.message",
+    Content: map[string]interface{}{
+      "msgtype": "m.text",
+      "body":    "first",
+    },
+  }, txnId)
+
+  // Use the refresh token to get a new access token.
+  c.AccessToken, refreshToken, _ = c.ConsumeRefreshToken(t, refreshToken)
+
+  // When syncing, we should find the event and it should also have the correct transaction ID even
+	// though the access token is different.
+  c.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionIDForEvent(t, roomID, eventID1, txnId))
+
+	// We try sending the event again with the same transaction ID
+  eventID2 := c.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
+    Type: "m.room.message",
+    Content: map[string]interface{}{
+      "msgtype": "m.text",
+      "body":    "first",
+    },
+  }, txnId)
+
+	// The event should have been deduplicated and we should get back the same event ID
+	must.EqualStr(t, eventID2, eventID1, "Expected eventID1 and eventID2 to be the same from a client using a refresh token")
 }
