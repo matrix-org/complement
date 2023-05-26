@@ -67,8 +67,7 @@ func mustHaveTransactionIDForEvent(t *testing.T, roomID, eventID, expectedTxnId 
 
 // TestTxnScopeOnLocalEcho tests that transaction IDs in the sync response are scoped to the device
 func TestTxnScopeOnLocalEcho(t *testing.T) {
-	// Synapse will support this once https://github.com/matrix-org/synapse/pull/15629 is merged
-	runtime.SkipIf(t, runtime.Dendrite, runtime.Synapse)
+	runtime.SkipIf(t, runtime.Dendrite)
 
 	deployment := Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
@@ -107,8 +106,7 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 // TestTxnIdempotencyScopedToDevice tests that transaction IDs are scoped to a device
 // and behave as expected across multiple clients if they use the same device ID
 func TestTxnIdempotencyScopedToDevice(t *testing.T) {
-	// Synapse will support this once https://github.com/matrix-org/synapse/pull/15629 is merged
-	runtime.SkipIf(t, runtime.Dendrite, runtime.Synapse)
+	runtime.SkipIf(t, runtime.Dendrite)
 
 	deployment := Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
@@ -203,8 +201,7 @@ func TestTxnIdempotency(t *testing.T) {
 // it still gets back a transaction ID in the sync response and idempotency is respected.
 func TestTxnIdWithRefreshToken(t *testing.T) {
   // Dendrite and Conduit don't support refresh tokens yet.
-	// Synapse will pass once https://github.com/matrix-org/synapse/pull/15629 is merged
-  runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit, runtime.Synapse)
+  runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit)
 
   deployment := Deploy(t, b.BlueprintCleanHS)
   defer deployment.Destroy(t)
