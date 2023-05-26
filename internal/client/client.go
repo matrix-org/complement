@@ -459,6 +459,53 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string, opts ...Logi
 	return userID, accessToken, deviceID
 }
 
+// LoginUserWithRefreshToken will log in to a homeserver, with refresh token enabled,
+// and create a new device on an existing user.
+func (c *CSAPI) LoginUserWithRefreshToken(t *testing.T, localpart, password string) (userID, accessToken, refreshToken, deviceID string, expiresInMs int64) {
+	t.Helper()
+	reqBody := map[string]interface{}{
+		"identifier": map[string]interface{}{
+			"type": "m.id.user",
+			"user": localpart,
+		},
+		"password":      password,
+		"type":          "m.login.password",
+		"refresh_token": true,
+	}
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, WithJSONBody(t, reqBody))
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+
+	userID = gjson.GetBytes(body, "user_id").Str
+	accessToken = gjson.GetBytes(body, "access_token").Str
+	deviceID = gjson.GetBytes(body, "device_id").Str
+	refreshToken = gjson.GetBytes(body, "refresh_token").Str
+	expiresInMs = gjson.GetBytes(body, "expires_in_ms").Int()
+	return userID, accessToken, refreshToken, deviceID, expiresInMs
+}
+
+// RefreshToken will consume a refresh token and return a new access token and refresh token.
+func (c *CSAPI) ConsumeRefreshToken(t *testing.T, refreshToken string) (newAccessToken, newRefreshToken string, expiresInMs int64) {
+	t.Helper()
+	reqBody := map[string]interface{}{
+		"refresh_token": refreshToken,
+	}
+	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "refresh"}, WithJSONBody(t, reqBody))
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("unable to read response body: %v", err)
+	}
+
+	newAccessToken = gjson.GetBytes(body, "access_token").Str
+	newRefreshToken = gjson.GetBytes(body, "refresh_token").Str
+	expiresInMs = gjson.GetBytes(body, "expires_in_ms").Int()
+	return newAccessToken, newRefreshToken, expiresInMs
+}
+
 // RegisterUser will register the user with given parameters and
 // return user ID, access token and device ID. It fails the test on network error.
 func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
