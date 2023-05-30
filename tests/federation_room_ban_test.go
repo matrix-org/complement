@@ -12,7 +12,7 @@ import (
 // Create a federation room. Bob bans Alice. Bob unbans Alice. Bob invites Alice (unbanning her). Ensure the invite is
 // received and can be accepted.
 func TestUnbanViaInvite(t *testing.T) {
-	runtime.SkipIf(t, runtime.Synapse) // https://github.com/matrix-org/synapse/issues/1563
+	runtime.SkipIf(t, runtime.Synapse) // FIXME: https://github.com/matrix-org/synapse/issues/1563
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
@@ -25,13 +25,13 @@ func TestUnbanViaInvite(t *testing.T) {
 	alice.JoinRoom(t, roomID, []string{"hs2"})
 
 	// Ban Alice
-	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
+	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
 		"user_id": alice.UserID,
 	}))
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 
 	// Unban Alice
-	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "unban"}, client.WithJSONBody(t, map[string]interface{}{
+	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "unban"}, client.WithJSONBody(t, map[string]interface{}{
 		"user_id": alice.UserID,
 	}))
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))

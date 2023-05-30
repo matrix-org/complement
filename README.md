@@ -7,13 +7,24 @@ Complement is a black box integration testing framework for Matrix homeservers.
 
 ## Running
 
-You need to have Go and Docker installed, as well as `libolm3` and `libolm-dev`. Then:
+You need to have Go and Docker >= 20.10 installed, as well as `libolm3` and `libolm-dev`. Then:
 
 ```
 $ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl go test -v ./tests/...
 ```
 
-You can install `libolm3` on Debian using something like:
+For a full list of configuration options, see the [automatically generated documentation](ENVIRONMENT.md). In addition to the environment variables, [all normal Go test config options](https://pkg.go.dev/cmd/go/internal/test) will work, so to just run 1 named test and include a timeout for the test run:
+```
+$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests/...
+```
+
+If you need to pass environment variables to the image under test, you can:
+1. define a pass-through prefix with e.g. `COMPLEMENT_SHARE_ENV_PREFIX=PASS_`; then
+2. prefix the desired environment variables with that prefix; e.g. `PASS_SYNAPSE_COMPLEMENT_USE_WORKERS=true`.
+
+### Dependencies
+
+Complement supports encryption via `libolm`. You can install `libolm3` on Debian using something like:
 ```
 echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/complement.list && apt-get update && apt-get install -y libolm3 libolm-dev/buster-backports
 ```
@@ -28,13 +39,31 @@ export CPATH=/opt/homebrew/include
 export PATH=/opt/homebrew/bin:$PATH
 ```
 
-You can either use your own image, or one of the ones supplied in the [dockerfiles](./dockerfiles) directory.
+### Potential conflict with firewall software
 
-A full list of config options can be found [in the config file](./internal/config/config.go). All normal Go test config
-options will work, so to just run 1 named test and include a timeout for the test run:
+The homeserver in the test image needs to be able to make requests to the mock
+homeserver hosted by Complement itself, which may be blocked by firewall
+software. This will manifest with a subset of the tests (mostly those to do
+with federation) inexplicably failing.
+
+To solve this, you will need to configure your firewall to allow such requests.
+
+If you are using [ufw](https://code.launchpad.net/ufw), this can be done with:
+
+```sh
+sudo ufw allow in on br-+
 ```
-$ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(TestOutboundFederationSend)$' -v ./tests/...
-```
+
+### Running using Podman
+
+It is possible to run the test suite using Podman and the compatibility layer for Docker API.
+Rootless mode is also supported.
+
+To do so you should:
+- `systemctl --user start podman.service` to start the rootless API daemon (can also be enabled).
+- `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock BUILDAH_FORMAT=docker COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT=host.containers.internal ...`
+
+Docker image format is needed because OCI format doesn't support the HEALTHCHECK directive unfortunately.
 
 ### Running against Dendrite
 
@@ -51,17 +80,22 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests/...
 
 If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
 
-If you want to develop Complement tests while working on a local dev instance of Synapse, use the [`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh) script and set the `COMPLEMENT_DIR` environment variable to the filepath of your local Complement checkout. A regex that matches against test names can also be supplied as an argument to the script, i.e:
+If you want to develop Complement tests while working on a local dev instance
+of Synapse, use the
+[`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh)
+script and set the `COMPLEMENT_DIR` environment variable to the filepath of
+your local Complement checkout. Arguments to `go test` can be supplied as an argument to the script, e.g.:
 
 ```sh
-COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh "TestOutboundFederation(Profile|Send)"
+COMPLEMENT_DIR=/path/to/complement scripts-dev/complement.sh -run "TestOutboundFederation(Profile|Send)"
 ```
 
-To run Complement against a specific release of Synapse, set the
-`SYNAPSE_VERSION` build argument. For example:
+To run Complement against a specific release of Synapse, build the
+"complement-synapse" image with a `SYNAPSE_VERSION` build argument. For
+example:
 
 ```sh
-docker build -t complement-synapse:v1.36.0 -f dockerfiles/Synapse.Dockerfile --build-arg=SYNAPSE_VERSION=v1.36.0 dockerfiles
+(cd synapse && docker build -t complement-synapse:v1.36.0 -f docker/complement/Dockerfile --build-arg=SYNAPSE_VERSION=v1.36.0 docker/complement)
 COMPLEMENT_BASE_IMAGE=complement-synapse:v1.36.0 go test ./tests/...
 ```
 
@@ -83,20 +117,24 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 
 If you want to write Complement tests _and_ hack on a homeserver implementation at the same time it can be very awkward
 to have to `docker build` the image all the time. To resolve this, Complement support "host mounts" which mount a directory
-from the host to the container. This is set via `COMPLEMENT_HOST_MOUNTS`:
+from the host to the container. This is set via `COMPLEMENT_HOST_MOUNTS`, on the form `HOST:CONTAINER[:ro][;...]` where
+`:ro` makes the mount read-only.
 
+For example, for Dendrite on Linux with the default location of `$GOPATH`, do a one-time setup:
+
+```shellsession
+$ git clone https://github.com/matrix-org/dendrite ../dendrite
+$ (cd ../dendrite && docker build -t complement-dendrite-local -f build/scripts/ComplementLocal.Dockerfile .)
+$ mkdir -p ../complement-go-build-cache
+$ export COMPLEMENT_BASE_IMAGE=complement-dendrite-local
+$ export COMPLEMENT_HOST_MOUNTS="$PWD/../dendrite:/dendrite:ro;$HOME/go:/go:ro;$PWD/../complement-go-build-cache:/root/.cache/go-build"
 ```
-COMPLEMENT_HOST_MOUNTS='/my/local/dir:/container/dir;/another/local/dir:/container/dir2:ro'
 
-which is:
-  - /my/local/dir:/container/dir
-  - /another/local/dir:/container/dir2:ro
+Then simply use `go test` to compile and test your locally checked out Dendrite:
 
-which is of the form:
-  - HOST:CONTAINER[:ro] where :ro makes the mount read-only.
+```shellsession
+$ go test -v ./tests/...
 ```
-
-For example, for Dendrite: `COMPLEMENT_HOST_MOUNTS='/your/local/dendrite:/dendrite:ro;/your/go/path:/go:ro'`.
 
 ### Getting prettier output
 
@@ -160,19 +198,20 @@ update-ca-certificates
 
 ## Sytest parity
 
+As of 10 February 2023:
 ```
 $ go build ./cmd/sytest-coverage
 $ ./sytest-coverage -v
-10apidoc/01register 3/10 tests
-    × GET /register yields a set of flows
-    × POST $ep_name admin with shared secret
-    × POST $ep_name with shared secret
-    × POST $ep_name with shared secret disallows symbols
-    × POST $ep_name with shared secret downcases capitals
-    × POST /register allows registration of usernames with '$chr'
+10apidoc/01register 10/10 tests
+    ✓ POST $ep_name admin with shared secret
+    ✓ POST $ep_name with shared secret disallows symbols
+    ✓ POST $ep_name with shared secret downcases capitals
+    ✓ POST $ep_name with shared secret
+    ✓ POST /register allows registration of usernames with '$chr'
+    ✓ POST /register rejects registration of usernames with '$q'
+    ✓ GET /register yields a set of flows
     ✓ POST /register can create a user
     ✓ POST /register downcases capitals in usernames
-    × POST /register rejects registration of usernames with '$q'
     ✓ POST /register returns the same device_id as that in the request
 
 10apidoc/01request-encoding 1/1 tests
@@ -181,8 +220,8 @@ $ ./sytest-coverage -v
 10apidoc/02login 6/6 tests
     ✓ GET /login yields a set of flows
     ✓ POST /login as non-existing user is rejected
-    ✓ POST /login can log in as a user
     ✓ POST /login can log in as a user with just the local part of the id
+    ✓ POST /login can log in as a user
     ✓ POST /login returns the same device_id as that in the request
     ✓ POST /login wrong password is rejected
 
@@ -197,15 +236,15 @@ $ ./sytest-coverage -v
     ✓ GET /profile/:user_id/avatar_url publicly accessible
     ✓ PUT /profile/:user_id/avatar_url sets my avatar
 
-10apidoc/12device_management 2/8 tests
-    × DELETE /device/{deviceId}
-    × DELETE /device/{deviceId} requires UI auth user to match device owner
-    × DELETE /device/{deviceId} with no body gives a 401
-    ✓ GET /device/{deviceId}
+10apidoc/12device_management 8/8 tests
+    ✓ DELETE /device/{deviceId} requires UI auth user to match device owner
+    ✓ DELETE /device/{deviceId} with no body gives a 401
+    ✓ DELETE /device/{deviceId}
     ✓ GET /device/{deviceId} gives a 404 for unknown devices
-    × GET /devices
-    × PUT /device/{deviceId} gives a 404 for unknown devices
-    × PUT /device/{deviceId} updates device fields
+    ✓ GET /device/{deviceId}
+    ✓ GET /devices
+    ✓ PUT /device/{deviceId} gives a 404 for unknown devices
+    ✓ PUT /device/{deviceId} updates device fields
 
 10apidoc/13ui-auth 0/4 tests
 10apidoc/20presence 2/2 tests
@@ -216,8 +255,8 @@ $ ./sytest-coverage -v
     ✓ Can /sync newly created room
     ✓ POST /createRoom creates a room with the given version
     ✓ POST /createRoom ignores attempts to set the room version via creation_content
-    ✓ POST /createRoom makes a private room
     ✓ POST /createRoom makes a private room with invites
+    ✓ POST /createRoom makes a private room
     ✓ POST /createRoom makes a public room
     ✓ POST /createRoom makes a room with a name
     ✓ POST /createRoom makes a room with a topic
@@ -243,27 +282,62 @@ $ ./sytest-coverage -v
     ✓ GET /rooms/:room_id/aliases lists aliases
     ✓ PUT /directory/room/:room_alias creates alias
 
-10apidoc/33room-members 3/8 tests
+10apidoc/33room-members 8/8 tests
+    ✓ POST /join/:room_alias can join a room with custom content
     ✓ POST /join/:room_alias can join a room
-    × POST /join/:room_alias can join a room with custom content
+    ✓ POST /join/:room_id can join a room with custom content
     ✓ POST /join/:room_id can join a room
-    × POST /join/:room_id can join a room with custom content
-    × POST /rooms/:room_id/ban can ban a user
-    × POST /rooms/:room_id/invite can send an invite
+    ✓ POST /rooms/:room_id/ban can ban a user
+    ✓ POST /rooms/:room_id/invite can send an invite
     ✓ POST /rooms/:room_id/join can join a room
-    × POST /rooms/:room_id/leave can leave a room
+    ✓ POST /rooms/:room_id/leave can leave a room
 
-10apidoc/34room-messages 0/5 tests
-10apidoc/35room-typing 0/1 tests
-10apidoc/36room-levels 0/4 tests
-10apidoc/37room-receipts 0/1 tests
-10apidoc/38room-read-marker 0/1 tests
-10apidoc/40content 0/2 tests
-10apidoc/45server-capabilities 0/2 tests
-11register 0/7 tests
+10apidoc/34room-messages 5/5 tests
+    ✓ GET /rooms/:room_id/messages lazy loads members correctly
+    ✓ GET /rooms/:room_id/messages returns a message
+    ✓ POST /rooms/:room_id/send/:event_type sends a message
+    ✓ PUT /rooms/:room_id/send/:event_type/:txn_id deduplicates the same txn id
+    ✓ PUT /rooms/:room_id/send/:event_type/:txn_id sends a message
+
+10apidoc/35room-typing 1/1 tests
+    ✓ PUT /rooms/:room_id/typing/:user_id sets typing notification
+
+10apidoc/36room-levels 3/3 tests
+    ✓ GET /rooms/:room_id/state/m.room.power_levels can fetch levels
+    ✓ PUT /rooms/:room_id/state/m.room.power_levels can set levels
+    ✓ PUT power_levels should not explode if the old power levels were empty
+
+10apidoc/37room-receipts 1/1 tests
+    ✓ POST /rooms/:room_id/receipt can create receipts
+
+10apidoc/38room-read-marker 1/1 tests
+    ✓ POST /rooms/:room_id/read_markers can create read marker
+
+10apidoc/40content 2/2 tests
+    ✓ GET /media/v3/download can fetch the value again
+    ✓ POST /media/v3/upload can create an upload
+
+10apidoc/45server-capabilities 2/2 tests
+    ✓ GET /capabilities is present and well formed for registered user
+    ✓ GET /v3/capabilities is not public
+
+11register 1/7 tests
+    × Register with a recaptcha
+    × Can register using an email address
+    ✓ registration accepts non-ascii passwords
+    × registration is idempotent, with username specified
+    × registration is idempotent, without username specified
+    × registration remembers parameters
+    × registration with inhibit_login inhibits login
+
 12login/01threepid-and-password 0/1 tests
 12login/02cas 0/3 tests
-13logout 0/4 tests
+13logout 4/4 tests
+    ✓ Can logout all devices
+    ✓ Can logout current device
+    ✓ Request to logout with invalid an access token is rejected
+    ✓ Request to logout without an access token is rejected
+
 14account/01change-password 7/7 tests
     ✓ After changing password, a different session no longer works by default
     ✓ After changing password, can log in with new password
@@ -280,62 +354,91 @@ $ ./sytest-coverage -v
     ✓ Can't deactivate account with wrong password
 
 21presence-events 0/2 tests
-30rooms/01state 2/7 tests
-    × Global initialSync
-    × Global initialSync with limit=0 gives no messages
-    × Joining room twice is idempotent
+30rooms/01state 5/5 tests
+    ✓ Joining room twice is idempotent
     ✓ Room creation reports m.room.create to myself
     ✓ Room creation reports m.room.member to myself
-    × Setting room topic reports m.room.topic to myself
-    × Setting state twice is idempotent
+    ✓ Setting room topic reports m.room.topic to myself
+    ✓ Setting state twice is idempotent
 
-30rooms/02members-local 0/3 tests
-30rooms/03members-remote 0/5 tests
+30rooms/02members-local 3/3 tests
+    ✓ Existing members see new members' join events
+    ✓ Existing members see new members' presence
+    ✓ New room members see their own join event
+
+30rooms/03members-remote 2/5 tests
+    × Existing members see new member's presence
+    ✓ Existing members see new members' join events
+    ✓ New room members see their own join event
+    × Remote users can join room by alias
+    × Remote users may not join unfederated rooms
+
 30rooms/04messages 0/9 tests
-30rooms/05aliases 6/13 tests
+30rooms/05aliases 13/13 tests
     ✓ Canonical alias can be set
     ✓ Canonical alias can include alt_aliases
     ✓ Alias creators can delete alias with no ops
     ✓ Alias creators can delete canonical alias with no ops
-    × Can delete canonical alias
+    ✓ Can delete canonical alias
     ✓ Deleting a non-existent alias should return a 404
     ✓ Only room members can list aliases of a room
-    × Regular users can add and delete aliases in the default room configuration
-    × Regular users can add and delete aliases when m.room.aliases is restricted
-    × Remote room alias queries can handle Unicode
-    × Room aliases can contain Unicode
-    × Users can't delete other's aliases
-    × Users with sufficient power-level can delete other's aliases
+    ✓ Regular users can add and delete aliases in the default room configuration
+    ✓ Regular users can add and delete aliases when m.room.aliases is restricted
+    ✓ Remote room alias queries can handle Unicode
+    ✓ Room aliases can contain Unicode
+    ✓ Users can't delete other's aliases
+    ✓ Users with sufficient power-level can delete other's aliases
 
-30rooms/06invite 1/13 tests
-    × Can invite users to invite-only rooms
+30rooms/06invite 13/13 tests
+    ✓ Can invite users to invite-only rooms
     ✓ Test that we can be reinvited to a room we created
-    × Invited user can reject invite
-    × Invited user can reject invite for empty room
-    × Invited user can reject invite over federation
-    × Invited user can reject invite over federation for empty room
-    × Invited user can reject invite over federation several times
-    × Invited user can reject local invite after originator leaves
-    × Invited user can see room metadata
-    × Remote invited user can see room metadata
-    × Uninvited users cannot join the room
-    × Users cannot invite a user that is already in the room
-    × Users cannot invite themselves to a room
+    ✓ Invited user can reject invite for empty room
+    ✓ Invited user can reject invite over federation for empty room
+    ✓ Invited user can reject invite over federation several times
+    ✓ Invited user can reject invite over federation
+    ✓ Invited user can reject invite
+    ✓ Invited user can reject local invite after originator leaves
+    ✓ Invited user can see room metadata
+    ✓ Remote invited user can see room metadata
+    ✓ Uninvited users cannot join the room
+    ✓ Users cannot invite a user that is already in the room
+    ✓ Users cannot invite themselves to a room
 
 30rooms/07ban 0/2 tests
 30rooms/08levels 0/3 tests
 30rooms/09eventstream 0/2 tests
-30rooms/10redactions 0/5 tests
-30rooms/11leaving 0/5 tests
+30rooms/10redactions 0/6 tests
+30rooms/11leaving 5/5 tests
+    ✓ Can get 'm.room.name' state for a departed room (SPEC-216)
+    ✓ Can get rooms/{roomId}/members for a departed room (SPEC-216)
+    ✓ Can get rooms/{roomId}/messages for a departed room (SPEC-216)
+    ✓ Can get rooms/{roomId}/state for a departed room (SPEC-216)
+    ✓ Getting messages going forward is limited for a departed room (SPEC-216)
+
 30rooms/12thirdpartyinvite 0/13 tests
 30rooms/13guestaccess 0/11 tests
 30rooms/14override-per-room 0/2 tests
-30rooms/15kick 0/2 tests
-30rooms/20typing 0/3 tests
+30rooms/15kick 2/2 tests
+    ✓ Users cannot kick users from a room they are not in
+    ✓ Users cannot kick users who have already left a room
+
+30rooms/20typing 3/3 tests
+    ✓ Typing can be explicitly stopped
+    ✓ Typing notification sent to local room members
+    ✓ Typing notifications also sent to remote room members
+
 30rooms/21receipts 0/2 tests
-30rooms/22profile 0/1 tests
+30rooms/22profile 1/1 tests
+    ✓ $datum updates affect room member events
+
 30rooms/30history-visibility 0/2 tests
-30rooms/31forget 0/5 tests
+30rooms/31forget 5/5 tests
+    ✓ Can forget room you've been kicked from
+    ✓ Can re-join room if re-invited
+    ✓ Can't forget room you're still in
+    ✓ Forgetting room does not show up in v2 /sync
+    ✓ Forgotten room messages cannot be paginated
+
 30rooms/32erasure 0/1 tests
 30rooms/40joinedapis 0/2 tests
 30rooms/50context 0/4 tests
@@ -344,74 +447,126 @@ $ ./sytest-coverage -v
     ✓ /event/ on joined room works
     ✓ /event/ on non world readable room does not work
 
-30rooms/52members 0/3 tests
+30rooms/52members 3/3 tests
+    ✓ Can filter rooms/{roomId}/members
+    ✓ Can get rooms/{roomId}/members at a given point
+    ✓ Can get rooms/{roomId}/members
+
 30rooms/60version_upgrade 0/19 tests
 30rooms/70publicroomslist 0/5 tests
 31sync/01filter 2/2 tests
     ✓ Can create filter
     ✓ Can download filter
 
-31sync/02sync 0/1 tests
-31sync/03joined 0/6 tests
+31sync/02sync 1/1 tests
+    ✓ Can sync
+
+31sync/03joined 6/6 tests
+    ✓ Can sync a joined room
+    ✓ Full state sync includes joined rooms
+    ✓ Get presence for newly joined members in incremental sync
+    ✓ Newly joined room has correct timeline in incremental sync
+    ✓ Newly joined room includes presence in incremental sync
+    ✓ Newly joined room is included in an incremental sync
+
 31sync/04timeline 0/9 tests
 31sync/05presence 0/3 tests
 31sync/06state 0/14 tests
 31sync/07invited 0/3 tests
 31sync/08polling 0/2 tests
-31sync/09archived 0/8 tests
+31sync/09archived 8/8 tests
+    ✓ Archived rooms only contain history from before the user left
+    ✓ Left rooms appear in the leave section of full state sync
+    ✓ Left rooms appear in the leave section of sync
+    ✓ Newly left rooms appear in the leave section of gapped sync
+    ✓ Newly left rooms appear in the leave section of incremental sync
+    ✓ Previously left rooms don't appear in the leave section of sync
+    ✓ We should see our own leave event when rejecting an invite,
+    ✓ We should see our own leave event, even if history_visibility is
+
 31sync/10archived-ban 0/3 tests
 31sync/11typing 0/3 tests
 31sync/12receipts 0/2 tests
 31sync/13filtered_sync 0/2 tests
 31sync/14read-markers 0/3 tests
-31sync/15lazy-members 0/11 tests
+31sync/15lazy-members 0/12 tests
 31sync/16room-summary 0/4 tests
 31sync/17peeking 0/4 tests
 32room-versions 0/6 tests
-40presence 0/4 tests
-41end-to-end-keys/01-upload-key 0/6 tests
-41end-to-end-keys/03-one-time-keys 0/1 tests
-41end-to-end-keys/04-query-key-federation 0/1 tests
-41end-to-end-keys/05-one-time-key-federation 0/1 tests
+40presence 5/5 tests
+    ✓ Presence can be set from sync
+    ✓ Presence changes are also reported to remote room members
+    ✓ Presence changes are reported to local room members
+    ✓ Presence changes to UNAVAILABLE are reported to local room members
+    ✓ Presence changes to UNAVAILABLE are reported to remote room members
+
+41end-to-end-keys/01-upload-key 6/6 tests
+    ✓ Can query device keys using POST
+    ✓ Can query specific device keys using POST
+    ✓ Can upload device keys
+    ✓ Rejects invalid device keys
+    ✓ Should reject keys claiming to belong to a different user
+    ✓ query for user with no keys returns empty key dict
+
+41end-to-end-keys/03-one-time-keys 1/1 tests
+    ✓ Can claim one time key using POST
+
+41end-to-end-keys/04-query-key-federation 1/1 tests
+    ✓ Can query remote device keys using POST
+
+41end-to-end-keys/05-one-time-key-federation 1/1 tests
+    ✓ Can claim remote one time key using POST
+
 41end-to-end-keys/06-device-lists 0/15 tests
 41end-to-end-keys/07-backup 0/10 tests
 41end-to-end-keys/08-cross-signing 0/8 tests
 42tags 0/7 tests
-43search 0/5 tests
-44account_data 0/6 tests
+44account_data 4/6 tests
+    ✓ Can add account data to room
+    ✓ Can add account data
+    ✓ Can get account data without syncing
+    ✓ Can get room account data without syncing
+    × Latest account data appears in v2 /sync
+    × New account data appears in incremental v2 /sync
+
 45openid 0/3 tests
-46direct/01directmessage 0/3 tests
+46direct/01directmessage 3/3 tests
+    ✓ Can recv a device message using /sync
+    ✓ Can send a message directly to a device using PUT /sendToDevice
+    ✓ Can send a to-device message to two users which both receive it using /sync
+
 46direct/02reliability 0/2 tests
 46direct/03polling 0/1 tests
 46direct/04federation 0/2 tests
 46direct/05wildcard 0/4 tests
-48admin 0/5 tests
+48admin 0/1 tests
 49ignore 0/3 tests
-50federation/00prepare 0/1 tests
 50federation/01keys 1/4 tests
-    ✓ Federation key API allows unsigned requests for keys
     × Federation key API can act as a notary server via a $method request
+    ✓ Federation key API allows unsigned requests for keys
     × Key notary server must not overwrite a valid key with a spurious result from the origin server
     × Key notary server should return an expired key if it can't find any others
 
-50federation/02server-names 0/1 tests
-50federation/10query-profile 1/2 tests
-    × Inbound federation can query profile data
+50federation/02server-names 1/1 tests
+    ✓ Non-numeric ports in server names are rejected
+
+50federation/10query-profile 2/2 tests
+    ✓ Inbound federation can query profile data
     ✓ Outbound federation can query profile data
 
 50federation/11query-directory 0/2 tests
 50federation/30room-join 0/19 tests
 50federation/31room-send 0/5 tests
 50federation/32room-getevent 0/2 tests
-50federation/33room-get-missing-events 1/4 tests
-    × Inbound federation can return missing events for $vis visibility
+50federation/33room-get-missing-events 2/4 tests
+    ✓ Inbound federation can return missing events for $vis visibility
     × Outbound federation can request missing events
     ✓ Outbound federation will ignore a missing event with bad JSON for room version 6
     × outliers whose auth_events are in a different room are correctly rejected
 
 50federation/34room-backfill 0/5 tests
 50federation/35room-invite 0/11 tests
-50federation/36state 0/11 tests
+50federation/36state 0/13 tests
 50federation/37public-rooms 0/1 tests
 50federation/38receipts 0/2 tests
 50federation/39redactions 0/4 tests
@@ -424,16 +579,35 @@ $ ./sytest-coverage -v
 50federation/50server-acl-endpoints 0/1 tests
 50federation/51transactions 0/2 tests
 50federation/52soft-fail 0/3 tests
-51media/01unicode 0/5 tests
+51media/01unicode 4/5 tests
+    × Alternative server names do not cause a routing loop
+    ✓ Can download specifying a different Unicode file name
+    ✓ Can download with Unicode file name locally
+    ✓ Can download with Unicode file name over federation
+    ✓ Can upload with Unicode file name
+
 51media/02nofilename 3/3 tests
     ✓ Can download without a file name locally
     ✓ Can download without a file name over federation
     ✓ Can upload without a file name
 
-51media/03ascii 0/5 tests
-51media/10thumbnail 0/2 tests
-51media/20urlpreview 0/1 tests
-51media/30config 0/1 tests
+51media/03ascii 5/5 tests
+    ✓ Can download file '$filename'
+    ✓ Can download specifying a different ASCII file name
+    ✓ Can fetch images in room
+    ✓ Can send image in room message
+    ✓ Can upload with ASCII file name
+
+51media/10thumbnail 2/2 tests
+    ✓ POSTed media can be thumbnailed
+    ✓ Remote media can be thumbnailed
+
+51media/20urlpreview 1/1 tests
+    ✓ Test URL preview
+
+51media/30config 1/1 tests
+    ✓ Can read configuration endpoint
+
 52user-directory/01public 0/7 tests
 52user-directory/02private 0/3 tests
 54identity 0/6 tests
@@ -449,7 +623,6 @@ $ ./sytest-coverage -v
 61push/03_unread_count 0/2 tests
 61push/05_set_actions 0/4 tests
 61push/06_get_pusher 0/1 tests
-61push/06_push_rules_in_sync 0/4 tests
 61push/07_set_enabled 0/2 tests
 61push/08_rejected_pushers 0/1 tests
 61push/09_notifications_api 0/1 tests
@@ -468,7 +641,9 @@ $ ./sytest-coverage -v
 90jira/SYN-205 1/1 tests
     ✓ Rooms can be created with an initial invite list (SYN-205)
 
-90jira/SYN-328 0/1 tests
+90jira/SYN-328 1/1 tests
+    ✓ Typing notifications don't leak
+
 90jira/SYN-343 1/1 tests
     ✓ Non-present room members cannot ban others
 
@@ -478,5 +653,5 @@ $ ./sytest-coverage -v
 90jira/SYN-516 0/1 tests
 90jira/SYN-627 0/1 tests
 
-TOTAL: 85/622 tests converted
+TOTAL: 220/610 tests converted
 ```

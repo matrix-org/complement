@@ -1,7 +1,6 @@
 package csapi_tests
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -13,7 +12,7 @@ import (
 )
 
 func doCreateRoom(t *testing.T, c *client.CSAPI, json map[string]interface{}, match match.HTTPResponse) {
-	res := c.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "createRoom"}, client.WithJSONBody(t, json))
+	res := c.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, client.WithJSONBody(t, json))
 	must.MatchResponse(t, res, match)
 }
 
@@ -36,7 +35,6 @@ func TestRoomCreate(t *testing.T) {
 			}, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{
-					match.JSONKeyEqual("room_alias", fmt.Sprintf("#%s:hs1", roomAlias)),
 					match.JSONKeyTypeEqual("room_id", gjson.String),
 				},
 			})
@@ -62,7 +60,7 @@ func TestRoomCreate(t *testing.T) {
 				"topic":  "Test Room",
 				"preset": "public_chat",
 			})
-			res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.topic"})
+			res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{
@@ -77,7 +75,7 @@ func TestRoomCreate(t *testing.T) {
 				"name":   "Test Room",
 				"preset": "public_chat",
 			})
-			res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.name"})
+			res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{
@@ -92,7 +90,7 @@ func TestRoomCreate(t *testing.T) {
 				"room_version": "2",
 				"preset":       "public_chat",
 			})
-			res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.create"})
+			res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.create"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{

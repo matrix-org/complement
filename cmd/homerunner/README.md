@@ -9,6 +9,7 @@ HOMERUNNER_PORT=54321                                             # port to list
 HOMERUNNER_SPAWN_HS_TIMEOUT_SECS=5                                # how long to wait for the base image to spin up
 HOMERUNNER_KEEP_BLUEPRINTS='clean_hs federation_one_to_one_room'  # space delimited blueprint names to keep images for
 HOMERUNNER_SNAPSHOT_BLUEPRINT=/some/file.json                     # single shot execute this blueprint then commit the image, does not run the server
+HOMERUNNER_HS_PORTBINDING_IP=127.0.0.1                            # IP to bind homeserver ports on, if not local-only
 ```
 
 To build and run:
@@ -138,3 +139,16 @@ The `complement_blueprint` label is the blueprint name you should use to deploy 
 ### Access tokens
 
 Access tokens are returned when deploying the blueprint but sometimes you want to login as a normal user. The format for passwords for all users created by Complement is [here](https://github.com/matrix-org/complement/blob/fc87b081ac9dd3c8e52bcd2ed155bc8d49ce6d56/internal/instruction/runner.go#L415).
+
+### Health
+
+Homerunner will respond to `GET /health` with a 200 response. You can use this to check if homerunner is ready when running your tests.
+
+
+### Running using dind (docker-in-docker)
+
+The provided Docker container contains just homerunner, and a separate docker daemon will be required
+to host the homeservers that are started.
+
+This can be done by mounting the unix socket into the container, or running a `docker:dind` sidecar and exporting `DOCKER_HOST` correctly (eg `tcp://localhost:2375/`).
+

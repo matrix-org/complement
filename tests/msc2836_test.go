@@ -196,9 +196,8 @@ func TestFederatedEventRelationships(t *testing.T) {
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil, nil),
 	)
-	// we expect to be pushed transactions but don't care about them
-	srv.UnexpectedRequestsAreErrors = false
 	cancel := srv.Listen()
 	defer cancel()
 
@@ -336,11 +335,11 @@ func TestFederatedEventRelationships(t *testing.T) {
 	}))
 
 	// Hit /event_relationships to make sure it spiders the whole thing by asking /event_relationships on Complement
-	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
+	res := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":  eventE.EventID(),
 		"max_depth": 10,
 		"direction": "up",
-	})
+	}))
 	var gotEventIDs []string
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
@@ -357,12 +356,12 @@ func TestFederatedEventRelationships(t *testing.T) {
 	must.HaveInOrder(t, gotEventIDs, []string{eventE.EventID(), eventD.EventID(), eventC.EventID(), eventA.EventID()})
 
 	// now querying for the children of A should return A,B,C (it should've been remembered B from the previous /event_relationships request)
-	res = alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, map[string]interface{}{
+	res = alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":     eventA.EventID(),
 		"max_depth":    1,
 		"direction":    "down",
 		"recent_first": false,
-	})
+	}))
 	gotEventIDs = []string{}
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{

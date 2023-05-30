@@ -19,7 +19,6 @@ import (
 
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -62,7 +61,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 			w.WriteHeader(502)
 			return
 		}
-		federation.SendJoinRequestsHandler(srv, w, req)
+		federation.SendJoinRequestsHandler(srv, w, req, false, false)
 	})).Methods("PUT")
 
 	ver := alice.GetDefaultRoomVersion(t)
@@ -80,13 +79,43 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 
 	queryParams := url.Values{}
 	queryParams.Set("server_name", "hs1")
-	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
+	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{
 			match.JSONKeyEqual("room_id", serverRoom.RoomID),
 		},
 	})
+}
+
+// This tests that joining a room with multiple ?server_name=s works correctly.
+// The join should succeed even if the first server is not in the room.
+func TestJoinFederatedRoomFailOver(t *testing.T) {
+	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	bob := deployment.Client(t, "hs2", "@bob:hs2")
+
+	srv := federation.NewServer(t, deployment)
+	cancel := srv.Listen()
+	defer cancel()
+
+	srv.Mux().Handle("/_matrix/federation/v1/make_join/{roomID}/{userID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		t.Logf("Complement homeserver responds to /make_join with 404, M_NOT_FOUND.")
+		w.WriteHeader(404)
+		w.Write([]byte(`{
+			"errcode": "M_NOT_FOUND",
+			"error": "Unknown room."
+		}`))
+	})).Methods("GET")
+
+	roomID := bob.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	t.Logf("%s created room %s.", bob.UserID, roomID)
+
+	t.Logf("%s joins the room via {complement,hs2}.", alice.UserID)
+	alice.JoinRoom(t, roomID, []string{srv.ServerName(), "hs2"})
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 }
 
 // This tests that joining a room over federation works in the presence of:
@@ -157,7 +186,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -186,7 +215,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID) + "bogus": "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -201,7 +230,10 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		alice.JoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with state with unverifiable auth events shouldn't block room join", func(t *testing.T) {
-		runtime.SkipIf(t, runtime.Dendrite) // https://github.com/matrix-org/dendrite/issues/2028
+		// FIXME: https://github.com/matrix-org/dendrite/issues/2800
+		//  (previously https://github.com/matrix-org/dendrite/issues/2028)
+		runtime.SkipIf(t, runtime.Dendrite)
+
 		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 		roomAlias := srv.MakeAliasMapping("UnverifiableAuthEvents", room.RoomID)
 
@@ -216,7 +248,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		}).JSON()
 		rawSig, err := json.Marshal(map[string]interface{}{
-			docker.HostnameRunningComplement: map[string]string{
+			deployment.Config.HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		})
@@ -265,6 +297,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
+	origin := gomatrixserverlib.ServerName(srv.ServerName())
 	defer cancel()
 
 	fedClient := srv.FederationClient(deployment)
@@ -287,7 +320,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	})
 
 	// charlie sends a make_join for a different user
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), "hs1", roomID, srv.UserID("charlie2"), federation.SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, srv.UserID("charlie2"), federation.SupportedRoomVersions())
 	must.NotError(t, "MakeJoin", err)
 
 	// ... and does a switcheroo to turn it into a join for himself
@@ -297,7 +330,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	must.NotError(t, "JoinEvent.Build", err)
 
 	// SendJoin should return a 403.
-	_, err = fedClient.SendJoin(context.Background(), "hs1", joinEvent)
+	_, err = fedClient.SendJoin(context.Background(), origin, "hs1", joinEvent)
 	if err == nil {
 		t.Errorf("SendJoin returned 200, want 403")
 	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -317,7 +350,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	res := alice.MustDoFunc(
 		t,
 		"GET",
-		[]string{"_matrix", "client", "r0", "rooms", roomID, "state", "m.room.member", charlie},
+		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", charlie},
 	)
 	stateResp := client.ParseJSON(t, res)
 	membership := must.GetJSONFieldStr(t, stateResp, "membership")
@@ -378,14 +411,16 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 			url.PathEscape(event.EventID()),
 		)
 		t.Logf("PUT %s", path)
-		req := gomatrixserverlib.NewFederationRequest("PUT", "hs1", path)
+		req := gomatrixserverlib.NewFederationRequest("PUT", gomatrixserverlib.ServerName(srv.ServerName()), "hs1", path)
 		if err := req.SetContent(event); err != nil {
 			t.Errorf("req.SetContent: %v", err)
 			return
 		}
 
 		var res interface{}
-		err := srv.SendFederationRequest(deployment, req, &res)
+
+		err := srv.SendFederationRequest(context.Background(), t, deployment, req, &res)
+
 		if err == nil {
 			t.Errorf("send request returned 200")
 			return
@@ -459,9 +494,13 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
+
+		// accept incoming presence transactions, etc
+		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
 	defer cancel()
+	origin := gomatrixserverlib.ServerName(srv.ServerName())
 
 	// annoyingly we can't get to the room that alice and bob already share (see https://github.com/matrix-org/complement/issues/254)
 	// so we have to create a new one.
@@ -474,25 +513,25 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	// now we send a make_join...
 	charlie := srv.UserID("charlie")
 	fedClient := srv.FederationClient(deployment)
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), "hs1", roomID, charlie, federation.SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, charlie, federation.SupportedRoomVersions())
 	if err != nil {
 		t.Fatalf("make_join failed: %v", err)
 	}
 
 	// ... construct a signed join event ...
 	roomVer := makeJoinResp.RoomVersion
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName()), srv.KeyID, srv.Priv, roomVer)
+	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), origin, srv.KeyID, srv.Priv, roomVer)
 	if err != nil {
 		t.Fatalf("failed to sign join event: %v", err)
 	}
 
 	// and send_join it, with the magic param
-	sendJoinResp, err := fedClient.SendJoinPartialState(context.Background(), "hs1", joinEvent)
+	sendJoinResp, err := fedClient.SendJoinPartialState(context.Background(), origin, "hs1", joinEvent)
 	if err != nil {
 		t.Fatalf("send_join failed: %v", err)
 	}
 
-	if !sendJoinResp.PartialState {
+	if !sendJoinResp.MembersOmitted {
 		t.Skip("Server does not support partial_state")
 	}
 
@@ -502,17 +541,26 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 		returnedStateEventKeys = append(returnedStateEventKeys, typeAndStateKeyForEvent(gjson.ParseBytes(ev)))
 	}
 	must.CheckOffAll(t, returnedStateEventKeys, []interface{}{
-		"m.room.create|", "m.room.power_levels|", "m.room.join_rules|", "m.room.history_visibility|",
+		"m.room.create|",
+		"m.room.power_levels|",
+		"m.room.join_rules|",
+		"m.room.history_visibility|",
+		// Expect Alice and Bob's membership here because they're room heroes
+		"m.room.member|" + alice.UserID,
+		"m.room.member|" + bob.UserID,
 	})
 
-	// check the returned auth events match those expected
+	// check the returned auth events match those expected.
+	// Now that we include heroes in the partial join response,
+	// all of the events are included under "state" and so we don't expect any
+	// extra auth_events.
+	// TODO: add in a second e.g. power_levels event so that we add stuff to the
+	// auth chain.
 	var returnedAuthEventKeys []interface{}
 	for _, ev := range sendJoinResp.AuthEvents {
 		returnedAuthEventKeys = append(returnedAuthEventKeys, typeAndStateKeyForEvent(gjson.ParseBytes(ev)))
 	}
-	must.CheckOffAll(t, returnedAuthEventKeys, []interface{}{
-		"m.room.member|" + alice.UserID,
-	})
+	must.CheckOffAll(t, returnedAuthEventKeys, []interface{}{})
 
 	// check the server list. Only one, so we can use HaveInOrder even though the list is unordered
 	must.HaveInOrder(t, sendJoinResp.ServersInRoom, []string{"hs1"})
@@ -521,4 +569,32 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 // given an event JSON, return the type and state_key, joined with a "|"
 func typeAndStateKeyForEvent(result gjson.Result) string {
 	return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
+}
+
+func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
+	// Dendrite doesn't read AS registration files from Complement yet
+	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/complement/issues/514
+
+	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
+	defer deployment.Destroy(t)
+
+	// Create the application service bridge user to try to join the room from
+	asUserID := "@the-bridge-user:hs1"
+	as := deployment.Client(t, "hs1", asUserID)
+
+	// Create the federated remote user which will create the room
+	remoteUserID := "@charlie:hs2"
+	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+
+	t.Run("join remote federated room as application service user", func(t *testing.T) {
+		//t.Parallel()
+		// Create the room from a remote homeserver
+		roomID := remoteCharlie.CreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"name":   "hs2 room",
+		})
+
+		// Join the AS bridge user to the remote federated room (without a profile set)
+		as.JoinRoom(t, roomID, []string{"hs2"})
+	})
 }

@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,8 +21,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	client "github.com/docker/docker/client"
+	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 
@@ -32,10 +31,10 @@ import (
 )
 
 var (
-	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
-	HostnameRunningComplement = "host.docker.internal"
 	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
 	HostnameRunningDocker = "localhost"
+	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
+	HostnameRunningComplement = "host.docker.internal"
 )
 
 const complementLabel = "complement_context"
@@ -181,7 +180,10 @@ func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
 		return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ImageList: %w", bprint.Name, err)
 	}
 	if len(images) == 0 {
-		d.ConstructBlueprint(bprint)
+		err = d.ConstructBlueprint(bprint)
+		if err != nil {
+			return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ConstructBlueprint: %w", bprint.Name, err)
+		}
 	}
 	return nil
 }
@@ -237,7 +239,7 @@ func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
 func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 	d.log("Constructing blueprint '%s'", bprint.Name)
 
-	networkID, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
+	networkName, err := createNetworkIfNotExists(d.Docker, d.Config.PackageNamespace, bprint.Name)
 	if err != nil {
 		return []error{err}
 	}
@@ -245,7 +247,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 	runner := instruction.NewRunner(bprint.Name, d.Config.BestEffort, d.Config.DebugLoggingEnabled)
 	results := make([]result, len(bprint.Homeservers))
 	for i, hs := range bprint.Homeservers {
-		res := d.constructHomeserver(bprint.Name, runner, hs, networkID)
+		res := d.constructHomeserver(bprint.Name, runner, hs, networkName)
 		if res.err != nil {
 			errs = append(errs, res.err)
 			if res.containerID != "" {
@@ -257,9 +259,23 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			}); delErr != nil {
 				d.log("%s: failed to remove container which failed to deploy: %s", res.contextStr, delErr)
 			}
+			// there is little point continuing to set up the remaining homeservers at this point
+			return
 		}
 		// kill the container
 		defer func(r result) {
+			containerInfo, err := d.Docker.ContainerInspect(context.Background(), r.containerID)
+
+			if err != nil {
+				d.log("%s : Can't get status of %s", r.contextStr, r.containerID)
+				return
+			}
+
+			if !containerInfo.State.Running {
+				// The container isn't running anyway, so no need to kill it.
+				return
+			}
+
 			killErr := d.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
 			if killErr != nil {
 				d.log("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
@@ -292,20 +308,34 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			}
 		}
 
+		deviceIDs := runner.DeviceIDs(res.homeserver.Name)
+		for userID, deviceID := range deviceIDs {
+			labels["device_id"+userID] = deviceID
+		}
+
 		// Combine the labels for tokens and application services
 		asLabels := labelsForApplicationServices(res.homeserver)
 		for k, v := range asLabels {
 			labels[k] = v
 		}
 
+		// Stop the container before we commit it.
+		// This gives it chance to shut down gracefully.
+		// If we don't do this, then e.g. Postgres databases can become corrupt, which
+		// then incurs a slow recovery process when we use the blueprint later.
+		d.log("%s: Stopping container: %s", res.contextStr, res.containerID)
+		timeout := 10 * time.Second
+		d.Docker.ContainerStop(context.Background(), res.containerID, &timeout)
+
+		// Log again so we can see the timings.
+		d.log("%s: Stopped container: %s", res.contextStr, res.containerID)
+
 		// commit the container
 		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
 			Author:    "Complement",
 			Pause:     true,
 			Reference: "localhost/complement:" + res.contextStr,
-			Config: &container.Config{
-				Labels: labels,
-			},
+			Changes:   toChanges(labels),
 		})
 		if err != nil {
 			d.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
@@ -318,11 +348,22 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 	return errs
 }
 
+// Convert a map of labels to a list of changes directive in Dockerfile format.
+// Labels keys and values can't be multiline (eg. can't contain `\n` character)
+// neither can they contain unescaped `"` character.
+func toChanges(labels map[string]string) []string {
+	var changes []string
+	for k, v := range labels {
+		changes = append(changes, fmt.Sprintf("LABEL \"%s\"=\"%s\"", k, v))
+	}
+	return changes
+}
+
 // construct this homeserver and execute its instructions, keeping the container alive.
-func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkID string) result {
+func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.Runner, hs b.Homeserver, networkName string) result {
 	contextStr := fmt.Sprintf("%s.%s.%s", d.Config.PackageNamespace, blueprintName, hs.Name)
 	d.log("%s : constructing homeserver...\n", contextStr)
-	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkID)
+	dep, err := d.deployBaseImage(blueprintName, hs, contextStr, networkName)
 	if err != nil {
 		log.Printf("%s : failed to deployBaseImage: %s\n", contextStr, err)
 		containerID := ""
@@ -350,34 +391,45 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 }
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
-func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkID string) (*HomeserverDeployment, error) {
+func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkName string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
+	var baseImageURI string
+	if hs.BaseImageURI == nil {
+		baseImageURI = d.Config.BaseImageURI
+		// Use HS specific base image if defined
+		if uri, ok := d.Config.BaseImageURIs[hs.Name]; ok {
+			baseImageURI = uri
+		}
+	} else {
+		baseImageURI = *hs.BaseImageURI
+	}
 
 	return deployImage(
-		d.Docker, d.Config.BaseImageURI, fmt.Sprintf("complement_%s", contextStr),
+		d.Docker, baseImageURI, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
-		networkID, d.Config,
+		networkName, d.Config,
 	)
 }
 
+// Multilines label using Dockerfile syntax is unsupported, let's inline \n instead
 func generateASRegistrationYaml(as b.ApplicationService) string {
-	return fmt.Sprintf("id: %s\n", as.ID) +
-		fmt.Sprintf("hs_token: %s\n", as.HSToken) +
-		fmt.Sprintf("as_token: %s\n", as.ASToken) +
-		fmt.Sprintf("url: '%s'\n", as.URL) +
-		fmt.Sprintf("sender_localpart: %s\n", as.SenderLocalpart) +
-		fmt.Sprintf("rate_limited: %v\n", as.RateLimited) +
-		"namespaces:\n" +
-		"  users:\n" +
-		"    - exclusive: false\n" +
-		"      regex: .*\n" +
-		"  rooms: []\n" +
-		"  aliases: []\n"
+	return fmt.Sprintf("id: %s\\n", as.ID) +
+		fmt.Sprintf("hs_token: %s\\n", as.HSToken) +
+		fmt.Sprintf("as_token: %s\\n", as.ASToken) +
+		fmt.Sprintf("url: '%s'\\n", as.URL) +
+		fmt.Sprintf("sender_localpart: %s\\n", as.SenderLocalpart) +
+		fmt.Sprintf("rate_limited: %v\\n", as.RateLimited) +
+		"namespaces:\\n" +
+		"  users:\\n" +
+		"    - exclusive: false\\n" +
+		"      regex: .*\\n" +
+		"  rooms: []\\n" +
+		"  aliases: []\\n"
 }
 
-// createNetworkIfNotExists creates a docker network and returns its id.
-// ID is guaranteed not to be empty when err == nil
-func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkID string, err error) {
+// createNetworkIfNotExists creates a docker network and returns its name.
+// Name is guaranteed not to be empty when err == nil
+func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkName string, err error) {
 	// check if a network already exists for this blueprint
 	nws, err := docker.NetworkList(context.Background(), types.NetworkListOptions{
 		Filters: label(
@@ -393,10 +445,11 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 		if len(nws) > 1 {
 			log.Printf("WARNING: createNetworkIfNotExists got %d networks for pkg=%s blueprint=%s", len(nws), pkgNamespace, blueprintName)
 		}
-		return nws[0].ID, nil
+		return nws[0].Name, nil
 	}
+	networkName = "complement_" + pkgNamespace + "_" + blueprintName
 	// make a user-defined network so we get DNS based on the container name
-	nw, err := docker.NetworkCreate(context.Background(), "complement_"+pkgNamespace+"_"+blueprintName, types.NetworkCreate{
+	nw, err := docker.NetworkCreate(context.Background(), networkName, types.NetworkCreate{
 		Labels: map[string]string{
 			complementLabel:        blueprintName,
 			"complement_blueprint": blueprintName,
@@ -415,7 +468,7 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 	if nw.ID == "" {
 		return "", fmt.Errorf("%s: unexpected empty ID while creating networkID", blueprintName)
 	}
-	return nw.ID, nil
+	return networkName, nil
 }
 
 func printLogs(docker *client.Client, containerID, contextStr string) {
@@ -443,7 +496,7 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	if len(csapiPortInfo) == 0 {
 		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", csapiPort, p)
 	}
-	baseURL = fmt.Sprintf("http://"+HostnameRunningDocker+":%s", csapiPortInfo[0].HostPort)
+	baseURL = fmt.Sprintf("http://"+csapiPortInfo[0].HostIP+":%s", csapiPortInfo[0].HostPort)
 
 	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
 	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
@@ -453,7 +506,7 @@ func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, e
 	if len(ssapiPortInfo) == 0 {
 		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", ssapiPort, p)
 	}
-	fedBaseURL = fmt.Sprintf("https://"+HostnameRunningDocker+":%s", ssapiPortInfo[0].HostPort)
+	fedBaseURL = fmt.Sprintf("https://"+csapiPortInfo[0].HostIP+":%s", ssapiPortInfo[0].HostPort)
 	return
 }
 

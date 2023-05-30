@@ -3,7 +3,6 @@ package csapi_tests
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -56,7 +55,7 @@ func TestServerNotices(t *testing.T) {
 		roomID = syncUntilInvite(t, alice)
 	})
 	t.Run("Alice cannot reject the invite", func(t *testing.T) {
-		res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "r0", "rooms", roomID, "leave"})
+		res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusForbidden,
 			JSON: []match.JSON{
@@ -66,20 +65,7 @@ func TestServerNotices(t *testing.T) {
 	})
 	t.Run("Alice can join the alert room", func(t *testing.T) {
 		alice.JoinRoom(t, roomID, []string{})
-		queryParams := url.Values{}
-		queryParams.Set("dir", "b")
-		// check if we received the message
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
-		msgRes := &msgResult{}
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: http.StatusOK,
-			JSON: []match.JSON{
-				findMessageId(eventID, msgRes),
-			},
-		})
-		if !msgRes.found {
-			t.Errorf("did not find expected message from server notices")
-		}
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, eventID))
 	})
 	t.Run("Alice can leave the alert room, after joining it", func(t *testing.T) {
 		alice.LeaveRoom(t, roomID)
@@ -88,7 +74,7 @@ func TestServerNotices(t *testing.T) {
 		sendServerNotice(t, admin, reqBody, nil)
 		newRoomID := syncUntilInvite(t, alice)
 		if roomID != newRoomID {
-			t.Errorf("expected a new room, but they are the same")
+			t.Errorf("expected no new room but got one: %s != %s", roomID, newRoomID)
 		}
 	})
 	t.Run("Sending a notice with a transactionID is idempotent", func(t *testing.T) {

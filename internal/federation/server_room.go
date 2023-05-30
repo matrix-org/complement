@@ -3,6 +3,7 @@ package federation
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/matrix-org/gomatrixserverlib"
@@ -15,7 +16,9 @@ type ServerRoom struct {
 	Version            gomatrixserverlib.RoomVersion
 	RoomID             string
 	State              map[string]*gomatrixserverlib.Event
+	StateMutex         sync.RWMutex
 	Timeline           []*gomatrixserverlib.Event
+	TimelineMutex      sync.RWMutex
 	ForwardExtremities []string
 	Depth              int64
 }
@@ -36,7 +39,9 @@ func (r *ServerRoom) AddEvent(ev *gomatrixserverlib.Event) {
 	if ev.StateKey() != nil {
 		r.replaceCurrentState(ev)
 	}
+	r.TimelineMutex.Lock()
 	r.Timeline = append(r.Timeline, ev)
+	r.TimelineMutex.Unlock()
 	// update extremities and depth
 	if ev.Depth() > r.Depth {
 		r.Depth = ev.Depth()
@@ -75,41 +80,75 @@ func (r *ServerRoom) AuthEvents(sn gomatrixserverlib.StateNeeded) (eventIDs []st
 // on the (type, state_key) provided.
 func (r *ServerRoom) replaceCurrentState(ev *gomatrixserverlib.Event) {
 	tuple := fmt.Sprintf("%s\x1f%s", ev.Type(), *ev.StateKey())
+	r.StateMutex.Lock()
 	r.State[tuple] = ev
+	r.StateMutex.Unlock()
 }
 
 // CurrentState returns the state event for the given (type, state_key) or nil.
 func (r *ServerRoom) CurrentState(evType, stateKey string) *gomatrixserverlib.Event {
 	tuple := fmt.Sprintf("%s\x1f%s", evType, stateKey)
-	return r.State[tuple]
+	r.StateMutex.RLock()
+	state := r.State[tuple]
+	r.StateMutex.RUnlock()
+	return state
 }
 
 // AllCurrentState returns all the current state events
 func (r *ServerRoom) AllCurrentState() (events []*gomatrixserverlib.Event) {
+	r.StateMutex.RLock()
 	for _, ev := range r.State {
 		events = append(events, ev)
 	}
+	r.StateMutex.RUnlock()
 	return
 }
 
 // AuthChain returns all auth events for all events in the current state TODO: recursively
 func (r *ServerRoom) AuthChain() (chain []*gomatrixserverlib.Event) {
+	return r.AuthChainForEvents(r.AllCurrentState())
+}
+
+// AuthChainForEvents returns all auth events for all events in the given state
+func (r *ServerRoom) AuthChainForEvents(events []*gomatrixserverlib.Event) (chain []*gomatrixserverlib.Event) {
 	chainMap := make(map[string]bool)
-	// get all the auth event IDs
-	for _, ev := range r.AllCurrentState() {
+
+	// build a map of all events in the room
+	// Timeline and State contain different sets of events, so check them both.
+	eventsByID := map[string]*gomatrixserverlib.Event{}
+	r.TimelineMutex.RLock()
+	for _, ev := range r.Timeline {
+		eventsByID[ev.EventID()] = ev
+	}
+	r.TimelineMutex.RUnlock()
+	r.StateMutex.RLock()
+	for _, ev := range r.State {
+		eventsByID[ev.EventID()] = ev
+	}
+	r.StateMutex.RUnlock()
+
+	// a queue of events whose auth events are to be included in the auth chain
+	queue := []*gomatrixserverlib.Event{}
+	queue = append(queue, events...)
+
+	// get all the auth events recursively
+	// we extend the "queue" as we go along
+	for i := 0; i < len(queue); i++ {
+		ev := queue[i]
 		for _, evID := range ev.AuthEventIDs() {
 			if chainMap[evID] {
 				continue
 			}
 			chainMap[evID] = true
+			event, ok := eventsByID[evID]
+			if !ok {
+				panic(fmt.Sprintf("AuthChainForEvents: event %s refers to unknown event %s in auth events", ev.EventID(), evID))
+			}
+			chain = append(chain, event)
+			queue = append(queue, event)
 		}
 	}
-	// find them in the timeline
-	for _, tev := range r.Timeline {
-		if chainMap[tev.EventID()] {
-			chain = append(chain, tev)
-		}
-	}
+
 	return
 }
 
@@ -127,6 +166,35 @@ func (r *ServerRoom) MustHaveMembershipForUser(t *testing.T, userID, wantMembers
 	if m != wantMembership {
 		t.Fatalf("incorrect membership state for %s: got %s, want %s", userID, m, wantMembership)
 	}
+}
+
+// ServersInRoom gets all servers currently joined to the room
+func (r *ServerRoom) ServersInRoom() (servers []string) {
+	serverSet := make(map[string]struct{})
+
+	r.StateMutex.RLock()
+	for _, ev := range r.State {
+		if ev.Type() != "m.room.member" {
+			continue
+		}
+		membership, err := ev.Membership()
+		if err != nil || membership != "join" {
+			continue
+		}
+		_, server, err := gomatrixserverlib.SplitID('@', *ev.StateKey())
+		if err != nil {
+			continue
+		}
+
+		serverSet[string(server)] = struct{}{}
+	}
+	r.StateMutex.RUnlock()
+
+	for server := range serverSet {
+		servers = append(servers, server)
+	}
+
+	return
 }
 
 func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLevelContent) {
