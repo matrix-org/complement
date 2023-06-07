@@ -227,13 +227,26 @@ func manyMessages(senders []string, count int) []Event {
 	evs := make([]Event, count)
 	for i := 0; i < len(evs); i++ {
 		sender := senders[i%len(senders)]
-		evs[i] = Event{
-			Type: "m.room.message",
-			Content: map[string]interface{}{
-				"body":    "Hello world " + strconv.Itoa(i),
-				"msgtype": "m.text",
-			},
-			Sender: sender,
+
+		// Sprinkle in some state every so often to make it harder for the HS
+		if i%10 == 0 {
+			evs[i] = Event{
+				Type:     "m.room.topic",
+				StateKey: Ptr(""),
+				Content: map[string]interface{}{
+					"topic": "Room topic " + strconv.Itoa(i),
+				},
+				Sender: "@alice",
+			}
+		} else {
+			evs[i] = Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"body":    "Hello world " + strconv.Itoa(i),
+					"msgtype": "m.text",
+				},
+				Sender: sender,
+			}
 		}
 	}
 	return evs
