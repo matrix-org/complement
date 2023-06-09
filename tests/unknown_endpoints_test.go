@@ -81,6 +81,6 @@ func TestUnknownEndpoints(t *testing.T) {
 		// v3 should exist, but not v3/unknown.
 		queryUnknownEndpoint(t, alice, []string{"_matrix", "media", "v3", "unknown"})
 
-		queryUnknownMethod(t, alice, "PUT", []string{"_matrix", "media", "v3", "upload"})
+		queryUnknownMethod(t, alice, "PATCH", []string{"_matrix", "media", "v3", "upload"})
 	})
 }
