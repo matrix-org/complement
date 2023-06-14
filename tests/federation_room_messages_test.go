@@ -35,10 +35,11 @@ func TestMessagesOverFederation(t *testing.T) {
 
 			messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomWithManyMessages, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"dir":   []string{"b"},
-				"limit": []string{"500"},
+				"limit": []string{"100"},
 			}))
 			messagesResBody := client.ParseJSON(t, messagesRes)
 			eventIDs := client.GetJSONFieldStringArray(t, messagesResBody, "chunk")
+			// end := client.GetJSONFieldStringArray(t, messagesResBody, "end")
 
 			logrus.WithFields(logrus.Fields{
 				"joinedRooms":          joinedRooms,
@@ -46,6 +47,21 @@ func TestMessagesOverFederation(t *testing.T) {
 				"eventIDsLength":       len(eventIDs),
 				"eventIDs":             eventIDs,
 			}).Error("asdf")
+
+			// messagesRes2 := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomWithManyMessages, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			// 	"dir":   []string{"b"},
+			// 	"from":  end,
+			// 	"limit": []string{"500"},
+			// }))
+			// messagesResBody2 := client.ParseJSON(t, messagesRes2)
+			// eventIDs2 := client.GetJSONFieldStringArray(t, messagesResBody2, "chunk")
+
+			// logrus.WithFields(logrus.Fields{
+			// 	"joinedRooms":          joinedRooms,
+			// 	"roomWithManyMessages": roomWithManyMessages,
+			// 	"eventIDsLength":       len(eventIDs2),
+			// 	"eventIDs":             eventIDs2,
+			// }).Error("asdf2")
 
 			time.Sleep(5 * time.Second)
 		})
