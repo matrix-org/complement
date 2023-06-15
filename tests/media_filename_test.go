@@ -118,7 +118,7 @@ func TestMediaFilenames(t *testing.T) {
 	})
 }
 
-// Returns content disposition information like (inline, filename)
+// Returns content disposition information like (mediatype, filename)
 func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName string) string {
 	t.Helper()
 
@@ -139,8 +139,8 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 		t.Fatalf("Got err when parsing content disposition: %s", err)
 	}
 
-	if mediaType != "inline" {
-		t.Fatalf("Found unexpected mediatype %s, expected inline", mediaType)
+	if mediaType != "attachment" {
+		t.Fatalf("Found unexpected mediatype %s, expected attachment", mediaType)
 	}
 
 	if filename, ok := params["filename"]; ok {
