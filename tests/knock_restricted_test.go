@@ -1,5 +1,5 @@
-//go:build msc3787
-// +build msc3787
+//go:build !dendrite_blacklist
+// +build !dendrite_blacklist
 
 // This file contains tests for a join rule which mixes concepts of restricted joins
 // and knocking. This is implemented in room version 10.
