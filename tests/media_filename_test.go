@@ -43,9 +43,10 @@ func TestMediaFilenames(t *testing.T) {
 
 					mxcUri := alice.UploadContent(t, data.MatrixPng, filename, "image/png")
 
-					name := downloadForFilename(t, alice, mxcUri, "")
+					name, isAttachment := downloadForFilename(t, alice, mxcUri, "")
 
-					if name != filename {
+					// filename is not required, but if it's an attachment then check it matches
+					if isAttachment && name != filename {
 						t.Fatalf("Incorrect filename '%s', expected '%s'", name, filename)
 					}
 				})
@@ -58,8 +59,9 @@ func TestMediaFilenames(t *testing.T) {
 				mxcUri := alice.UploadContent(t, data.MatrixPng, "test.png", "image/png")
 
 				const altName = "file.png"
-				filename := downloadForFilename(t, alice, mxcUri, altName)
-				if filename != altName {
+				filename, isAttachment := downloadForFilename(t, alice, mxcUri, altName)
+
+				if isAttachment && filename != altName {
 					t.Fatalf("filename did not match, expected '%s', got '%s'", altName, filename)
 				}
 			})
@@ -83,8 +85,9 @@ func TestMediaFilenames(t *testing.T) {
 
 				const diffUnicodeFilename = "\u2615" // coffee emoji
 
-				filename := downloadForFilename(t, alice, mxcUri, diffUnicodeFilename)
-				if filename != diffUnicodeFilename {
+				filename, isAttachment := downloadForFilename(t, alice, mxcUri, diffUnicodeFilename)
+
+				if isAttachment && filename != diffUnicodeFilename {
 					t.Fatalf("filename did not match, expected '%s', got '%s'", diffUnicodeFilename, filename)
 				}
 			})
@@ -95,9 +98,9 @@ func TestMediaFilenames(t *testing.T) {
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
 
-				filename := downloadForFilename(t, alice, mxcUri, "")
+				filename, isAttachment := downloadForFilename(t, alice, mxcUri, "")
 
-				if filename != unicodeFileName {
+				if isAttachment && filename != unicodeFileName {
 					t.Fatalf("filename did not match, expected '%s', got '%s'", unicodeFileName, filename)
 				}
 			})
@@ -108,9 +111,9 @@ func TestMediaFilenames(t *testing.T) {
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
 
-				filename := downloadForFilename(t, bob, mxcUri, "")
+				filename, isAttachment := downloadForFilename(t, bob, mxcUri, "")
 
-				if filename != unicodeFileName {
+				if isAttachment && filename != unicodeFileName {
 					t.Fatalf("filename did not match, expected '%s', got '%s'", unicodeFileName, filename)
 				}
 			})
@@ -119,7 +122,7 @@ func TestMediaFilenames(t *testing.T) {
 }
 
 // Returns content disposition information like (mediatype, filename)
-func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName string) string {
+func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName string) (filename string, isAttachment bool) {
 	t.Helper()
 
 	origin, mediaId := client.SplitMxc(mxcUri)
@@ -139,15 +142,16 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 		t.Fatalf("Got err when parsing content disposition: %s", err)
 	}
 
-	if mediaType != "attachment" {
+	if mediaType = "attachment" ||  {
+		if filename, ok := params["filename"]; ok {
+			return filename, true
+		} else {
+			t.Fatalf("Content Disposition did not have filename")
+			return "", true
+		}
+	}
+	if mediaType != "inline" {
 		t.Fatalf("Found unexpected mediatype %s, expected attachment", mediaType)
 	}
-
-	if filename, ok := params["filename"]; ok {
-		return filename
-	} else {
-		t.Fatalf("Content Disposition did not have filename")
-
-		return ""
-	}
+	return "", false
 }
