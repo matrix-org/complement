@@ -142,7 +142,7 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 		t.Fatalf("Got err when parsing content disposition: %s", err)
 	}
 
-	if mediaType = "attachment" ||  {
+	if mediaType = "attachment" {
 		if filename, ok := params["filename"]; ok {
 			return filename, true
 		} else {
