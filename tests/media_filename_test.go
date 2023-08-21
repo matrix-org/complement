@@ -170,7 +170,7 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 		}
 	}
 	if mediaType != "inline" {
-		t.Fatalf("Found unexpected mediatype %s, expected attachment", mediaType)
+		t.Fatalf("Found unexpected mediatype %s, expected 'attachment' or 'inline'", mediaType)
 	}
 	return filename, false
 }
