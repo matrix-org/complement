@@ -8,6 +8,7 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/data"
+	"github.com/matrix-org/complement/runtime"
 )
 
 const asciiFileName = "ascii"
@@ -117,11 +118,29 @@ func TestMediaFilenames(t *testing.T) {
 					t.Fatalf("filename did not match, expected '%s', got '%s'", unicodeFileName, filename)
 				}
 			})
+
+			t.Run("Will serve unsafe media types as attachments", func(t *testing.T) {
+				if runtime.Homeserver != runtime.Synapse {
+					// We need to check that this security behaviour is being correctly run in
+					// Synapse, but since this is not part of the Matrix spec we do not assume
+					// other homeservers are doing so.
+					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse homeserver")
+				}
+				t.Parallel()
+
+				mxcUri := alice.UploadContent(t, data.MatrixSvg, asciiFileName, "image/svg")
+
+				_, isAttachment := downloadForFilename(t, bob, mxcUri, "")
+
+				if !isAttachment {
+					t.Fatal("Expected file type to be an attachment but ")
+				}
+			})
 		})
 	})
 }
 
-// Returns content disposition information like (mediatype, filename)
+// Returns content disposition information like (filename, isAttachment)
 func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName string) (filename string, isAttachment bool) {
 	t.Helper()
 
@@ -141,9 +160,9 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 	if err != nil {
 		t.Fatalf("Got err when parsing content disposition: %s", err)
 	}
-
+	filename, hasFilename := params["filename"]
 	if mediaType == "attachment" {
-		if filename, ok := params["filename"]; ok {
+		if !hasFilename {
 			return filename, true
 		} else {
 			t.Fatalf("Content Disposition did not have filename")
@@ -153,5 +172,5 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 	if mediaType != "inline" {
 		t.Fatalf("Found unexpected mediatype %s, expected attachment", mediaType)
 	}
-	return "", false
+	return filename, false
 }
