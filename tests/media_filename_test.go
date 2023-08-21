@@ -162,7 +162,7 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 	}
 	filename, hasFilename := params["filename"]
 	if mediaType == "attachment" {
-		if !hasFilename {
+		if hasFilename {
 			return filename, true
 		} else {
 			t.Fatalf("Content Disposition did not have filename")
