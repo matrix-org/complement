@@ -80,13 +80,17 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 
 	// sytest: Can query remote device keys using POST
 	t.Run("Can query remote device keys using POST", func(t *testing.T) {
+		// Device list changes only come down incremental syncs, so we do an
+		// initial sync up front.
+		_, nextBatch := bob.MustSync(t, client.SyncReq{})
+
 		displayName := "My new displayname"
 		body := client.WithJSONBody(t, map[string]interface{}{
 			"display_name": displayName,
 		})
 		alice.MustDoFunc(t, http.MethodPut, []string{"_matrix", "client", "v3", "devices", alice.DeviceID}, body)
 		// wait for bob to receive the displayname change
-		bob.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 			devicesChanged := topLevelSyncJSON.Get("device_lists.changed")
 			if devicesChanged.Exists() {
 				for _, userID := range devicesChanged.Array() {
