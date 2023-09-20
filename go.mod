@@ -1,5 +1,7 @@
 module github.com/matrix-org/complement
 
+replace github.com/matrix-org/gomatrixserverlib => ../../../gomatrixserverlib/main/
+
 go 1.16
 
 require (

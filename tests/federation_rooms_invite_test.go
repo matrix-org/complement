@@ -3,7 +3,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
@@ -96,7 +96,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			bob.MustSyncUntil(t, client.SyncReq{},
 				client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
 					// We expect a membership event ..
-					if result.Get("type").Str != gomatrixserverlib.MRoomMember {
+					if result.Get("type").Str != spec.MRoomMember {
 						return false
 					}
 					// .. for Bob
