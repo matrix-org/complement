@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrix"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/gomatrixserverlib"
 
@@ -167,7 +169,9 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		raw := signedEvent.JSON()
 		raw, err := sjson.SetRawBytes(raw, "signatures", []byte(`{}`))
 		must.NotError(t, "failed to strip signatures key from event", err)
-		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+		must.NotError(t, "failed to get room version", err)
+		unsignedEvent, err := verImpl.NewEventFromTrustedJSON(raw, false)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
 		alice.JoinRoom(t, roomAlias, nil)
@@ -195,7 +199,9 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		raw := signedEvent.JSON()
 		raw, err = sjson.SetRawBytes(raw, "signatures", rawSig)
 		must.NotError(t, "failed to modify signatures key from event", err)
-		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+		must.NotError(t, "failed to get room version", err)
+		unsignedEvent, err := verImpl.NewEventFromTrustedJSON(raw, false)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
 		alice.JoinRoom(t, roomAlias, nil)
@@ -224,7 +230,9 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		raw := signedEvent.JSON()
 		raw, err = sjson.SetRawBytes(raw, "signatures", rawSig)
 		must.NotError(t, "failed to modify signatures key from event", err)
-		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+		must.NotError(t, "failed to get room version", err)
+		unsignedEvent, err := verImpl.NewEventFromTrustedJSON(raw, false)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
 		alice.JoinRoom(t, roomAlias, nil)
@@ -255,7 +263,9 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		must.NotError(t, "failed to marshal bad signature block", err)
 		rawEvent, err = sjson.SetRawBytes(rawEvent, "signatures", rawSig)
 		must.NotError(t, "failed to modify signatures key from event", err)
-		badlySignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(rawEvent, false, ver)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+		must.NotError(t, "failed to get room version", err)
+		badlySignedEvent, err := verImpl.NewEventFromTrustedJSON(rawEvent, false)
 		must.NotError(t, "failed to make Event from badly signed event JSON", err)
 		room.AddEvent(badlySignedEvent)
 		t.Logf("Created badly signed auth event %s", badlySignedEvent.EventID())
@@ -297,7 +307,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
-	origin := gomatrixserverlib.ServerName(srv.ServerName())
+	origin := spec.ServerName(srv.ServerName())
 	defer cancel()
 
 	fedClient := srv.FederationClient(deployment)
@@ -320,13 +330,17 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	})
 
 	// charlie sends a make_join for a different user
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, srv.UserID("charlie2"), federation.SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, srv.UserID("charlie2"))
 	must.NotError(t, "MakeJoin", err)
 
 	// ... and does a switcheroo to turn it into a join for himself
-	makeJoinResp.JoinEvent.Sender = charlie
+	makeJoinResp.JoinEvent.SenderID = charlie
 	makeJoinResp.JoinEvent.StateKey = &charlie
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName()), srv.KeyID, srv.Priv, makeJoinResp.RoomVersion)
+
+	verImpl, err := gomatrixserverlib.GetRoomVersion(makeJoinResp.RoomVersion)
+	must.NotError(t, "JoinEvent.GetRoomVersion", err)
+	eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
+	joinEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
 	must.NotError(t, "JoinEvent.Build", err)
 
 	// SendJoin should return a 403.
@@ -404,14 +418,14 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 
 	// a helper function which makes a send_* request to the given path and checks
 	// that it fails with a 400 error
-	assertRequestFails := func(t *testing.T, event *gomatrixserverlib.Event) {
+	assertRequestFails := func(t *testing.T, event gomatrixserverlib.PDU) {
 		path := fmt.Sprintf("%s/%s/%s",
 			baseApiPath,
-			url.PathEscape(event.RoomID()),
+			url.PathEscape(event.RoomID().String()),
 			url.PathEscape(event.EventID()),
 		)
 		t.Logf("PUT %s", path)
-		req := gomatrixserverlib.NewFederationRequest("PUT", gomatrixserverlib.ServerName(srv.ServerName()), "hs1", path)
+		req := fclient.NewFederationRequest("PUT", spec.ServerName(srv.ServerName()), "hs1", path)
 		if err := req.SetContent(event); err != nil {
 			t.Errorf("req.SetContent: %v", err)
 			return
@@ -500,7 +514,7 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	)
 	cancel := srv.Listen()
 	defer cancel()
-	origin := gomatrixserverlib.ServerName(srv.ServerName())
+	origin := spec.ServerName(srv.ServerName())
 
 	// annoyingly we can't get to the room that alice and bob already share (see https://github.com/matrix-org/complement/issues/254)
 	// so we have to create a new one.
@@ -513,14 +527,16 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	// now we send a make_join...
 	charlie := srv.UserID("charlie")
 	fedClient := srv.FederationClient(deployment)
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, charlie, federation.SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, charlie)
 	if err != nil {
 		t.Fatalf("make_join failed: %v", err)
 	}
 
 	// ... construct a signed join event ...
-	roomVer := makeJoinResp.RoomVersion
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), origin, srv.KeyID, srv.Priv, roomVer)
+	verImpl, err := gomatrixserverlib.GetRoomVersion(makeJoinResp.RoomVersion)
+	must.NotError(t, "JoinEvent.GetRoomVersion", err)
+	eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
+	joinEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
 	if err != nil {
 		t.Fatalf("failed to sign join event: %v", err)
 	}
