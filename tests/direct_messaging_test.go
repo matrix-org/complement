@@ -134,7 +134,7 @@ func TestIsDirectFlagFederation(t *testing.T) {
 			"membership": "invite",
 			"is_direct":  true,
 		},
-	}) // TODO: Used to call `.Headered(roomVer)` is that needed?
+	})
 	inviteReq, err := fclient.NewInviteV2Request(dmInviteEvent, []gomatrixserverlib.InviteStrippedState{})
 	if err != nil {
 		t.Fatalf("failed to make invite request: %s", err)
