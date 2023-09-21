@@ -1,7 +1,5 @@
 module github.com/matrix-org/complement
 
-replace github.com/matrix-org/gomatrixserverlib => ../../../gomatrixserverlib/main/
-
 go 1.16
 
 require (
@@ -14,17 +12,17 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/gorilla/mux v1.8.0
 	github.com/matrix-org/gomatrix v0.0.0-20220926102614-ceba4d9f7530
-	github.com/matrix-org/gomatrixserverlib v0.0.0-20230113181222-67e060196d05
+	github.com/matrix-org/gomatrixserverlib v0.0.0-20230921011113-50a984a43e59
 	github.com/matrix-org/util v0.0.0-20221111132719-399730281e66
 	github.com/moby/term v0.0.0-20210610120745-9d4ed1856297 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
-	github.com/sirupsen/logrus v1.9.0
-	github.com/tidwall/gjson v1.14.4
+	github.com/sirupsen/logrus v1.9.3
+	github.com/tidwall/gjson v1.16.0
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5
-	golang.org/x/crypto v0.5.0 // indirect
+	golang.org/x/crypto v0.13.0 // indirect
 	golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6 // indirect
 	golang.org/x/image v0.5.0 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect

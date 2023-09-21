@@ -633,3 +633,12 @@ func (f *basicKeyFetcher) FetchKeys(
 func (f *basicKeyFetcher) FetcherName() string {
 	return "basicKeyFetcher"
 }
+
+// SupportedRoomVersions is a convenience method which returns a list of the room versions supported by gomatrixserverlib.
+func SupportedRoomVersions() []gomatrixserverlib.RoomVersion {
+	supportedRoomVersions := make([]gomatrixserverlib.RoomVersion, 0, 10)
+	for v := range gomatrixserverlib.StableRoomVersions() {
+		supportedRoomVersions = append(supportedRoomVersions, v)
+	}
+	return supportedRoomVersions
+}
