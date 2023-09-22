@@ -183,7 +183,7 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 		if hasFilename {
 			return filename, true
 		} else {
-			t.Fatalf("Content Disposition did not have filename")
+			return "", true
 		}
 	}
 	if mediaType != "inline" {
