@@ -57,7 +57,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	inviteWaiter := NewWaiter()
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
-		federation.HandleInviteRequests(func(ev *gomatrixserverlib.Event) {
+		federation.HandleInviteRequests(func(ev gomatrixserverlib.PDU) {
 			inviteWaiter.Finish()
 		}),
 		federation.HandleTransactionRequests(nil, nil),
@@ -146,7 +146,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		// wait for the membership to arrive over federation
 		start := time.Now()
 		knockerState := serverRoom.CurrentState("m.room.member", knockingUser.UserID)
-		for knockerState == nil && time.Since(start) < 5 * time.Second {
+		for knockerState == nil && time.Since(start) < 5*time.Second {
 			time.Sleep(100 * time.Millisecond)
 			knockerState = serverRoom.CurrentState("m.room.member", knockingUser.UserID)
 		}
