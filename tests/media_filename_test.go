@@ -119,6 +119,24 @@ func TestMediaFilenames(t *testing.T) {
 				}
 			})
 
+			t.Run("Will serve safe media types as inline", func(t *testing.T) {
+				if runtime.Homeserver != runtime.Synapse {
+					// We need to check that this security behaviour is being correctly run in
+					// Synapse, but since this is not part of the Matrix spec we do not assume
+					// other homeservers are doing so.
+					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse homeserver")
+				}
+				t.Parallel()
+
+				mxcUri := alice.UploadContent(t, data.MatrixPng, "", "image/png")
+
+				_, isAttachment := downloadForFilename(t, bob, mxcUri, "")
+
+				if isAttachment {
+					t.Fatal("Expected file to be served as inline")
+				}
+			})
+
 			t.Run("Will serve unsafe media types as attachments", func(t *testing.T) {
 				if runtime.Homeserver != runtime.Synapse {
 					// We need to check that this security behaviour is being correctly run in
@@ -128,12 +146,12 @@ func TestMediaFilenames(t *testing.T) {
 				}
 				t.Parallel()
 
-				mxcUri := alice.UploadContent(t, data.MatrixSvg, asciiFileName, "image/svg")
+				mxcUri := alice.UploadContent(t, data.MatrixSvg, "", "image/svg")
 
 				_, isAttachment := downloadForFilename(t, bob, mxcUri, "")
 
 				if !isAttachment {
-					t.Fatal("Expected file type to be an attachment but ")
+					t.Fatal("Expected file to be served as an attachment")
 				}
 			})
 		})
