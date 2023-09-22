@@ -199,7 +199,7 @@ func TestRoomForget(t *testing.T) {
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 			bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			// Try to re-join
-			joinRes := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
+			joinRes := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID}, client.WithJSONBody(t, struct{}{}))
 			must.MatchResponse(t, joinRes, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 				JSON: []match.JSON{
