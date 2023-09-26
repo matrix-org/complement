@@ -23,6 +23,7 @@ import (
 	"github.com/matrix-org/gomatrix"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
+	"github.com/tidwall/sjson"
 
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/gomatrixserverlib"
@@ -361,17 +362,54 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 	if err != nil {
 		t.Fatalf("MustJoinRoom: invalid room version: %v", err)
 	}
+
+	var senderID spec.SenderID
+	signingKey := s.Priv
+	keyID := s.KeyID
+	origOrigin := origin
+	switch roomVer {
+	case gomatrixserverlib.RoomVersionPseudoIDs:
+		_, key, err := ed25519.GenerateKey(nil)
+		if err != nil {
+			t.Fatalf("MustJoinRoom: failed generating senderID: %v", err)
+		}
+		senderID, signingKey, err = spec.SenderIDFromPseudoIDKey(key), key, nil
+		keyID = "ed25519:1"
+		origin = spec.ServerName(senderID)
+		mapping := gomatrixserverlib.MXIDMapping{
+			UserRoomKey: senderID,
+			UserID:      userID,
+		}
+		if err = mapping.Sign(origOrigin, s.KeyID, s.Priv); err != nil {
+			t.Fatalf("MustJoinRoom: failed signing mxid_mapping: %v", err)
+		}
+
+		path := "mxid_mapping"
+		eventJSON, err := sjson.SetBytes(makeJoinResp.JoinEvent.Content, path, mapping)
+		if err != nil {
+			t.Fatalf("MustJoinRoom: failed setting mxid_mapping in content: %v", err)
+		}
+		eventJSON = gomatrixserverlib.CanonicalJSONAssumeValid(eventJSON)
+		makeJoinResp.JoinEvent.Content = eventJSON
+	default:
+		senderID = spec.SenderID(userID)
+	}
+
+	stateKey := string(senderID)
+	makeJoinResp.JoinEvent.SenderID = string(senderID)
+	makeJoinResp.JoinEvent.StateKey = &stateKey
+
 	eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
-	joinEvent, err := eb.Build(time.Now(), origin, s.KeyID, s.Priv)
+	joinEvent, err := eb.Build(time.Now(), origin, keyID, signingKey)
 	if err != nil {
 		t.Fatalf("MustJoinRoom: failed to sign event: %v", err)
 	}
 	var sendJoinResp fclient.RespSendJoin
 	if len(partialState) == 0 || !partialState[0] {
 		// Default to doing a regular join.
-		sendJoinResp, err = fedClient.SendJoin(context.Background(), origin, remoteServer, joinEvent)
+		sendJoinResp, err = fedClient.SendJoin(context.Background(), origOrigin, remoteServer, joinEvent)
 	} else {
-		sendJoinResp, err = fedClient.SendJoinPartialState(context.Background(), origin, remoteServer, joinEvent)
+		sendJoinResp, err = fedClient.SendJoinPartialState(context.Background(), origOrigin, remoteServer, joinEvent)
 	}
 	if err != nil {
 		t.Fatalf("MustJoinRoom: send_join failed: %v", err)
