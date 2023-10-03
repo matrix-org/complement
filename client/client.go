@@ -16,6 +16,7 @@ import (
 
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
+	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/matrix-org/complement/internal/b"
 )
@@ -36,10 +37,10 @@ type TestLike interface {
 	Fatalf(msg string, args ...interface{})
 }
 
-type CtxKey string
+type ctxKey string
 
 const (
-	CtxKeyWithRetryUntil CtxKey = "complement_retry_until" // contains *retryUntilParams
+	CtxKeyWithRetryUntil ctxKey = "complement_retry_until" // contains *retryUntilParams
 )
 
 type retryUntilParams struct {
@@ -229,18 +230,20 @@ func (c *CSAPI) SetPushRule(t TestLike, scope string, kind string, ruleID string
 	return c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID}, WithJSONBody(t, body), WithQueries(queryParams))
 }
 
-// SendEventUnsynced sends `e` into the room.
+// Unsafe_SendEventUnsynced sends `e` into the room. This function is UNSAFE as it does not wait
+// for the event to be fully processed. This can cause flakey tests. Prefer `SendEventSynced`.
 // Returns the event ID of the sent event.
-func (c *CSAPI) SendEventUnsynced(t TestLike, roomID string, e b.Event) string {
+func (c *CSAPI) Unsafe_SendEventUnsynced(t TestLike, roomID string, e b.Event) string {
 	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
-	return c.SendEventUnsyncedWithTxnID(t, roomID, e, strconv.Itoa(txnID))
+	return c.Unsafe_SendEventUnsyncedWithTxnID(t, roomID, e, strconv.Itoa(txnID))
 }
 
 // SendEventUnsyncedWithTxnID sends `e` into the room with a prescribed transaction ID.
-// This is useful for writing tests that interrogate transaction semantics.
+// This is useful for writing tests that interrogate transaction semantics. This function is UNSAFE
+// as it does not wait for the event to be fully processed. This can cause flakey tests. Prefer `SendEventSynced`.
 // Returns the event ID of the sent event.
-func (c *CSAPI) SendEventUnsyncedWithTxnID(t TestLike, roomID string, e b.Event, txnID string) string {
+func (c *CSAPI) Unsafe_SendEventUnsyncedWithTxnID(t TestLike, roomID string, e b.Event, txnID string) string {
 	t.Helper()
 	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, txnID}
 	if e.StateKey != nil {
@@ -256,7 +259,7 @@ func (c *CSAPI) SendEventUnsyncedWithTxnID(t TestLike, roomID string, e b.Event,
 // Returns the event ID of the sent event.
 func (c *CSAPI) SendEventSynced(t TestLike, roomID string, e b.Event) string {
 	t.Helper()
-	eventID := c.SendEventUnsynced(t, roomID, e)
+	eventID := c.Unsafe_SendEventUnsynced(t, roomID, e)
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
 	c.MustSyncUntil(t, SyncReq{}, SyncTimelineHas(roomID, func(r gjson.Result) bool {
 		return r.Get("event_id").Str == eventID
@@ -296,6 +299,54 @@ func (c *CSAPI) GetDefaultRoomVersion(t TestLike) gomatrixserverlib.RoomVersion 
 	}
 
 	return gomatrixserverlib.RoomVersion(defaultVersion.Str)
+}
+
+func (c *CSAPI) GenerateOneTimeKeys(t TestLike, otkCount uint) (deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) {
+	t.Helper()
+	account := olm.NewAccount()
+	ed25519Key, curveKey := account.IdentityKeys()
+
+	ed25519KeyID := fmt.Sprintf("ed25519:%s", c.DeviceID)
+	curveKeyID := fmt.Sprintf("curve25519:%s", c.DeviceID)
+
+	deviceKeys = map[string]interface{}{
+		"user_id":    c.UserID,
+		"device_id":  c.DeviceID,
+		"algorithms": []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
+		"keys": map[string]interface{}{
+			ed25519KeyID: ed25519Key.String(),
+			curveKeyID:   curveKey.String(),
+		},
+	}
+
+	signature, _ := account.SignJSON(deviceKeys)
+
+	deviceKeys["signatures"] = map[string]interface{}{
+		c.UserID: map[string]interface{}{
+			ed25519KeyID: signature,
+		},
+	}
+
+	account.GenOneTimeKeys(otkCount)
+	oneTimeKeys = map[string]interface{}{}
+
+	for kid, key := range account.OneTimeKeys() {
+		keyID := fmt.Sprintf("signed_curve25519:%s", kid)
+		keyMap := map[string]interface{}{
+			"key": key.String(),
+		}
+
+		signature, _ = account.SignJSON(keyMap)
+
+		keyMap["signatures"] = map[string]interface{}{
+			c.UserID: map[string]interface{}{
+				ed25519KeyID: signature,
+			},
+		}
+
+		oneTimeKeys[keyID] = keyMap
+	}
+	return deviceKeys, oneTimeKeys
 }
 
 // WithRawBody sets the HTTP request body to `body`

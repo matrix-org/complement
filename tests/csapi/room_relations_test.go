@@ -217,7 +217,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	_, token := alice.MustSync(t, client.SyncReq{})
 
-	rootEventID := alice.SendEventUnsynced(t, roomID, b.Event{
+	rootEventID := alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
@@ -227,9 +227,9 @@ func TestRelationsPaginationSync(t *testing.T) {
 	})
 
 	// Create some related events.
-	event_id := ""
+	eventID := ""
 	for i := 0; i < 5; i++ {
-		event_id = alice.SendEventUnsynced(t, roomID, b.Event{
+		eventID = alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
@@ -245,13 +245,13 @@ func TestRelationsPaginationSync(t *testing.T) {
 
 	// Sync and keep the token.
 	nextBatch := alice.MustSyncUntil(t, client.SyncReq{Since: token}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-		return r.Get("event_id").Str == event_id
+		return r.Get("event_id").Str == eventID
 	}))
 
 	// Create more related events.
 	event_ids := [5]string{}
 	for i := 0; i < 5; i++ {
-		event_ids[i] = alice.SendEventUnsynced(t, roomID, b.Event{
+		event_ids[i] = alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",

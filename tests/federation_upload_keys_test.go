@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/tidwall/gjson"
-	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
@@ -25,7 +24,7 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 	// Do an initial sync so that we can see the changes come down sync.
 	_, nextBatchBeforeKeyUpload := bob.MustSync(t, client.SyncReq{})
 
-	deviceKeys, oneTimeKeys := generateKeys(t, alice, 1)
+	deviceKeys, oneTimeKeys := alice.GenerateOneTimeKeys(t, 1)
 	// Upload keys
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"device_keys":   deviceKeys,
@@ -133,52 +132,4 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 			},
 		})
 	})
-}
-
-func generateKeys(t *testing.T, user *client.CSAPI, otkCount uint) (deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) {
-	t.Helper()
-	account := olm.NewAccount()
-	ed25519Key, curveKey := account.IdentityKeys()
-
-	ed25519KeyID := fmt.Sprintf("ed25519:%s", user.DeviceID)
-	curveKeyID := fmt.Sprintf("curve25519:%s", user.DeviceID)
-
-	deviceKeys = map[string]interface{}{
-		"user_id":    user.UserID,
-		"device_id":  user.DeviceID,
-		"algorithms": []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
-		"keys": map[string]interface{}{
-			ed25519KeyID: ed25519Key.String(),
-			curveKeyID:   curveKey.String(),
-		},
-	}
-
-	signature, _ := account.SignJSON(deviceKeys)
-
-	deviceKeys["signatures"] = map[string]interface{}{
-		user.UserID: map[string]interface{}{
-			ed25519KeyID: signature,
-		},
-	}
-
-	account.GenOneTimeKeys(otkCount)
-	oneTimeKeys = map[string]interface{}{}
-
-	for kid, key := range account.OneTimeKeys() {
-		keyID := fmt.Sprintf("signed_curve25519:%s", kid)
-		keyMap := map[string]interface{}{
-			"key": key.String(),
-		}
-
-		signature, _ = account.SignJSON(keyMap)
-
-		keyMap["signatures"] = map[string]interface{}{
-			user.UserID: map[string]interface{}{
-				ed25519KeyID: signature,
-			},
-		}
-
-		oneTimeKeys[keyID] = keyMap
-	}
-	return deviceKeys, oneTimeKeys
 }
