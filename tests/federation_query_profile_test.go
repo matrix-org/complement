@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
@@ -79,11 +80,11 @@ func TestInboundFederationProfile(t *testing.T) {
 	)
 	cancel := srv.Listen()
 	defer cancel()
-	origin := gomatrixserverlib.ServerName(srv.ServerName())
+	origin := spec.ServerName(srv.ServerName())
 
 	// sytest: Non-numeric ports in server names are rejected
 	t.Run("Non-numeric ports in server names are rejected", func(t *testing.T) {
-		fedReq := gomatrixserverlib.NewFederationRequest(
+		fedReq := fclient.NewFederationRequest(
 			"GET",
 			origin,
 			"hs1",
@@ -114,7 +115,7 @@ func TestInboundFederationProfile(t *testing.T) {
 			}),
 		)
 
-		fedReq := gomatrixserverlib.NewFederationRequest(
+		fedReq := fclient.NewFederationRequest(
 			"GET",
 			origin,
 			"hs1",

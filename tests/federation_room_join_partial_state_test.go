@@ -27,6 +27,8 @@ import (
 
 	"github.com/matrix-org/gomatrix"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
@@ -39,7 +41,7 @@ import (
 type server struct {
 	*federation.Server
 
-	pduHandlers map[int]func(*gomatrixserverlib.Event) bool
+	pduHandlers map[int]func(gomatrixserverlib.PDU) bool
 	eduHandlers map[int]func(gomatrixserverlib.EDU) bool
 
 	nextPDUHandlerKey int
@@ -54,7 +56,7 @@ func createTestServer(t *testing.T, deployment *docker.Deployment, opts ...func(
 	t.Helper()
 
 	server := &server{
-		pduHandlers:       map[int]func(*gomatrixserverlib.Event) bool{},
+		pduHandlers:       map[int]func(gomatrixserverlib.PDU) bool{},
 		eduHandlers:       map[int]func(gomatrixserverlib.EDU) bool{},
 		nextPDUHandlerKey: 0,
 		nextEDUHandlerKey: 0,
@@ -66,7 +68,7 @@ func createTestServer(t *testing.T, deployment *docker.Deployment, opts ...func(
 			federation.HandlePartialStateMakeSendJoinRequests(),
 			federation.HandleEventRequests(),
 			federation.HandleTransactionRequests(
-				func(e *gomatrixserverlib.Event) {
+				func(e gomatrixserverlib.PDU) {
 					expected := false
 					for _, pduHandler := range server.pduHandlers {
 						expected = pduHandler(e) || expected
@@ -99,7 +101,7 @@ func createTestServer(t *testing.T, deployment *docker.Deployment, opts ...func(
 // AddPDUHandler adds a PDU callback that returns `true` if it expected the given PDU.
 // When a PDU is received which is not expected by any PDU callback, the ongoing test is failed.
 // Returns a function to remove the PDU callback.
-func (s *server) AddPDUHandler(pduHandler func(*gomatrixserverlib.Event) bool) func() {
+func (s *server) AddPDUHandler(pduHandler func(gomatrixserverlib.PDU) bool) func() {
 	pduHandlerKey := s.nextPDUHandlerKey
 	s.nextPDUHandlerKey++
 	s.pduHandlers[pduHandlerKey] = pduHandler
@@ -126,9 +128,9 @@ func (s *server) AddEDUHandler(eduHandler func(gomatrixserverlib.EDU) bool) func
 func (s *server) WithWaitForLeave(
 	t *testing.T, room *federation.ServerRoom, userID string, leaveAction func(),
 ) {
-	leaveChannel := make(chan *gomatrixserverlib.Event, 10)
+	leaveChannel := make(chan gomatrixserverlib.PDU, 10)
 	removePDUHandler := s.AddPDUHandler(
-		func(e *gomatrixserverlib.Event) bool {
+		func(e gomatrixserverlib.PDU) bool {
 			if membership, _ := e.Membership(); e.Type() == "m.room.member" &&
 				*e.StateKey() == userID &&
 				membership == "leave" {
@@ -165,7 +167,7 @@ func TestPartialStateJoin(t *testing.T) {
 	createMembershipEvent := func(
 		t *testing.T, signingServer *server, room *federation.ServerRoom, userId string,
 		membership string,
-	) *gomatrixserverlib.Event {
+	) gomatrixserverlib.PDU {
 		t.Helper()
 
 		return signingServer.MustCreateEvent(t, room, b.Event{
@@ -181,7 +183,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// createJoinEvent creates a join event for the given user
 	createJoinEvent := func(
 		t *testing.T, signingServer *server, room *federation.ServerRoom, userId string,
-	) *gomatrixserverlib.Event {
+	) gomatrixserverlib.PDU {
 		t.Helper()
 
 		return createMembershipEvent(t, signingServer, room, userId, "join")
@@ -190,7 +192,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// createLeaveEvent creates a leave event for the given user
 	createLeaveEvent := func(
 		t *testing.T, signingServer *server, room *federation.ServerRoom, userId string,
-	) *gomatrixserverlib.Event {
+	) gomatrixserverlib.PDU {
 		t.Helper()
 
 		return createMembershipEvent(t, signingServer, room, userId, "leave")
@@ -301,7 +303,7 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		t.Log("4. Have Alice send a message to the remote room.")
-		removePDUHandler := server.AddPDUHandler(func(*gomatrixserverlib.Event) bool { return true })
+		removePDUHandler := server.AddPDUHandler(func(gomatrixserverlib.PDU) bool { return true })
 		defer removePDUHandler()
 		messageId := alice.SendEventUnsynced(t, serverRoom.RoomID, b.Event{
 			Type: "m.room.message",
@@ -464,9 +466,9 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
 
-		pdusChannel := make(chan *gomatrixserverlib.Event)
+		pdusChannel := make(chan gomatrixserverlib.PDU)
 		removePDUHandler := server.AddPDUHandler(
-			func(e *gomatrixserverlib.Event) bool {
+			func(e gomatrixserverlib.PDU) bool {
 				pdusChannel <- e
 
 				return true
@@ -859,7 +861,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// the HS will make a /get_missing_events request for the missing prev events of event B
 		handleGetMissingEventsRequests(t, server, serverRoom,
-			[]string{eventB.EventID()}, []*gomatrixserverlib.Event{eventA})
+			[]string{eventB.EventID()}, []gomatrixserverlib.PDU{eventA})
 
 		// send event B to hs1
 		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventB, syncToken)
@@ -899,7 +901,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// the HS will make a /get_missing_events request for the missing prev event of event B
 		handleGetMissingEventsRequests(t, server, serverRoom,
-			[]string{eventB.EventID()}, []*gomatrixserverlib.Event{eventA})
+			[]string{eventB.EventID()}, []gomatrixserverlib.PDU{eventA})
 
 		// send event B to hs1
 		testReceiveEventDuringPartialStateJoin(t, deployment, alice, psjResult, eventB, syncToken)
@@ -940,7 +942,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// the HS will make a /get_missing_events request for the missing prev event of event C,
 		// to which we respond with event B only.
 		handleGetMissingEventsRequests(t, server, serverRoom,
-			[]string{eventC.EventID()}, []*gomatrixserverlib.Event{eventB})
+			[]string{eventC.EventID()}, []gomatrixserverlib.PDU{eventB})
 
 		// dedicated state_ids and state handlers for event A
 		handleStateIdsRequests(t, server, serverRoom, eventA.EventID(), serverRoom.AllCurrentState(), nil, nil)
@@ -982,10 +984,10 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		err := client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event.Sender()
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == string(event.SenderID())
 		})(alice.UserID, syncRes)
 		if err != nil {
-			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.Sender(), err)
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.SenderID(), err)
 		}
 	})
 
@@ -1052,10 +1054,10 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 
 		err = client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event2.Sender()
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == string(event2.SenderID())
 		})(alice.UserID, syncRes)
 		if err != nil {
-			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event2.Sender(), err)
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event2.SenderID(), err)
 		}
 	})
 
@@ -1100,10 +1102,10 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		err := client.SyncStateHas(serverRoom.RoomID, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == event.Sender()
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == string(event.SenderID())
 		})(alice.UserID, syncRes)
 		if err != nil {
-			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.Sender(), err)
+			t.Errorf("Did not find %s's m.room.member event in lazy-loading /sync response: %s", event.SenderID(), err)
 		}
 	})
 
@@ -1410,7 +1412,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// next, we want to create 100 outliers. So, charlie creates 100 state events, and
 		// then persuades the system under test to create a backwards extremity using those events as
 		// part of the room state.
-		outliers := make([]*gomatrixserverlib.Event, 100)
+		outliers := make([]gomatrixserverlib.PDU, 100)
 		outlierEventIDs := make([]string, len(outliers))
 		for i := range outliers {
 			body := fmt.Sprintf("outlier event %d", i)
@@ -1433,7 +1435,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// dedicated get_missing_event handler for timelineEvent2.
 		// we grudgingly return a single event.
 		handleGetMissingEventsRequests(t, server, serverRoom,
-			[]string{timelineEvent2.EventID()}, []*gomatrixserverlib.Event{timelineEvent1},
+			[]string{timelineEvent2.EventID()}, []gomatrixserverlib.PDU{timelineEvent1},
 		)
 
 		// dedicated state_ids and state handlers for timelineEvent1's prev event (ie, the last outlier event)
@@ -1613,7 +1615,7 @@ func TestPartialStateJoin(t *testing.T) {
 			Content: map[string]interface{}{
 				"body": "bad state event",
 			},
-			AuthEvents: serverRoom.EventIDsOrReferences([]*gomatrixserverlib.Event{
+			AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
 				serverRoom.CurrentState("m.room.create", ""),
 				serverRoom.CurrentState("m.room.power_levels", ""),
 				derekJoinEvent,
@@ -1694,7 +1696,7 @@ func TestPartialStateJoin(t *testing.T) {
 			StateKey: &elsie,
 			Sender:   derek,
 			Content:  map[string]interface{}{"membership": "leave"},
-			AuthEvents: serverRoom.EventIDsOrReferences([]*gomatrixserverlib.Event{
+			AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
 				serverRoom.CurrentState("m.room.create", ""),
 				serverRoom.CurrentState("m.room.power_levels", ""),
 				derekJoinEvent,
@@ -1714,7 +1716,7 @@ func TestPartialStateJoin(t *testing.T) {
 			StateKey: b.Ptr(""),
 			Sender:   elsie,
 			Content:  map[string]interface{}{"body": "rejected state"},
-			AuthEvents: serverRoom.EventIDsOrReferences([]*gomatrixserverlib.Event{
+			AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
 				serverRoom.CurrentState("m.room.create", ""),
 				serverRoom.CurrentState("m.room.power_levels", ""),
 				elsieJoinEvent,
@@ -1794,7 +1796,7 @@ func TestPartialStateJoin(t *testing.T) {
 		fedClient2 := testServer2.FederationClient(deployment)
 
 		// charlie sends a make_join
-		_, err := fedClient2.MakeJoin(context.Background(), gomatrixserverlib.ServerName(testServer2.ServerName()), "hs1", roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
+		_, err := fedClient2.MakeJoin(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", roomID, testServer2.UserID("charlie"))
 
 		if err == nil {
 			t.Errorf("MakeJoin returned 200, want 404")
@@ -1856,12 +1858,17 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 
 		// daniel then tries to /send_join via the homeserver under test
-		joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv, makeJoinResp.RoomVersion)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(serverRoom.Version)
+		if err != nil {
+			t.Fatalf("MakeRespMakeJoin: invalid room version: %s", err)
+		}
+		eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
+		joinEvent, err := eb.Build(time.Now(), spec.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv)
 		must.NotError(t, "JoinEvent.Build", err)
 
 		// SendJoin should return a 404 because the homeserver under test has not
 		// finished its partial join.
-		_, err = fedClient2.SendJoin(context.Background(), gomatrixserverlib.ServerName(testServer2.ServerName()), "hs1", joinEvent)
+		_, err = fedClient2.SendJoin(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", joinEvent)
 		if err == nil {
 			t.Errorf("SendJoin returned 200, want 404")
 		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -1967,7 +1974,7 @@ func TestPartialStateJoin(t *testing.T) {
 		fedClient2 := testServer2.FederationClient(deployment)
 
 		// charlie sends a make_knock
-		_, err := fedClient2.MakeKnock(context.Background(), gomatrixserverlib.ServerName(testServer2.ServerName()), "hs1", roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
+		_, err := fedClient2.MakeKnock(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
 
 		if err == nil {
 			t.Errorf("MakeKnock returned 200, want 404")
@@ -2029,12 +2036,17 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 
 		// daniel then tries to /send_knock via the homeserver under test
-		knockEvent, err := makeKnockResp.KnockEvent.Build(time.Now(), gomatrixserverlib.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv, makeKnockResp.RoomVersion)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(serverRoom.Version)
+		if err != nil {
+			t.Fatalf("MakeRespMakeJoin: invalid room version: %s", err)
+		}
+		eb := verImpl.NewEventBuilderFromProtoEvent(&makeKnockResp.KnockEvent)
+		knockEvent, err := eb.Build(time.Now(), spec.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv)
 		must.NotError(t, "KnockEvent.Build", err)
 
 		// SendKnock should return a 404 because the homeserver under test has not
 		// finished its partial join.
-		_, err = fedClient2.SendKnock(context.Background(), gomatrixserverlib.ServerName(testServer2.ServerName()), "hs1", knockEvent)
+		_, err = fedClient2.SendKnock(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", knockEvent)
 		if err == nil {
 			t.Errorf("SendKnock returned 200, want 404")
 		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -2174,7 +2186,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room := server2.MustJoinRoom(
 				t,
 				deployment,
-				gomatrixserverlib.ServerName(server1.ServerName()),
+				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
 				true,
@@ -2222,7 +2234,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room := server2.MustJoinRoom(
 				t,
 				deployment,
-				gomatrixserverlib.ServerName(server1.ServerName()),
+				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
 				true,
@@ -2264,7 +2276,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2.MustJoinRoom(
 				t,
 				deployment,
-				gomatrixserverlib.ServerName(server1.ServerName()),
+				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
 				true,
@@ -2338,7 +2350,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room = server2.MustJoinRoom(
 				t,
 				deployment,
-				gomatrixserverlib.ServerName(server1.ServerName()),
+				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				elsie,
 				true,
@@ -2359,7 +2371,7 @@ func TestPartialStateJoin(t *testing.T) {
 				StateKey: b.Ptr(elsie),
 				Sender:   derek,
 				Content:  map[string]interface{}{"membership": "leave"},
-				AuthEvents: room.EventIDsOrReferences([]*gomatrixserverlib.Event{
+				AuthEvents: room.EventIDsOrReferences([]gomatrixserverlib.PDU{
 					room.CurrentState("m.room.create", ""),
 					room.CurrentState("m.room.power_levels", ""),
 					derekJoinEvent,
@@ -2520,7 +2532,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room := server2.MustJoinRoom(
 				t,
 				deployment,
-				gomatrixserverlib.ServerName(server1.ServerName()),
+				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
 				true,
@@ -2551,7 +2563,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2.MustJoinRoom(
 				t,
 				deployment,
-				gomatrixserverlib.ServerName(server1.ServerName()),
+				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
 				true,
@@ -2592,17 +2604,17 @@ func TestPartialStateJoin(t *testing.T) {
 
 			makeRespUserDeviceKeys := func(
 				userID string, deviceID string,
-			) gomatrixserverlib.RespUserDeviceKeys {
-				return gomatrixserverlib.RespUserDeviceKeys{
+			) fclient.RespUserDeviceKeys {
+				return fclient.RespUserDeviceKeys{
 					UserID:   userID,
 					DeviceID: deviceID,
 					Algorithms: []string{
 						"m.megolm.v1.aes-sha2",
 					},
-					Keys: map[gomatrixserverlib.KeyID]gomatrixserverlib.Base64Bytes{
+					Keys: map[gomatrixserverlib.KeyID]spec.Base64Bytes{
 						"ed25519:JLAFKJWSCS": []byte("lEuiRJBit0IG6nUf5pUzWTUEsRVVe/HJkoKuEww9ULI"),
 					},
-					Signatures: map[string]map[gomatrixserverlib.KeyID]gomatrixserverlib.Base64Bytes{
+					Signatures: map[string]map[gomatrixserverlib.KeyID]spec.Base64Bytes{
 						userID: {
 							"ed25519:JLAFKJWSCS": []byte("dSO80A01XiigH3uBiDVx/EjzaoycHcjq9lfQX0uWsqxl2giMIiSPR8a4d291W1ihKJL/a+myXS367WT6NAIcBA"),
 						},
@@ -2625,10 +2637,10 @@ func TestPartialStateJoin(t *testing.T) {
 							userDevicesQueryChannel <- userID
 
 							// Make up a device list for the user.
-							responseBytes, _ := json.Marshal(gomatrixserverlib.RespUserDevices{
+							responseBytes, _ := json.Marshal(fclient.RespUserDevices{
 								UserID:   userID,
 								StreamID: lastDeviceStreamID,
-								Devices: []gomatrixserverlib.RespUserDevice{
+								Devices: []fclient.RespUserDevice{
 									{
 										DeviceID:    deviceID,
 										DisplayName: fmt.Sprintf("%s's device", userID),
@@ -2659,19 +2671,19 @@ func TestPartialStateJoin(t *testing.T) {
 							}
 
 							// Make up keys for every device requested.
-							deviceKeys := make(map[string]map[string]gomatrixserverlib.DeviceKeys)
+							deviceKeys := make(map[string]map[string]fclient.DeviceKeys)
 							for userID := range queryKeysRequest.DeviceKeys {
 								userDevicesQueryChannel <- userID
 
 								deviceID := fmt.Sprintf("%s_device", userID)
-								deviceKeys[userID] = map[string]gomatrixserverlib.DeviceKeys{
+								deviceKeys[userID] = map[string]fclient.DeviceKeys{
 									deviceID: {
 										RespUserDeviceKeys: makeRespUserDeviceKeys(userID, deviceID),
 									},
 								}
 							}
 
-							responseBytes, _ := json.Marshal(gomatrixserverlib.RespQueryKeys{
+							responseBytes, _ := json.Marshal(fclient.RespQueryKeys{
 								DeviceKeys: deviceKeys,
 							})
 							w.WriteHeader(200)
@@ -3161,7 +3173,7 @@ func TestPartialStateJoin(t *testing.T) {
 				StateKey: b.Ptr(derek),
 				Sender:   fred,
 				Content:  map[string]interface{}{"membership": "ban"},
-				AuthEvents: room.EventIDsOrReferences([]*gomatrixserverlib.Event{
+				AuthEvents: room.EventIDsOrReferences([]gomatrixserverlib.PDU{
 					room.CurrentState("m.room.create", ""),
 					room.CurrentState("m.room.power_levels", ""),
 					fredJoinEvent,
@@ -3474,7 +3486,7 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
 
-		server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
+		server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
 		bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
 		alice.MustSyncUntil(t,
 			client.SyncReq{
@@ -3506,9 +3518,9 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 		defer psjResult.Destroy(t)
 
-		pdusChannel := make(chan *gomatrixserverlib.Event)
+		pdusChannel := make(chan gomatrixserverlib.PDU)
 		removePDUHandler := server.AddPDUHandler(
-			func(e *gomatrixserverlib.Event) bool {
+			func(e gomatrixserverlib.PDU) bool {
 				pdusChannel <- e
 
 				return true
@@ -3563,7 +3575,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			leaveCompleted := NewWaiter()
 			t.Log("Alice starts a leave request")
-			server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
+			server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
 			go func() {
 				alice.LeaveRoom(t, serverRoom.RoomID)
 				t.Log("Alice's leave request completed")
@@ -3606,9 +3618,9 @@ func TestPartialStateJoin(t *testing.T) {
 			// Prepare to listen for leave events from the HS under test.
 			// We're only expecting one leave event, but give the channel extra capacity
 			// to avoid deadlock if the HS does something silly.
-			leavesChannel := make(chan *gomatrixserverlib.Event, 10)
+			leavesChannel := make(chan gomatrixserverlib.PDU, 10)
 			server.AddPDUHandler(
-				func(e *gomatrixserverlib.Event) bool {
+				func(e gomatrixserverlib.PDU) bool {
 					if e.Type() == "m.room.member" {
 						if ok := gjson.ValidBytes(e.Content()); !ok {
 							t.Fatalf("Received event %s with invalid content: %v", e.EventID(), e.Content())
@@ -3635,8 +3647,8 @@ func TestPartialStateJoin(t *testing.T) {
 			case <-time.After(1 * time.Second):
 				t.Fatal("Resident server did not receive Alice's leave")
 			case e := <-leavesChannel:
-				if e.Sender() != alice.UserID {
-					t.Errorf("Unexpected leave event %s for %s", e.EventID(), e.Sender())
+				if string(e.SenderID()) != alice.UserID {
+					t.Errorf("Unexpected leave event %s for %s", e.EventID(), e.SenderID())
 				}
 			}
 		})
@@ -3675,7 +3687,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Alice leaves the room")
-			server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
+			server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
 			alice.LeaveRoom(t, serverRoom.RoomID)
 
 			t.Log("Alice sees Alice's leave")
@@ -3712,7 +3724,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Alice leaves the room")
-			server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
+			server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
 			alice.LeaveRoom(t, serverRoom.RoomID)
 
 			t.Log("Alice sees Alice's leave")
@@ -3756,7 +3768,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Alice leaves the room")
-			server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
+			server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
 			alice.LeaveRoom(t, serverRoom.RoomID)
 
 			t.Log("Alice sees Alice's leave")
@@ -3802,7 +3814,7 @@ func TestPartialStateJoin(t *testing.T) {
 				StateKey: b.Ptr(alice.UserID),
 				Sender:   server.UserID("charlie"),
 				Content:  map[string]interface{}{"membership": "leave"},
-				AuthEvents: serverRoom.EventIDsOrReferences([]*gomatrixserverlib.Event{
+				AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
 					serverRoom.CurrentState("m.room.create", ""),
 					serverRoom.CurrentState("m.room.power_levels", ""),
 					serverRoom.CurrentState("m.room.member", alice.UserID),
@@ -3854,7 +3866,7 @@ func TestPartialStateJoin(t *testing.T) {
 				StateKey: b.Ptr(alice.UserID),
 				Sender:   server.UserID("charlie"),
 				Content:  map[string]interface{}{"membership": "ban"},
-				AuthEvents: serverRoom.EventIDsOrReferences([]*gomatrixserverlib.Event{
+				AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
 					serverRoom.CurrentState("m.room.create", ""),
 					serverRoom.CurrentState("m.room.power_levels", ""),
 					serverRoom.CurrentState("m.room.member", alice.UserID),
@@ -4039,7 +4051,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Log("Alice purges that room")
 		// Ignore PDUs (leaves from shutting down the room).
-		server.AddPDUHandler(func(e *gomatrixserverlib.Event) bool { return true })
+		server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
 		alice.MustDo(t, "DELETE", []string{"_synapse", "admin", "v1", "rooms", serverRoom.RoomID}, client.WithJSONBody(t, map[string]interface{}{}))
 
 		// Note: clients don't get told about purged rooms. No leave event for you!
@@ -4078,7 +4090,7 @@ func TestPartialStateJoin(t *testing.T) {
 // sends the given event to the homeserver under test, checks that a client can see it and checks
 // the state at the event. returns the new sync token after the event.
 func testReceiveEventDuringPartialStateJoin(
-	t *testing.T, deployment *docker.Deployment, alice *client.CSAPI, psjResult partialStateJoinResult, event *gomatrixserverlib.Event, syncToken string,
+	t *testing.T, deployment *docker.Deployment, alice *client.CSAPI, psjResult partialStateJoinResult, event gomatrixserverlib.PDU, syncToken string,
 ) string {
 	// send the event to the homeserver
 	psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
@@ -4094,13 +4106,13 @@ func testReceiveEventDuringPartialStateJoin(
 	// is resolved. For now, we use this to check whether Synapse has calculated the partial state
 	// flag for the last event correctly.
 
-	stateReq := gomatrixserverlib.NewFederationRequest("GET", gomatrixserverlib.ServerName(psjResult.Server.ServerName()), "hs1",
+	stateReq := fclient.NewFederationRequest("GET", spec.ServerName(psjResult.Server.ServerName()), "hs1",
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
 			url.PathEscape(psjResult.ServerRoom.RoomID),
 			url.QueryEscape(event.EventID()),
 		),
 	)
-	var respStateIDs gomatrixserverlib.RespStateIDs
+	var respStateIDs fclient.RespStateIDs
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	err := psjResult.Server.SendFederationRequest(ctx, t, deployment, stateReq, &respStateIDs)
@@ -4138,7 +4150,7 @@ func testReceiveEventDuringPartialStateJoin(
 	)
 
 	// check the server's idea of the state at the event. We do this by making a `state_ids` request over federation
-	stateReq = gomatrixserverlib.NewFederationRequest("GET", gomatrixserverlib.ServerName(psjResult.Server.ServerName()), "hs1",
+	stateReq = fclient.NewFederationRequest("GET", spec.ServerName(psjResult.Server.ServerName()), "hs1",
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
 			url.PathEscape(psjResult.ServerRoom.RoomID),
 			url.QueryEscape(event.EventID()),
@@ -4330,7 +4342,7 @@ func (psj *partialStateJoinResult) Destroy(t *testing.T) {
 }
 
 // send a message into the room without letting the homeserver under test know about it.
-func (psj *partialStateJoinResult) CreateMessageEvent(t *testing.T, senderLocalpart string, prevEventIDs []string) *gomatrixserverlib.Event {
+func (psj *partialStateJoinResult) CreateMessageEvent(t *testing.T, senderLocalpart string, prevEventIDs []string) gomatrixserverlib.PDU {
 	var prevEvents interface{}
 	if prevEventIDs == nil {
 		prevEvents = nil
@@ -4369,7 +4381,7 @@ func (psj *partialStateJoinResult) FinishStateRequest() {
 // if sendResponseWaiter is not nil, we will Wait() for it to finish before sending the response.
 func handleStateIdsRequests(
 	t *testing.T, srv *server, serverRoom *federation.ServerRoom,
-	eventID string, roomState []*gomatrixserverlib.Event,
+	eventID string, roomState []gomatrixserverlib.PDU,
 	requestReceivedWaiter *Waiter, sendResponseWaiter *Waiter,
 ) {
 	srv.Mux().NewRoute().Methods("GET").Path(
@@ -4386,7 +4398,7 @@ func handleStateIdsRequests(
 			}
 			t.Logf("Replying to /state_ids request for event %s", queryParams["event_id"])
 
-			res := gomatrixserverlib.RespStateIDs{
+			res := fclient.RespStateIDs{
 				AuthEventIDs:  eventIDsFromEvents(serverRoom.AuthChainForEvents(roomState)),
 				StateEventIDs: eventIDsFromEvents(roomState),
 			}
@@ -4409,7 +4421,7 @@ func handleStateIdsRequests(
 // if sendResponseWaiter is not nil, we will Wait() for it to finish before sending the response.
 func handleStateRequests(
 	t *testing.T, srv *server, serverRoom *federation.ServerRoom,
-	eventID string, roomState []*gomatrixserverlib.Event,
+	eventID string, roomState []gomatrixserverlib.PDU,
 	requestReceivedWaiter *Waiter, sendResponseWaiter *Waiter,
 ) {
 	srv.Mux().NewRoute().Methods("GET").Path(
@@ -4427,7 +4439,7 @@ func handleStateRequests(
 
 			t.Logf("Replying to /state request for event %s", queryParams["event_id"])
 
-			res := gomatrixserverlib.RespState{
+			res := fclient.RespState{
 				AuthEvents:  gomatrixserverlib.NewEventJSONsFromEvents(serverRoom.AuthChainForEvents(roomState)),
 				StateEvents: gomatrixserverlib.NewEventJSONsFromEvents(roomState),
 			}
@@ -4448,14 +4460,14 @@ func handleStateRequests(
 // must match those listed in "expectedLatestEvents" (otherwise the test is failed).
 func handleGetMissingEventsRequests(
 	t *testing.T, srv *server, serverRoom *federation.ServerRoom,
-	expectedLatestEvents []string, eventsToReturn []*gomatrixserverlib.Event,
+	expectedLatestEvents []string, eventsToReturn []gomatrixserverlib.PDU,
 ) {
 	srv.Mux().HandleFunc(fmt.Sprintf("/_matrix/federation/v1/get_missing_events/%s", serverRoom.RoomID), func(w http.ResponseWriter, req *http.Request) {
 		body, err := ioutil.ReadAll(req.Body)
 		if err != nil {
 			t.Fatalf("unable to read /get_missing_events request body: %s", err)
 		}
-		var getMissingEventsRequest gomatrixserverlib.MissingEvents
+		var getMissingEventsRequest fclient.MissingEvents
 		err = json.Unmarshal(body, &getMissingEventsRequest)
 		if err != nil {
 			t.Fatalf("unable to unmarshall /get_missing_events request body: %s", err)
@@ -4466,7 +4478,7 @@ func handleGetMissingEventsRequests(
 			t.Fatalf("getMissingEventsRequest.LatestEvents: got %v, wanted %v", getMissingEventsRequest, expectedLatestEvents)
 		}
 
-		responseBytes, _ := json.Marshal(gomatrixserverlib.RespMissingEvents{
+		responseBytes, _ := json.Marshal(fclient.RespMissingEvents{
 			Events: gomatrixserverlib.NewEventJSONsFromEvents(eventsToReturn),
 		})
 		w.WriteHeader(200)
@@ -4474,7 +4486,7 @@ func handleGetMissingEventsRequests(
 	}).Methods("POST")
 }
 
-func eventIDsFromEvents(he []*gomatrixserverlib.Event) []string {
+func eventIDsFromEvents(he []gomatrixserverlib.PDU) []string {
 	eventIDs := make([]string, len(he))
 	for i := range he {
 		eventIDs[i] = he[i].EventID()

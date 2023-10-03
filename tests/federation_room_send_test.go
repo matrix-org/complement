@@ -32,7 +32,7 @@ func TestOutboundFederationSend(t *testing.T) {
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleTransactionRequests(
 			// listen for PDU events in transactions
-			func(ev *gomatrixserverlib.Event) {
+			func(ev gomatrixserverlib.PDU) {
 				defer waiter.Finish()
 
 				if ev.Type() != wantEventType {

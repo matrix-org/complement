@@ -13,6 +13,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/client"
@@ -87,7 +89,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	/* Create a handler for /event_auth */
 	// a map from event ID to events to be returned by /event_auth
-	eventAuthMap := make(map[string][]*gomatrixserverlib.Event)
+	eventAuthMap := make(map[string][]gomatrixserverlib.PDU)
 	srv.Mux().HandleFunc("/_matrix/federation/v1/event_auth/{roomID}/{eventID}", func(w http.ResponseWriter, req *http.Request) {
 		vars := mux.Vars(req)
 		eventID := vars["eventID"]
@@ -98,7 +100,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 			_, _ = w.Write([]byte("{}"))
 			return
 		}
-		res := gomatrixserverlib.RespEventAuth{AuthEvents: gomatrixserverlib.NewEventJSONsFromEvents(authEvents)}
+		res := fclient.RespEventAuth{AuthEvents: gomatrixserverlib.NewEventJSONsFromEvents(authEvents)}
 		responseBytes, _ := json.Marshal(&res)
 		w.WriteHeader(200)
 		_, _ = w.Write(responseBytes)
@@ -126,9 +128,9 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement1",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
+		Origin:         spec.ServerName(srv.ServerName()),
 		Destination:    "hs1",
-		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
+		OriginServerTS: spec.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			rejectedEvent.JSON(),
 		},
@@ -157,7 +159,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// create a regular event which refers to the outlier event in its auth events,
 	// so that the outlier gets pulled in.
-	sentEventAuthEvents := []*gomatrixserverlib.Event{
+	sentEventAuthEvents := []gomatrixserverlib.PDU{
 		room.CurrentState("m.room.create", ""),
 		room.CurrentState("m.room.join_rules", ""),
 		room.CurrentState("m.room.power_levels", ""),
@@ -197,9 +199,9 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	_, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement2",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
+		Origin:         spec.ServerName(srv.ServerName()),
 		Destination:    "hs1",
-		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
+		OriginServerTS: spec.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			sentEvent1.JSON(),
 			sentEvent2.JSON(),

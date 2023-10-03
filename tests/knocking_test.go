@@ -57,7 +57,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	inviteWaiter := NewWaiter()
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
-		federation.HandleInviteRequests(func(ev *gomatrixserverlib.Event) {
+		federation.HandleInviteRequests(func(ev gomatrixserverlib.PDU) {
 			inviteWaiter.Finish()
 		}),
 		federation.HandleTransactionRequests(nil, nil),

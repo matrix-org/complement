@@ -22,6 +22,9 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
+	// Do an initial sync so that we can see the changes come down sync.
+	_, nextBatchBeforeKeyUpload := bob.MustSync(t, client.SyncReq{})
+
 	deviceKeys, oneTimeKeys := generateKeys(t, alice, 1)
 	// Upload keys
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
@@ -48,77 +51,86 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 		},
 	})
 
-	t.Run("Parallel", func(t *testing.T) {
-		// sytest: Can claim remote one time key using POST
-		t.Run("Can claim remote one time key using POST", func(t *testing.T) {
-			t.Parallel()
-			// check keys on remote server
-			reqBody = client.WithJSONBody(t, map[string]interface{}{
-				"one_time_keys": map[string]interface{}{
-					alice.UserID: map[string]string{
-						alice.DeviceID: "signed_curve25519",
-					},
+	// sytest: Can claim remote one time key using POST
+	t.Run("Can claim remote one time key using POST", func(t *testing.T) {
+		// check keys on remote server
+		reqBody = client.WithJSONBody(t, map[string]interface{}{
+			"one_time_keys": map[string]interface{}{
+				alice.UserID: map[string]string{
+					alice.DeviceID: "signed_curve25519",
 				},
-			})
-			resp = bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
-			otksField := "one_time_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
-			must.MatchResponse(t, resp, match.HTTPResponse{
-				StatusCode: http.StatusOK,
-				JSON: []match.JSON{
-					match.JSONKeyTypeEqual(otksField, gjson.JSON),
-					match.JSONKeyEqual(otksField, oneTimeKeys),
-				},
-			})
-
-			// there should be no OTK left now
-			resp = bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
-			must.MatchResponse(t, resp, match.HTTPResponse{
-				StatusCode: http.StatusOK,
-				JSON: []match.JSON{
-					match.JSONKeyMissing("one_time_keys." + client.GjsonEscape(alice.UserID)),
-				},
-			})
+			},
 		})
+		resp = bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+		otksField := "one_time_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
+		must.MatchResponse(t, resp, match.HTTPResponse{
+			StatusCode: http.StatusOK,
+			JSON: []match.JSON{
+				match.JSONKeyTypeEqual(otksField, gjson.JSON),
+				match.JSONKeyEqual(otksField, oneTimeKeys),
+			},
+		})
+		// there should be no OTK left now
+		resp = bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+		must.MatchResponse(t, resp, match.HTTPResponse{
+			StatusCode: http.StatusOK,
+			JSON: []match.JSON{
+				match.JSONKeyMissing("one_time_keys." + client.GjsonEscape(alice.UserID)),
+			},
+		})
+	})
 
-		// sytest: Can query remote device keys using POST
-		t.Run("Can query remote device keys using POST", func(t *testing.T) {
-			t.Parallel()
-
-			displayName := "My new displayname"
-			body := client.WithJSONBody(t, map[string]interface{}{
-				"display_name": displayName,
-			})
-			alice.MustDo(t, http.MethodPut, []string{"_matrix", "client", "v3", "devices", alice.DeviceID}, body)
-			// wait for bob to receive the displayname change
-			bob.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-				devicesChanged := topLevelSyncJSON.Get("device_lists.changed")
-				if devicesChanged.Exists() {
-					for _, userID := range devicesChanged.Array() {
-						if userID.Str == alice.UserID {
-							return nil
-						}
+	// sytest: Can query remote device keys using POST
+	t.Run("Can query remote device keys using POST", func(t *testing.T) {
+		// We expect the key upload to come down /sync. We need to do this so
+		// that can tell the next device update actually triggers the
+		// notification to go down /sync.
+		nextBatch := bob.MustSyncUntil(t, client.SyncReq{Since: nextBatchBeforeKeyUpload}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+			devicesChanged := topLevelSyncJSON.Get("device_lists.changed")
+			if devicesChanged.Exists() {
+				for _, userID := range devicesChanged.Array() {
+					if userID.Str == alice.UserID {
+						return nil
 					}
 				}
-				return fmt.Errorf("no device_lists found")
-			})
-			reqBody = client.WithJSONBody(t, map[string]interface{}{
-				"device_keys": map[string]interface{}{
-					alice.UserID: []string{},
-				},
-			})
-			resp = bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
-			deviceKeysField := "device_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
+			}
+			return fmt.Errorf("no device_lists found")
+		})
 
-			must.MatchResponse(t, resp, match.HTTPResponse{
-				StatusCode: http.StatusOK,
-				JSON: []match.JSON{
-					match.JSONKeyTypeEqual(deviceKeysField, gjson.JSON),
-					match.JSONKeyEqual(deviceKeysField+".algorithms", deviceKeys["algorithms"]),
-					match.JSONKeyEqual(deviceKeysField+".keys", deviceKeys["keys"]),
-					match.JSONKeyEqual(deviceKeysField+".signatures", deviceKeys["signatures"]),
-					match.JSONKeyEqual(deviceKeysField+".unsigned.device_display_name", displayName),
-				},
-			})
+		displayName := "My new displayname"
+		body := client.WithJSONBody(t, map[string]interface{}{
+			"display_name": displayName,
+		})
+		alice.MustDo(t, http.MethodPut, []string{"_matrix", "client", "v3", "devices", alice.DeviceID}, body)
+		// wait for bob to receive the displayname change
+		bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+			devicesChanged := topLevelSyncJSON.Get("device_lists.changed")
+			if devicesChanged.Exists() {
+				for _, userID := range devicesChanged.Array() {
+					if userID.Str == alice.UserID {
+						return nil
+					}
+				}
+			}
+			return fmt.Errorf("no device_lists found")
+		})
+		reqBody = client.WithJSONBody(t, map[string]interface{}{
+			"device_keys": map[string]interface{}{
+				alice.UserID: []string{},
+			},
+		})
+		resp = bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
+		deviceKeysField := "device_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
+
+		must.MatchResponse(t, resp, match.HTTPResponse{
+			StatusCode: http.StatusOK,
+			JSON: []match.JSON{
+				match.JSONKeyTypeEqual(deviceKeysField, gjson.JSON),
+				match.JSONKeyEqual(deviceKeysField+".algorithms", deviceKeys["algorithms"]),
+				match.JSONKeyEqual(deviceKeysField+".keys", deviceKeys["keys"]),
+				match.JSONKeyEqual(deviceKeysField+".signatures", deviceKeys["signatures"]),
+				match.JSONKeyEqual(deviceKeysField+".unsigned.device_display_name", displayName),
+			},
 		})
 	})
 }

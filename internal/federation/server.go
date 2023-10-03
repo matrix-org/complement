@@ -21,6 +21,9 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrix"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
+	"github.com/tidwall/sjson"
 
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/gomatrixserverlib"
@@ -76,9 +79,11 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	}
 	fetcher := &basicKeyFetcher{
 		KeyFetcher: &gomatrixserverlib.DirectKeyFetcher{
-			Client: gomatrixserverlib.NewClient(
-				gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}),
+			Client: fclient.NewClient(
+				fclient.WithTransport(&docker.RoundTripper{Deployment: deployment}),
 			),
+			IsLocalServerName: func(s spec.ServerName) bool { return s == spec.ServerName(deployment.Config.HostnameRunningComplement) },
+			LocalPublicKey:    []byte(pub),
 		},
 		srv: srv,
 	}
@@ -182,18 +187,18 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 // FederationClient returns a client which will sign requests using this server's key.
 //
 // The requests will be routed according to the deployment map in `deployment`.
-func (s *Server) FederationClient(deployment *docker.Deployment) *gomatrixserverlib.FederationClient {
+func (s *Server) FederationClient(deployment *docker.Deployment) fclient.FederationClient {
 	if !s.listening {
 		s.t.Fatalf("FederationClient() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the way federation requests are signed. Ensure you Listen() first!")
 	}
-	identity := gomatrixserverlib.SigningIdentity{
-		ServerName: gomatrixserverlib.ServerName(s.ServerName()),
+	identity := fclient.SigningIdentity{
+		ServerName: spec.ServerName(s.ServerName()),
 		KeyID:      s.KeyID,
 		PrivateKey: s.Priv,
 	}
-	f := gomatrixserverlib.NewFederationClient(
-		[]*gomatrixserverlib.SigningIdentity{&identity},
-		gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}),
+	f := fclient.NewFederationClient(
+		[]*fclient.SigningIdentity{&identity},
+		fclient.WithTransport(&docker.RoundTripper{Deployment: deployment}),
 	)
 	return f
 }
@@ -207,8 +212,8 @@ func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment
 	defer cancel()
 	resp, err := cli.SendTransaction(ctx, gomatrixserverlib.Transaction{
 		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("complement-%d", time.Now().Nanosecond())),
-		Origin:        gomatrixserverlib.ServerName(s.ServerName()),
-		Destination:   gomatrixserverlib.ServerName(destination),
+		Origin:        spec.ServerName(s.ServerName()),
+		Destination:   spec.ServerName(destination),
 		PDUs:          pdus,
 		EDUs:          edus,
 	})
@@ -229,10 +234,10 @@ func (s *Server) SendFederationRequest(
 	ctx context.Context,
 	t *testing.T,
 	deployment *docker.Deployment,
-	req gomatrixserverlib.FederationRequest,
+	req fclient.FederationRequest,
 	resBody interface{},
 ) error {
-	if err := req.Sign(gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
+	if err := req.Sign(spec.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
 		return err
 	}
 
@@ -241,7 +246,7 @@ func (s *Server) SendFederationRequest(
 		return err
 	}
 
-	httpClient := gomatrixserverlib.NewClient(gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}))
+	httpClient := fclient.NewClient(fclient.WithTransport(&docker.RoundTripper{Deployment: deployment}))
 	start := time.Now()
 	err = httpClient.DoRequestAndParseResponse(ctx, httpReq, resBody)
 
@@ -260,8 +265,8 @@ func (s *Server) DoFederationRequest(
 	ctx context.Context,
 	t *testing.T,
 	deployment *docker.Deployment,
-	req gomatrixserverlib.FederationRequest) (*http.Response, error) {
-	if err := req.Sign(gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
+	req fclient.FederationRequest) (*http.Response, error) {
+	if err := req.Sign(spec.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
 		return nil, err
 	}
 
@@ -270,7 +275,7 @@ func (s *Server) DoFederationRequest(
 		return nil, err
 	}
 
-	httpClient := gomatrixserverlib.NewClient(gomatrixserverlib.WithTransport(&docker.RoundTripper{Deployment: deployment}))
+	httpClient := fclient.NewClient(fclient.WithTransport(&docker.RoundTripper{Deployment: deployment}))
 	start := time.Now()
 
 	var resp *http.Response
@@ -286,7 +291,7 @@ func (s *Server) DoFederationRequest(
 
 // MustCreateEvent will create and sign a new latest event for the given room.
 // It does not insert this event into the room however. See ServerRoom.AddEvent for that.
-func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *gomatrixserverlib.Event {
+func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) gomatrixserverlib.PDU {
 	t.Helper()
 	content, err := json.Marshal(ev.Content)
 	if err != nil {
@@ -310,8 +315,8 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		// the usual behaviour.
 		prevEvents = room.ForwardExtremities
 	}
-	eb := gomatrixserverlib.EventBuilder{
-		Sender:     ev.Sender,
+	proto := gomatrixserverlib.ProtoEvent{
+		SenderID:   ev.Sender,
 		Depth:      int64(room.Depth + 1), // depth starts at 1
 		Type:       ev.Type,
 		StateKey:   ev.StateKey,
@@ -322,15 +327,20 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 		AuthEvents: ev.AuthEvents,
 		Redacts:    ev.Redacts,
 	}
-	if eb.AuthEvents == nil {
+	if proto.AuthEvents == nil {
 		var stateNeeded gomatrixserverlib.StateNeeded
-		stateNeeded, err = gomatrixserverlib.StateNeededForEventBuilder(&eb)
+		stateNeeded, err = gomatrixserverlib.StateNeededForProtoEvent(&proto)
 		if err != nil {
 			t.Fatalf("MustCreateEvent: failed to work out auth_events : %s", err)
 		}
-		eb.AuthEvents = room.AuthEvents(stateNeeded)
+		proto.AuthEvents = room.AuthEvents(stateNeeded)
 	}
-	signedEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(s.serverName), s.KeyID, s.Priv, room.Version)
+	verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+	if err != nil {
+		t.Fatalf("MustCreateEvent: invalid room version: %s", err)
+	}
+	eb := verImpl.NewEventBuilderFromProtoEvent(&proto)
+	signedEvent, err := eb.Build(time.Now(), spec.ServerName(s.serverName), s.KeyID, s.Priv)
 	if err != nil {
 		t.Fatalf("MustCreateEvent: failed to sign event: %s", err)
 	}
@@ -339,25 +349,67 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) *go
 
 // MustJoinRoom will make the server send a make_join and a send_join to join a room
 // It returns the resultant room.
-func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string, partialState ...bool) *ServerRoom {
+func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remoteServer spec.ServerName, roomID string, userID string, partialState ...bool) *ServerRoom {
 	t.Helper()
-	origin := gomatrixserverlib.ServerName(s.serverName)
+	origin := spec.ServerName(s.serverName)
 	fedClient := s.FederationClient(deployment)
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, remoteServer, roomID, userID, SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, remoteServer, roomID, userID)
 	if err != nil {
 		t.Fatalf("MustJoinRoom: make_join failed: %v", err)
 	}
 	roomVer := makeJoinResp.RoomVersion
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), origin, s.KeyID, s.Priv, roomVer)
+	verImpl, err := gomatrixserverlib.GetRoomVersion(makeJoinResp.RoomVersion)
+	if err != nil {
+		t.Fatalf("MustJoinRoom: invalid room version: %v", err)
+	}
+
+	var senderID spec.SenderID
+	signingKey := s.Priv
+	keyID := s.KeyID
+	origOrigin := origin
+	switch roomVer {
+	case gomatrixserverlib.RoomVersionPseudoIDs:
+		_, key, err := ed25519.GenerateKey(nil)
+		if err != nil {
+			t.Fatalf("MustJoinRoom: failed generating senderID: %v", err)
+		}
+		senderID, signingKey, err = spec.SenderIDFromPseudoIDKey(key), key, nil
+		keyID = "ed25519:1"
+		origin = spec.ServerName(senderID)
+		mapping := gomatrixserverlib.MXIDMapping{
+			UserRoomKey: senderID,
+			UserID:      userID,
+		}
+		if err = mapping.Sign(origOrigin, s.KeyID, s.Priv); err != nil {
+			t.Fatalf("MustJoinRoom: failed signing mxid_mapping: %v", err)
+		}
+
+		path := "mxid_mapping"
+		eventJSON, err := sjson.SetBytes(makeJoinResp.JoinEvent.Content, path, mapping)
+		if err != nil {
+			t.Fatalf("MustJoinRoom: failed setting mxid_mapping in content: %v", err)
+		}
+		eventJSON = gomatrixserverlib.CanonicalJSONAssumeValid(eventJSON)
+		makeJoinResp.JoinEvent.Content = eventJSON
+	default:
+		senderID = spec.SenderID(userID)
+	}
+
+	stateKey := string(senderID)
+	makeJoinResp.JoinEvent.SenderID = string(senderID)
+	makeJoinResp.JoinEvent.StateKey = &stateKey
+
+	eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
+	joinEvent, err := eb.Build(time.Now(), origin, keyID, signingKey)
 	if err != nil {
 		t.Fatalf("MustJoinRoom: failed to sign event: %v", err)
 	}
-	var sendJoinResp gomatrixserverlib.RespSendJoin
+	var sendJoinResp fclient.RespSendJoin
 	if len(partialState) == 0 || !partialState[0] {
 		// Default to doing a regular join.
-		sendJoinResp, err = fedClient.SendJoin(context.Background(), origin, remoteServer, joinEvent)
+		sendJoinResp, err = fedClient.SendJoin(context.Background(), origOrigin, remoteServer, joinEvent)
 	} else {
-		sendJoinResp, err = fedClient.SendJoinPartialState(context.Background(), origin, remoteServer, joinEvent)
+		sendJoinResp, err = fedClient.SendJoinPartialState(context.Background(), origOrigin, remoteServer, joinEvent)
 	}
 	if err != nil {
 		t.Fatalf("MustJoinRoom: send_join failed: %v", err)
@@ -376,11 +428,11 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 }
 
 // Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
-func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remoteServer gomatrixserverlib.ServerName, roomID string, userID string) {
+func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remoteServer spec.ServerName, roomID string, userID string) {
 	t.Helper()
-	origin := gomatrixserverlib.ServerName(s.serverName)
+	origin := spec.ServerName(s.serverName)
 	fedClient := s.FederationClient(deployment)
-	var leaveEvent *gomatrixserverlib.Event
+	var leaveEvent gomatrixserverlib.PDU
 	room := s.rooms[roomID]
 	if room == nil {
 		// e.g rejecting an invite
@@ -388,8 +440,12 @@ func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remo
 		if err != nil {
 			t.Fatalf("MustLeaveRoom: (rejecting invite) make_leave failed: %v", err)
 		}
-		roomVer := makeLeaveResp.RoomVersion
-		leaveEvent, err = makeLeaveResp.LeaveEvent.Build(time.Now(), origin, s.KeyID, s.Priv, roomVer)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(makeLeaveResp.RoomVersion)
+		if err != nil {
+			t.Fatalf("MustLeaveRoom: invalid room version: %v", err)
+		}
+		eb := verImpl.NewEventBuilderFromProtoEvent(&makeLeaveResp.LeaveEvent)
+		leaveEvent, err = eb.Build(time.Now(), origin, s.KeyID, s.Priv)
 		if err != nil {
 			t.Fatalf("MustLeaveRoom: (rejecting invite) failed to sign event: %v", err)
 		}
@@ -416,11 +472,11 @@ func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remo
 
 // ValidFederationRequest is a wrapper around http.HandlerFunc which automatically validates the incoming
 // federation request and supports sending back JSON. Fails the test if the request is not valid.
-func (s *Server) ValidFederationRequest(t *testing.T, handler func(fr *gomatrixserverlib.FederationRequest, pathParams map[string]string) util.JSONResponse) http.HandlerFunc {
+func (s *Server) ValidFederationRequest(t *testing.T, handler func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		// Check federation signature
-		fedReq, errResp := gomatrixserverlib.VerifyHTTPRequest(
-			req, time.Now(), gomatrixserverlib.ServerName(s.serverName), nil, s.keyRing,
+		fedReq, errResp := fclient.VerifyHTTPRequest(
+			req, time.Now(), spec.ServerName(s.serverName), nil, s.keyRing,
 		)
 		if fedReq == nil {
 			t.Errorf(
@@ -575,7 +631,7 @@ func (d *nopKeyDatabase) StoreKeys(ctx context.Context, results map[gomatrixserv
 }
 func (f *nopKeyDatabase) FetchKeys(
 	ctx context.Context,
-	requests map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.Timestamp) (
+	requests map[gomatrixserverlib.PublicKeyLookupRequest]spec.Timestamp) (
 	map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, error,
 ) {
 	return nil, nil
@@ -591,7 +647,7 @@ type basicKeyFetcher struct {
 
 func (f *basicKeyFetcher) FetchKeys(
 	ctx context.Context,
-	requests map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.Timestamp) (
+	requests map[gomatrixserverlib.PublicKeyLookupRequest]spec.Timestamp) (
 	map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, error,
 ) {
 	result := make(map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, len(requests))
@@ -599,10 +655,10 @@ func (f *basicKeyFetcher) FetchKeys(
 		if string(req.ServerName) == f.srv.serverName && req.KeyID == f.srv.KeyID {
 			publicKey := f.srv.Priv.Public().(ed25519.PublicKey)
 			result[req] = gomatrixserverlib.PublicKeyLookupResult{
-				ValidUntilTS: gomatrixserverlib.AsTimestamp(time.Now().Add(24 * time.Hour)),
+				ValidUntilTS: spec.AsTimestamp(time.Now().Add(24 * time.Hour)),
 				ExpiredTS:    gomatrixserverlib.PublicKeyNotExpired,
 				VerifyKey: gomatrixserverlib.VerifyKey{
-					Key: gomatrixserverlib.Base64Bytes(publicKey),
+					Key: spec.Base64Bytes(publicKey),
 				},
 			}
 		} else {
@@ -619,7 +675,7 @@ func (f *basicKeyFetcher) FetcherName() string {
 // SupportedRoomVersions is a convenience method which returns a list of the room versions supported by gomatrixserverlib.
 func SupportedRoomVersions() []gomatrixserverlib.RoomVersion {
 	supportedRoomVersions := make([]gomatrixserverlib.RoomVersion, 0, 10)
-	for v := range gomatrixserverlib.SupportedRoomVersions() {
+	for v := range gomatrixserverlib.StableRoomVersions() {
 		supportedRoomVersions = append(supportedRoomVersions, v)
 	}
 	return supportedRoomVersions
