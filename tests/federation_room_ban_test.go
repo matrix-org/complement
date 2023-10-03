@@ -3,8 +3,8 @@ package tests
 import (
 	"testing"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -25,13 +25,13 @@ func TestUnbanViaInvite(t *testing.T) {
 	alice.JoinRoom(t, roomID, []string{"hs2"})
 
 	// Ban Alice
-	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
+	bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
 		"user_id": alice.UserID,
 	}))
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 
 	// Unban Alice
-	bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "unban"}, client.WithJSONBody(t, map[string]interface{}{
+	bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "unban"}, client.WithJSONBody(t, map[string]interface{}{
 		"user_id": alice.UserID,
 	}))
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))

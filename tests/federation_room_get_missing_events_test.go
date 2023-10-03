@@ -12,8 +12,8 @@ import (
 	"github.com/matrix-org/util"
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"

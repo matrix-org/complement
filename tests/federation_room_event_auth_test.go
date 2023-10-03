@@ -15,8 +15,8 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -219,7 +219,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// now inspect the results. Each of the rejected events should give a 404 for /event
 	t.Run("Outlier should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", outlierEvent.EventID()})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", outlierEvent.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching outlier event, but got %d", res.StatusCode)
@@ -227,7 +227,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 
 	t.Run("sent event 1 should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent1.EventID()})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent1.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching sent event 1, but got %d", res.StatusCode)
@@ -235,7 +235,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 
 	t.Run("sent event 2 should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent2.EventID()})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent2.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching sent event 2, but got %d", res.StatusCode)

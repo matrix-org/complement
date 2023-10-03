@@ -8,8 +8,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/runtime"
 )
@@ -403,8 +403,8 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"presence": "online",
 	})
-	bob.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
-	charlie.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
+	bob.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
+	charlie.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
 
 	// Alice should see that Bob and Charlie are online. She may see this happen
 	// simultaneously in one /sync response, or separately in two /sync

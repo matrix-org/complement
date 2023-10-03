@@ -5,8 +5,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -25,7 +25,7 @@ func TestRoomMembers(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "join"})
+			res := bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "join"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -46,7 +46,7 @@ func TestRoomMembers(t *testing.T) {
 				"room_alias_name": "room_alias_random",
 			})
 
-			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", "#room_alias_random:hs1"})
+			res := bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "join", "#room_alias_random:hs1"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -66,7 +66,7 @@ func TestRoomMembers(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
+			res := bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -144,7 +144,7 @@ func TestRoomMembers(t *testing.T) {
 
 			joinBody := client.WithJSONBody(t, map[string]string{"foo": "bar"})
 
-			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID}, joinBody)
+			res := bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "join", roomID}, joinBody)
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -155,7 +155,7 @@ func TestRoomMembers(t *testing.T) {
 			})
 
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
-			res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+			res = alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -173,7 +173,7 @@ func TestRoomMembers(t *testing.T) {
 				"room_alias_name": "room_alias_random2",
 			})
 			joinBody := client.WithJSONBody(t, map[string]string{"foo": "bar"})
-			res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", "#room_alias_random2:hs1"}, joinBody)
+			res := bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "join", "#room_alias_random2:hs1"}, joinBody)
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -184,7 +184,7 @@ func TestRoomMembers(t *testing.T) {
 			})
 
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
-			res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+			res = alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -202,7 +202,7 @@ func TestRoomMembers(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
+			bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			// ban bob from room
@@ -210,7 +210,7 @@ func TestRoomMembers(t *testing.T) {
 				"user_id": bob.UserID,
 				"reason":  "Testing",
 			})
-			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, banBody)
+			res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, banBody)
 			must.MatchResponse(t, res, match.HTTPResponse{StatusCode: 200})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 				if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
@@ -219,7 +219,7 @@ func TestRoomMembers(t *testing.T) {
 				return ev.Get("content.membership").Str == "ban"
 			}))
 			// verify bob is banned
-			res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+			res = alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyEqual("membership", "ban"),
@@ -233,7 +233,7 @@ func TestRoomMembers(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{})
 			alice.InviteRoom(t, roomID, bob.UserID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+			res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyEqual("membership", "invite"),
@@ -252,7 +252,7 @@ func TestRoomMembers(t *testing.T) {
 			bob.LeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 
-			res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
+			res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", bob.UserID})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyEqual("membership", "leave"),

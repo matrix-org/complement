@@ -6,8 +6,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 )
 
 // sytest: Can send a message directly to a device using PUT /sendToDevice

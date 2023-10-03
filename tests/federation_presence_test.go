@@ -5,8 +5,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 )
 
 func TestRemotePresence(t *testing.T) {
@@ -21,7 +21,7 @@ func TestRemotePresence(t *testing.T) {
 		_, bobSinceToken := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 		statusMsg := "Update for room members"
-		alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
+		alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"status_msg": statusMsg,
 				"presence":   "online",
@@ -38,7 +38,7 @@ func TestRemotePresence(t *testing.T) {
 	t.Run("Presence changes to UNAVAILABLE are reported to remote room members", func(t *testing.T) {
 		_, bobSinceToken := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
-		alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
+		alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"presence": "unavailable",
 			}),

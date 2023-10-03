@@ -17,8 +17,8 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -79,7 +79,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 
 	queryParams := url.Values{}
 	queryParams.Set("server_name", "hs1")
-	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
+	res := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{
@@ -347,7 +347,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	}
 
 	// Alice checks the room state to check that charlie isn't a member
-	res := alice.MustDoFunc(
+	res := alice.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", charlie},

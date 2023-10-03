@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
@@ -38,7 +38,7 @@ func TestRoomsInvite(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
-			res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
+			res := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 			})
@@ -88,7 +88,7 @@ func TestRoomsInvite(t *testing.T) {
 			body := client.WithJSONBody(t, map[string]interface{}{
 				"user_id": alice.UserID,
 			})
-			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
+			res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 			})
@@ -109,7 +109,7 @@ func TestRoomsInvite(t *testing.T) {
 			body := client.WithJSONBody(t, map[string]interface{}{
 				"user_id": bob.UserID,
 			})
-			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
+			res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 			})
@@ -149,7 +149,7 @@ func TestRoomsInvite(t *testing.T) {
 					bob.UserID: 100,
 				},
 			})
-			alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"}, reqBody)
+			alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"}, reqBody)
 
 			// Alice leaves the room
 			alice.LeaveRoom(t, roomID)
@@ -180,7 +180,7 @@ func verifyState(t *testing.T, res gjson.Result, roomID string, cl *client.CSAPI
 		eventContent := event.Get("content." + field).Str
 		eventStateKey := event.Get("state_key").Str
 
-		res := cl.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, eventStateKey})
+		res := cl.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, eventStateKey})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{

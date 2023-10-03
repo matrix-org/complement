@@ -1,3 +1,4 @@
+//go:build !dendrite_blacklist
 // +build !dendrite_blacklist
 
 // Rationale for being included in Dendrite's blacklist: https://github.com/matrix-org/complement/pull/104#discussion_r617646624
@@ -9,8 +10,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -24,7 +25,7 @@ func TestPresence(t *testing.T) {
 
 	// sytest: GET /presence/:user_id/status fetches initial status
 	t.Run("GET /presence/:user_id/status fetches initial status", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyPresent("presence"),
@@ -38,11 +39,11 @@ func TestPresence(t *testing.T) {
 			"status_msg": statusMsg,
 			"presence":   "online",
 		})
-		res := alice.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"}, reqBody)
+		res := alice.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 		})
-		res = alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"})
+		res = alice.Do(t, "GET", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyPresent("presence"),
@@ -63,7 +64,7 @@ func TestPresence(t *testing.T) {
 		_, bobSinceToken := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 		statusMsg := "Update for room members"
-		alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
+		alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"status_msg": statusMsg,
 				"presence":   "online",
@@ -80,7 +81,7 @@ func TestPresence(t *testing.T) {
 	t.Run("Presence changes to UNAVAILABLE are reported to local room members", func(t *testing.T) {
 		_, bobSinceToken := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
-		alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
+		alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"presence": "unavailable",
 			}),

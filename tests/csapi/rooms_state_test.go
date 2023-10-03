@@ -9,8 +9,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/must"
 )
 
@@ -134,7 +134,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 }
 
 func getEventIdForState(t *testing.T, client *client.CSAPI, roomID, evType, stateKey string) *string {
-	res := client.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
+	res := client.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
 
 	jsonBody := must.ParseJSON(t, res.Body)
 	result := gjson.ParseBytes(jsonBody)

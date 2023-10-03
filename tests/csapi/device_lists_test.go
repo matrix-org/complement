@@ -5,8 +5,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -38,7 +38,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		ed25519KeyID := fmt.Sprintf("ed25519:%s", user.DeviceID)
 		curve25519KeyID := fmt.Sprintf("curve25519:%s", user.DeviceID)
 
-		user.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"},
+		user.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"device_keys": map[string]interface{}{
 					"user_id":    user.UserID,
@@ -67,7 +67,7 @@ func TestDeviceListUpdates(t *testing.T) {
 	mustQueryKeys := func(t *testing.T, user *client.CSAPI, userID string, check []match.JSON) {
 		t.Helper()
 
-		res := user.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"},
+		res := user.Do(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"device_keys": map[string]interface{}{
 					userID: []string{},

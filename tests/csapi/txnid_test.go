@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
@@ -36,7 +36,7 @@ func TestTxnInEvent(t *testing.T) {
 	}, txnId)
 
 	// The transaction ID should be present on the GET /rooms/{roomID}/event/{eventID} response.
-	res := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "event", eventID})
+	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "event", eventID})
 	body := client.ParseJSON(t, res)
 	result := gjson.ParseBytes(body)
 	unsignedTxnId := result.Get("unsigned.transaction_id")
@@ -46,7 +46,6 @@ func TestTxnInEvent(t *testing.T) {
 
 	must.EqualStr(t, unsignedTxnId.Str, txnId, fmt.Sprintf("Event had an incorrect 'unsigned.transaction_id' on GET /rooms/%s/event/%s response", eventID, roomID))
 }
-
 
 func mustHaveTransactionIDForEvent(t *testing.T, roomID, eventID, expectedTxnId string) client.SyncCheckOpt {
 	return client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
@@ -200,47 +199,47 @@ func TestTxnIdempotency(t *testing.T) {
 // TestTxnIdWithRefreshToken tests that when a client refreshes its access token,
 // it still gets back a transaction ID in the sync response and idempotency is respected.
 func TestTxnIdWithRefreshToken(t *testing.T) {
-  // Dendrite and Conduit don't support refresh tokens yet.
-  runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit)
+	// Dendrite and Conduit don't support refresh tokens yet.
+	runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit)
 
-  deployment := Deploy(t, b.BlueprintCleanHS)
-  defer deployment.Destroy(t)
+	deployment := Deploy(t, b.BlueprintCleanHS)
+	defer deployment.Destroy(t)
 
-  deployment.RegisterUser(t, "hs1", "alice", "password", false)
+	deployment.RegisterUser(t, "hs1", "alice", "password", false)
 
-  c := deployment.Client(t, "hs1", "")
+	c := deployment.Client(t, "hs1", "")
 
-  var refreshToken string
-  c.UserID, c.AccessToken, refreshToken, c.DeviceID, _ = c.LoginUserWithRefreshToken(t, "alice", "password")
+	var refreshToken string
+	c.UserID, c.AccessToken, refreshToken, c.DeviceID, _ = c.LoginUserWithRefreshToken(t, "alice", "password")
 
-  // Create a room where we can send events.
-  roomID := c.CreateRoom(t, map[string]interface{}{})
+	// Create a room where we can send events.
+	roomID := c.CreateRoom(t, map[string]interface{}{})
 
 	txnId := "abcdef"
 	// We send an event
-  eventID1 := c.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
-    Type: "m.room.message",
-    Content: map[string]interface{}{
-      "msgtype": "m.text",
-      "body":    "first",
-    },
-  }, txnId)
+	eventID1 := c.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "first",
+		},
+	}, txnId)
 
-  // Use the refresh token to get a new access token.
-  c.AccessToken, refreshToken, _ = c.ConsumeRefreshToken(t, refreshToken)
+	// Use the refresh token to get a new access token.
+	c.AccessToken, refreshToken, _ = c.ConsumeRefreshToken(t, refreshToken)
 
-  // When syncing, we should find the event and it should also have the correct transaction ID even
+	// When syncing, we should find the event and it should also have the correct transaction ID even
 	// though the access token is different.
-  c.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionIDForEvent(t, roomID, eventID1, txnId))
+	c.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionIDForEvent(t, roomID, eventID1, txnId))
 
 	// We try sending the event again with the same transaction ID
-  eventID2 := c.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
-    Type: "m.room.message",
-    Content: map[string]interface{}{
-      "msgtype": "m.text",
-      "body":    "first",
-    },
-  }, txnId)
+	eventID2 := c.SendEventUnsyncedWithTxnID(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "first",
+		},
+	}, txnId)
 
 	// The event should have been deduplicated and we should get back the same event ID
 	must.EqualStr(t, eventID2, eventID1, "Expected eventID1 and eventID2 to be the same from a client using a refresh token")

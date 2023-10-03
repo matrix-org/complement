@@ -9,8 +9,8 @@ import (
 	"github.com/tidwall/gjson"
 	"maunium.net/go/mautrix/crypto/olm"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -28,7 +28,7 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 		"device_keys":   deviceKeys,
 		"one_time_keys": oneTimeKeys,
 	})
-	resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+	resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
 	must.MatchResponse(t, resp, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -60,7 +60,7 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 					},
 				},
 			})
-			resp = bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+			resp = bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
 			otksField := "one_time_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
@@ -71,7 +71,7 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 			})
 
 			// there should be no OTK left now
-			resp = bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+			resp = bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
 				JSON: []match.JSON{
@@ -88,7 +88,7 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 			body := client.WithJSONBody(t, map[string]interface{}{
 				"display_name": displayName,
 			})
-			alice.MustDoFunc(t, http.MethodPut, []string{"_matrix", "client", "v3", "devices", alice.DeviceID}, body)
+			alice.MustDo(t, http.MethodPut, []string{"_matrix", "client", "v3", "devices", alice.DeviceID}, body)
 			// wait for bob to receive the displayname change
 			bob.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 				devicesChanged := topLevelSyncJSON.Get("device_lists.changed")
@@ -106,7 +106,7 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 					alice.UserID: []string{},
 				},
 			})
-			resp = bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
+			resp = bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
 			deviceKeysField := "device_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
 
 			must.MatchResponse(t, resp, match.HTTPResponse{
