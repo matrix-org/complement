@@ -249,7 +249,7 @@ func (c *CSAPI) Unsafe_SendEventUnsyncedWithTxnID(t TestLike, roomID string, e b
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
-	if e.Sender != "" {
+	if e.Sender != "" && e.Sender != c.UserID {
 		t.Fatalf("Event.Sender must not be set, as this is set by the client in use (%s)", c.UserID)
 	}
 	res := c.MustDo(t, "PUT", paths, WithJSONBody(t, e.Content))
