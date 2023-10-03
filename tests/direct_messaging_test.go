@@ -126,7 +126,7 @@ func TestIsDirectFlagFederation(t *testing.T) {
 
 	bob := srv.UserID("bob")
 	room := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, bob))
-	dmInviteEvent := srv.MustCreateEvent(t, room, b.Event{
+	dmInviteEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:     "m.room.member",
 		StateKey: &alice.UserID,
 		Sender:   bob,

@@ -73,7 +73,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	var missingEventIDs []string
 	numMissingEvents := 5
 	for i := 0; i < numMissingEvents; i++ {
-		missingEvent := srv.MustCreateEvent(t, srvRoom, b.Event{
+		missingEvent := srv.MustCreateEvent(t, srvRoom, federation.Event{
 			Sender: bob,
 			Type:   "m.room.message",
 			Content: map[string]interface{}{
@@ -86,7 +86,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	}
 
 	// 3) Inject a final event into Complement
-	mostRecentEvent := srv.MustCreateEvent(t, srvRoom, b.Event{
+	mostRecentEvent := srv.MustCreateEvent(t, srvRoom, federation.Event{
 		Sender: bob,
 		Type:   "m.room.message",
 		Content: map[string]interface{}{
@@ -237,7 +237,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	room.AddEvent(signedBadEvent)
 
 	// send the first "good" event, referencing the broken event as a prev_event
-	sentEvent := srv.MustCreateEvent(t, room, b.Event{
+	sentEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -291,7 +291,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	// it just ignores it, so we need to send another event referring to the
 	// first one and check that we get a /get_missing_events request.
 
-	message3 := srv.MustCreateEvent(t, room, b.Event{
+	message3 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{

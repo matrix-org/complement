@@ -97,24 +97,6 @@ type Event struct {
 	Sender   string
 	StateKey *string
 	Content  map[string]interface{}
-
-	/* The following fields are ignored in blueprints as clients are unable to set them.
-	 * They are used with federation.Server.
-	 */
-
-	Unsigned map[string]interface{}
-
-	// The events needed to authenticate this event.
-	// This can be either []EventReference for room v1/v2, or []string for room v3 onwards.
-	// If it is left at nil, MustCreateEvent will populate it automatically based on the room state.
-	AuthEvents interface{}
-
-	// The prev events of the event if we want to override or falsify them.
-	// If it is left at nil, MustCreateEvent will populate it automatically based on the forward extremities.
-	PrevEvents interface{}
-
-	// If this is a redaction, the event that it redacts
-	Redacts string
 }
 
 func MustValidate(bp Blueprint) Blueprint {

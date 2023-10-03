@@ -11,6 +11,24 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 )
 
+type Event struct {
+	Type     string
+	Sender   string
+	StateKey *string
+	Content  map[string]interface{}
+
+	Unsigned map[string]interface{}
+	// The events needed to authenticate this event.
+	// This can be either []EventReference for room v1/v2, or []string for room v3 onwards.
+	// If it is left at nil, MustCreateEvent will populate it automatically based on the room state.
+	AuthEvents interface{}
+	// The prev events of the event if we want to override or falsify them.
+	// If it is left at nil, MustCreateEvent will populate it automatically based on the forward extremities.
+	PrevEvents interface{}
+	// If this is a redaction, the event that it redacts
+	Redacts string
+}
+
 // ServerRoom represents a room on this test federation server
 type ServerRoom struct {
 	Version            gomatrixserverlib.RoomVersion
@@ -212,13 +230,13 @@ func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLev
 }
 
 // InitialRoomEvents returns the initial set of events that get created when making a room.
-func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []b.Event {
+func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []Event {
 	// need to serialise/deserialise to get map[string]interface{} annoyingly
 	plContent := initialPowerLevelsContent(creator)
 	plBytes, _ := json.Marshal(plContent)
 	var plContentMap map[string]interface{}
 	json.Unmarshal(plBytes, &plContentMap)
-	return []b.Event{
+	return []Event{
 		{
 			Type:     "m.room.create",
 			StateKey: b.Ptr(""),

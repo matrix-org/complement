@@ -44,20 +44,20 @@ func TestUnrejectRejectedEvents(t *testing.T) {
 	// Create the events. Event A will have whatever the current forward
 	// extremities are as prev events. Event B will refer to event A only
 	// to guarantee the test will work.
-	eventA := srv.MustCreateEvent(t, serverRoom, b.Event{
+	eventA := srv.MustCreateEvent(t, serverRoom, federation.Event{
 		Type:   "m.event.a",
 		Sender: bob,
 		Content: map[string]interface{}{
 			"event": "A",
 		},
 	})
-	eventB := srv.MustCreateEvent(t, serverRoom, b.Event{
-		Type:       "m.event.b",
-		Sender:     bob,
-		PrevEvents: []string{eventA.EventID()},
+	eventB := srv.MustCreateEvent(t, serverRoom, federation.Event{
+		Type:   "m.event.b",
+		Sender: bob,
 		Content: map[string]interface{}{
 			"event": "B",
 		},
+		PrevEvents: []string{eventA.EventID()},
 	})
 
 	// Send event B into the room. Event A at this point is unknown

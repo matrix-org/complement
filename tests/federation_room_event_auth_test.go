@@ -118,7 +118,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	charlieMembershipEvent := room.CurrentState("m.room.member", charlie)
 
 	// have Charlie send a PL event which will be rejected
-	rejectedEvent := srv.MustCreateEvent(t, room, b.Event{
+	rejectedEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:     "m.room.power_levels",
 		StateKey: b.Ptr(""),
 		Sender:   charlie,
@@ -140,7 +140,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// create an event to be pulled in as an outlier, which is valid according to its prev events,
 	// but uses the rejected event among its auth events.
-	outlierEvent := srv.MustCreateEvent(t, room, b.Event{
+	outlierEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:     "m.room.member",
 		StateKey: &charlie,
 		Sender:   charlie,
@@ -166,7 +166,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 		charlieMembershipEvent,
 		outlierEvent,
 	}
-	sentEvent1 := srv.MustCreateEvent(t, room, b.Event{
+	sentEvent1 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:       "m.room.message",
 		Sender:     charlie,
 		Content:    map[string]interface{}{"body": "sentEvent1"},
@@ -178,7 +178,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// another a regular event which refers to the outlier event, but
 	// this time we will give a different answer to /event_auth
-	sentEvent2 := srv.MustCreateEvent(t, room, b.Event{
+	sentEvent2 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:       "m.room.message",
 		Sender:     charlie,
 		Content:    map[string]interface{}{"body": "sentEvent1"},
@@ -190,7 +190,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	t.Logf("Created sent event 2 %s", sentEvent2.EventID())
 
 	// finally, a genuine regular event.
-	sentinelEvent := srv.MustCreateEvent(t, room, b.Event{
+	sentinelEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:    "m.room.message",
 		Sender:  charlie,
 		Content: map[string]interface{}{"body": "sentinelEvent"},
