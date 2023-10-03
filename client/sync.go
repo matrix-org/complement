@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -86,7 +85,7 @@ type SyncReq struct {
 //
 // Will time out after CSAPI.SyncUntilTimeout. Returns the `next_batch` token from the final
 // response.
-func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheckOpt) string {
+func (c *CSAPI) MustSyncUntil(t TestLike, syncReq SyncReq, checks ...SyncCheckOpt) string {
 	t.Helper()
 	start := time.Now()
 	numResponsesReturned := 0
@@ -139,7 +138,7 @@ func (c *CSAPI) MustSyncUntil(t *testing.T, syncReq SyncReq, checks ...SyncCheck
 //
 // Fails the test if the /sync request does not return 200 OK.
 // Returns the top-level parsed /sync response JSON as well as the next_batch token from the response.
-func (c *CSAPI) MustSync(t *testing.T, syncReq SyncReq) (gjson.Result, string) {
+func (c *CSAPI) MustSync(t TestLike, syncReq SyncReq) (gjson.Result, string) {
 	t.Helper()
 	query := url.Values{
 		"timeout": []string{"1000"},

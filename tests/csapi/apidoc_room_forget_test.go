@@ -47,7 +47,7 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			alice.LeaveRoom(t, roomID)
-			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, , client.WithJSONBody(t, struct{}{}))
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,

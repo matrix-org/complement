@@ -5,9 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"io"
-	"testing"
 
-	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
 )
 
@@ -20,7 +18,7 @@ func WithDeviceID(deviceID string) LoginOpt {
 }
 
 // LoginUser will log in to a homeserver and create a new device on an existing user.
-func (c *CSAPI) LoginUser(t *testing.T, localpart, password string, opts ...LoginOpt) (userID, accessToken, deviceID string) {
+func (c *CSAPI) LoginUser(t TestLike, localpart, password string, opts ...LoginOpt) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"identifier": map[string]interface{}{
@@ -50,7 +48,7 @@ func (c *CSAPI) LoginUser(t *testing.T, localpart, password string, opts ...Logi
 
 // LoginUserWithRefreshToken will log in to a homeserver, with refresh token enabled,
 // and create a new device on an existing user.
-func (c *CSAPI) LoginUserWithRefreshToken(t *testing.T, localpart, password string) (userID, accessToken, refreshToken, deviceID string, expiresInMs int64) {
+func (c *CSAPI) LoginUserWithRefreshToken(t TestLike, localpart, password string) (userID, accessToken, refreshToken, deviceID string, expiresInMs int64) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"identifier": map[string]interface{}{
@@ -77,7 +75,7 @@ func (c *CSAPI) LoginUserWithRefreshToken(t *testing.T, localpart, password stri
 }
 
 // RefreshToken will consume a refresh token and return a new access token and refresh token.
-func (c *CSAPI) ConsumeRefreshToken(t *testing.T, refreshToken string) (newAccessToken, newRefreshToken string, expiresInMs int64) {
+func (c *CSAPI) ConsumeRefreshToken(t TestLike, refreshToken string) (newAccessToken, newRefreshToken string, expiresInMs int64) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"refresh_token": refreshToken,
@@ -97,7 +95,7 @@ func (c *CSAPI) ConsumeRefreshToken(t *testing.T, refreshToken string) (newAcces
 
 // RegisterUser will register the user with given parameters and
 // return user ID, access token and device ID. It fails the test on network error.
-func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, accessToken, deviceID string) {
+func (c *CSAPI) RegisterUser(t TestLike, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"auth": map[string]string{
@@ -121,13 +119,13 @@ func (c *CSAPI) RegisterUser(t *testing.T, localpart, password string) (userID, 
 
 // RegisterSharedSecret registers a new account with a shared secret via HMAC
 // See https://github.com/matrix-org/synapse/blob/e550ab17adc8dd3c48daf7fedcd09418a73f524b/synapse/_scripts/register_new_matrix_user.py#L40
-func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bool) (userID, accessToken, deviceID string) {
+func (c *CSAPI) RegisterSharedSecret(t TestLike, user, pass string, isAdmin bool) (userID, accessToken, deviceID string) {
 	resp := c.Do(t, "GET", []string{"_synapse", "admin", "v1", "register"})
 	if resp.StatusCode != 200 {
 		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
 		return
 	}
-	body := must.ParseJSON(t, resp.Body)
+	body := ParseJSON(t, resp)
 	nonce := gjson.GetBytes(body, "nonce")
 	if !nonce.Exists() {
 		t.Fatalf("Malformed shared secret GET response: %s", string(body))
@@ -153,7 +151,7 @@ func (c *CSAPI) RegisterSharedSecret(t *testing.T, user, pass string, isAdmin bo
 		"admin":    isAdmin,
 	}
 	resp = c.MustDo(t, "POST", []string{"_synapse", "admin", "v1", "register"}, WithJSONBody(t, reqBody))
-	body = must.ParseJSON(t, resp.Body)
+	body = ParseJSON(t, resp)
 	userID = gjson.GetBytes(body, "user_id").Str
 	accessToken = gjson.GetBytes(body, "access_token").Str
 	deviceID = gjson.GetBytes(body, "device_id").Str

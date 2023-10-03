@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"testing"
 	"time"
 
 	"github.com/matrix-org/gomatrixserverlib"
@@ -24,6 +23,18 @@ import (
 const (
 	SharedSecret = "complement"
 )
+
+// TestLike is an interface that testing.T satisfies. All client functions accept a TestLike interface,
+// with the intention of a `testing.T` being passed into them. However, the client may be used in non-test
+// scenarios e.g benchmarks, which can then use the same client by just implementing this interface.
+type TestLike interface {
+	Helper()
+	Logf(msg string, args ...interface{})
+	Skipf(msg string, args ...interface{})
+	Error(args ...interface{})
+	Errorf(msg string, args ...interface{})
+	Fatalf(msg string, args ...interface{})
+}
 
 type CtxKey string
 
@@ -55,7 +66,7 @@ type CSAPI struct {
 }
 
 // UploadContent uploads the provided content with an optional file name. Fails the test on error. Returns the MXC URI.
-func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, contentType string) string {
+func (c *CSAPI) UploadContent(t TestLike, fileBody []byte, fileName string, contentType string) string {
 	t.Helper()
 	query := url.Values{}
 	if fileName != "" {
@@ -70,7 +81,7 @@ func (c *CSAPI) UploadContent(t *testing.T, fileBody []byte, fileName string, co
 }
 
 // DownloadContent downloads media from the server, returning the raw bytes and the Content-Type. Fails the test on error.
-func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
+func (c *CSAPI) DownloadContent(t TestLike, mxcUri string) ([]byte, string) {
 	t.Helper()
 	origin, mediaId := SplitMxc(mxcUri)
 	res := c.MustDo(t, "GET", []string{"_matrix", "media", "v3", "download", origin, mediaId})
@@ -83,7 +94,7 @@ func (c *CSAPI) DownloadContent(t *testing.T, mxcUri string) ([]byte, string) {
 }
 
 // CreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
-func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
+func (c *CSAPI) CreateRoom(t TestLike, creationContent interface{}) string {
 	t.Helper()
 	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, creationContent))
 	body := ParseJSON(t, res)
@@ -91,7 +102,7 @@ func (c *CSAPI) CreateRoom(t *testing.T, creationContent interface{}) string {
 }
 
 // JoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
-func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []string) string {
+func (c *CSAPI) JoinRoom(t TestLike, roomIDOrAlias string, serverNames []string) string {
 	t.Helper()
 	// construct URL query parameters
 	query := make(url.Values, len(serverNames))
@@ -113,7 +124,7 @@ func (c *CSAPI) JoinRoom(t *testing.T, roomIDOrAlias string, serverNames []strin
 }
 
 // LeaveRoom leaves the room ID, else fails the test.
-func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
+func (c *CSAPI) LeaveRoom(t TestLike, roomID string) {
 	t.Helper()
 	// leave the room
 	body := map[string]interface{}{}
@@ -121,7 +132,7 @@ func (c *CSAPI) LeaveRoom(t *testing.T, roomID string) {
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
-func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
+func (c *CSAPI) InviteRoom(t TestLike, roomID string, userID string) {
 	t.Helper()
 	// Invite the user to the room
 	body := map[string]interface{}{
@@ -130,19 +141,19 @@ func (c *CSAPI) InviteRoom(t *testing.T, roomID string, userID string) {
 	c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
 }
 
-func (c *CSAPI) GetGlobalAccountData(t *testing.T, eventType string) *http.Response {
+func (c *CSAPI) GetGlobalAccountData(t TestLike, eventType string) *http.Response {
 	return c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType})
 }
 
-func (c *CSAPI) SetGlobalAccountData(t *testing.T, eventType string, content map[string]interface{}) *http.Response {
+func (c *CSAPI) SetGlobalAccountData(t TestLike, eventType string, content map[string]interface{}) *http.Response {
 	return c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
-func (c *CSAPI) GetRoomAccountData(t *testing.T, roomID string, eventType string) *http.Response {
+func (c *CSAPI) GetRoomAccountData(t TestLike, roomID string, eventType string) *http.Response {
 	return c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "rooms", roomID, "account_data", eventType})
 }
 
-func (c *CSAPI) SetRoomAccountData(t *testing.T, roomID string, eventType string, content map[string]interface{}) *http.Response {
+func (c *CSAPI) SetRoomAccountData(t TestLike, roomID string, eventType string, content map[string]interface{}) *http.Response {
 	return c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "rooms", roomID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
@@ -159,7 +170,7 @@ func (c *CSAPI) SetRoomAccountData(t *testing.T, roomID string, eventType string
 //	}
 //
 // Push rules are returned in the same order received from the homeserver.
-func (c *CSAPI) GetAllPushRules(t *testing.T) gjson.Result {
+func (c *CSAPI) GetAllPushRules(t TestLike) gjson.Result {
 	t.Helper()
 
 	// We have to supply an empty string to the end of this path in order to generate a trailing slash.
@@ -184,7 +195,7 @@ func (c *CSAPI) GetAllPushRules(t *testing.T) gjson.Result {
 //	    map[string]interface{}{"set_tweak": "highlight"},
 //	  }),
 //	)
-func (c *CSAPI) GetPushRule(t *testing.T, scope string, kind string, ruleID string) gjson.Result {
+func (c *CSAPI) GetPushRule(t TestLike, scope string, kind string, ruleID string) gjson.Result {
 	t.Helper()
 
 	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID})
@@ -203,7 +214,7 @@ func (c *CSAPI) GetPushRule(t *testing.T, scope string, kind string, ruleID stri
 //	c.SetPushRule(t, "global", "underride", "com.example.rule2", map[string]interface{}{
 //	  "actions": []string{"dont_notify"},
 //	}, nil, "com.example.rule1")
-func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID string, body map[string]interface{}, before string, after string) *http.Response {
+func (c *CSAPI) SetPushRule(t TestLike, scope string, kind string, ruleID string, body map[string]interface{}, before string, after string) *http.Response {
 	t.Helper()
 
 	// If the `before` or `after` arguments have been provided, construct same-named query parameters
@@ -220,7 +231,7 @@ func (c *CSAPI) SetPushRule(t *testing.T, scope string, kind string, ruleID stri
 
 // SendEventUnsynced sends `e` into the room.
 // Returns the event ID of the sent event.
-func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string {
+func (c *CSAPI) SendEventUnsynced(t TestLike, roomID string, e b.Event) string {
 	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
 	return c.SendEventUnsyncedWithTxnID(t, roomID, e, strconv.Itoa(txnID))
@@ -229,7 +240,7 @@ func (c *CSAPI) SendEventUnsynced(t *testing.T, roomID string, e b.Event) string
 // SendEventUnsyncedWithTxnID sends `e` into the room with a prescribed transaction ID.
 // This is useful for writing tests that interrogate transaction semantics.
 // Returns the event ID of the sent event.
-func (c *CSAPI) SendEventUnsyncedWithTxnID(t *testing.T, roomID string, e b.Event, txnID string) string {
+func (c *CSAPI) SendEventUnsyncedWithTxnID(t TestLike, roomID string, e b.Event, txnID string) string {
 	t.Helper()
 	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, txnID}
 	if e.StateKey != nil {
@@ -243,7 +254,7 @@ func (c *CSAPI) SendEventUnsyncedWithTxnID(t *testing.T, roomID string, e b.Even
 
 // SendEventSynced sends `e` into the room and waits for its event ID to come down /sync.
 // Returns the event ID of the sent event.
-func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
+func (c *CSAPI) SendEventSynced(t TestLike, roomID string, e b.Event) string {
 	t.Helper()
 	eventID := c.SendEventUnsynced(t, roomID, e)
 	t.Logf("SendEventSynced waiting for event ID %s", eventID)
@@ -254,7 +265,7 @@ func (c *CSAPI) SendEventSynced(t *testing.T, roomID string, e b.Event) string {
 }
 
 // SendRedaction sends a redaction request. Will fail if the returned HTTP request code is not 200
-func (c *CSAPI) SendRedaction(t *testing.T, roomID string, e b.Event, eventID string) string {
+func (c *CSAPI) SendRedaction(t TestLike, roomID string, e b.Event, eventID string) string {
 	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
 	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, strconv.Itoa(txnID)}
@@ -264,7 +275,7 @@ func (c *CSAPI) SendRedaction(t *testing.T, roomID string, e b.Event, eventID st
 }
 
 // GetCapbabilities queries the server's capabilities
-func (c *CSAPI) GetCapabilities(t *testing.T) []byte {
+func (c *CSAPI) GetCapabilities(t TestLike) []byte {
 	t.Helper()
 	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
 	body, err := io.ReadAll(res.Body)
@@ -275,7 +286,7 @@ func (c *CSAPI) GetCapabilities(t *testing.T) []byte {
 }
 
 // GetDefaultRoomVersion returns the server's default room version
-func (c *CSAPI) GetDefaultRoomVersion(t *testing.T) gomatrixserverlib.RoomVersion {
+func (c *CSAPI) GetDefaultRoomVersion(t TestLike) gomatrixserverlib.RoomVersion {
 	t.Helper()
 	capabilities := c.GetCapabilities(t)
 	defaultVersion := gjson.GetBytes(capabilities, `capabilities.m\.room_versions.default`)
@@ -310,7 +321,7 @@ func WithContentType(cType string) RequestOpt {
 }
 
 // WithJSONBody sets the HTTP request body to the JSON serialised form of `obj`
-func WithJSONBody(t *testing.T, obj interface{}) RequestOpt {
+func WithJSONBody(t TestLike, obj interface{}) RequestOpt {
 	return func(req *http.Request) {
 		t.Helper()
 		b, err := json.Marshal(obj)
@@ -341,7 +352,7 @@ func WithRetryUntil(timeout time.Duration, untilFn func(res *http.Response) bool
 }
 
 // MustDo is the same as Do but fails the test if the returned HTTP response code is not 2xx.
-func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
+func (c *CSAPI) MustDo(t TestLike, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
 	res := c.Do(t, method, paths, opts...)
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
@@ -365,7 +376,7 @@ func (c *CSAPI) MustDo(t *testing.T, method string, paths []string, opts ...Requ
 //			match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
 //		},
 //	})
-func (c *CSAPI) Do(t *testing.T, method string, paths []string, opts ...RequestOpt) *http.Response {
+func (c *CSAPI) Do(t TestLike, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
 	for i := range paths {
 		paths[i] = url.PathEscape(paths[i])
@@ -450,7 +461,7 @@ func (c *CSAPI) Do(t *testing.T, method string, paths []string, opts ...RequestO
 }
 
 // NewLoggedClient returns an http.Client which logs requests/responses
-func NewLoggedClient(t *testing.T, hsName string, cli *http.Client) *http.Client {
+func NewLoggedClient(t TestLike, hsName string, cli *http.Client) *http.Client {
 	t.Helper()
 	if cli == nil {
 		cli = &http.Client{
@@ -466,7 +477,7 @@ func NewLoggedClient(t *testing.T, hsName string, cli *http.Client) *http.Client
 }
 
 type loggedRoundTripper struct {
-	t      *testing.T
+	t      TestLike
 	hsName string
 	wrap   http.RoundTripper
 }
@@ -483,7 +494,7 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 // GetJSONFieldStr extracts a value from a byte-encoded JSON body given a search key
-func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
+func GetJSONFieldStr(t TestLike, body []byte, wantKey string) string {
 	t.Helper()
 	res := gjson.GetBytes(body, wantKey)
 	if !res.Exists() {
@@ -495,7 +506,7 @@ func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	return res.Str
 }
 
-func GetJSONFieldStringArray(t *testing.T, body []byte, wantKey string) []string {
+func GetJSONFieldStringArray(t TestLike, body []byte, wantKey string) []string {
 	t.Helper()
 
 	res := gjson.GetBytes(body, wantKey)
@@ -519,7 +530,7 @@ func GetJSONFieldStringArray(t *testing.T, body []byte, wantKey string) []string
 }
 
 // ParseJSON parses a JSON-encoded HTTP Response body into a byte slice
-func ParseJSON(t *testing.T, res *http.Response) []byte {
+func ParseJSON(t TestLike, res *http.Response) []byte {
 	t.Helper()
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
@@ -569,7 +580,7 @@ func SplitMxc(mxcUri string) (string, string) {
 //
 // The messages parameter is nested as follows:
 // user_id -> device_id -> content (map[string]interface{})
-func (c *CSAPI) SendToDeviceMessages(t *testing.T, evType string, messages map[string]map[string]map[string]interface{}) {
+func (c *CSAPI) SendToDeviceMessages(t TestLike, evType string, messages map[string]map[string]map[string]interface{}) {
 	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
 	c.MustDo(
