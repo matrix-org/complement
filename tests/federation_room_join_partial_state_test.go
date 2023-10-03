@@ -305,7 +305,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Log("4. Have Alice send a message to the remote room.")
 		removePDUHandler := server.AddPDUHandler(func(gomatrixserverlib.PDU) bool { return true })
 		defer removePDUHandler()
-		messageId := alice.SendEventUnsynced(t, serverRoom.RoomID, b.Event{
+		messageId := alice.Unsafe_SendEventUnsynced(t, serverRoom.RoomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"body":    "Hello world",
