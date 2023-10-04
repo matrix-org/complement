@@ -17,8 +17,8 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -118,7 +118,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	charlieMembershipEvent := room.CurrentState("m.room.member", charlie)
 
 	// have Charlie send a PL event which will be rejected
-	rejectedEvent := srv.MustCreateEvent(t, room, b.Event{
+	rejectedEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:     "m.room.power_levels",
 		StateKey: b.Ptr(""),
 		Sender:   charlie,
@@ -140,7 +140,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// create an event to be pulled in as an outlier, which is valid according to its prev events,
 	// but uses the rejected event among its auth events.
-	outlierEvent := srv.MustCreateEvent(t, room, b.Event{
+	outlierEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:     "m.room.member",
 		StateKey: &charlie,
 		Sender:   charlie,
@@ -166,7 +166,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 		charlieMembershipEvent,
 		outlierEvent,
 	}
-	sentEvent1 := srv.MustCreateEvent(t, room, b.Event{
+	sentEvent1 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:       "m.room.message",
 		Sender:     charlie,
 		Content:    map[string]interface{}{"body": "sentEvent1"},
@@ -178,7 +178,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// another a regular event which refers to the outlier event, but
 	// this time we will give a different answer to /event_auth
-	sentEvent2 := srv.MustCreateEvent(t, room, b.Event{
+	sentEvent2 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:       "m.room.message",
 		Sender:     charlie,
 		Content:    map[string]interface{}{"body": "sentEvent1"},
@@ -190,7 +190,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	t.Logf("Created sent event 2 %s", sentEvent2.EventID())
 
 	// finally, a genuine regular event.
-	sentinelEvent := srv.MustCreateEvent(t, room, b.Event{
+	sentinelEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:    "m.room.message",
 		Sender:  charlie,
 		Content: map[string]interface{}{"body": "sentinelEvent"},
@@ -221,7 +221,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// now inspect the results. Each of the rejected events should give a 404 for /event
 	t.Run("Outlier should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", outlierEvent.EventID()})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", outlierEvent.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching outlier event, but got %d", res.StatusCode)
@@ -229,7 +229,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 
 	t.Run("sent event 1 should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent1.EventID()})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent1.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching sent event 1, but got %d", res.StatusCode)
@@ -237,7 +237,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 
 	t.Run("sent event 2 should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent2.EventID()})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent2.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching sent event 2, but got %d", res.StatusCode)

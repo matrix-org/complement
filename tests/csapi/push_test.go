@@ -7,8 +7,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -58,7 +58,7 @@ func TestPushSync(t *testing.T) {
 				"actions": []string{"notify"},
 			})
 
-			alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", "!foo:example.com"}, body)
+			alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", "!foo:example.com"}, body)
 		})
 	})
 
@@ -69,7 +69,7 @@ func TestPushSync(t *testing.T) {
 				"enabled": false,
 			})
 
-			alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", "!foo:example.com", "enabled"}, body)
+			alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", "!foo:example.com", "enabled"}, body)
 		})
 	})
 
@@ -80,7 +80,7 @@ func TestPushSync(t *testing.T) {
 				"enabled": true,
 			})
 
-			alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", "!foo:example.com", "enabled"}, body)
+			alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", "!foo:example.com", "enabled"}, body)
 		})
 	})
 
@@ -91,7 +91,7 @@ func TestPushSync(t *testing.T) {
 				"actions": []string{"dont_notify"},
 			})
 
-			alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", "!foo:example.com", "actions"}, body)
+			alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", "!foo:example.com", "actions"}, body)
 		})
 	})
 }

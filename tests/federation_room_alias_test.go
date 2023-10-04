@@ -3,8 +3,8 @@ package tests
 import (
 	"testing"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -21,11 +21,11 @@ func TestRemoteAliasRequestsUnderstandUnicode(t *testing.T) {
 
 	roomID := alice.CreateRoom(t, map[string]interface{}{})
 
-	alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "directory", "room", unicodeAlias}, client.WithJSONBody(t, map[string]interface{}{
+	alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "directory", "room", unicodeAlias}, client.WithJSONBody(t, map[string]interface{}{
 		"room_id": roomID,
 	}))
 
-	res := bob.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", unicodeAlias})
+	res := bob.Do(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", unicodeAlias})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{

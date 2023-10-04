@@ -8,8 +8,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/runtime"
 )
@@ -291,17 +291,16 @@ func TestSync(t *testing.T) {
 			// a good event - in another room - to act as a sentinel. It's not
 			// guaranteed, but hopefully if the sentinel is received, so was the
 			// redaction.
-			redactionEvent := srv.MustCreateEvent(t, redactionRoom, b.Event{
+			redactionEvent := srv.MustCreateEvent(t, redactionRoom, federation.Event{
 				Type:    "m.room.redaction",
 				Sender:  charlie,
 				Content: map[string]interface{}{},
-				Redacts: "$12345",
-			})
+				Redacts: "$12345"})
 			redactionRoom.AddEvent(redactionEvent)
 			t.Logf("Created redaction event %s", redactionEvent.EventID())
 			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON()}, nil)
 
-			sentinelEvent := srv.MustCreateEvent(t, sentinelRoom, b.Event{
+			sentinelEvent := srv.MustCreateEvent(t, sentinelRoom, federation.Event{
 				Type:    "m.room.test",
 				Sender:  charlie,
 				Content: map[string]interface{}{"body": "1234"},
@@ -318,7 +317,7 @@ func TestSync(t *testing.T) {
 			pdus := make([]json.RawMessage, 11)
 			var lastSentEventId string
 			for i := range pdus {
-				ev := srv.MustCreateEvent(t, redactionRoom, b.Event{
+				ev := srv.MustCreateEvent(t, redactionRoom, federation.Event{
 					Type:    "m.room.message",
 					Sender:  charlie,
 					Content: map[string]interface{}{},
@@ -403,8 +402,8 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"presence": "online",
 	})
-	bob.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
-	charlie.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
+	bob.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
+	charlie.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
 
 	// Alice should see that Bob and Charlie are online. She may see this happen
 	// simultaneously in one /sync response, or separately in two /sync

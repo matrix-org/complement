@@ -3,8 +3,8 @@ package csapi_tests
 import (
 	"testing"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -18,7 +18,7 @@ func TestMembersLocal(t *testing.T) {
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bobspassword", false)
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
-	bob.MustDoFunc(
+	bob.MustDo(
 		t, "PUT", []string{"_matrix", "client", "v3", "presence", bob.UserID, "status"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"presence": "online",

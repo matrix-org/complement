@@ -27,7 +27,7 @@ func TestServerCapabilities(t *testing.T) {
 	)
 
 	// sytest: GET /v3/capabilities is not public
-	res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
+	res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusUnauthorized,
 	})

@@ -7,10 +7,9 @@ import (
 	"testing"
 
 	"github.com/tidwall/gjson"
-	"maunium.net/go/mautrix/crypto/olm"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/complement/runtime"
@@ -23,7 +22,8 @@ func TestUploadKey(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	deviceKeys, oneTimeKeys := generateKeys(t, alice, 1)
+	deviceKeys, oneTimeKeys := alice.GenerateOneTimeKeys(t, 1)
+
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: Can upload device keys
 		t.Run("Can upload device keys", func(t *testing.T) {
@@ -31,7 +31,7 @@ func TestUploadKey(t *testing.T) {
 				"device_keys":   deviceKeys,
 				"one_time_keys": oneTimeKeys,
 			})
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+			resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
 				JSON: []match.JSON{
@@ -64,7 +64,7 @@ func TestUploadKey(t *testing.T) {
 				},
 				"one_time_keys": oneTimeKeys,
 			})
-			resp := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+			resp := bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusBadRequest,
 				JSON: []match.JSON{
@@ -83,7 +83,7 @@ func TestUploadKey(t *testing.T) {
 					"device_id": alice.DeviceID,
 				},
 			})
-			resp := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+			resp := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusBadRequest,
 			})
@@ -96,7 +96,7 @@ func TestUploadKey(t *testing.T) {
 					alice.UserID: {},
 				},
 			})
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
+			resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
 				JSON: []match.JSON{
@@ -111,7 +111,7 @@ func TestUploadKey(t *testing.T) {
 					alice.UserID: {alice.DeviceID},
 				},
 			})
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
+			resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
 			deviceKeysField := "device_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
@@ -131,7 +131,7 @@ func TestUploadKey(t *testing.T) {
 					bob.UserID: {},
 				},
 			})
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
+			resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, reqBody)
 			deviceKeysField := "device_keys." + client.GjsonEscape(bob.UserID)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
@@ -151,7 +151,7 @@ func TestUploadKey(t *testing.T) {
 					},
 				},
 			})
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+			resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
 			otksField := "one_time_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
@@ -162,7 +162,7 @@ func TestUploadKey(t *testing.T) {
 			})
 
 			// there should be no OTK left now
-			resp = alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+			resp = alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusOK,
 				JSON: []match.JSON{
@@ -171,52 +171,4 @@ func TestUploadKey(t *testing.T) {
 			})
 		})
 	})
-}
-
-func generateKeys(t *testing.T, user *client.CSAPI, otkCount uint) (deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) {
-	t.Helper()
-	account := olm.NewAccount()
-	ed25519Key, curveKey := account.IdentityKeys()
-
-	ed25519KeyID := fmt.Sprintf("ed25519:%s", user.DeviceID)
-	curveKeyID := fmt.Sprintf("curve25519:%s", user.DeviceID)
-
-	deviceKeys = map[string]interface{}{
-		"user_id":    user.UserID,
-		"device_id":  user.DeviceID,
-		"algorithms": []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
-		"keys": map[string]interface{}{
-			ed25519KeyID: ed25519Key.String(),
-			curveKeyID:   curveKey.String(),
-		},
-	}
-
-	signature, _ := account.SignJSON(deviceKeys)
-
-	deviceKeys["signatures"] = map[string]interface{}{
-		user.UserID: map[string]interface{}{
-			ed25519KeyID: signature,
-		},
-	}
-
-	account.GenOneTimeKeys(otkCount)
-	oneTimeKeys = map[string]interface{}{}
-
-	for kid, key := range account.OneTimeKeys() {
-		keyID := fmt.Sprintf("signed_curve25519:%s", kid)
-		keyMap := map[string]interface{}{
-			"key": key.String(),
-		}
-
-		signature, _ = account.SignJSON(keyMap)
-
-		keyMap["signatures"] = map[string]interface{}{
-			user.UserID: map[string]interface{}{
-				ed25519KeyID: signature,
-			},
-		}
-
-		oneTimeKeys[keyID] = keyMap
-	}
-	return deviceKeys, oneTimeKeys
 }

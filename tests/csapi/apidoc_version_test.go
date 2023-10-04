@@ -28,7 +28,7 @@ func TestVersionStructure(t *testing.T) {
 
 	// sytest: Version responds 200 OK with valid structure
 	t.Run("Version responds 200 OK with valid structure", func(t *testing.T) {
-		res := client.MustDoFunc(t, "GET", []string{"_matrix", "client", "versions"})
+		res := client.MustDo(t, "GET", []string{"_matrix", "client", "versions"})
 
 		// Matches;
 		// - r0.?.?

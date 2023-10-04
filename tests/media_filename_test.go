@@ -5,8 +5,8 @@ import (
 	"mime"
 	"testing"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/runtime"
 )
@@ -172,7 +172,7 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 		path = []string{"_matrix", "media", "v3", "download", origin, mediaId}
 	}
 
-	res := c.MustDoFunc(t, "GET", path)
+	res := c.MustDo(t, "GET", path)
 
 	mediaType, params, err := mime.ParseMediaType(res.Header.Get("Content-Disposition"))
 	if err != nil {

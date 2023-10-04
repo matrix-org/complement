@@ -6,8 +6,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -23,7 +23,7 @@ func TestDeactivateAccount(t *testing.T) {
 	// at least one auth flow involving a password.
 	t.Run("Password flow is available", func(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{})
-		res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "account", "deactivate"}, reqBody)
+		res := authedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "account", "deactivate"}, reqBody)
 
 		rawBody := must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 401,
@@ -97,7 +97,7 @@ func TestDeactivateAccount(t *testing.T) {
 			"type":     "m.login.password",
 			"password": password,
 		})
-		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
+		res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 403,
 		})
@@ -114,7 +114,7 @@ func deactivateAccount(t *testing.T, authedClient *client.CSAPI, password string
 		},
 	})
 
-	res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "account", "deactivate"}, reqBody)
+	res := authedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "account", "deactivate"}, reqBody)
 
 	return res
 }

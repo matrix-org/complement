@@ -7,8 +7,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -22,7 +22,7 @@ func TestLogin(t *testing.T) {
 		// sytest: GET /login yields a set of flows
 		t.Run("GET /login yields a set of flows", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{}`)))
+			res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{}`)))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				Headers: map[string]string{
 					"Content-Type": "application/json",
@@ -43,7 +43,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login can log in as a user
 		t.Run("POST /login can login as user", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
@@ -62,7 +62,7 @@ func TestLogin(t *testing.T) {
 		t.Run("POST /login returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
 			deviceID := "test_device_id"
-			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
@@ -83,7 +83,7 @@ func TestLogin(t *testing.T) {
 		t.Run("POST /login can log in as a user with just the local part of the id", func(t *testing.T) {
 			t.Parallel()
 
-			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
@@ -101,7 +101,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login as non-existing user is rejected
 		t.Run("POST /login as non-existing user is rejected", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
@@ -116,7 +116,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login wrong password is rejected
 		t.Run("POST /login wrong password is rejected", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
@@ -136,7 +136,7 @@ func TestLogin(t *testing.T) {
 		t.Run("Login with uppercase username works and GET /whoami afterwards also", func(t *testing.T) {
 			t.Parallel()
 			// login should be possible with uppercase username
-			res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
 				"type": "m.login.password",
 				"identifier": {
 					"type": "m.id.user",
@@ -151,7 +151,7 @@ func TestLogin(t *testing.T) {
 			unauthedClient.UserID = js.Get("user_id").Str
 			unauthedClient.AccessToken = js.Get("access_token").Str
 			// check that we can successfully query /whoami
-			unauthedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "account", "whoami"})
+			unauthedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "account", "whoami"})
 		})
 	})
 }

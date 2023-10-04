@@ -9,7 +9,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -22,7 +22,7 @@ func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverNam
 	// This is copied from Client.JoinRoom to test a join failure.
 	query := make(url.Values, 1)
 	query.Set("server_name", serverName)
-	res := c.DoFunc(
+	res := c.Do(
 		t,
 		"POST",
 		[]string{"_matrix", "client", "v3", "join", roomIDOrAlias},
@@ -272,7 +272,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 	body := map[string]interface{}{
 		"user_id": bob.UserID,
 	}
-	res := alice.DoFunc(
+	res := alice.Do(
 		t,
 		"POST",
 		[]string{"_matrix", "client", "v3", "rooms", room, "invite"},

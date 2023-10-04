@@ -30,8 +30,8 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
@@ -170,7 +170,7 @@ func TestPartialStateJoin(t *testing.T) {
 	) gomatrixserverlib.PDU {
 		t.Helper()
 
-		return signingServer.MustCreateEvent(t, room, b.Event{
+		return signingServer.MustCreateEvent(t, room, federation.Event{
 			Type:     "m.room.member",
 			StateKey: b.Ptr(userId),
 			Sender:   userId,
@@ -305,7 +305,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Log("4. Have Alice send a message to the remote room.")
 		removePDUHandler := server.AddPDUHandler(func(gomatrixserverlib.PDU) bool { return true })
 		defer removePDUHandler()
-		messageId := alice.SendEventUnsynced(t, serverRoom.RoomID, b.Event{
+		messageId := alice.Unsafe_SendEventUnsynced(t, serverRoom.RoomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"body":    "Hello world",
@@ -478,7 +478,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		alice.Client.Timeout = 2 * time.Second
 		paths := []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "send", "m.room.message", "0"}
-		res := alice.MustDoFunc(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
+		res := alice.MustDo(t, "PUT", paths, client.WithJSONBody(t, map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Hello world!",
 		}))
@@ -1135,7 +1135,7 @@ func TestPartialStateJoin(t *testing.T) {
 		go func() {
 			queryParams := url.Values{}
 			queryParams.Set("at", syncToken)
-			clientMembersRequestResponseChan <- alice.MustDoFunc(
+			clientMembersRequestResponseChan <- alice.MustDo(
 				t,
 				"GET",
 				[]string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "members"},
@@ -1328,7 +1328,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// we will do a gappy sync after, which will only pick up the last message.
 		var lastEventID string
 		for i := 0; i < 2; i++ {
-			event := server.MustCreateEvent(t, serverRoom, b.Event{
+			event := server.MustCreateEvent(t, serverRoom, federation.Event{
 				Type:   "m.room.message",
 				Sender: server.UserID("derek"),
 				Content: map[string]interface{}{
@@ -1416,7 +1416,7 @@ func TestPartialStateJoin(t *testing.T) {
 		outlierEventIDs := make([]string, len(outliers))
 		for i := range outliers {
 			body := fmt.Sprintf("outlier event %d", i)
-			outliers[i] = server.MustCreateEvent(t, serverRoom, b.Event{
+			outliers[i] = server.MustCreateEvent(t, serverRoom, federation.Event{
 				Type:     "outlier_state",
 				Sender:   server.UserID("charlie"),
 				StateKey: b.Ptr(fmt.Sprintf("state_%d", i)),
@@ -1517,7 +1517,7 @@ func TestPartialStateJoin(t *testing.T) {
 		federation.HandleEventAuthRequests()(server.Server)
 
 		// derek sends a state event, despite not having permission to send state. This should be rejected.
-		badStateEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+		badStateEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 			Type:     "m.room.test",
 			StateKey: b.Ptr(""),
 			Sender:   server.UserID("derek"),
@@ -1545,7 +1545,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// ... and check that the bad state event is *not* visible
 		must.MatchResponse(t,
-			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badStateEvent.EventID()}),
+			alice.Do(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badStateEvent.EventID()}),
 			match.HTTPResponse{
 				StatusCode: 404,
 				JSON: []match.JSON{
@@ -1561,7 +1561,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// check that the bad state event is *still* not visible
 		must.MatchResponse(t,
-			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badStateEvent.EventID()}),
+			alice.Do(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badStateEvent.EventID()}),
 			match.HTTPResponse{
 				StatusCode: 404,
 				JSON: []match.JSON{
@@ -1608,7 +1608,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// derek now sends a state event with auth_events that say he was in the room. It will be
 		// accepted during the faster join, but should then ultimately be rejected.
-		badStateEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+		badStateEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 			Type:     "m.room.test",
 			StateKey: b.Ptr(""),
 			Sender:   derek,
@@ -1639,7 +1639,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// the bad state event should now *not* be visible
 		must.MatchResponse(t,
-			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badStateEvent.EventID()}),
+			alice.Do(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badStateEvent.EventID()}),
 			match.HTTPResponse{
 				StatusCode: 404,
 				JSON: []match.JSON{
@@ -1691,7 +1691,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Derek now kicks Elsie, with auth_events that say he was in the room. It will be
 		// accepted during the faster join, but should then ultimately be rejected.
-		badKickEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+		badKickEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 			Type:     "m.room.member",
 			StateKey: &elsie,
 			Sender:   derek,
@@ -1711,7 +1711,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Logf("derek created bad kick event %s with auth events %#v", badKickEvent.EventID(), badKickEvent.AuthEventIDs())
 
 		// elsie sends some state. This should be rejected during the faster join, but ultimately accepted.
-		rejectedStateEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+		rejectedStateEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 			Type:     "m.room.test",
 			StateKey: b.Ptr(""),
 			Sender:   elsie,
@@ -1739,7 +1739,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// ... but the rejected state event should not.
 		syncToken = awaitEventViaSync(t, alice, serverRoom.RoomID, sentinelEvent.EventID(), syncToken)
 		must.MatchResponse(t,
-			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", rejectedStateEvent.EventID()}),
+			alice.Do(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", rejectedStateEvent.EventID()}),
 			match.HTTPResponse{
 				StatusCode: 404,
 				JSON: []match.JSON{
@@ -1755,7 +1755,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// the bad kick event should now *not* be visible
 		must.MatchResponse(t,
-			alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badKickEvent.EventID()}),
+			alice.Do(t, "GET", []string{"_matrix", "client", "r0", "rooms", serverRoom.RoomID, "event", badKickEvent.EventID()}),
 			match.HTTPResponse{
 				StatusCode: 404,
 				JSON: []match.JSON{
@@ -1902,7 +1902,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// attempts to joined_members should now block. Fire off a goroutine to try it.
 		jmResponseChan := make(chan *http.Response)
 		go func() {
-			response := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "joined_members"})
+			response := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "joined_members"})
 			jmResponseChan <- response
 			close(jmResponseChan)
 		}()
@@ -2130,7 +2130,7 @@ func TestPartialStateJoin(t *testing.T) {
 		renameDevice := func(t *testing.T, user *client.CSAPI, displayName string) {
 			t.Helper()
 
-			user.MustDoFunc(
+			user.MustDo(
 				t,
 				"PUT",
 				[]string{"_matrix", "client", "v3", "devices", user.DeviceID},
@@ -2331,7 +2331,7 @@ func TestPartialStateJoin(t *testing.T) {
 			var powerLevelsContent map[string]interface{}
 			json.Unmarshal(room.CurrentState("m.room.power_levels", "").Content(), &powerLevelsContent)
 			powerLevelsContent["users"].(map[string]interface{})[derek] = 100
-			room.AddEvent(server1.MustCreateEvent(t, room, b.Event{
+			room.AddEvent(server1.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.power_levels",
 				StateKey: b.Ptr(""),
 				Sender:   server1.UserID("charlie"),
@@ -2366,7 +2366,7 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Log("@charlie, @derek and @elsie received device list update.")
 
 			// @derek:server1 "kicks" @elsie:server2.
-			badKickEvent := server1.MustCreateEvent(t, room, b.Event{
+			badKickEvent := server1.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(elsie),
 				Sender:   derek,
@@ -2739,7 +2739,7 @@ func TestPartialStateJoin(t *testing.T) {
 		mustQueryKeys := func(t *testing.T, user *client.CSAPI, userID string) {
 			t.Helper()
 
-			user.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"},
+			user.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"},
 				client.WithJSONBody(t, map[string]interface{}{
 					"device_keys": map[string]interface{}{
 						userID: []string{},
@@ -2829,7 +2829,7 @@ func TestPartialStateJoin(t *testing.T) {
 				syncDeviceListsHas(section, expectedUserID),
 			)
 
-			res := user.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "keys", "changes"},
+			res := user.MustDo(t, "GET", []string{"_matrix", "client", "v3", "keys", "changes"},
 				client.WithQueries(url.Values{
 					"from": []string{syncToken},
 					"to":   []string{nextSyncToken},
@@ -3141,7 +3141,7 @@ func TestPartialStateJoin(t *testing.T) {
 			json.Unmarshal(room.CurrentState("m.room.power_levels", "").Content(), &powerLevelsContent)
 			powerLevelsContent["users"].(map[string]interface{})[derek] = 50
 			powerLevelsContent["users"].(map[string]interface{})[fred] = 100
-			room.AddEvent(server.MustCreateEvent(t, room, b.Event{
+			room.AddEvent(server.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.power_levels",
 				StateKey: b.Ptr(""),
 				Sender:   charlie,
@@ -3168,7 +3168,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @fred is really in the room.
 			// This event has to be a ban, rather than a kick, otherwise state resolution can bring
 			// @derek back into the room and ruin the test setup.
-			badKickEvent := server.MustCreateEvent(t, room, b.Event{
+			badKickEvent := server.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(derek),
 				Sender:   fred,
@@ -3188,7 +3188,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @derek kicks @elsie.
 			// This is incorrectly rejected since the homeserver under test incorrectly thinks
 			// @derek had been kicked from the room.
-			kickEvent := server.MustCreateEvent(t, room, b.Event{
+			kickEvent := server.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(elsie),
 				Sender:   derek,
@@ -3205,7 +3205,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Check that the last kick was incorrectly rejected.
 			must.MatchResponse(t,
-				alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", room.RoomID, "event", kickEvent.EventID()}),
+				alice.Do(t, "GET", []string{"_matrix", "client", "r0", "rooms", room.RoomID, "event", kickEvent.EventID()}),
 				match.HTTPResponse{
 					StatusCode: 404,
 					JSON: []match.JSON{
@@ -3398,7 +3398,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice creates an alias for the room
 		aliasName := "#t40alice-room:hs1"
-		alice.MustDoFunc(
+		alice.MustDo(
 			t,
 			"PUT",
 			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
@@ -3408,7 +3408,7 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		// Alice then queries that alias
-		response := alice.MustDoFunc(
+		response := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
@@ -3449,7 +3449,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Alice creates an alias for the room
 		aliasName := "#t41alice-room:hs1"
-		alice.MustDoFunc(
+		alice.MustDo(
 			t,
 			"PUT",
 			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
@@ -3459,7 +3459,7 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 
 		// Alice then deletes that alias
-		response := alice.MustDoFunc(
+		response := alice.MustDo(
 			t,
 			"DELETE",
 			[]string{"_matrix", "client", "v3", "directory", "room", aliasName},
@@ -3528,7 +3528,7 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 		defer removePDUHandler()
 
-		alice.MustDoFunc(t,
+		alice.MustDo(t,
 			"PUT",
 			[]string{"_matrix", "client", "v3", "profile", alice.UserID, "displayname"},
 			client.WithJSONBody(t, map[string]interface{}{
@@ -3809,7 +3809,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("A resident server user kicks Alice from the room.")
-			kickEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			kickEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(alice.UserID),
 				Sender:   server.UserID("charlie"),
@@ -3861,7 +3861,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("A resident server user bans Alice from the room.")
-			banEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			banEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(alice.UserID),
 				Sender:   server.UserID("charlie"),
@@ -3890,7 +3890,7 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Log("Alice tries to rejoin...")
 			queryParams := url.Values{}
 			queryParams.Add("server_name", server.ServerName())
-			response := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
+			response := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
 
 			t.Log("... but Alice was forbidden from rejoining")
 			must.MatchResponse(t, response, match.HTTPResponse{StatusCode: http.StatusForbidden})
@@ -3922,12 +3922,12 @@ func TestPartialStateJoin(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"visibility": "public",
 		})
-		terry.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "directory", "list", "room", serverRoom.RoomID}, reqBody)
+		terry.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "directory", "list", "room", serverRoom.RoomID}, reqBody)
 
 		assertPublicRoomDirectoryMemberCountEquals := func(t *testing.T, expectedMemberCount int64) {
 			// In Synapse, rooms stats are updated by a background job which runs asynchronously.
 			// To account for that, we check for up to 3 seconds that the job has completed.
-			terry.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
+			terry.MustDo(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
 				client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
 					body, err := ioutil.ReadAll(res.Body)
 					if err != nil {
@@ -3977,7 +3977,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// The user directory is updated by a background job in Synapse which runs
 			// asynchronously. We check for up to 3 seconds that the job has completed, after which
 			// the job should have finished and the user directory should be up to date.
-			rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody,
+			rocky.MustDo(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody,
 				client.WithRetryUntil(time.Second*3, func(res *http.Response) bool {
 					body, err := ioutil.ReadAll(res.Body)
 					if err != nil {
@@ -3998,7 +3998,7 @@ func TestPartialStateJoin(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"search_term": "rod",
 		})
-		res := rocky.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody)
+		res := rocky.MustDo(t, "POST", []string{"_matrix", "client", "v3", "user_directory", "search"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
@@ -4052,7 +4052,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Log("Alice purges that room")
 		// Ignore PDUs (leaves from shutting down the room).
 		server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
-		alice.MustDoFunc(t, "DELETE", []string{"_synapse", "admin", "v1", "rooms", serverRoom.RoomID}, client.WithJSONBody(t, map[string]interface{}{}))
+		alice.MustDo(t, "DELETE", []string{"_synapse", "admin", "v1", "rooms", serverRoom.RoomID}, client.WithJSONBody(t, map[string]interface{}{}))
 
 		// Note: clients don't get told about purged rooms. No leave event for you!
 		t.Log("Alice does an initial sync after the purge, until the response does not include the purged room")
@@ -4066,7 +4066,7 @@ func TestPartialStateJoin(t *testing.T) {
 		matcher := match.JSONKeyMissing(
 			fmt.Sprintf("rooms.join.%s", client.GjsonEscape(serverRoom.RoomID)),
 		)
-		alice.MustDoFunc(
+		alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "sync"},
@@ -4143,7 +4143,7 @@ func testReceiveEventDuringPartialStateJoin(
 	//   our request may be rejected due to https://github.com/matrix-org/synapse/issues/13288.
 	//   By way of a workaround, request a remote user's current membership, which should block until the current state
 	//   is updated.
-	alice.DoFunc(
+	alice.Do(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", psjResult.ServerRoom.RoomID, "state", "m.room.member", "@non-existent:remote"},
@@ -4196,7 +4196,7 @@ func awaitEventArrival(t *testing.T, timeout time.Duration, alice *client.CSAPI,
 	t.Helper()
 
 	// Alice should be able to see the event with an /event request. We might have to try it a few times.
-	alice.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "event", eventID},
+	alice.Do(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "event", eventID},
 		client.WithRetryUntil(timeout, func(res *http.Response) bool {
 			if res.StatusCode == 200 {
 				return true
@@ -4221,7 +4221,7 @@ func awaitPartialStateJoinCompletion(
 	// Use a `/members` request to wait for the room to be un-partial stated.
 	// We avoid using `/sync`, as it only waits (or used to wait) for full state at
 	// particular events, rather than the whole room.
-	user.MustDoFunc(
+	user.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", room.RoomID, "members"},
@@ -4350,7 +4350,7 @@ func (psj *partialStateJoinResult) CreateMessageEvent(t *testing.T, senderLocalp
 		prevEvents = prevEventIDs
 	}
 
-	event := psj.Server.MustCreateEvent(t, psj.ServerRoom, b.Event{
+	event := psj.Server.MustCreateEvent(t, psj.ServerRoom, federation.Event{
 		Type:   "m.room.message",
 		Sender: psj.Server.UserID(senderLocalpart),
 		Content: map[string]interface{}{

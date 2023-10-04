@@ -29,7 +29,6 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/util"
 
-	"github.com/matrix-org/complement/internal/b"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 )
@@ -162,7 +161,7 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 
 // MustMakeRoom will add a room to this server so it is accessible to other servers when prompted via federation.
 // The `events` will be added to this room. Returns the created room.
-func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []b.Event) *ServerRoom {
+func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersion, events []Event) *ServerRoom {
 	if !s.listening {
 		s.t.Fatalf("MustMakeRoom() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room ID. Ensure you Listen() first!")
 	}
@@ -291,7 +290,7 @@ func (s *Server) DoFederationRequest(
 
 // MustCreateEvent will create and sign a new latest event for the given room.
 // It does not insert this event into the room however. See ServerRoom.AddEvent for that.
-func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev b.Event) gomatrixserverlib.PDU {
+func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev Event) gomatrixserverlib.PDU {
 	t.Helper()
 	content, err := json.Marshal(ev.Content)
 	if err != nil {
@@ -451,7 +450,7 @@ func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remo
 		}
 	} else {
 		// make the leave event
-		leaveEvent = s.MustCreateEvent(t, room, b.Event{
+		leaveEvent = s.MustCreateEvent(t, room, Event{
 			Type:     "m.room.member",
 			StateKey: &userID,
 			Sender:   userID,

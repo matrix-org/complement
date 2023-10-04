@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -126,7 +126,7 @@ func TestIsDirectFlagFederation(t *testing.T) {
 
 	bob := srv.UserID("bob")
 	room := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, bob))
-	dmInviteEvent := srv.MustCreateEvent(t, room, b.Event{
+	dmInviteEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:     "m.room.member",
 		StateKey: &alice.UserID,
 		Sender:   bob,

@@ -19,8 +19,8 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -81,7 +81,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 
 	queryParams := url.Values{}
 	queryParams.Set("server_name", "hs1")
-	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
+	res := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{
@@ -158,7 +158,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 		roomAlias := srv.MakeAliasMapping("MissingSignatures", room.RoomID)
 		// create a normal event then remove the signatures key
-		signedEvent := srv.MustCreateEvent(t, room, b.Event{
+		signedEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: b.Ptr(""),
 			Type:     "m.room.name",
@@ -181,7 +181,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 		roomAlias := srv.MakeAliasMapping("BadSignatures", room.RoomID)
 		// create a normal event then modify the signatures
-		signedEvent := srv.MustCreateEvent(t, room, b.Event{
+		signedEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: b.Ptr(""),
 			Type:     "m.room.name",
@@ -212,7 +212,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		roomAlias := srv.MakeAliasMapping("UnobtainableKeys", room.RoomID)
 		// create a normal event then modify the signatures to have a bogus key ID which Complement does
 		// not have the keys for
-		signedEvent := srv.MustCreateEvent(t, room, b.Event{
+		signedEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: b.Ptr(""),
 			Type:     "m.room.name",
@@ -246,7 +246,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		roomAlias := srv.MakeAliasMapping("UnverifiableAuthEvents", room.RoomID)
 
 		// create a normal event then modify the signatures
-		rawEvent := srv.MustCreateEvent(t, room, b.Event{
+		rawEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: &charlie,
 			Type:     "m.room.member",
@@ -271,7 +271,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		t.Logf("Created badly signed auth event %s", badlySignedEvent.EventID())
 
 		// and now add another event which will use it as an auth event.
-		goodEvent := srv.MustCreateEvent(t, room, b.Event{
+		goodEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: &charlie,
 			Type:     "m.room.member",
@@ -361,7 +361,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	}
 
 	// Alice checks the room state to check that charlie isn't a member
-	res := alice.MustDoFunc(
+	res := alice.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", charlie},
@@ -453,7 +453,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 	}
 
 	t.Run("regular event", func(t *testing.T) {
-		event := srv.MustCreateEvent(t, room, b.Event{
+		event := srv.MustCreateEvent(t, room, federation.Event{
 			Type:    "m.room.message",
 			Sender:  charlie,
 			Content: map[string]interface{}{"body": "bzz"},
@@ -461,7 +461,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		assertRequestFails(t, event)
 	})
 	t.Run("non-state membership event", func(t *testing.T) {
-		event := srv.MustCreateEvent(t, room, b.Event{
+		event := srv.MustCreateEvent(t, room, federation.Event{
 			Type:    "m.room.member",
 			Sender:  charlie,
 			Content: map[string]interface{}{"body": "bzz"},
@@ -475,7 +475,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		if membershipType == expectedMembership {
 			continue
 		}
-		event := srv.MustCreateEvent(t, room, b.Event{
+		event := srv.MustCreateEvent(t, room, federation.Event{
 			Type:     "m.room.member",
 			Sender:   charlie,
 			StateKey: &charlie,
@@ -488,7 +488,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 
 	// right sort of membership, but mismatched state_key
 	t.Run("event with mismatched state key", func(t *testing.T) {
-		event := srv.MustCreateEvent(t, room, b.Event{
+		event := srv.MustCreateEvent(t, room, federation.Event{
 			Type:     "m.room.member",
 			Sender:   charlie,
 			StateKey: b.Ptr(srv.UserID("doris")),

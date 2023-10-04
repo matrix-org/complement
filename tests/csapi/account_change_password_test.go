@@ -4,8 +4,8 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -34,7 +34,7 @@ func TestChangePassword(t *testing.T) {
 			"type":     "m.login.password",
 			"password": password1,
 		})
-		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
+		res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 403,
 			JSON: []match.JSON{
@@ -53,7 +53,7 @@ func TestChangePassword(t *testing.T) {
 			"type":     "m.login.password",
 			"password": password2,
 		})
-		res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
+		res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{
@@ -63,14 +63,14 @@ func TestChangePassword(t *testing.T) {
 	})
 	// sytest: After changing password, existing session still works
 	t.Run("After changing password, existing session still works", func(t *testing.T) {
-		res := passwordClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "account", "whoami"})
+		res := passwordClient.Do(t, "GET", []string{"_matrix", "client", "v3", "account", "whoami"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 		})
 	})
 	// sytest: After changing password, a different session no longer works by default
 	t.Run("After changing password, a different session no longer works by default", func(t *testing.T) {
-		res := sessionTest.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "account", "whoami"})
+		res := sessionTest.Do(t, "GET", []string{"_matrix", "client", "v3", "account", "whoami"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 401,
 		})
@@ -89,12 +89,12 @@ func TestChangePassword(t *testing.T) {
 			"logout_devices": false,
 		})
 
-		res := passwordClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "account", "password"}, reqBody)
+		res := passwordClient.Do(t, "POST", []string{"_matrix", "client", "v3", "account", "password"}, reqBody)
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 		})
-		res = sessionOptional.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "account", "whoami"})
+		res = sessionOptional.Do(t, "GET", []string{"_matrix", "client", "v3", "account", "whoami"})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
@@ -113,7 +113,7 @@ func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword stri
 		"new_password": newPassword,
 	})
 
-	res := passwordClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "account", "password"}, reqBody)
+	res := passwordClient.Do(t, "POST", []string{"_matrix", "client", "v3", "account", "password"}, reqBody)
 
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
@@ -130,7 +130,7 @@ func createSession(t *testing.T, deployment *docker.Deployment, userID, password
 		"type":     "m.login.password",
 		"password": password,
 	})
-	res := authedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
+	res := authedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("unable to read response body: %v", err)

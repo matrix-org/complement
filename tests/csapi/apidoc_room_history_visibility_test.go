@@ -6,8 +6,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -15,7 +15,7 @@ import (
 // TODO most of this can be refactored into data-driven tests
 
 func fetchEvent(t *testing.T, c *client.CSAPI, roomId, eventId string) *http.Response {
-	return c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomId, "event", eventId})
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomId, "event", eventId})
 }
 
 func createRoomWithVisibility(t *testing.T, c *client.CSAPI, visibility string) string {
