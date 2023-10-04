@@ -44,9 +44,9 @@ func (c *CSAPI) LoginUser(t TestLike, localpart, password string, opts ...LoginO
 		t.Fatalf("unable to read response body: %v", err)
 	}
 
-	userID = gjson.GetBytes(body, "user_id").Str
-	accessToken = gjson.GetBytes(body, "access_token").Str
-	deviceID = gjson.GetBytes(body, "device_id").Str
+	userID = GetJSONFieldStr(t, body, "user_id")
+	accessToken = GetJSONFieldStr(t, body, "access_token")
+	deviceID = GetJSONFieldStr(t, body, "device_id")
 	return userID, accessToken, deviceID
 }
 
@@ -70,10 +70,10 @@ func (c *CSAPI) LoginUserWithRefreshToken(t TestLike, localpart, password string
 		t.Fatalf("unable to read response body: %v", err)
 	}
 
-	userID = gjson.GetBytes(body, "user_id").Str
-	accessToken = gjson.GetBytes(body, "access_token").Str
-	deviceID = gjson.GetBytes(body, "device_id").Str
-	refreshToken = gjson.GetBytes(body, "refresh_token").Str
+	userID = GetJSONFieldStr(t, body, "user_id")
+	accessToken = GetJSONFieldStr(t, body, "access_token")
+	deviceID = GetJSONFieldStr(t, body, "device_id")
+	refreshToken = GetJSONFieldStr(t, body, "refresh_token")
 	expiresInMs = gjson.GetBytes(body, "expires_in_ms").Int()
 	return userID, accessToken, refreshToken, deviceID, expiresInMs
 }
@@ -91,8 +91,8 @@ func (c *CSAPI) ConsumeRefreshToken(t TestLike, refreshToken string) (newAccessT
 		t.Fatalf("unable to read response body: %v", err)
 	}
 
-	newAccessToken = gjson.GetBytes(body, "access_token").Str
-	newRefreshToken = gjson.GetBytes(body, "refresh_token").Str
+	newAccessToken = GetJSONFieldStr(t, body, "access_token")
+	newRefreshToken = GetJSONFieldStr(t, body, "refresh_token")
 	expiresInMs = gjson.GetBytes(body, "expires_in_ms").Int()
 	return newAccessToken, newRefreshToken, expiresInMs
 }
@@ -115,9 +115,9 @@ func (c *CSAPI) RegisterUser(t TestLike, localpart, password string) (userID, ac
 		t.Fatalf("unable to read response body: %v", err)
 	}
 
-	userID = gjson.GetBytes(body, "user_id").Str
-	accessToken = gjson.GetBytes(body, "access_token").Str
-	deviceID = gjson.GetBytes(body, "device_id").Str
+	userID = GetJSONFieldStr(t, body, "user_id")
+	accessToken = GetJSONFieldStr(t, body, "access_token")
+	deviceID = GetJSONFieldStr(t, body, "device_id")
 	return userID, accessToken, deviceID
 }
 
@@ -156,8 +156,8 @@ func (c *CSAPI) RegisterSharedSecret(t TestLike, user, pass string, isAdmin bool
 	}
 	resp = c.MustDo(t, "POST", []string{"_synapse", "admin", "v1", "register"}, WithJSONBody(t, reqBody))
 	body = ParseJSON(t, resp)
-	userID = gjson.GetBytes(body, "user_id").Str
-	accessToken = gjson.GetBytes(body, "access_token").Str
-	deviceID = gjson.GetBytes(body, "device_id").Str
+	userID = GetJSONFieldStr(t, body, "user_id")
+	accessToken = GetJSONFieldStr(t, body, "access_token")
+	deviceID = GetJSONFieldStr(t, body, "device_id")
 	return userID, accessToken, deviceID
 }
