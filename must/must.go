@@ -16,6 +16,7 @@ import (
 
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 )
 
@@ -144,15 +145,7 @@ func MatchFederationRequest(t *testing.T, fedReq *fclient.FederationRequest, mat
 func MatchGJSON(t *testing.T, jsonResult gjson.Result, matchers ...match.JSON) {
 	t.Helper()
 
-	MatchJSON(t, jsonResult.Raw, matchers...)
-}
-
-// EXPERIMENTAL
-// MatchJSON performs JSON assertions on a raw JSON string.
-func MatchJSON(t *testing.T, json string, matchers ...match.JSON) {
-	t.Helper()
-
-	MatchJSONBytes(t, []byte(json), matchers...)
+	MatchJSONBytes(t, []byte(jsonResult.Raw), matchers...)
 }
 
 // EXPERIMENTAL
@@ -166,12 +159,13 @@ func MatchJSONBytes(t *testing.T, rawJson []byte, matchers ...match.JSON) {
 
 	for _, jm := range matchers {
 		if err := jm(rawJson); err != nil {
-			t.Fatalf("MatchJSONBytes %s", err)
+			t.Fatalf("MatchJSONBytes %s with input = %v", err, string(rawJson))
 		}
 	}
 }
 
 // Equal ensures that got==want else logs an error.
+// The 'msg' is displayed with the error to provide extra context.
 func Equal[V comparable](t *testing.T, got, want V, msg string) {
 	t.Helper()
 	if got != want {
@@ -180,6 +174,7 @@ func Equal[V comparable](t *testing.T, got, want V, msg string) {
 }
 
 // NotEqualStr ensures that got!=want else logs an error.
+// The 'msg' is displayed with the error to provide extra context.
 func NotEqual[V comparable](t *testing.T, got, want V, msg string) {
 	t.Helper()
 	if got == want {
@@ -242,18 +237,45 @@ func HaveInAnyOrder[V constraints.Ordered](t *testing.T, gots []V, wants []V) {
 }
 
 // EXPERIMENTAL
-// ContainsSubset checks that every item in smaller is in larger, failing the test if at least 1 item isn't. Ignores extra elements
+// ContainSubset checks that every item in smaller is in larger, failing the test if at least 1 item isn't. Ignores extra elements
 // in larger. Ignores ordering.
-func ContainsSubset[V comparable](t *testing.T, larger []V, smaller []V) {
+func ContainSubset[V comparable](t *testing.T, larger []V, smaller []V) {
 	t.Helper()
 	if len(larger) < len(smaller) {
-		t.Fatalf("ContainsSubset: length mismatch, larger=%d smaller=%d", len(larger), len(smaller))
+		t.Fatalf("ContainSubset: length mismatch, larger=%d smaller=%d", len(larger), len(smaller))
 	}
 	for i, item := range smaller {
 		if !slices.Contains(larger, item) {
-			t.Fatalf("ContainsSubset: element not found in larger set: smaller[%d] (%v)", i, item)
+			t.Fatalf("ContainSubset: element not found in larger set: smaller[%d] (%v) larger=%v", i, item, larger)
 		}
 	}
+}
+
+// EXPERIMENTAL
+// NotContainSubset checks that every item in smaller is NOT in larger, failing the test if at least 1 item is. Ignores extra elements
+// in larger. Ignores ordering.
+func NotContainSubset[V comparable](t *testing.T, larger []V, smaller []V) {
+	t.Helper()
+	if len(larger) < len(smaller) {
+		t.Fatalf("NotContainSubset: length mismatch, larger=%d smaller=%d", len(larger), len(smaller))
+	}
+	for i, item := range smaller {
+		if slices.Contains(larger, item) {
+			t.Fatalf("NotContainSubset: element found in larger set: smaller[%d] (%v)", i, item)
+		}
+	}
+}
+
+// EXPERIMENTAL
+// GetTimelineEventIDs returns the timeline event IDs in the sync response for the given room ID. If the room is missing
+// this returns a 0 element slice.
+func GetTimelineEventIDs(t *testing.T, topLevelSyncJSON gjson.Result, roomID string) []string {
+	timeline := topLevelSyncJSON.Get(fmt.Sprintf("rooms.join.%s.timeline.events", client.GjsonEscape(roomID))).Array()
+	eventIDs := make([]string, len(timeline))
+	for i := range timeline {
+		eventIDs[i] = timeline[i].Get("event_id").Str
+	}
+	return eventIDs
 }
 
 // EXPERIMENTAL

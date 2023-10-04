@@ -56,13 +56,10 @@ func TestInboundFederationKeys(t *testing.T) {
 
 				key := v.Get("key")
 
-				// Test key existence and string type
-				if !key.Exists() {
-					return fmt.Errorf("verify_keys: Key '%s' has no 'key' field", k.Str)
-				}
-				if key.Type != gjson.String {
-					return fmt.Errorf("verify_keys: Key '%s' has 'key' with unexpected type, expected String, got '%s'", k.Str, key.Type.String())
-				}
+				must.MatchGJSON(t, v,
+					match.JSONKeyPresent("key"),
+					match.JSONKeyTypeEqual("key", gjson.String),
+				)
 
 				var keyBytes []byte
 				keyBytes, err = base64.RawStdEncoding.DecodeString(key.Str)
@@ -79,25 +76,17 @@ func TestInboundFederationKeys(t *testing.T) {
 					return fmt.Errorf("old_verify_keys: Key '%s' has no 'ed25519:' prefix", k.Str)
 				}
 
-				expiredTs := v.Get("expired_ts")
+				must.MatchGJSON(t, v,
+					match.JSONKeyPresent("expired_ts"),
+					match.JSONKeyTypeEqual("expired_ts", gjson.Number),
+				)
 
-				// Test expired_ts existence and number type
-				if !expiredTs.Exists() {
-					return fmt.Errorf("old_verify_keys: Key '%s' has no 'expired_ts' field", k.Str)
-				}
-				if expiredTs.Type != gjson.Number {
-					return fmt.Errorf("old_verify_keys: Key '%s' has expired_ts with unexpected type, expected Number, got '%s'", k.Str, expiredTs.Type.String())
-				}
+				must.MatchGJSON(t, v,
+					match.JSONKeyPresent("key"),
+					match.JSONKeyTypeEqual("key", gjson.String),
+				)
 
 				key := v.Get("key")
-
-				// Test key existence and string type
-				if !key.Exists() {
-					return fmt.Errorf("old_verify_keys: Key '%s' has no 'key' field", k.Str)
-				}
-				if key.Type != gjson.String {
-					return fmt.Errorf("old_verify_keys: Key '%s' has 'key' with unexpected type, expected String, got '%s'", k.Str, key.Type.String())
-				}
 
 				var keyBytes []byte
 				keyBytes, err = base64.RawStdEncoding.DecodeString(key.Str)

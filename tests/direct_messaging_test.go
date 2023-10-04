@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -42,15 +42,7 @@ func TestWriteMDirectAccountData(t *testing.T) {
 		if r.Get("type").Str != "m.direct" {
 			return false
 		}
-		content := r.Get("content")
-		rooms := content.Get(bob.UserID)
-		if !rooms.Exists() || !rooms.IsArray() {
-			t.Errorf("m.direct event missing rooms array for user %s", bob.UserID)
-			return false
-		}
-		if rooms.Array()[0].Str != roomID {
-			t.Errorf("m.direct room for %s mismatch: got %v want %v", bob.UserID, rooms.Str, roomID)
-		}
+		must.MatchGJSON(t, r, match.JSONKeyEqual("content."+client.GjsonEscape(bob.UserID), []string{roomID}))
 		return true
 	}
 	t.Logf("%s: global account data set; syncing until it arrives", time.Now()) // synapse#13334
