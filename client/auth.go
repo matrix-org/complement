@@ -9,6 +9,10 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+const (
+	SharedSecret = "complement"
+)
+
 type LoginOpt func(map[string]interface{})
 
 func WithDeviceID(deviceID string) LoginOpt {

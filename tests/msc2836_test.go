@@ -209,7 +209,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	roomVer := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 	room := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, charlie))
-	eventA := srv.MustCreateEvent(t, room, b.Event{
+	eventA := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -218,7 +218,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 		},
 	})
 	room.AddEvent(eventA)
-	eventB := srv.MustCreateEvent(t, room, b.Event{
+	eventB := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -233,7 +233,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	room.AddEvent(eventB)
 	// wait 1ms to ensure that the timestamp changes, which is important when using the recent_first flag
 	time.Sleep(1 * time.Millisecond)
-	eventC := srv.MustCreateEvent(t, room, b.Event{
+	eventC := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -246,7 +246,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 		},
 	})
 	room.AddEvent(eventC)
-	eventD := srv.MustCreateEvent(t, room, b.Event{
+	eventD := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -307,7 +307,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	alice.JoinRoom(t, room.RoomID, []string{srv.ServerName()})
 
 	// send a new child in the thread (child of D) so the HS has something to latch on to.
-	eventE := srv.MustCreateEvent(t, room, b.Event{
+	eventE := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{

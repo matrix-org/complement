@@ -21,10 +21,6 @@ import (
 	"github.com/matrix-org/complement/internal/b"
 )
 
-const (
-	SharedSecret = "complement"
-)
-
 // TestLike is an interface that testing.T satisfies. All client functions accept a TestLike interface,
 // with the intention of a `testing.T` being passed into them. However, the client may be used in non-test
 // scenarios e.g benchmarks, which can then use the same client by just implementing this interface.

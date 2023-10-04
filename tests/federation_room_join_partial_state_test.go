@@ -170,7 +170,7 @@ func TestPartialStateJoin(t *testing.T) {
 	) gomatrixserverlib.PDU {
 		t.Helper()
 
-		return signingServer.MustCreateEvent(t, room, b.Event{
+		return signingServer.MustCreateEvent(t, room, federation.Event{
 			Type:     "m.room.member",
 			StateKey: b.Ptr(userId),
 			Sender:   userId,
@@ -1328,7 +1328,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// we will do a gappy sync after, which will only pick up the last message.
 		var lastEventID string
 		for i := 0; i < 2; i++ {
-			event := server.MustCreateEvent(t, serverRoom, b.Event{
+			event := server.MustCreateEvent(t, serverRoom, federation.Event{
 				Type:   "m.room.message",
 				Sender: server.UserID("derek"),
 				Content: map[string]interface{}{
@@ -1416,7 +1416,7 @@ func TestPartialStateJoin(t *testing.T) {
 		outlierEventIDs := make([]string, len(outliers))
 		for i := range outliers {
 			body := fmt.Sprintf("outlier event %d", i)
-			outliers[i] = server.MustCreateEvent(t, serverRoom, b.Event{
+			outliers[i] = server.MustCreateEvent(t, serverRoom, federation.Event{
 				Type:     "outlier_state",
 				Sender:   server.UserID("charlie"),
 				StateKey: b.Ptr(fmt.Sprintf("state_%d", i)),
@@ -1517,7 +1517,7 @@ func TestPartialStateJoin(t *testing.T) {
 		federation.HandleEventAuthRequests()(server.Server)
 
 		// derek sends a state event, despite not having permission to send state. This should be rejected.
-		badStateEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+		badStateEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 			Type:     "m.room.test",
 			StateKey: b.Ptr(""),
 			Sender:   server.UserID("derek"),
@@ -1608,7 +1608,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// derek now sends a state event with auth_events that say he was in the room. It will be
 		// accepted during the faster join, but should then ultimately be rejected.
-		badStateEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+		badStateEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 			Type:     "m.room.test",
 			StateKey: b.Ptr(""),
 			Sender:   derek,
@@ -1691,7 +1691,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// Derek now kicks Elsie, with auth_events that say he was in the room. It will be
 		// accepted during the faster join, but should then ultimately be rejected.
-		badKickEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+		badKickEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 			Type:     "m.room.member",
 			StateKey: &elsie,
 			Sender:   derek,
@@ -1711,7 +1711,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Logf("derek created bad kick event %s with auth events %#v", badKickEvent.EventID(), badKickEvent.AuthEventIDs())
 
 		// elsie sends some state. This should be rejected during the faster join, but ultimately accepted.
-		rejectedStateEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+		rejectedStateEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 			Type:     "m.room.test",
 			StateKey: b.Ptr(""),
 			Sender:   elsie,
@@ -2331,7 +2331,7 @@ func TestPartialStateJoin(t *testing.T) {
 			var powerLevelsContent map[string]interface{}
 			json.Unmarshal(room.CurrentState("m.room.power_levels", "").Content(), &powerLevelsContent)
 			powerLevelsContent["users"].(map[string]interface{})[derek] = 100
-			room.AddEvent(server1.MustCreateEvent(t, room, b.Event{
+			room.AddEvent(server1.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.power_levels",
 				StateKey: b.Ptr(""),
 				Sender:   server1.UserID("charlie"),
@@ -2366,7 +2366,7 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Log("@charlie, @derek and @elsie received device list update.")
 
 			// @derek:server1 "kicks" @elsie:server2.
-			badKickEvent := server1.MustCreateEvent(t, room, b.Event{
+			badKickEvent := server1.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(elsie),
 				Sender:   derek,
@@ -3141,7 +3141,7 @@ func TestPartialStateJoin(t *testing.T) {
 			json.Unmarshal(room.CurrentState("m.room.power_levels", "").Content(), &powerLevelsContent)
 			powerLevelsContent["users"].(map[string]interface{})[derek] = 50
 			powerLevelsContent["users"].(map[string]interface{})[fred] = 100
-			room.AddEvent(server.MustCreateEvent(t, room, b.Event{
+			room.AddEvent(server.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.power_levels",
 				StateKey: b.Ptr(""),
 				Sender:   charlie,
@@ -3168,7 +3168,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @fred is really in the room.
 			// This event has to be a ban, rather than a kick, otherwise state resolution can bring
 			// @derek back into the room and ruin the test setup.
-			badKickEvent := server.MustCreateEvent(t, room, b.Event{
+			badKickEvent := server.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(derek),
 				Sender:   fred,
@@ -3188,7 +3188,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @derek kicks @elsie.
 			// This is incorrectly rejected since the homeserver under test incorrectly thinks
 			// @derek had been kicked from the room.
-			kickEvent := server.MustCreateEvent(t, room, b.Event{
+			kickEvent := server.MustCreateEvent(t, room, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(elsie),
 				Sender:   derek,
@@ -3809,7 +3809,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("A resident server user kicks Alice from the room.")
-			kickEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			kickEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(alice.UserID),
 				Sender:   server.UserID("charlie"),
@@ -3861,7 +3861,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("A resident server user bans Alice from the room.")
-			banEvent := server.MustCreateEvent(t, serverRoom, b.Event{
+			banEvent := server.MustCreateEvent(t, serverRoom, federation.Event{
 				Type:     "m.room.member",
 				StateKey: b.Ptr(alice.UserID),
 				Sender:   server.UserID("charlie"),
@@ -4350,7 +4350,7 @@ func (psj *partialStateJoinResult) CreateMessageEvent(t *testing.T, senderLocalp
 		prevEvents = prevEventIDs
 	}
 
-	event := psj.Server.MustCreateEvent(t, psj.ServerRoom, b.Event{
+	event := psj.Server.MustCreateEvent(t, psj.ServerRoom, federation.Event{
 		Type:   "m.room.message",
 		Sender: psj.Server.UserID(senderLocalpart),
 		Content: map[string]interface{}{
