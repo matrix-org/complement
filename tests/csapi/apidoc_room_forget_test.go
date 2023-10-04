@@ -8,8 +8,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -26,7 +26,7 @@ func TestRoomForget(t *testing.T) {
 		t.Run("Can't forget room you're still in", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "private_chat"})
-			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusBadRequest,
 				JSON: []match.JSON{
@@ -47,8 +47,8 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			alice.LeaveRoom(t, roomID)
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
-			res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"})
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
+			res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 				JSON: []match.JSON{
@@ -71,7 +71,7 @@ func TestRoomForget(t *testing.T) {
 			alice.LeaveRoom(t, roomID)
 			// Ensure Alice left the room
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			bob.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -117,7 +117,7 @@ func TestRoomForget(t *testing.T) {
 			alice.LeaveRoom(t, roomID)
 			// Ensure Alice left the room
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			bob.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -152,7 +152,7 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			// Kick Bob
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
 				client.WithJSONBody(t, map[string]interface{}{
 					"user_id": bob.UserID,
 				}),
@@ -197,9 +197,9 @@ func TestRoomForget(t *testing.T) {
 			bob.LeaveRoom(t, roomID)
 			// Ensure Bob has really left the room
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
-			bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			// Try to re-join
-			joinRes := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
+			joinRes := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "join", roomID}, client.WithJSONBody(t, struct{}{}))
 			must.MatchResponse(t, joinRes, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 				JSON: []match.JSON{
@@ -214,7 +214,7 @@ func TestRoomForget(t *testing.T) {
 			queryParams.Set("dir", "b")
 			queryParams.Set("limit", "100")
 			// Check if we can see Bobs previous message
-			res := bob.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+			res := bob.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 			msgRes := &msgResult{}
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusOK,
@@ -234,7 +234,7 @@ func TestRoomForget(t *testing.T) {
 			msgRes.found = false
 			// We should now be able to see the new message
 			queryParams.Set("limit", "1")
-			res = bob.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+			res = bob.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusOK,
 				JSON:       []match.JSON{findMessageId(messageID, msgRes)},
@@ -251,11 +251,11 @@ func TestRoomForget(t *testing.T) {
 			// Bob rejects the invite
 			bob.LeaveRoom(t, roomID)
 			// Bob tries to forget about this room
-			bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			// Alice also leaves the room
 			alice.LeaveRoom(t, roomID)
 			// Alice tries to forget about this room
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 		})
 	})
 }

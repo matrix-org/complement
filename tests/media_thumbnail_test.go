@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/data"
 )
 
@@ -52,7 +52,7 @@ func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string) {
 
 	origin, mediaId := client.SplitMxc(mxcUri)
 
-	res := c.MustDoFunc(t, "GET", []string{"_matrix", "media", "v3", "thumbnail", origin, mediaId}, client.WithQueries(url.Values{
+	res := c.MustDo(t, "GET", []string{"_matrix", "media", "v3", "thumbnail", origin, mediaId}, client.WithQueries(url.Values{
 		"width":  []string{"32"},
 		"height": []string{"32"},
 		"method": []string{"scale"},

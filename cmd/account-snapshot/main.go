@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/cmd/account-snapshot/internal"
-	"github.com/matrix-org/complement/internal/b"
 )
 
 /*

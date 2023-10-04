@@ -3,8 +3,8 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -20,11 +20,11 @@ func TestProfileDisplayName(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"displayname": displayName,
 		})
-		_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "profile", authedClient.UserID, "displayname"}, reqBody)
+		_ = authedClient.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "profile", authedClient.UserID, "displayname"}, reqBody)
 	})
 	// sytest: GET /profile/:user_id/displayname publicly accessible
 	t.Run("GET /profile/:user_id/displayname publicly accessible", func(t *testing.T) {
-		res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "profile", authedClient.UserID, "displayname"})
+		res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "profile", authedClient.UserID, "displayname"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,
 			JSON: []match.JSON{

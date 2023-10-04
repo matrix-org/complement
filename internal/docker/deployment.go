@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/config"
 )
 

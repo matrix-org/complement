@@ -19,8 +19,8 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -57,7 +57,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	inviteWaiter := NewWaiter()
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
-		federation.HandleInviteRequests(func(ev *gomatrixserverlib.Event) {
+		federation.HandleInviteRequests(func(ev gomatrixserverlib.PDU) {
 			inviteWaiter.Finish()
 		}),
 		federation.HandleTransactionRequests(nil, nil),
@@ -122,7 +122,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			"server_name": []string{"hs1"},
 		}
 
-		res := knockingUser.DoFunc(
+		res := knockingUser.Do(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "join", roomID},
@@ -146,7 +146,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		// wait for the membership to arrive over federation
 		start := time.Now()
 		knockerState := serverRoom.CurrentState("m.room.member", knockingUser.UserID)
-		for knockerState == nil && time.Since(start) < 5 * time.Second {
+		for knockerState == nil && time.Since(start) < 5*time.Second {
 			time.Sleep(100 * time.Millisecond)
 			knockerState = serverRoom.CurrentState("m.room.member", knockingUser.UserID)
 		}
@@ -181,7 +181,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			_, since := knockingUser.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 			// Rescind knock
-			knockingUser.MustDoFunc(
+			knockingUser.MustDo(
 				t,
 				"POST",
 				[]string{"_matrix", "client", "v3", "rooms", roomID, "leave"},
@@ -218,7 +218,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		//
 		// In the case of federation, this test will still check that a knock can be
 		// carried out after a previous knock is rejected.
-		inRoomUser.MustDoFunc(
+		inRoomUser.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
@@ -241,7 +241,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 
 	t.Run("A user can knock on a room without a reason", func(t *testing.T) {
 		// Reject the knock
-		inRoomUser.MustDoFunc(
+		inRoomUser.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
@@ -256,7 +256,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("A user in the room can accept a knock", func(t *testing.T) {
-		inRoomUser.MustDoFunc(
+		inRoomUser.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "invite"},
@@ -285,7 +285,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		//
 		// In the case of federation, this test will still check that a knock can not be
 		// carried out after a ban.
-		inRoomUser.MustDoFunc(
+		inRoomUser.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "ban"},
@@ -349,7 +349,7 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 	}
 
 	// Knock on the room
-	res := c.DoFunc(
+	res := c.Do(
 		t,
 		"POST",
 		[]string{"_matrix", "client", "v3", "knock", roomID},
@@ -416,7 +416,7 @@ func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, jo
 // It will then query the directory and ensure the room is listed, and has a given 'join_rule' entry
 func publishAndCheckRoomJoinRule(t *testing.T, c *client.CSAPI, roomID, expectedJoinRule string) {
 	// Publish the room to the public room directory
-	c.MustDoFunc(
+	c.MustDo(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
@@ -426,7 +426,7 @@ func publishAndCheckRoomJoinRule(t *testing.T, c *client.CSAPI, roomID, expected
 	)
 
 	// Check that we can see the room in the directory
-	c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
+	c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
 		client.WithRetryUntil(time.Second, func(res *http.Response) bool {
 			roomFound := false
 			must.MatchResponse(t, res, match.HTTPResponse{

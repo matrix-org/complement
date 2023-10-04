@@ -10,8 +10,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -64,7 +64,7 @@ func TestUrlPreview(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "media", "v3", "preview_url"},
+	res := alice.MustDo(t, "GET", []string{"_matrix", "media", "v3", "preview_url"},
 		client.WithQueries(url.Values{
 			"url": []string{webServer.URL + "/test.html"},
 		}),

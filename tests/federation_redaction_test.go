@@ -1,12 +1,13 @@
 package tests
 
 import (
-	"github.com/matrix-org/complement/internal/b"
+	"testing"
+	"time"
+
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
-	"testing"
-	"time"
 )
 
 // test that a redaction is sent out over federation even if we don't have the original event
@@ -27,7 +28,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleTransactionRequests(
 			// listen for PDU events in transactions
-			func(ev *gomatrixserverlib.Event) {
+			func(ev gomatrixserverlib.PDU) {
 				defer waiter.Finish()
 
 				if ev.Type() != wantEventType {
@@ -56,13 +57,12 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	alice.JoinRoom(t, roomAlias, []string{srv.ServerName()})
 
 	// inject event to redact in the room
-	badEvent := srv.MustCreateEvent(t, serverRoom, b.Event{
+	badEvent := srv.MustCreateEvent(t, serverRoom, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
 			"body": "666",
-		},
-	})
+		}})
 	serverRoom.AddEvent(badEvent)
 
 	eventID := badEvent.EventID()
@@ -70,9 +70,12 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	eventToRedact := eventID + ":" + fullServerName
 
 	// the client sends a request to the local homeserver to send the redaction
-	res := alice.SendRedaction(t, serverRoom.RoomID, b.Event{Type: wantEventType, Content: map[string]interface{}{
-		"msgtype": "m.room.redaction"},
-		Redacts: eventToRedact}, eventToRedact)
+	res := alice.SendRedaction(t, serverRoom.RoomID, b.Event{
+		Type: wantEventType,
+		Content: map[string]interface{}{
+			"reason": "reasons...",
+		},
+	}, eventToRedact)
 
 	// wait for redaction to arrive at remote homeserver
 	waiter.Wait(t, 1*time.Second)

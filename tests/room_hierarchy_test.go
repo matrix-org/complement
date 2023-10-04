@@ -20,8 +20,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -219,7 +219,7 @@ func TestClientSpacesSummary(t *testing.T) {
 	// - Rooms are returned correctly along with the custom fields `room_type`.
 	// - Events are returned correctly.
 	t.Run("query whole graph", func(t *testing.T) {
-		res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -257,7 +257,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		// Should only include R1, SS1, and R2.
 		query := make(url.Values, 1)
 		query.Set("max_depth", "1")
-		res := alice.MustDoFunc(
+		res := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v1", "rooms", root, "hierarchy"},
@@ -283,7 +283,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		// Should only include R1, SS1, and R2.
 		query := make(url.Values, 1)
 		query.Set("suggested_only", "true")
-		res := alice.MustDoFunc(
+		res := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v1", "rooms", root, "hierarchy"},
@@ -309,7 +309,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		// The initial page should only include Root, R1, SS1, and SS2.
 		query := make(url.Values, 1)
 		query.Set("limit", "4")
-		res := alice.MustDoFunc(
+		res := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v1", "rooms", root, "hierarchy"},
@@ -328,7 +328,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		// The following page should include R3, R4, and R2.
 		query = make(url.Values, 1)
 		query.Set("from", client.GetJSONFieldStr(t, body, "next_batch"))
-		res = alice.MustDoFunc(
+		res = alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v1", "rooms", root, "hierarchy"},
@@ -352,7 +352,7 @@ func TestClientSpacesSummary(t *testing.T) {
 			StateKey: &ss1,
 			Content:  map[string]interface{}{},
 		})
-		res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONCheckOff("rooms", []interface{}{
@@ -464,7 +464,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	bob.JoinRoom(t, root, []string{"hs1"})
 
-	res := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
+	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
@@ -482,7 +482,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	alice.InviteRoom(t, r1, bob.UserID)
 	alice.InviteRoom(t, r3, bob.UserID)
 
-	res = bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
+	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
@@ -499,7 +499,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	// Invite to SS1 and it now appears, as well as the rooms under it.
 	alice.InviteRoom(t, ss1, bob.UserID)
 
-	res = bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
+	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{
@@ -627,7 +627,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 	}
 	t.Logf("rooms: %v", allEvents)
 
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
+	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONCheckOff("rooms", []interface{}{

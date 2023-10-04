@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/tidwall/gjson"
@@ -119,7 +119,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
 			timestampString := strconv.FormatInt(timestamp, 10)
-			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			timestampToEventRes := nonMemberUser.Do(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"ts":  []string{timestampString},
 				"dir": []string{"f"},
 			}))
@@ -147,7 +147,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
 			timestampString := strconv.FormatInt(timestamp, 10)
-			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			timestampToEventRes := nonMemberUser.Do(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"ts":  []string{timestampString},
 				"dir": []string{"f"},
 			}))
@@ -198,7 +198,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 
 				// Get a pagination token from eventB
-				contextRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"limit": []string{"0"},
 				}))
 				contextResResBody := client.ParseJSON(t, contextRes)
@@ -212,7 +212,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				})
 
 				// Paginate backwards from eventB
-				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 					"from":  []string{paginationToken},
@@ -289,7 +289,7 @@ func sendMessageWithTimestamp(t *testing.T, as *client.CSAPI, c *client.CSAPI, r
 	//
 	// We can't use as.SendEventSynced(...) because application services can't use
 	// the /sync API.
-	sendRes := as.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
+	sendRes := as.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
 		"body":    message,
 		"msgtype": "m.text",
 	}), client.WithQueries(url.Values{
@@ -311,7 +311,7 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 
 	givenTimestamp := makeTimestampFromTime(givenTime)
 	timestampString := strconv.FormatInt(givenTimestamp, 10)
-	timestampToEventRes := c.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+	timestampToEventRes := c.Do(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		"ts":  []string{timestampString},
 		"dir": []string{direction},
 	}))
@@ -348,7 +348,7 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", checkCounter)
 		}
 
-		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		messagesRes := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 			"dir":   []string{"b"},
 			"limit": []string{"100"},
 		}))
@@ -378,7 +378,7 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, roomID string, expectedEventId string, actualEventId string, givenTimestamp int64) string {
 	t.Helper()
 
-	messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+	messagesRes := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		// The events returned will be from the newest -> oldest since we're going backwards
 		"dir":   []string{"b"},
 		"limit": []string{"100"},

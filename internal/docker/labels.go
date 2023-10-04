@@ -5,7 +5,7 @@ import (
 
 	"github.com/docker/docker/api/types/filters"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 )
 
 // label returns a filter for the presence of certain labels ("complement_context") or a match of

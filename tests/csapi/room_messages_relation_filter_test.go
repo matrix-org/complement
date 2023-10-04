@@ -10,8 +10,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/complement/runtime"
@@ -30,13 +30,13 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	beforeToken := alice.MustSyncUntil(t, client.SyncReq{})
 
 	// Send messages with different relations.
-	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
+	res := alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "Message without a relation",
 	}))
 	rootEventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-2"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-2"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "Threaded Reply",
 		"m.relates_to": map[string]interface{}{
@@ -46,7 +46,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	}))
 	threadEventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-3"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-3"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "Reference Reply",
 		"m.relates_to": map[string]interface{}{
@@ -66,7 +66,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	queryParams.Set("dir", "f")
 	queryParams.Set("from", beforeToken)
 	queryParams.Set("filter", `{ "org.matrix.msc3874.rel_types" : ["m.thread"] }`)
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -84,7 +84,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	queryParams.Set("dir", "f")
 	queryParams.Set("from", beforeToken)
 	queryParams.Set("filter", `{ "org.matrix.msc3874.rel_types" : ["m.reference"] }`)
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -102,7 +102,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	queryParams.Set("dir", "f")
 	queryParams.Set("from", beforeToken)
 	queryParams.Set("filter", `{ "org.matrix.msc3874.rel_types" : ["m.thread", "m.reference"] }`)
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -120,7 +120,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	queryParams.Set("dir", "f")
 	queryParams.Set("from", beforeToken)
 	queryParams.Set("filter", `{ "org.matrix.msc3874.not_rel_types" : ["m.thread"] }`)
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -138,7 +138,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	queryParams.Set("dir", "f")
 	queryParams.Set("from", beforeToken)
 	queryParams.Set("filter", `{ "org.matrix.msc3874.not_rel_types" : ["m.reference"] }`)
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -156,7 +156,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	queryParams.Set("dir", "f")
 	queryParams.Set("from", beforeToken)
 	queryParams.Set("filter", `{ "org.matrix.msc3874.not_rel_types" : ["m.thread", "m.reference"] }`)
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -27,7 +27,7 @@ func TestServerCapabilities(t *testing.T) {
 	)
 
 	// sytest: GET /v3/capabilities is not public
-	res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
+	res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusUnauthorized,
 	})

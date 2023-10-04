@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
@@ -124,7 +126,7 @@ func TestIsDirectFlagFederation(t *testing.T) {
 
 	bob := srv.UserID("bob")
 	room := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, bob))
-	dmInviteEvent := srv.MustCreateEvent(t, room, b.Event{
+	dmInviteEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:     "m.room.member",
 		StateKey: &alice.UserID,
 		Sender:   bob,
@@ -132,13 +134,13 @@ func TestIsDirectFlagFederation(t *testing.T) {
 			"membership": "invite",
 			"is_direct":  true,
 		},
-	}).Headered(roomVer)
-	inviteReq, err := gomatrixserverlib.NewInviteV2Request(dmInviteEvent, []gomatrixserverlib.InviteV2StrippedState{})
+	})
+	inviteReq, err := fclient.NewInviteV2Request(dmInviteEvent, []gomatrixserverlib.InviteStrippedState{})
 	if err != nil {
 		t.Fatalf("failed to make invite request: %s", err)
 	}
 	_, since := alice.MustSync(t, client.SyncReq{})
-	_, err = srv.FederationClient(deployment).SendInviteV2(context.Background(), gomatrixserverlib.ServerName(srv.ServerName()), "hs1", inviteReq)
+	_, err = srv.FederationClient(deployment).SendInviteV2(context.Background(), spec.ServerName(srv.ServerName()), "hs1", inviteReq)
 	if err != nil {
 		t.Fatalf("failed to send invite v2: %s", err)
 	}

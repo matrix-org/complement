@@ -11,14 +11,16 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrix"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -79,7 +81,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 
 	queryParams := url.Values{}
 	queryParams.Set("server_name", "hs1")
-	res := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
+	res := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{
@@ -156,7 +158,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 		roomAlias := srv.MakeAliasMapping("MissingSignatures", room.RoomID)
 		// create a normal event then remove the signatures key
-		signedEvent := srv.MustCreateEvent(t, room, b.Event{
+		signedEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: b.Ptr(""),
 			Type:     "m.room.name",
@@ -167,7 +169,9 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		raw := signedEvent.JSON()
 		raw, err := sjson.SetRawBytes(raw, "signatures", []byte(`{}`))
 		must.NotError(t, "failed to strip signatures key from event", err)
-		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+		must.NotError(t, "failed to get room version", err)
+		unsignedEvent, err := verImpl.NewEventFromTrustedJSON(raw, false)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
 		alice.JoinRoom(t, roomAlias, nil)
@@ -177,7 +181,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 		roomAlias := srv.MakeAliasMapping("BadSignatures", room.RoomID)
 		// create a normal event then modify the signatures
-		signedEvent := srv.MustCreateEvent(t, room, b.Event{
+		signedEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: b.Ptr(""),
 			Type:     "m.room.name",
@@ -195,7 +199,9 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		raw := signedEvent.JSON()
 		raw, err = sjson.SetRawBytes(raw, "signatures", rawSig)
 		must.NotError(t, "failed to modify signatures key from event", err)
-		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+		must.NotError(t, "failed to get room version", err)
+		unsignedEvent, err := verImpl.NewEventFromTrustedJSON(raw, false)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
 		alice.JoinRoom(t, roomAlias, nil)
@@ -206,7 +212,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		roomAlias := srv.MakeAliasMapping("UnobtainableKeys", room.RoomID)
 		// create a normal event then modify the signatures to have a bogus key ID which Complement does
 		// not have the keys for
-		signedEvent := srv.MustCreateEvent(t, room, b.Event{
+		signedEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: b.Ptr(""),
 			Type:     "m.room.name",
@@ -224,7 +230,9 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		raw := signedEvent.JSON()
 		raw, err = sjson.SetRawBytes(raw, "signatures", rawSig)
 		must.NotError(t, "failed to modify signatures key from event", err)
-		unsignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(raw, false, ver)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+		must.NotError(t, "failed to get room version", err)
+		unsignedEvent, err := verImpl.NewEventFromTrustedJSON(raw, false)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
 		alice.JoinRoom(t, roomAlias, nil)
@@ -238,7 +246,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		roomAlias := srv.MakeAliasMapping("UnverifiableAuthEvents", room.RoomID)
 
 		// create a normal event then modify the signatures
-		rawEvent := srv.MustCreateEvent(t, room, b.Event{
+		rawEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: &charlie,
 			Type:     "m.room.member",
@@ -255,13 +263,15 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		must.NotError(t, "failed to marshal bad signature block", err)
 		rawEvent, err = sjson.SetRawBytes(rawEvent, "signatures", rawSig)
 		must.NotError(t, "failed to modify signatures key from event", err)
-		badlySignedEvent, err := gomatrixserverlib.NewEventFromTrustedJSON(rawEvent, false, ver)
+		verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+		must.NotError(t, "failed to get room version", err)
+		badlySignedEvent, err := verImpl.NewEventFromTrustedJSON(rawEvent, false)
 		must.NotError(t, "failed to make Event from badly signed event JSON", err)
 		room.AddEvent(badlySignedEvent)
 		t.Logf("Created badly signed auth event %s", badlySignedEvent.EventID())
 
 		// and now add another event which will use it as an auth event.
-		goodEvent := srv.MustCreateEvent(t, room, b.Event{
+		goodEvent := srv.MustCreateEvent(t, room, federation.Event{
 			Sender:   charlie,
 			StateKey: &charlie,
 			Type:     "m.room.member",
@@ -297,7 +307,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
-	origin := gomatrixserverlib.ServerName(srv.ServerName())
+	origin := spec.ServerName(srv.ServerName())
 	defer cancel()
 
 	fedClient := srv.FederationClient(deployment)
@@ -320,13 +330,17 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	})
 
 	// charlie sends a make_join for a different user
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, srv.UserID("charlie2"), federation.SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, srv.UserID("charlie2"))
 	must.NotError(t, "MakeJoin", err)
 
 	// ... and does a switcheroo to turn it into a join for himself
-	makeJoinResp.JoinEvent.Sender = charlie
+	makeJoinResp.JoinEvent.SenderID = charlie
 	makeJoinResp.JoinEvent.StateKey = &charlie
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName()), srv.KeyID, srv.Priv, makeJoinResp.RoomVersion)
+
+	verImpl, err := gomatrixserverlib.GetRoomVersion(makeJoinResp.RoomVersion)
+	must.NotError(t, "JoinEvent.GetRoomVersion", err)
+	eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
+	joinEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
 	must.NotError(t, "JoinEvent.Build", err)
 
 	// SendJoin should return a 403.
@@ -347,7 +361,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	}
 
 	// Alice checks the room state to check that charlie isn't a member
-	res := alice.MustDoFunc(
+	res := alice.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", charlie},
@@ -404,14 +418,14 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 
 	// a helper function which makes a send_* request to the given path and checks
 	// that it fails with a 400 error
-	assertRequestFails := func(t *testing.T, event *gomatrixserverlib.Event) {
+	assertRequestFails := func(t *testing.T, event gomatrixserverlib.PDU) {
 		path := fmt.Sprintf("%s/%s/%s",
 			baseApiPath,
-			url.PathEscape(event.RoomID()),
+			url.PathEscape(event.RoomID().String()),
 			url.PathEscape(event.EventID()),
 		)
 		t.Logf("PUT %s", path)
-		req := gomatrixserverlib.NewFederationRequest("PUT", gomatrixserverlib.ServerName(srv.ServerName()), "hs1", path)
+		req := fclient.NewFederationRequest("PUT", spec.ServerName(srv.ServerName()), "hs1", path)
 		if err := req.SetContent(event); err != nil {
 			t.Errorf("req.SetContent: %v", err)
 			return
@@ -439,7 +453,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 	}
 
 	t.Run("regular event", func(t *testing.T) {
-		event := srv.MustCreateEvent(t, room, b.Event{
+		event := srv.MustCreateEvent(t, room, federation.Event{
 			Type:    "m.room.message",
 			Sender:  charlie,
 			Content: map[string]interface{}{"body": "bzz"},
@@ -447,7 +461,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		assertRequestFails(t, event)
 	})
 	t.Run("non-state membership event", func(t *testing.T) {
-		event := srv.MustCreateEvent(t, room, b.Event{
+		event := srv.MustCreateEvent(t, room, federation.Event{
 			Type:    "m.room.member",
 			Sender:  charlie,
 			Content: map[string]interface{}{"body": "bzz"},
@@ -461,7 +475,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		if membershipType == expectedMembership {
 			continue
 		}
-		event := srv.MustCreateEvent(t, room, b.Event{
+		event := srv.MustCreateEvent(t, room, federation.Event{
 			Type:     "m.room.member",
 			Sender:   charlie,
 			StateKey: &charlie,
@@ -474,7 +488,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 
 	// right sort of membership, but mismatched state_key
 	t.Run("event with mismatched state key", func(t *testing.T) {
-		event := srv.MustCreateEvent(t, room, b.Event{
+		event := srv.MustCreateEvent(t, room, federation.Event{
 			Type:     "m.room.member",
 			Sender:   charlie,
 			StateKey: b.Ptr(srv.UserID("doris")),
@@ -500,7 +514,7 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	)
 	cancel := srv.Listen()
 	defer cancel()
-	origin := gomatrixserverlib.ServerName(srv.ServerName())
+	origin := spec.ServerName(srv.ServerName())
 
 	// annoyingly we can't get to the room that alice and bob already share (see https://github.com/matrix-org/complement/issues/254)
 	// so we have to create a new one.
@@ -513,14 +527,16 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	// now we send a make_join...
 	charlie := srv.UserID("charlie")
 	fedClient := srv.FederationClient(deployment)
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, charlie, federation.SupportedRoomVersions())
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, charlie)
 	if err != nil {
 		t.Fatalf("make_join failed: %v", err)
 	}
 
 	// ... construct a signed join event ...
-	roomVer := makeJoinResp.RoomVersion
-	joinEvent, err := makeJoinResp.JoinEvent.Build(time.Now(), origin, srv.KeyID, srv.Priv, roomVer)
+	verImpl, err := gomatrixserverlib.GetRoomVersion(makeJoinResp.RoomVersion)
+	must.NotError(t, "JoinEvent.GetRoomVersion", err)
+	eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
+	joinEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
 	if err != nil {
 		t.Fatalf("failed to sign join event: %v", err)
 	}

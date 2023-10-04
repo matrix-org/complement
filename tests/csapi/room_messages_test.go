@@ -8,8 +8,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/complement/runtime"
@@ -31,7 +31,7 @@ func TestSendAndFetchMessage(t *testing.T) {
 	_, token := alice.MustSync(t, client.SyncReq{})
 
 	// first use the non-txn endpoint
-	alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message"}, client.WithJSONBody(t, map[string]interface{}{
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    testMessage,
 	}))
@@ -45,7 +45,7 @@ func TestSendAndFetchMessage(t *testing.T) {
 	queryParams := url.Values{}
 	queryParams.Set("dir", "f")
 	queryParams.Set("from", token)
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -71,7 +71,7 @@ func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
 	// then request messages from the room
 	queryParams := url.Values{}
 	queryParams.Set("dir", "b")
-	res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusForbidden,
 	})
@@ -89,13 +89,13 @@ func TestSendMessageWithTxn(t *testing.T) {
 
 	const txnID = "lorem"
 
-	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", txnID}, client.WithJSONBody(t, map[string]interface{}{
+	res := alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", txnID}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "test",
 	}))
 	eventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", txnID}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", txnID}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "test",
 	}))
@@ -166,7 +166,7 @@ func TestRoomMessagesLazyLoading(t *testing.T) {
 	queryParams.Set("filter", `{ "lazy_load_members" : true }`)
 	queryParams.Set("from", beforeToken)
 	queryParams.Set("to", afterToken)
-	res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -189,11 +189,13 @@ func TestRoomMessagesLazyLoading(t *testing.T) {
 }
 
 // TODO We should probably see if this should be removed.
-//  Sytest tests for a very specific bug; check if local user member event loads properly when going backwards from a prev_event.
-//  However, note that the sytest *only* checks for the *local, single* user in a room to be included in `/messages`.
-//  This function exists here for sytest exhaustiveness, but I question its usefulness, thats why TestRoomMessagesLazyLoading
-//  exists to do a more generic check.
-//  We should probably see if this should be removed.
+//
+//	Sytest tests for a very specific bug; check if local user member event loads properly when going backwards from a prev_event.
+//	However, note that the sytest *only* checks for the *local, single* user in a room to be included in `/messages`.
+//	This function exists here for sytest exhaustiveness, but I question its usefulness, thats why TestRoomMessagesLazyLoading
+//	exists to do a more generic check.
+//	We should probably see if this should be removed.
+//
 // sytest: GET /rooms/:room_id/messages lazy loads members correctly
 func TestRoomMessagesLazyLoadingLocalUser(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
@@ -217,7 +219,7 @@ func TestRoomMessagesLazyLoadingLocalUser(t *testing.T) {
 	queryParams.Set("dir", "b")
 	queryParams.Set("filter", `{ "lazy_load_members" : true }`)
 	queryParams.Set("from", token)
-	res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+	res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{

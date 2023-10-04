@@ -6,8 +6,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -35,7 +35,7 @@ func TestSyncFilter(t *testing.T) {
 				},
 			},
 		})
-		res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", "@alice:hs1", "filter", filterID})
+		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "user", "@alice:hs1", "filter", filterID})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyPresent("room"),
@@ -48,7 +48,7 @@ func TestSyncFilter(t *testing.T) {
 
 func createFilter(t *testing.T, c *client.CSAPI, filterContent map[string]interface{}) string {
 	t.Helper()
-	res := c.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "user", c.UserID, "filter"}, client.WithJSONBody(t, filterContent))
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "user", c.UserID, "filter"}, client.WithJSONBody(t, filterContent))
 	if res.StatusCode != 200 {
 		t.Fatalf("MatchResponse got status %d want 200", res.StatusCode)
 	}

@@ -10,14 +10,16 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
 
 // The Spec says here
-//     https://spec.matrix.org/v1.1/client-server-api/#server-behaviour-13
+//
+//	https://spec.matrix.org/v1.1/client-server-api/#server-behaviour-13
+//
 // that
 // > Servers must not send room invites from ignored users to clients.
 //
@@ -40,7 +42,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, publicRoom))
 
 	// Alice ignores Bob.
-	alice.MustDoFunc(
+	alice.MustDo(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", "m.ignored_user_list"},
@@ -82,7 +84,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	}
 	// Note: SyncUntil only runs its callback on array elements. I want to investigate an object.
 	// So let's make the HTTP request more directly.
-	response := alice.MustDoFunc(
+	response := alice.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "sync"},

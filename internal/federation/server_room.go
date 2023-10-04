@@ -8,16 +8,34 @@ import (
 
 	"github.com/matrix-org/gomatrixserverlib"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 )
+
+type Event struct {
+	Type     string
+	Sender   string
+	StateKey *string
+	Content  map[string]interface{}
+
+	Unsigned map[string]interface{}
+	// The events needed to authenticate this event.
+	// This can be either []EventReference for room v1/v2, or []string for room v3 onwards.
+	// If it is left at nil, MustCreateEvent will populate it automatically based on the room state.
+	AuthEvents interface{}
+	// The prev events of the event if we want to override or falsify them.
+	// If it is left at nil, MustCreateEvent will populate it automatically based on the forward extremities.
+	PrevEvents interface{}
+	// If this is a redaction, the event that it redacts
+	Redacts string
+}
 
 // ServerRoom represents a room on this test federation server
 type ServerRoom struct {
 	Version            gomatrixserverlib.RoomVersion
 	RoomID             string
-	State              map[string]*gomatrixserverlib.Event
+	State              map[string]gomatrixserverlib.PDU
 	StateMutex         sync.RWMutex
-	Timeline           []*gomatrixserverlib.Event
+	Timeline           []gomatrixserverlib.PDU
 	TimelineMutex      sync.RWMutex
 	ForwardExtremities []string
 	Depth              int64
@@ -28,14 +46,14 @@ func newRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *ServerRoom {
 	return &ServerRoom{
 		RoomID:             roomId,
 		Version:            roomVer,
-		State:              make(map[string]*gomatrixserverlib.Event),
+		State:              make(map[string]gomatrixserverlib.PDU),
 		ForwardExtremities: make([]string, 0),
 	}
 }
 
 // AddEvent adds a new event to the timeline, updating current state if it is a state event.
 // Updates depth and forward extremities.
-func (r *ServerRoom) AddEvent(ev *gomatrixserverlib.Event) {
+func (r *ServerRoom) AddEvent(ev gomatrixserverlib.PDU) {
 	if ev.StateKey() != nil {
 		r.replaceCurrentState(ev)
 	}
@@ -78,7 +96,7 @@ func (r *ServerRoom) AuthEvents(sn gomatrixserverlib.StateNeeded) (eventIDs []st
 
 // replaceCurrentState inserts a new state event for this room or replaces current state depending
 // on the (type, state_key) provided.
-func (r *ServerRoom) replaceCurrentState(ev *gomatrixserverlib.Event) {
+func (r *ServerRoom) replaceCurrentState(ev gomatrixserverlib.PDU) {
 	tuple := fmt.Sprintf("%s\x1f%s", ev.Type(), *ev.StateKey())
 	r.StateMutex.Lock()
 	r.State[tuple] = ev
@@ -86,7 +104,7 @@ func (r *ServerRoom) replaceCurrentState(ev *gomatrixserverlib.Event) {
 }
 
 // CurrentState returns the state event for the given (type, state_key) or nil.
-func (r *ServerRoom) CurrentState(evType, stateKey string) *gomatrixserverlib.Event {
+func (r *ServerRoom) CurrentState(evType, stateKey string) gomatrixserverlib.PDU {
 	tuple := fmt.Sprintf("%s\x1f%s", evType, stateKey)
 	r.StateMutex.RLock()
 	state := r.State[tuple]
@@ -95,7 +113,7 @@ func (r *ServerRoom) CurrentState(evType, stateKey string) *gomatrixserverlib.Ev
 }
 
 // AllCurrentState returns all the current state events
-func (r *ServerRoom) AllCurrentState() (events []*gomatrixserverlib.Event) {
+func (r *ServerRoom) AllCurrentState() (events []gomatrixserverlib.PDU) {
 	r.StateMutex.RLock()
 	for _, ev := range r.State {
 		events = append(events, ev)
@@ -105,17 +123,17 @@ func (r *ServerRoom) AllCurrentState() (events []*gomatrixserverlib.Event) {
 }
 
 // AuthChain returns all auth events for all events in the current state TODO: recursively
-func (r *ServerRoom) AuthChain() (chain []*gomatrixserverlib.Event) {
+func (r *ServerRoom) AuthChain() (chain []gomatrixserverlib.PDU) {
 	return r.AuthChainForEvents(r.AllCurrentState())
 }
 
 // AuthChainForEvents returns all auth events for all events in the given state
-func (r *ServerRoom) AuthChainForEvents(events []*gomatrixserverlib.Event) (chain []*gomatrixserverlib.Event) {
+func (r *ServerRoom) AuthChainForEvents(events []gomatrixserverlib.PDU) (chain []gomatrixserverlib.PDU) {
 	chainMap := make(map[string]bool)
 
 	// build a map of all events in the room
 	// Timeline and State contain different sets of events, so check them both.
-	eventsByID := map[string]*gomatrixserverlib.Event{}
+	eventsByID := map[string]gomatrixserverlib.PDU{}
 	r.TimelineMutex.RLock()
 	for _, ev := range r.Timeline {
 		eventsByID[ev.EventID()] = ev
@@ -128,7 +146,7 @@ func (r *ServerRoom) AuthChainForEvents(events []*gomatrixserverlib.Event) (chai
 	r.StateMutex.RUnlock()
 
 	// a queue of events whose auth events are to be included in the auth chain
-	queue := []*gomatrixserverlib.Event{}
+	queue := []gomatrixserverlib.PDU{}
 	queue = append(queue, events...)
 
 	// get all the auth events recursively
@@ -212,13 +230,13 @@ func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLev
 }
 
 // InitialRoomEvents returns the initial set of events that get created when making a room.
-func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []b.Event {
+func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []Event {
 	// need to serialise/deserialise to get map[string]interface{} annoyingly
 	plContent := initialPowerLevelsContent(creator)
 	plBytes, _ := json.Marshal(plContent)
 	var plContentMap map[string]interface{}
 	json.Unmarshal(plBytes, &plContentMap)
-	return []b.Event{
+	return []Event{
 		{
 			Type:     "m.room.create",
 			StateKey: b.Ptr(""),
@@ -255,16 +273,10 @@ func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []
 
 // EventIDsOrReferences converts a list of events into a list of EventIDs or EventReferences,
 // depending on the room version
-func (r *ServerRoom) EventIDsOrReferences(events []*gomatrixserverlib.Event) (refs []interface{}) {
+func (r *ServerRoom) EventIDsOrReferences(events []gomatrixserverlib.PDU) (refs []interface{}) {
 	refs = make([]interface{}, len(events))
-	eventFormat, _ := r.Version.EventFormat()
 	for i, ev := range events {
-		switch eventFormat {
-		case gomatrixserverlib.EventFormatV1:
-			refs[i] = ev.EventReference()
-		default:
-			refs[i] = ev.EventID()
-		}
+		refs[i] = ev.EventID()
 	}
 	return
 }

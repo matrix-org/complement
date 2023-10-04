@@ -6,8 +6,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -58,7 +58,7 @@ func TestPowerLevels(t *testing.T) {
 	// sytest: GET /rooms/:room_id/state/m.room.power_levels can fetch levels
 	t.Run("GET /rooms/:room_id/state/m.room.power_levels can fetch levels", func(t *testing.T) {
 		// Test if the old state still exists
-		res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
 
 		// note: before v10 we technically cannot assume that powerlevel integers are json numbers,
 		//  as they can be both strings and numbers.
@@ -123,7 +123,7 @@ func TestPowerLevels(t *testing.T) {
 			Content:  PLContent,
 		})
 
-		res := alice.MustDoFunc(
+		res := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "event", eventId},
@@ -157,7 +157,7 @@ func TestPowerLevels(t *testing.T) {
 		})
 
 		// This should give a 403 (not a 500)
-		res := alice.DoFunc(
+		res := alice.Do(
 			t,
 			"PUT",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"},
@@ -170,7 +170,7 @@ func TestPowerLevels(t *testing.T) {
 		})
 
 		// Test if the old state still exists
-		res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
+		res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,

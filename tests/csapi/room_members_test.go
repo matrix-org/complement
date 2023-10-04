@@ -7,8 +7,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -34,7 +34,7 @@ func TestGetRoomMembers(t *testing.T) {
 
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
-	resp := alice.MustDoFunc(
+	resp := alice.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -91,7 +91,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 		},
 	})
 
-	resp := alice.MustDoFunc(
+	resp := alice.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -138,7 +138,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 
 	t.Run("not_membership", func(t *testing.T) {
-		resp := alice.MustDoFunc(
+		resp := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -163,7 +163,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 	})
 
 	t.Run("membership/leave", func(t *testing.T) {
-		resp := alice.MustDoFunc(
+		resp := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -188,7 +188,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 	})
 
 	t.Run("membership/join", func(t *testing.T) {
-		resp := alice.MustDoFunc(
+		resp := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},

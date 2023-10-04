@@ -5,8 +5,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -25,7 +25,7 @@ func TestTyping(t *testing.T) {
 
 	token := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
-	alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
+	alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
 		"typing":  true,
 		"timeout": 10000,
 	}))
@@ -57,7 +57,7 @@ func TestTyping(t *testing.T) {
 
 	// sytest: Typing can be explicitly stopped
 	t.Run("Typing can be explicitly stopped", func(t *testing.T) {
-		alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
+		alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
 			"typing": false,
 		}))
 
@@ -89,7 +89,7 @@ func TestLeakyTyping(t *testing.T) {
 	_, charlieToken := charlie.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 	// Alice types in that room. Bob should see her typing.
-	alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
+	alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
 		"typing":  true,
 		"timeout": 10000,
 	}))

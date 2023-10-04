@@ -6,8 +6,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 	"github.com/matrix-org/complement/runtime"
@@ -40,20 +40,20 @@ func TestThreadsEndpoint(t *testing.T) {
 	_, token := alice.MustSync(t, client.SyncReq{})
 
 	// Create 2 threads in the room.
-	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
+	res := alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "Thread 1 Root",
 	}))
 	threadID1 := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-2"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-2"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "Thraed 2 Root",
 	}))
 	threadID2 := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
 	// Add threaded replies.
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-3"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-3"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "Thread 1 Reply",
 		"m.relates_to": map[string]interface{}{
@@ -63,7 +63,7 @@ func TestThreadsEndpoint(t *testing.T) {
 	}))
 	replyID1 := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-4"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-4"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "Thread 2 Reply",
 		"m.relates_to": map[string]interface{}{
@@ -79,7 +79,7 @@ func TestThreadsEndpoint(t *testing.T) {
 	}))
 
 	// Request the threads.
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "threads"})
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "threads"})
 	body := must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 	})
@@ -88,7 +88,7 @@ func TestThreadsEndpoint(t *testing.T) {
 	checkResults(t, body, []string{threadKey(threadID2, replyID2), threadKey(threadID1, replyID1)})
 
 	// Update thread 1 and ensure it gets updated.
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-5"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-5"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "Thread 1 Reply 2",
 		"m.relates_to": map[string]interface{}{
@@ -103,7 +103,7 @@ func TestThreadsEndpoint(t *testing.T) {
 		return r.Get("event_id").Str == replyID3
 	}))
 
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "threads"})
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "threads"})
 	body = must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 	})

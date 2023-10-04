@@ -3,11 +3,11 @@ package tests
 import (
 	"testing"
 
-	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -96,7 +96,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			bob.MustSyncUntil(t, client.SyncReq{},
 				client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
 					// We expect a membership event ..
-					if result.Get("type").Str != gomatrixserverlib.MRoomMember {
+					if result.Get("type").Str != spec.MRoomMember {
 						return false
 					}
 					// .. for Bob
@@ -128,7 +128,7 @@ func verifyState(t *testing.T, res gjson.Result, wantFields, wantValues map[stri
 		wantValue := wantValues[eventType]
 		eventStateKey := event.Get("state_key").Str
 
-		res := cl.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, eventStateKey})
+		res := cl.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, eventStateKey})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{

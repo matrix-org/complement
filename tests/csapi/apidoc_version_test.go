@@ -7,7 +7,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )
@@ -28,7 +28,7 @@ func TestVersionStructure(t *testing.T) {
 
 	// sytest: Version responds 200 OK with valid structure
 	t.Run("Version responds 200 OK with valid structure", func(t *testing.T) {
-		res := client.MustDoFunc(t, "GET", []string{"_matrix", "client", "versions"})
+		res := client.MustDo(t, "GET", []string{"_matrix", "client", "versions"})
 
 		// Matches;
 		// - r0.?.?

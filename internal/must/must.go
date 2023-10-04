@@ -12,7 +12,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
 
 	"github.com/matrix-org/complement/internal/match"
 )
@@ -118,7 +118,7 @@ func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byt
 }
 
 // MatchFederationRequest performs JSON assertions on incoming federation requests.
-func MatchFederationRequest(t *testing.T, fedReq *gomatrixserverlib.FederationRequest, matchers ...match.JSON) {
+func MatchFederationRequest(t *testing.T, fedReq *fclient.FederationRequest, matchers ...match.JSON) {
 	t.Helper()
 	content := fedReq.Content()
 	if !gjson.ValidBytes(content) {

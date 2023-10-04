@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/matrix-org/util"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -71,7 +73,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	var missingEventIDs []string
 	numMissingEvents := 5
 	for i := 0; i < numMissingEvents; i++ {
-		missingEvent := srv.MustCreateEvent(t, srvRoom, b.Event{
+		missingEvent := srv.MustCreateEvent(t, srvRoom, federation.Event{
 			Sender: bob,
 			Type:   "m.room.message",
 			Content: map[string]interface{}{
@@ -84,7 +86,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	}
 
 	// 3) Inject a final event into Complement
-	mostRecentEvent := srv.MustCreateEvent(t, srvRoom, b.Event{
+	mostRecentEvent := srv.MustCreateEvent(t, srvRoom, federation.Event{
 		Sender: bob,
 		Type:   "m.room.message",
 		Content: map[string]interface{}{
@@ -96,7 +98,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	// 4) Respond to /get_missing_events with the missing events if the request is well-formed.
 	srv.Mux().HandleFunc(
 		"/_matrix/federation/v1/get_missing_events/{roomID}",
-		srv.ValidFederationRequest(t, func(fr *gomatrixserverlib.FederationRequest, pathParams map[string]string) util.JSONResponse {
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
 			if pathParams["roomID"] != roomID {
 				t.Errorf("Received /get_missing_events for the wrong room: %s", roomID)
 				return util.JSONResponse{
@@ -205,8 +207,9 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	if err != nil {
 		t.Fatalf("failed to marshal badEvent content %+v", badEvent.Content)
 	}
-	eb := gomatrixserverlib.EventBuilder{
-		Sender:     badEvent.Sender,
+
+	proto := gomatrixserverlib.ProtoEvent{
+		SenderID:   badEvent.Sender,
 		Depth:      int64(room.Depth + 1), // depth starts at 1
 		Type:       badEvent.Type,
 		StateKey:   badEvent.StateKey,
@@ -214,20 +217,27 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		RoomID:     room.RoomID,
 		PrevEvents: room.ForwardExtremities,
 	}
-	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
+	var stateNeeded gomatrixserverlib.StateNeeded
+	stateNeeded, err = gomatrixserverlib.StateNeededForProtoEvent(&proto)
 	if err != nil {
-		t.Fatalf("failed to work out auth_events : %s", err)
+		t.Fatalf("failed to create event: failed to work out auth_events : %s", err)
 	}
-	eb.AuthEvents = room.AuthEvents(stateNeeded)
+	proto.AuthEvents = room.AuthEvents(stateNeeded)
+
 	// we have to create this event as a v5 event which doesn't assert floats yet
-	signedBadEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName()), srv.KeyID, srv.Priv, gomatrixserverlib.RoomVersionV5)
+	verImpl, err := gomatrixserverlib.GetRoomVersion(gomatrixserverlib.RoomVersionV5)
+	if err != nil {
+		t.Fatalf("failed to create event: invalid room version: %s", err)
+	}
+	eb := verImpl.NewEventBuilderFromProtoEvent(&proto)
+	signedBadEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
 	if err != nil {
 		t.Fatalf("failed to sign event: %s", err)
 	}
 	room.AddEvent(signedBadEvent)
 
 	// send the first "good" event, referencing the broken event as a prev_event
-	sentEvent := srv.MustCreateEvent(t, room, b.Event{
+	sentEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -248,9 +258,9 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		// return the bad event, which should result in the transaction failing.
 		w.WriteHeader(200)
 		res := struct {
-			Events []*gomatrixserverlib.Event `json:"events"`
+			Events []gomatrixserverlib.PDU `json:"events"`
 		}{
-			Events: []*gomatrixserverlib.Event{signedBadEvent},
+			Events: []gomatrixserverlib.PDU{signedBadEvent},
 		}
 		var responseBytes []byte
 		responseBytes, err = json.Marshal(&res)
@@ -261,8 +271,8 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	fedClient := srv.FederationClient(deployment)
 	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "wut",
-		Origin:        gomatrixserverlib.ServerName(srv.ServerName()),
-		Destination:   gomatrixserverlib.ServerName("hs1"),
+		Origin:        spec.ServerName(srv.ServerName()),
+		Destination:   spec.ServerName("hs1"),
 		PDUs: []json.RawMessage{
 			sentEvent.JSON(),
 		},
@@ -281,7 +291,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	// it just ignores it, so we need to send another event referring to the
 	// first one and check that we get a /get_missing_events request.
 
-	message3 := srv.MustCreateEvent(t, room, b.Event{
+	message3 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -307,8 +317,8 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 
 	resp, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "t2",
-		Origin:        gomatrixserverlib.ServerName(srv.ServerName()),
-		Destination:   gomatrixserverlib.ServerName("hs1"),
+		Origin:        spec.ServerName(srv.ServerName()),
+		Destination:   spec.ServerName("hs1"),
 		PDUs: []json.RawMessage{
 			message3.JSON(),
 		},
@@ -350,7 +360,7 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			stateKey := ""
 			// Set the history visibility for this room
 			alice.SendEventSynced(t, roomID, b.Event{
-				Type: gomatrixserverlib.MRoomHistoryVisibility,
+				Type: spec.MRoomHistoryVisibility,
 				Content: map[string]interface{}{
 					"history_visibility": visibility,
 				},
@@ -369,9 +379,9 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie, roomID))
 
-			req := gomatrixserverlib.NewFederationRequest(
+			req := fclient.NewFederationRequest(
 				"POST",
-				gomatrixserverlib.ServerName(srv.ServerName()),
+				spec.ServerName(srv.ServerName()),
 				"hs1",
 				fmt.Sprintf("/_matrix/federation/v1/get_missing_events/%s", roomID),
 			)
@@ -390,7 +400,7 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			})
 			must.NotError(t, "failed to set content", err)
 
-			result := gomatrixserverlib.RespMissingEvents{}
+			result := fclient.RespMissingEvents{}
 			err = srv.SendFederationRequest(context.Background(), t, deployment, req, &result)
 			must.NotError(t, "get_missing_events failed", err)
 			if len(result.Events) == 0 {
@@ -406,7 +416,7 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			// * the message
 			events := result.Events.UntrustedEvents(roomVersion)
 
-			verifyMsgEvent := func(ev *gomatrixserverlib.Event) {
+			verifyMsgEvent := func(ev gomatrixserverlib.PDU) {
 				must.EqualStr(t, ev.Type(), "m.room.message", "not a message event")
 				// if the history vis is 'joined' or 'invite', we should get redacted
 				// copies of the events before we joined.
@@ -424,20 +434,20 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			}
 
 			for i, ev := range events {
-				must.EqualStr(t, ev.RoomID(), roomID, "unexpected roomID")
+				must.EqualStr(t, ev.RoomID().String(), roomID, "unexpected roomID")
 				switch i {
 				case 0:
 					must.EqualStr(t, ev.Type(), "m.room.member", "not a membership event")
 					must.EqualStr(t, *ev.StateKey(), alice.UserID, "unexpected creator")
 				case 1:
-					must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomPowerLevels, "not a powerlevel event")
+					must.EqualStr(t, ev.Type(), spec.MRoomPowerLevels, "not a powerlevel event")
 				case 2:
-					must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomJoinRules, "not a join_rules event")
+					must.EqualStr(t, ev.Type(), spec.MRoomJoinRules, "not a join_rules event")
 				case 3:
-					must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomHistoryVisibility, "not a history_visiblity event")
+					must.EqualStr(t, ev.Type(), spec.MRoomHistoryVisibility, "not a history_visiblity event")
 				case 4:
 					if visibility != gomatrixserverlib.HistoryVisibilityShared { // shared -> shared no-ops
-						must.EqualStr(t, ev.Type(), gomatrixserverlib.MRoomHistoryVisibility, "not a history_visiblity event")
+						must.EqualStr(t, ev.Type(), spec.MRoomHistoryVisibility, "not a history_visiblity event")
 					} else {
 						verifyMsgEvent(ev)
 					}
