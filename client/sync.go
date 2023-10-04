@@ -169,7 +169,7 @@ func (c *CSAPI) MustSync(t TestLike, syncReq SyncReq) (gjson.Result, string) {
 // Check that the timeline for `roomID` has an event which passes the check function.
 func SyncTimelineHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		err := loopArray(
+		err := checkArrayElements(
 			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", check,
 		)
 		if err == nil {
@@ -192,7 +192,7 @@ func SyncTimelineHasEventID(roomID string, eventID string) SyncCheckOpt {
 // `lazy_load_members` syncs.
 func SyncStateHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		err := loopArray(
+		err := checkArrayElements(
 			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", check,
 		)
 		if err == nil {
@@ -204,7 +204,7 @@ func SyncStateHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 
 func SyncEphemeralHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		err := loopArray(
+		err := checkArrayElements(
 			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".ephemeral.events", check,
 		)
 		if err == nil {
@@ -263,7 +263,7 @@ func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 		// - actively being invited to a room.
 		if clientUserID == userID {
 			// active
-			err := loopArray(
+			err := checkArrayElements(
 				topLevelSyncJSON, "rooms.invite."+GjsonEscape(roomID)+".invite_state.events",
 				func(ev gjson.Result) bool {
 					return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
@@ -302,14 +302,14 @@ func SyncJoinedTo(userID, roomID string, checks ...func(gjson.Result) bool) Sync
 		// Check both the timeline and the state events for the join event
 		// since on initial sync, the state events may only be in
 		// <room>.state.events.
-		firstErr := loopArray(
+		firstErr := checkArrayElements(
 			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", checkJoined,
 		)
 		if firstErr == nil {
 			return nil
 		}
 
-		secondErr := loopArray(
+		secondErr := checkArrayElements(
 			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", checkJoined,
 		)
 		if secondErr == nil {
@@ -346,7 +346,7 @@ func SyncLeftFrom(userID, roomID string) SyncCheckOpt {
 // `check` function returns true for at least one event.
 func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		return loopArray(topLevelSyncJSON, "account_data.events", check)
+		return checkArrayElements(topLevelSyncJSON, "account_data.events", check)
 	}
 }
 
@@ -355,7 +355,7 @@ func SyncGlobalAccountDataHas(check func(gjson.Result) bool) SyncCheckOpt {
 // one event.
 func SyncRoomAccountDataHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		err := loopArray(
+		err := checkArrayElements(
 			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".account_data.events", check,
 		)
 		if err == nil {
@@ -374,7 +374,7 @@ func SyncRoomAccountDataHas(roomID string, check func(gjson.Result) bool) SyncCh
 // `check` gets passed the full event, including sender and type.
 func SyncToDeviceHas(fromUser string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		err := loopArray(
+		err := checkArrayElements(
 			topLevelSyncJSON, "to_device.events", func(result gjson.Result) bool {
 				if fromUser != "" && result.Get("sender").Str != fromUser {
 					return false

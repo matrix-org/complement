@@ -600,7 +600,7 @@ func GjsonEscape(in string) string {
 	return in
 }
 
-func loopArray(object gjson.Result, key string, check func(gjson.Result) bool) error {
+func checkArrayElements(object gjson.Result, key string, check func(gjson.Result) bool) error {
 	array := object.Get(key)
 	if !array.Exists() {
 		return fmt.Errorf("Key %s does not exist", key)
