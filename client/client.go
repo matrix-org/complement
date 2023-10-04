@@ -18,7 +18,7 @@ import (
 	"github.com/tidwall/gjson"
 	"maunium.net/go/mautrix/crypto/olm"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 )
 
 // TestLike is an interface that testing.T satisfies. All client functions accept a TestLike interface,

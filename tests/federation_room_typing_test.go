@@ -6,7 +6,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 )
 
 func awaitTyping(userId string) func(result gjson.Result) bool {

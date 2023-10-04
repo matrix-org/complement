@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/must"
 )
