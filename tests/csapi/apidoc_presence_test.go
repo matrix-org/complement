@@ -11,7 +11,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
 )

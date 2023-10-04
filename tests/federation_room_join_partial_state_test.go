@@ -31,7 +31,7 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
