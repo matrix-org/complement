@@ -5,8 +5,8 @@ import (
 
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // This is technically a tad different from the sytest, in that it doesnt try to ban a @random_dude:test,

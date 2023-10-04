@@ -19,11 +19,11 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -368,7 +368,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	)
 	stateResp := client.ParseJSON(t, res)
 	membership := must.GetJSONFieldStr(t, stateResp, "membership")
-	must.EqualStr(t, membership, "ban", "membership of charlie")
+	must.Equal(t, membership, "ban", "membership of charlie")
 }
 
 // This test checks that we cannot submit anything via /v1/send_join except a join.

@@ -2,19 +2,21 @@
 package must
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/tidwall/gjson"
+	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/slices"
 
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 
-	"github.com/matrix-org/complement/internal/match"
+	"github.com/matrix-org/complement/match"
 )
 
 // NotError will ensure `err` is nil else terminate the test with `msg`.
@@ -25,10 +27,11 @@ func NotError(t *testing.T, msg string, err error) {
 	}
 }
 
+// EXPERIMENTAL
 // ParseJSON will ensure that the HTTP request/response body is valid JSON, then return the body, else terminate the test.
 func ParseJSON(t *testing.T, b io.ReadCloser) []byte {
 	t.Helper()
-	body, err := ioutil.ReadAll(b)
+	body, err := io.ReadAll(b)
 	if err != nil {
 		t.Fatalf("MustParseJSON: reading body returned %s", err)
 	}
@@ -38,10 +41,11 @@ func ParseJSON(t *testing.T, b io.ReadCloser) []byte {
 	return body
 }
 
+// EXPERIMENTAL
 // MatchRequest consumes the HTTP request and performs HTTP-level assertions on it. Returns the raw response body.
 func MatchRequest(t *testing.T, req *http.Request, m match.HTTPRequest) []byte {
 	t.Helper()
-	body, err := ioutil.ReadAll(req.Body)
+	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		t.Fatalf("MatchRequest: Failed to read request body: %s", err)
 	}
@@ -68,6 +72,7 @@ func MatchRequest(t *testing.T, req *http.Request, m match.HTTPRequest) []byte {
 	return body
 }
 
+// EXPERIMENTAL
 // MatchSuccess consumes the HTTP response and fails if the response is non-2xx.
 func MatchSuccess(t *testing.T, res *http.Response) {
 	if res.StatusCode < 200 || res.StatusCode > 299 {
@@ -75,6 +80,7 @@ func MatchSuccess(t *testing.T, res *http.Response) {
 	}
 }
 
+// EXPERIMENTAL
 // MatchFailure consumes the HTTP response and fails if the response is 2xx.
 func MatchFailure(t *testing.T, res *http.Response) {
 	if res.StatusCode >= 200 && res.StatusCode <= 299 {
@@ -82,10 +88,11 @@ func MatchFailure(t *testing.T, res *http.Response) {
 	}
 }
 
+// EXPERIMENTAL
 // MatchResponse consumes the HTTP response and performs HTTP-level assertions on it. Returns the raw response body.
 func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byte {
 	t.Helper()
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("MatchResponse: Failed to read response body: %s", err)
 	}
@@ -132,6 +139,7 @@ func MatchFederationRequest(t *testing.T, fedReq *fclient.FederationRequest, mat
 	}
 }
 
+// EXPERIMENTAL
 // MatchGJSON performs JSON assertions on a gjson.Result object.
 func MatchGJSON(t *testing.T, jsonResult gjson.Result, matchers ...match.JSON) {
 	t.Helper()
@@ -139,6 +147,7 @@ func MatchGJSON(t *testing.T, jsonResult gjson.Result, matchers ...match.JSON) {
 	MatchJSON(t, jsonResult.Raw, matchers...)
 }
 
+// EXPERIMENTAL
 // MatchJSON performs JSON assertions on a raw JSON string.
 func MatchJSON(t *testing.T, json string, matchers ...match.JSON) {
 	t.Helper()
@@ -146,6 +155,7 @@ func MatchJSON(t *testing.T, json string, matchers ...match.JSON) {
 	MatchJSONBytes(t, []byte(json), matchers...)
 }
 
+// EXPERIMENTAL
 // MatchJSONBytes performs JSON assertions on a raw json byte slice.
 func MatchJSONBytes(t *testing.T, rawJson []byte, matchers ...match.JSON) {
 	t.Helper()
@@ -161,22 +171,23 @@ func MatchJSONBytes(t *testing.T, rawJson []byte, matchers ...match.JSON) {
 	}
 }
 
-// EqualStr ensures that got==want else logs an error.
-func EqualStr(t *testing.T, got, want, msg string) {
+// Equal ensures that got==want else logs an error.
+func Equal[V comparable](t *testing.T, got, want V, msg string) {
 	t.Helper()
 	if got != want {
-		t.Errorf("EqualStr %s: got '%s' want '%s'", msg, got, want)
+		t.Errorf("Equal %s: got '%v' want '%v'", msg, got, want)
 	}
 }
 
 // NotEqualStr ensures that got!=want else logs an error.
-func NotEqualStr(t *testing.T, got, want, msg string) {
+func NotEqual[V comparable](t *testing.T, got, want V, msg string) {
 	t.Helper()
 	if got == want {
-		t.Errorf("NotEqualStr %s: got '%s', but didn't want it", msg, got)
+		t.Errorf("NotEqual %s: got '%v', want '%v'", msg, got, want)
 	}
 }
 
+// EXPERIMENTAL
 // StartWithStr ensures that got starts with wantPrefix else logs an error.
 func StartWithStr(t *testing.T, got, wantPrefix, msg string) {
 	t.Helper()
@@ -199,19 +210,53 @@ func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
 	return res.Str
 }
 
-// HaveInOrder checks that the two string slices match exactly, failing the test on mismatches or omissions.
-func HaveInOrder(t *testing.T, gots []string, wants []string) {
+// EXPERIMENTAL
+// HaveInOrder checks that the two slices match exactly, failing the test on mismatches or omissions.
+func HaveInOrder[V comparable](t *testing.T, gots []V, wants []V) {
 	t.Helper()
 	if len(gots) != len(wants) {
-		t.Fatalf("HaveEventsInOrder: length mismatch, got %v want %v", gots, wants)
+		t.Fatalf("HaveInOrder: length mismatch, got %v want %v", gots, wants)
 	}
 	for i := range gots {
 		if gots[i] != wants[i] {
-			t.Errorf("HaveEventsInOrder: index %d got %s want %s", i, gots[i], wants[i])
+			t.Errorf("HaveInOrder: index %d got %v want %v", i, gots[i], wants[i])
 		}
 	}
 }
 
+// EXPERIMENTAL
+// HaveInAnyOrder checks that the two slices match, ignoring ordering. Fails the test on additions or omissions.
+// Side-effects by sorting the gots/wants.
+func HaveInAnyOrder[V constraints.Ordered](t *testing.T, gots []V, wants []V) {
+	t.Helper()
+	if len(gots) != len(wants) {
+		t.Fatalf("HaveInAnyOrder: length mismatch, got %v want %v", gots, wants)
+	}
+	slices.Sort(gots)
+	slices.Sort(wants)
+	for i := range gots {
+		if gots[i] != wants[i] {
+			t.Errorf("HaveInAnyOrder: index %d got %v want %v", i, gots[i], wants[i])
+		}
+	}
+}
+
+// EXPERIMENTAL
+// ContainsSubset checks that every item in smaller is in larger, failing the test if at least 1 item isn't. Ignores extra elements
+// in larger. Ignores ordering.
+func ContainsSubset[V comparable](t *testing.T, larger []V, smaller []V) {
+	t.Helper()
+	if len(larger) < len(smaller) {
+		t.Fatalf("ContainsSubset: length mismatch, larger=%d smaller=%d", len(larger), len(smaller))
+	}
+	for i, item := range smaller {
+		if !slices.Contains(larger, item) {
+			t.Fatalf("ContainsSubset: element not found in larger set: smaller[%d] (%v)", i, item)
+		}
+	}
+}
+
+// EXPERIMENTAL
 // CheckOffAll checks that a list contains exactly the given items, in any order.
 //
 // if an item is not present, the test is failed.
@@ -225,6 +270,7 @@ func CheckOffAll(t *testing.T, items []interface{}, wantItems []interface{}) {
 	}
 }
 
+// EXPERIMENTAL
 // CheckOffAllAllowUnwanted checks that a list contains all of the given items, in any order.
 // The updated list with the matched items removed from it is returned.
 //
@@ -238,16 +284,17 @@ func CheckOffAllAllowUnwanted(t *testing.T, items []interface{}, wantItems []int
 	return items
 }
 
+// EXPERIMENTAL
 // CheckOff an item from the list. If the item is not present the test is failed.
 // The updated list with the matched item removed from it is returned. Items are
-// compared using match.JSONDeepEqual
+// compared using JSON deep equal.
 func CheckOff(t *testing.T, items []interface{}, wantItem interface{}) []interface{} {
 	t.Helper()
 	// check off the item
 	want := -1
 	for i, w := range items {
 		wBytes, _ := json.Marshal(w)
-		if match.JSONDeepEqual(wBytes, wantItem) {
+		if jsonDeepEqual(wBytes, wantItem) {
 			want = i
 			break
 		}
@@ -259,4 +306,14 @@ func CheckOff(t *testing.T, items []interface{}, wantItem interface{}) []interfa
 	// delete the wanted item
 	items = append(items[:want], items[want+1:]...)
 	return items
+}
+
+func jsonDeepEqual(gotJson []byte, wantValue interface{}) bool {
+	// marshal what the test gave us
+	wantBytes, _ := json.Marshal(wantValue)
+	// re-marshal what the network gave us to acount for key ordering
+	var gotVal interface{}
+	_ = json.Unmarshal(gotJson, &gotVal)
+	gotBytes, _ := json.Marshal(gotVal)
+	return bytes.Equal(gotBytes, wantBytes)
 }

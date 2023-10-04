@@ -11,8 +11,8 @@ import (
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -299,8 +299,8 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
 				return false
 			}
-			must.EqualStr(t, ev.Get("sender").Str, bob.UserID, "Bob should have joined by himself")
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
+			must.Equal(t, ev.Get("sender").Str, bob.UserID, "Bob should have joined by himself")
+			must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
 
 			return true
 		},
@@ -328,7 +328,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
 				return false
 			}
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, "leave", "Charlie failed to leave the room")
+			must.Equal(t, ev.Get("content").Get("membership").Str, "leave", "Charlie failed to leave the room")
 
 			return true
 		},
@@ -436,8 +436,8 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
 				return false
 			}
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
-			must.EqualStr(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
+			must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
+			must.Equal(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
 
 			return true
 		},
@@ -487,8 +487,8 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
 				return false
 			}
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
-			must.EqualStr(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
+			must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
+			must.Equal(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
 
 			return true
 		},

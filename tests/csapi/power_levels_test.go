@@ -8,8 +8,8 @@ import (
 
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // This test ensures that an authorised (PL 100) user is able to modify the users_default value

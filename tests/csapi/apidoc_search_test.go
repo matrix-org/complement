@@ -11,8 +11,8 @@ import (
 
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // Note: In contrast to Sytest, we define a filter.rooms on each search request, this is to mimic

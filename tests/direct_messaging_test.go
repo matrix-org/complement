@@ -9,8 +9,8 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 

@@ -1,3 +1,21 @@
+// package match contains matchers for HTTP and JSON data.
+//
+// Matchers are composable functions which check for the data specified, returning a golang error if a matcher fails.
+// They are typically used with the 'must' package in the following way:
+//
+//	res := user.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.server_acl"})
+//	must.MatchResponse(t, res, match.HTTPResponse{
+//		StatusCode: 200,
+//		JSON: []match.JSON{
+//			match.JSONKeyEqual("allow", []string{"*"}),
+//			match.JSONKeyEqual("deny", []string{"hs2"}),
+//			match.JSONKeyEqual("allow_ip_literals", true),
+//		},
+//	})
+//
+// Matchers have no concept of tests, and do not automatically fail tests if the match fails. This can be useful
+// when you want to repeatedly perform a check until it succeeds (e.g from /sync). If you want matches to fail a test,
+// you can use the 'must' package.
 package match
 
 import (
@@ -23,26 +41,14 @@ func JSONKeyEqual(wantKey string, wantValue interface{}) JSON {
 			return fmt.Errorf("key '%s' missing", wantKey)
 		}
 		gotValue := res.Value()
-		if !JSONDeepEqual([]byte(res.Raw), wantValue) {
+		if !jsonDeepEqual([]byte(res.Raw), wantValue) {
 			return fmt.Errorf(
 				"key '%s' got '%v' (type %T) want '%v' (type %T)",
 				wantKey, gotValue, gotValue, wantValue, wantValue,
 			)
-		} else {
-			return nil
 		}
+		return nil
 	}
-}
-
-// JSONDeepEqual compares raw json with a json-serializable value, seeing if they're equal.
-func JSONDeepEqual(gotJson []byte, wantValue interface{}) bool {
-	// marshal what the test gave us
-	wantBytes, _ := json.Marshal(wantValue)
-	// re-marshal what the network gave us to acount for key ordering
-	var gotVal interface{}
-	_ = json.Unmarshal(gotJson, &gotVal)
-	gotBytes, _ := json.Marshal(gotVal)
-	return bytes.Equal(gotBytes, wantBytes)
 }
 
 // JSONKeyPresent returns a matcher which will check that `wantKey` is present in the JSON object.
@@ -130,7 +136,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 			want := -1
 			for i, w := range wantItems {
 				wBytes, _ := json.Marshal(w)
-				if JSONDeepEqual(wBytes, item) {
+				if jsonDeepEqual(wBytes, item) {
 					want = i
 					break
 				}
@@ -166,6 +172,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 	}
 }
 
+// EXPERIMENTAL
 // JSONCheckOffAllowUnwanted returns a matcher which will loop over `wantKey` and ensure that the items
 // (which can be array elements or object keys)
 // are present exactly once in any order in `wantItems`. Allows unexpected items or items
@@ -177,17 +184,19 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 // it's an object).
 //
 // Usage: (ensures `events` has these events in any order, with the right event type)
-//    JSONCheckOffAllowUnwanted("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
-//        return r.Get("event_id").Str
-//    }, func(eventID interface{}, eventBody gjson.Result) error {
-//        if eventBody.Get("type").Str != "m.room.message" {
-//	          return fmt.Errorf("expected event to be 'm.room.message'")
-//        }
-//    })
+//
+//	   JSONCheckOffAllowUnwanted("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
+//	       return r.Get("event_id").Str
+//	   }, func(eventID interface{}, eventBody gjson.Result) error {
+//	       if eventBody.Get("type").Str != "m.room.message" {
+//		          return fmt.Errorf("expected event to be 'm.room.message'")
+//	       }
+//	   })
 func JSONCheckOffAllowUnwanted(wantKey string, wantItems []interface{}, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
 	return jsonCheckOffInternal(wantKey, wantItems, true, mapper, fn)
 }
 
+// EXPERIMENTAL
 // JSONCheckOff returns a matcher which will loop over `wantKey` and ensure that the items
 // (which can be array elements or object keys)
 // are present exactly once in any order in `wantItems`. If there are unexpected items or items
@@ -199,13 +208,14 @@ func JSONCheckOffAllowUnwanted(wantKey string, wantItems []interface{}, mapper f
 // it's an object).
 //
 // Usage: (ensures `events` has these events in any order, with the right event type)
-//    JSONCheckOff("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
-//        return r.Get("event_id").Str
-//    }, func(eventID interface{}, eventBody gjson.Result) error {
-//        if eventBody.Get("type").Str != "m.room.message" {
-//	          return fmt.Errorf("expected event to be 'm.room.message'")
-//        }
-//    })
+//
+//	   JSONCheckOff("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
+//	       return r.Get("event_id").Str
+//	   }, func(eventID interface{}, eventBody gjson.Result) error {
+//	       if eventBody.Get("type").Str != "m.room.message" {
+//		          return fmt.Errorf("expected event to be 'm.room.message'")
+//	       }
+//	   })
 func JSONCheckOff(wantKey string, wantItems []interface{}, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
 	return jsonCheckOffInternal(wantKey, wantItems, false, mapper, fn)
 }
@@ -256,6 +266,7 @@ func JSONMapEach(wantKey string, fn func(k, v gjson.Result) error) JSON {
 	}
 }
 
+// EXPERIMENTAL
 // AnyOf takes 1 or more `checkers`, and builds a new checker which accepts a given
 // json body iff it's accepted by at least one of the original `checkers`.
 func AnyOf(checkers ...JSON) JSON {
@@ -280,4 +291,16 @@ func AnyOf(checkers ...JSON) JSON {
 		}
 		return fmt.Errorf(builder.String())
 	}
+}
+
+// jsonDeepEqual compares raw json with a json-serializable value, seeing if they're equal.
+// It forces `gotJson` through a JSON parser to ensure keys/whitespace are identical to the marshalled form of `wantValue`.
+func jsonDeepEqual(gotJson []byte, wantValue interface{}) bool {
+	// marshal what the test gave us
+	wantBytes, _ := json.Marshal(wantValue)
+	// re-marshal what the network gave us to acount for key ordering
+	var gotVal interface{}
+	_ = json.Unmarshal(gotJson, &gotVal)
+	gotBytes, _ := json.Marshal(gotVal)
+	return bytes.Equal(gotBytes, wantBytes)
 }

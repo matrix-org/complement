@@ -9,9 +9,9 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/must"
 )
 
 func TestRoomCreationReportsEventsToMyself(t *testing.T) {
@@ -32,8 +32,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if ev.Get("type").Str != "m.room.create" {
 					return false
 				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("content").Get("creator").Str, userID, "wrong content.creator")
+				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
+				must.Equal(t, ev.Get("content").Get("creator").Str, userID, "wrong content.creator")
 				return true
 			}))
 		})
@@ -46,9 +46,9 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if ev.Get("type").Str != "m.room.member" {
 					return false
 				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("state_key").Str, userID, "wrong state_key")
-				must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "wrong content.membership")
+				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
+				must.Equal(t, ev.Get("state_key").Str, userID, "wrong state_key")
+				must.Equal(t, ev.Get("content").Get("membership").Str, "join", "wrong content.membership")
 				return true
 			}))
 		})
@@ -74,8 +74,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if !ev.Get("state_key").Exists() {
 					return false
 				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("content").Get("topic").Str, roomTopic, "wrong content.topic")
+				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
+				must.Equal(t, ev.Get("content").Get("topic").Str, roomTopic, "wrong content.topic")
 				return true
 			}))
 		})

@@ -9,8 +9,8 @@ import (
 
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 func setRoomAliasResp(t *testing.T, c *client.CSAPI, roomID, roomAlias string) *http.Response {
