@@ -18,8 +18,8 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // TODO:
@@ -418,7 +418,7 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			events := result.Events.UntrustedEvents(roomVersion)
 
 			verifyMsgEvent := func(ev gomatrixserverlib.PDU) {
-				must.EqualStr(t, ev.Type(), "m.room.message", "not a message event")
+				must.Equal(t, ev.Type(), "m.room.message", "not a message event")
 				// if the history vis is 'joined' or 'invite', we should get redacted
 				// copies of the events before we joined.
 				if visibility == gomatrixserverlib.HistoryVisibilityJoined || visibility == gomatrixserverlib.HistoryVisibilityInvited {
@@ -435,20 +435,20 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			}
 
 			for i, ev := range events {
-				must.EqualStr(t, ev.RoomID().String(), roomID, "unexpected roomID")
+				must.Equal(t, ev.RoomID().String(), roomID, "unexpected roomID")
 				switch i {
 				case 0:
-					must.EqualStr(t, ev.Type(), "m.room.member", "not a membership event")
-					must.EqualStr(t, *ev.StateKey(), alice.UserID, "unexpected creator")
+					must.Equal(t, ev.Type(), "m.room.member", "not a membership event")
+					must.Equal(t, *ev.StateKey(), alice.UserID, "unexpected creator")
 				case 1:
-					must.EqualStr(t, ev.Type(), spec.MRoomPowerLevels, "not a powerlevel event")
+					must.Equal(t, ev.Type(), spec.MRoomPowerLevels, "not a powerlevel event")
 				case 2:
-					must.EqualStr(t, ev.Type(), spec.MRoomJoinRules, "not a join_rules event")
+					must.Equal(t, ev.Type(), spec.MRoomJoinRules, "not a join_rules event")
 				case 3:
-					must.EqualStr(t, ev.Type(), spec.MRoomHistoryVisibility, "not a history_visiblity event")
+					must.Equal(t, ev.Type(), spec.MRoomHistoryVisibility, "not a history_visiblity event")
 				case 4:
 					if visibility != gomatrixserverlib.HistoryVisibilityShared { // shared -> shared no-ops
-						must.EqualStr(t, ev.Type(), spec.MRoomHistoryVisibility, "not a history_visiblity event")
+						must.Equal(t, ev.Type(), spec.MRoomHistoryVisibility, "not a history_visiblity event")
 					} else {
 						verifyMsgEvent(ev)
 					}

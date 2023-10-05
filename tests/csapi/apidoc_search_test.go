@@ -9,10 +9,10 @@ import (
 	"github.com/matrix-org/util"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // Note: In contrast to Sytest, we define a filter.rooms on each search request, this is to mimic
@@ -263,7 +263,7 @@ func TestSearch(t *testing.T) {
 							match.JSONKeyEqual("result.content.body", expectedEvents[eventID.(string)]),
 						}
 						for _, jm := range matchers {
-							if err := jm([]byte(result.Raw)); err != nil {
+							if err := jm(result); err != nil {
 								return err
 							}
 						}

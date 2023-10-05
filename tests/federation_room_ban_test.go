@@ -3,16 +3,14 @@ package tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/complement/client"
 )
 
 // Regression test for https://github.com/matrix-org/synapse/issues/1563
 // Create a federation room. Bob bans Alice. Bob unbans Alice. Bob invites Alice (unbanning her). Ensure the invite is
 // received and can be accepted.
 func TestUnbanViaInvite(t *testing.T) {
-	runtime.SkipIf(t, runtime.Synapse) // FIXME: https://github.com/matrix-org/synapse/issues/1563
 	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 

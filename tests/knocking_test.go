@@ -23,8 +23,8 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // A reason to include in the request body when testing knock reason parameters
@@ -168,8 +168,8 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
 				return false
 			}
-			must.EqualStr(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
-			must.EqualStr(t, ev.Get("content").Get("membership").Str, "knock", "incorrect membership for knocking user")
+			must.Equal(t, ev.Get("content").Get("reason").Str, testKnockReason, "incorrect reason for knock")
+			must.Equal(t, ev.Get("content").Get("membership").Str, "knock", "incorrect membership for knocking user")
 			return true
 		}))
 	})
@@ -202,7 +202,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 					if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != knockingUser.UserID {
 						continue
 					}
-					must.EqualStr(t, ev.Get("content").Get("membership").Str, "leave", "expected leave membership after rescinding a knock")
+					must.Equal(t, ev.Get("content").Get("membership").Str, "leave", "expected leave membership after rescinding a knock")
 					return nil
 				}
 				return fmt.Errorf("leave timeline for %s doesn't have leave event for %s", roomID, knockingUser.UserID)

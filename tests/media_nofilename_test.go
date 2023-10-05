@@ -8,7 +8,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/must"
 )
 
 // Can handle uploads and remote/local downloads without a file name
@@ -43,14 +43,14 @@ func TestMediaWithoutFileName(t *testing.T) {
 		t.Run("Can upload without a file name", func(t *testing.T) {
 			t.Parallel()
 			mxc := alice.UploadContent(t, file, fileName, contentType)
-			must.NotEqualStr(t, mxc, "", "did not return an MXC URI")
+			must.NotEqual(t, mxc, "", "did not return an MXC URI")
 			must.StartWithStr(t, mxc, "mxc://", "returned invalid MXC URI")
 		})
 		// sytest: Can download without a file name locally
 		t.Run("Can download without a file name locally", func(t *testing.T) {
 			t.Parallel()
 			mxc := alice.UploadContent(t, file, fileName, contentType)
-			must.NotEqualStr(t, mxc, "", "did not return an MXC URI")
+			must.NotEqual(t, mxc, "", "did not return an MXC URI")
 			must.StartWithStr(t, mxc, "mxc://", "returned invalid MXC URI")
 
 			b, ct := alice.DownloadContent(t, mxc)
@@ -62,14 +62,14 @@ func TestMediaWithoutFileName(t *testing.T) {
 			// For now, we're operating under the assumption that homeservers are free to add other
 			// directives. All we're going to check is the mime-type.
 			mimeType := strings.Split(ct, ";")[0]
-			must.EqualStr(
+			must.Equal(
 				t, mimeType, contentType,
 				fmt.Sprintf(
 					"Wrong mime-type returned in Content-Type returned. got Content-Type '%s', extracted mime-type '%s', expected mime-type: '%s'",
 					ct, mimeType, contentType,
 				),
 			)
-			must.EqualStr(t, string(b), string(file), "wrong file content returned")
+			must.Equal(t, string(b), string(file), "wrong file content returned")
 		})
 		// sytest: Can download without a file name over federation
 		t.Run("Can download without a file name over federation", func(t *testing.T) {
@@ -84,14 +84,14 @@ func TestMediaWithoutFileName(t *testing.T) {
 			// For now, we're operating under the assumption that homeservers are free to add other
 			// directives. All we're going to check is the mime-type.
 			mimeType := strings.Split(ct, ";")[0]
-			must.EqualStr(
+			must.Equal(
 				t, mimeType, contentType,
 				fmt.Sprintf(
 					"Wrong mime-type returned in Content-Type returned. got Content-Type '%s', extracted mime-type '%s', expected mime-type: '%s'",
 					ct, mimeType, contentType,
 				),
 			)
-			must.EqualStr(t, string(b), string(remoteFile), "wrong file content returned")
+			must.Equal(t, string(b), string(remoteFile), "wrong file content returned")
 		})
 	})
 }

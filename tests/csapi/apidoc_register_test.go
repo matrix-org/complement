@@ -13,10 +13,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // TODO:
@@ -312,9 +312,9 @@ func registerSharedSecret(t *testing.T, c *client.CSAPI, user, pass string, isAd
 		return resp
 	}
 	body := must.ParseJSON(t, resp.Body)
-	nonce := gjson.GetBytes(body, "nonce")
+	nonce := body.Get("nonce")
 	if !nonce.Exists() {
-		t.Fatalf("Malformed shared secret GET response: %s", string(body))
+		t.Fatalf("Malformed shared secret GET response: %s", body.Raw)
 	}
 	mac := hmac.New(sha1.New, []byte(client.SharedSecret))
 	mac.Write([]byte(nonce.Str))

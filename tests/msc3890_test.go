@@ -12,8 +12,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/tidwall/gjson"
 )
 
@@ -53,10 +53,7 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 			if r.Get("type").Str != accountDataType {
 				return false
 			}
-			content := r.Get("content")
-
-			// Ensure the content of this account data type is as we expect
-			return match.JSONDeepEqual([]byte(content.Raw), accountDataContent)
+			return match.JSONKeyEqual("content", accountDataContent)(r) == nil
 		}
 
 		// Check that the content of the user account data for this type has been set successfully

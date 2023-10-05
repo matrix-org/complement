@@ -3,6 +3,8 @@ package client
 import (
 	"fmt"
 	"net/url"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -363,6 +365,32 @@ func SyncRoomAccountDataHas(roomID string, check func(gjson.Result) bool) SyncCh
 		}
 		return fmt.Errorf("SyncRoomAccountDataHas(%s): %s", roomID, err)
 	}
+}
+
+// SyncUsersTyping passes when all users in `userIDs` are typing in the same typing EDU.
+// It must see a typing EDU first before returning, even if the list of user IDs is empty.
+func SyncUsersTyping(roomID string, userIDs []string) SyncCheckOpt {
+	// don't sort the input slice the test gave us.
+	userIDsCopy := make([]string, len(userIDs))
+	copy(userIDsCopy, userIDs)
+	sort.Strings(userIDsCopy)
+	return SyncEphemeralHas(roomID, func(r gjson.Result) bool {
+		if r.Get("type").Str != "m.typing" {
+			return false
+		}
+
+		var usersSeenTyping []string
+		for _, item := range r.Get("content").Get("user_ids").Array() {
+			usersSeenTyping = append(usersSeenTyping, item.Str)
+		}
+		// special case to support nil and 0 length slices
+		if len(usersSeenTyping) == 0 && len(userIDsCopy) == 0 {
+			return true
+		}
+		sort.Strings(userIDsCopy)
+		sort.Strings(usersSeenTyping)
+		return reflect.DeepEqual(userIDsCopy, usersSeenTyping)
+	})
 }
 
 // Check that sync has received a to-device message,

@@ -3,27 +3,9 @@ package tests
 import (
 	"testing"
 
-	"github.com/tidwall/gjson"
-
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 )
-
-func awaitTyping(userId string) func(result gjson.Result) bool {
-	return func(result gjson.Result) bool {
-		if result.Get("type").Str != "m.typing" {
-			return false
-		}
-
-		for _, item := range result.Get("content").Get("user_ids").Array() {
-			if item.Str == userId {
-				return true
-			}
-		}
-
-		return false
-	}
-}
 
 // sytest: Typing notifications also sent to remote room members
 func TestRemoteTyping(t *testing.T) {
@@ -41,12 +23,9 @@ func TestRemoteTyping(t *testing.T) {
 	bobToken := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 	charlieToken := charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
 
-	alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", alice.UserID}, client.WithJSONBody(t, map[string]interface{}{
-		"typing":  true,
-		"timeout": 10000,
-	}))
+	alice.SendTyping(t, roomID, true, 10000)
 
-	bob.MustSyncUntil(t, client.SyncReq{Since: bobToken}, client.SyncEphemeralHas(roomID, awaitTyping(alice.UserID)))
+	bob.MustSyncUntil(t, client.SyncReq{Since: bobToken}, client.SyncUsersTyping(roomID, []string{alice.UserID}))
 
-	charlie.MustSyncUntil(t, client.SyncReq{Since: charlieToken}, client.SyncEphemeralHas(roomID, awaitTyping(alice.UserID)))
+	charlie.MustSyncUntil(t, client.SyncReq{Since: charlieToken}, client.SyncUsersTyping(roomID, []string{alice.UserID}))
 }

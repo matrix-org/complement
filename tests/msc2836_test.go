@@ -16,14 +16,15 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // This test checks that federated threading works when the remote server joins after the messages
@@ -324,9 +325,9 @@ func TestFederatedEventRelationships(t *testing.T) {
 	fedClient := srv.FederationClient(deployment)
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
-		Destination:    gomatrixserverlib.ServerName("hs1"),
-		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
+		Origin:         spec.ServerName(srv.ServerName()),
+		Destination:    spec.ServerName("hs1"),
+		OriginServerTS: spec.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			eventE.JSON(),
 		},
