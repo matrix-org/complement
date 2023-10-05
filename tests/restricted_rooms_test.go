@@ -487,9 +487,10 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
 				return false
 			}
-			must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
-			must.Equal(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
-
+			must.MatchGJSON(t, ev,
+				match.JSONKeyEqual("content.membership", "join"),
+				match.JSONKeyEqual("content.join_authorised_via_users_server", alice.UserID),
+			)
 			return true
 		},
 	))
