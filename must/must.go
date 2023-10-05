@@ -30,7 +30,7 @@ func NotError(t *testing.T, msg string, err error) {
 
 // EXPERIMENTAL
 // ParseJSON will ensure that the HTTP request/response body is valid JSON, then return the body, else terminate the test.
-func ParseJSON(t *testing.T, b io.ReadCloser) []byte {
+func ParseJSON(t *testing.T, b io.ReadCloser) gjson.Result {
 	t.Helper()
 	body, err := io.ReadAll(b)
 	if err != nil {
@@ -39,7 +39,7 @@ func ParseJSON(t *testing.T, b io.ReadCloser) []byte {
 	if !gjson.ValidBytes(body) {
 		t.Fatalf("MustParseJSON: not valid JSON")
 	}
-	return body
+	return gjson.ParseBytes(body)
 }
 
 // EXPERIMENTAL
@@ -197,14 +197,14 @@ func StartWithStr(t *testing.T, got, wantPrefix, msg string) {
 
 // GetJSONFieldStr extracts the string value under `wantKey` or fails the test.
 // The format of `wantKey` is specified at https://godoc.org/github.com/tidwall/gjson#Get
-func GetJSONFieldStr(t *testing.T, body []byte, wantKey string) string {
+func GetJSONFieldStr(t *testing.T, body gjson.Result, wantKey string) string {
 	t.Helper()
-	res := gjson.GetBytes(body, wantKey)
+	res := body.Get(wantKey)
 	if res.Index == 0 {
-		t.Fatalf("JSONFieldStr: key '%s' missing from %s", wantKey, string(body))
+		t.Fatalf("JSONFieldStr: key '%s' missing from %s", wantKey, body.Raw)
 	}
 	if res.Str == "" {
-		t.Fatalf("JSONFieldStr: key '%s' is not a string, body: %s", wantKey, string(body))
+		t.Fatalf("JSONFieldStr: key '%s' is not a string, body: %s", wantKey, body.Raw)
 	}
 	return res.Str
 }

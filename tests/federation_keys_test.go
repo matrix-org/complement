@@ -182,7 +182,7 @@ func checkKeysAndSignatures(t *testing.T, body []byte, jsonObj gjson.Result, key
 
 	// Test signatures for all verify_keys, these *have* to exist.
 	for keyName, keyBytes := range keys {
-		sigBase64 := must.GetJSONFieldStr(t, body, fmt.Sprintf("signatures.hs1.%s", keyName))
+		sigBase64 := must.GetJSONFieldStr(t, jsonObj, fmt.Sprintf("signatures.hs1.%s", keyName))
 
 		var sigBytes []byte
 		sigBytes, err = base64.RawStdEncoding.DecodeString(sigBase64)

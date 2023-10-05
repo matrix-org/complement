@@ -7,8 +7,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -145,9 +145,8 @@ func TestLogin(t *testing.T) {
 				"password": "superuser"
 			}`)))
 			// extract access_token
-			body := must.ParseJSON(t, res.Body)
+			js := must.ParseJSON(t, res.Body)
 			defer res.Body.Close()
-			js := gjson.ParseBytes(body)
 			unauthedClient.UserID = js.Get("user_id").Str
 			unauthedClient.AccessToken = js.Get("access_token").Str
 			// check that we can successfully query /whoami

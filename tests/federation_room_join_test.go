@@ -363,7 +363,8 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", charlie},
 	)
-	stateResp := client.ParseJSON(t, res)
+	stateResp := must.ParseJSON(t, res.Body)
+	res.Body.Close()
 	membership := must.GetJSONFieldStr(t, stateResp, "membership")
 	must.Equal(t, membership, "ban", "membership of charlie")
 }

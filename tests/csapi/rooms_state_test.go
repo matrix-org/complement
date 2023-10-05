@@ -136,8 +136,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 func getEventIdForState(t *testing.T, client *client.CSAPI, roomID, evType, stateKey string) *string {
 	res := client.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
 
-	jsonBody := must.ParseJSON(t, res.Body)
-	result := gjson.ParseBytes(jsonBody)
+	result := must.ParseJSON(t, res.Body)
 
 	for _, ev := range result.Array() {
 		if ev.Get("type").Str == evType && ev.Get("state_key").Str == stateKey {

@@ -1793,10 +1793,7 @@ func TestPartialStateJoin(t *testing.T) {
 			if httpError.Code != 404 {
 				t.Errorf("expected 404, got %d", httpError.Code)
 			}
-			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-			if errcode != "M_NOT_FOUND" {
-				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
-			}
+			must.MatchGJSON(t, gjson.ParseBytes(httpError.Contents), match.JSONKeyEqual("errcode", "M_NOT_FOUND"))
 		} else {
 			t.Errorf("MakeJoin: non-HTTPError: %v", err)
 		}
@@ -1864,10 +1861,7 @@ func TestPartialStateJoin(t *testing.T) {
 			if httpError.Code != 404 {
 				t.Errorf("expected 404, got %d", httpError.Code)
 			}
-			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-			if errcode != "M_NOT_FOUND" {
-				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
-			}
+			must.MatchGJSON(t, gjson.ParseBytes(httpError.Contents), match.JSONKeyEqual("errcode", "M_NOT_FOUND"))
 		} else {
 			t.Errorf("SendJoin: non-HTTPError: %v", err)
 		}
@@ -1971,10 +1965,7 @@ func TestPartialStateJoin(t *testing.T) {
 			if httpError.Code != 404 {
 				t.Errorf("expected 404, got %d", httpError.Code)
 			}
-			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-			if errcode != "M_NOT_FOUND" {
-				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
-			}
+			must.MatchGJSON(t, gjson.ParseBytes(httpError.Contents), match.JSONKeyEqual("errcode", "M_NOT_FOUND"))
 		} else {
 			t.Errorf("MakeKnock: non-HTTPError: %v", err)
 		}
@@ -2042,10 +2033,7 @@ func TestPartialStateJoin(t *testing.T) {
 			if httpError.Code != 404 {
 				t.Errorf("expected 404, got %d", httpError.Code)
 			}
-			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-			if errcode != "M_NOT_FOUND" {
-				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
-			}
+			must.MatchGJSON(t, gjson.ParseBytes(httpError.Contents), match.JSONKeyEqual("errcode", "M_NOT_FOUND"))
 		} else {
 			t.Errorf("SendKnock: non-HTTPError: %v", err)
 		}
@@ -4060,7 +4048,8 @@ func TestPartialStateJoin(t *testing.T) {
 			[]string{"_matrix", "client", "v3", "sync"},
 			client.WithQueries(queryParams),
 			client.WithRetryUntil(5*time.Second, func(res *http.Response) bool {
-				body := client.ParseJSON(t, res)
+				body := must.ParseJSON(t, res.Body)
+				res.Body.Close()
 				err := matcher(body)
 				return err == nil
 			}),
