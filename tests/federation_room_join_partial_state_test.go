@@ -357,7 +357,7 @@ func TestPartialStateJoin(t *testing.T) {
 				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
 			}, nil,
 		)
-		if err := matcher([]byte(roomRes.Raw)); err != nil {
+		if err := matcher(roomRes); err != nil {
 			t.Errorf("Did not find expected state events in /sync response: %s", err)
 		}
 	}
@@ -762,7 +762,7 @@ func TestPartialStateJoin(t *testing.T) {
 					func(r gjson.Result) interface{} { return r.Str },
 					nil,
 				)
-				return matcher([]byte(res.Raw))
+				return matcher(res)
 			},
 		)
 	})
@@ -1365,10 +1365,10 @@ func TestPartialStateJoin(t *testing.T) {
 				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
 			}, nil,
 		)
-		if err := timelineMatcher([]byte(roomRes.Raw)); err != nil {
+		if err := timelineMatcher(roomRes); err != nil {
 			t.Errorf("Unexpected timeline events found in gappy /sync response: %s", err)
 		}
-		if err := stateMatcher([]byte(roomRes.Raw)); err != nil {
+		if err := stateMatcher(roomRes); err != nil {
 			t.Errorf("Did not find derek's m.room.member event in gappy /sync response: %s", err)
 		}
 	})

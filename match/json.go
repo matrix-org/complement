@@ -36,7 +36,10 @@ type JSON func(body gjson.Result) error
 // `wantValue` is matched via JSONDeepEqual and the JSON takes the forms according to https://godoc.org/github.com/tidwall/gjson#Result.Value
 func JSONKeyEqual(wantKey string, wantValue interface{}) JSON {
 	return func(body gjson.Result) error {
-		res := body.Get(wantKey)
+		res := body
+		if wantKey != "" {
+			res = body.Get(wantKey)
+		}
 		if !res.Exists() {
 			return fmt.Errorf("key '%s' missing", wantKey)
 		}
