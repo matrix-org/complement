@@ -10,12 +10,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/data"
+	"github.com/matrix-org/complement/internal/web"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
-	"github.com/matrix-org/complement/internal/web"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -80,8 +80,8 @@ func TestUrlPreview(t *testing.T) {
 			match.JSONKeyEqual(e("matrix:image:size"), 2239.0),
 			match.JSONKeyEqual(e("og:image:height"), 129.0),
 			match.JSONKeyEqual(e("og:image:width"), 279.0),
-			func(body []byte) error {
-				res := gjson.GetBytes(body, e("og:image"))
+			func(body gjson.Result) error {
+				res := body.Get(e("og:image"))
 				if !res.Exists() {
 					return fmt.Errorf("can not find key og:image")
 				}

@@ -52,8 +52,8 @@ func TestVersionStructure(t *testing.T) {
 					return nil
 				}),
 				// Check when unstable_features is present if it's an object
-				func(body []byte) error {
-					res := gjson.GetBytes(body, "unstable_features")
+				func(body gjson.Result) error {
+					res := body.Get("unstable_features")
 					if !res.Exists() {
 						return nil
 					}

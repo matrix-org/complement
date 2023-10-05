@@ -6,8 +6,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -92,9 +92,9 @@ func TestPowerLevels(t *testing.T) {
 					}
 				}),
 
-				func(body []byte) error {
-					userDefault := int(gjson.GetBytes(body, "users_default").Num)
-					thisUser := int(gjson.GetBytes(body, "users."+client.GjsonEscape(alice.UserID)).Num)
+				func(body gjson.Result) error {
+					userDefault := int(body.Get("users_default").Num)
+					thisUser := int(body.Get("users." + client.GjsonEscape(alice.UserID)).Num)
 
 					if thisUser > userDefault {
 						return nil

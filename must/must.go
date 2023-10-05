@@ -64,8 +64,9 @@ func MatchRequest(t *testing.T, req *http.Request, m match.HTTPRequest) []byte {
 		if !gjson.ValidBytes(body) {
 			t.Fatalf("MatchRequest request body is not valid JSON - %s", contextStr)
 		}
+		parsedBody := gjson.ParseBytes(body)
 		for _, jm := range m.JSON {
-			if err = jm(body); err != nil {
+			if err = jm(parsedBody); err != nil {
 				t.Fatalf("MatchRequest %s - %s", err, contextStr)
 			}
 		}
@@ -116,8 +117,9 @@ func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byt
 		if !gjson.ValidBytes(body) {
 			t.Fatalf("MatchResponse response body is not valid JSON - %s", contextStr)
 		}
+		parsedBody := gjson.ParseBytes(body)
 		for _, jm := range m.JSON {
-			if err = jm(body); err != nil {
+			if err = jm(parsedBody); err != nil {
 				t.Fatalf("MatchResponse %s - %s", err, contextStr)
 			}
 		}
@@ -133,8 +135,9 @@ func MatchFederationRequest(t *testing.T, fedReq *fclient.FederationRequest, mat
 		t.Fatalf("MatchFederationRequest content is not valid JSON - %s", fedReq.RequestURI())
 	}
 
+	parsedContent := gjson.ParseBytes(content)
 	for _, jm := range matchers {
-		if err := jm(content); err != nil {
+		if err := jm(parsedContent); err != nil {
 			t.Fatalf("MatchFederationRequest %s - %s", err, fedReq.RequestURI())
 		}
 	}
@@ -157,8 +160,9 @@ func MatchJSONBytes(t *testing.T, rawJson []byte, matchers ...match.JSON) {
 		t.Fatalf("MatchJSONBytes: rawJson is not valid JSON")
 	}
 
+	body := gjson.ParseBytes(rawJson)
 	for _, jm := range matchers {
-		if err := jm(rawJson); err != nil {
+		if err := jm(body); err != nil {
 			t.Fatalf("MatchJSONBytes %s with input = %v", err, string(rawJson))
 		}
 	}
@@ -173,7 +177,7 @@ func Equal[V comparable](t *testing.T, got, want V, msg string) {
 	}
 }
 
-// NotEqualStr ensures that got!=want else logs an error.
+// NotEqual ensures that got!=want else logs an error.
 // The 'msg' is displayed with the error to provide extra context.
 func NotEqual[V comparable](t *testing.T, got, want V, msg string) {
 	t.Helper()

@@ -29,14 +29,14 @@ import (
 
 // JSON will perform some matches on the given JSON body, returning an error on a mis-match.
 // It can be assumed that the bytes are valid JSON.
-type JSON func(body []byte) error
+type JSON func(body gjson.Result) error
 
 // JSONKeyEqual returns a matcher which will check that `wantKey` is present and its value matches `wantValue`.
 // `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
 // `wantValue` is matched via JSONDeepEqual and the JSON takes the forms according to https://godoc.org/github.com/tidwall/gjson#Result.Value
 func JSONKeyEqual(wantKey string, wantValue interface{}) JSON {
-	return func(body []byte) error {
-		res := gjson.GetBytes(body, wantKey)
+	return func(body gjson.Result) error {
+		res := body.Get(wantKey)
 		if !res.Exists() {
 			return fmt.Errorf("key '%s' missing", wantKey)
 		}
@@ -54,8 +54,8 @@ func JSONKeyEqual(wantKey string, wantValue interface{}) JSON {
 // JSONKeyPresent returns a matcher which will check that `wantKey` is present in the JSON object.
 // `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
 func JSONKeyPresent(wantKey string) JSON {
-	return func(body []byte) error {
-		res := gjson.GetBytes(body, wantKey)
+	return func(body gjson.Result) error {
+		res := body.Get(wantKey)
 		if !res.Exists() {
 			return fmt.Errorf("key '%s' missing", wantKey)
 		}
@@ -66,8 +66,8 @@ func JSONKeyPresent(wantKey string) JSON {
 // JSONKeyMissing returns a matcher which will check that `forbiddenKey` is not present in the JSON object.
 // `forbiddenKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
 func JSONKeyMissing(forbiddenKey string) JSON {
-	return func(body []byte) error {
-		res := gjson.GetBytes(body, forbiddenKey)
+	return func(body gjson.Result) error {
+		res := body.Get(forbiddenKey)
 		if res.Exists() {
 			return fmt.Errorf("key '%s' present", forbiddenKey)
 		}
@@ -78,8 +78,8 @@ func JSONKeyMissing(forbiddenKey string) JSON {
 // JSONKeyTypeEqual returns a matcher which will check that `wantKey` is present and its value is of the type `wantType`.
 // `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
 func JSONKeyTypeEqual(wantKey string, wantType gjson.Type) JSON {
-	return func(body []byte) error {
-		res := gjson.GetBytes(body, wantKey)
+	return func(body gjson.Result) error {
+		res := body.Get(wantKey)
 		if !res.Exists() {
 			return fmt.Errorf("key '%s' missing", wantKey)
 		}
@@ -94,8 +94,8 @@ func JSONKeyTypeEqual(wantKey string, wantType gjson.Type) JSON {
 // its value is an array with the given size.
 // `wantKey` can be nested, see https://godoc.org/github.com/tidwall/gjson#Get for details.
 func JSONKeyArrayOfSize(wantKey string, wantSize int) JSON {
-	return func(body []byte) error {
-		res := gjson.GetBytes(body, wantKey)
+	return func(body gjson.Result) error {
+		res := body.Get(wantKey)
 		if !res.Exists() {
 			return fmt.Errorf("key '%s' missing", wantKey)
 		}
@@ -111,8 +111,8 @@ func JSONKeyArrayOfSize(wantKey string, wantSize int) JSON {
 }
 
 func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwantedItems bool, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
-	return func(body []byte) error {
-		res := gjson.GetBytes(body, wantKey)
+	return func(body gjson.Result) error {
+		res := body.Get(wantKey)
 		if !res.Exists() {
 			return fmt.Errorf("JSONCheckOff: missing key '%s'", wantKey)
 		}
@@ -223,22 +223,19 @@ func JSONCheckOff(wantKey string, wantItems []interface{}, mapper func(gjson.Res
 // JSONArrayEach returns a matcher which will check that `wantKey` is an array then loops over each
 // item calling `fn`. If `fn` returns an error, iterating stops and an error is returned.
 func JSONArrayEach(wantKey string, fn func(gjson.Result) error) JSON {
-	return func(body []byte) error {
-		var res gjson.Result
-		if wantKey == "" {
-			res = gjson.ParseBytes(body)
-		} else {
-			res = gjson.GetBytes(body, wantKey)
+	return func(body gjson.Result) error {
+		if wantKey != "" {
+			body = body.Get(wantKey)
 		}
 
-		if !res.Exists() {
+		if !body.Exists() {
 			return fmt.Errorf("missing key '%s'", wantKey)
 		}
-		if !res.IsArray() {
+		if !body.IsArray() {
 			return fmt.Errorf("key '%s' is not an array", wantKey)
 		}
 		var err error
-		res.ForEach(func(_, val gjson.Result) bool {
+		body.ForEach(func(_, val gjson.Result) bool {
 			err = fn(val)
 			return err == nil
 		})
@@ -249,8 +246,8 @@ func JSONArrayEach(wantKey string, fn func(gjson.Result) error) JSON {
 // JSONMapEach returns a matcher which will check that `wantKey` is a map then loops over each
 // item calling `fn`. If `fn` returns an error, iterating stops and an error is returned.
 func JSONMapEach(wantKey string, fn func(k, v gjson.Result) error) JSON {
-	return func(body []byte) error {
-		res := gjson.GetBytes(body, wantKey)
+	return func(body gjson.Result) error {
+		res := body.Get(wantKey)
 		if !res.Exists() {
 			return fmt.Errorf("missing key '%s'", wantKey)
 		}
@@ -270,7 +267,7 @@ func JSONMapEach(wantKey string, fn func(k, v gjson.Result) error) JSON {
 // AnyOf takes 1 or more `checkers`, and builds a new checker which accepts a given
 // json body iff it's accepted by at least one of the original `checkers`.
 func AnyOf(checkers ...JSON) JSON {
-	return func(body []byte) error {
+	return func(body gjson.Result) error {
 		if len(checkers) == 0 {
 			return fmt.Errorf("must provide at least one checker to AnyOf")
 		}
