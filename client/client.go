@@ -276,6 +276,17 @@ func (c *CSAPI) SendRedaction(t TestLike, roomID string, e b.Event, eventID stri
 	return GetJSONFieldStr(t, body, "event_id")
 }
 
+// SendTyping marks this user as typing until the timeout is reached. If isTyping is false, timeout is ignored.
+func (c *CSAPI) SendTyping(t TestLike, roomID string, isTyping bool, timeoutMillis int) {
+	content := map[string]interface{}{
+		"typing": isTyping,
+	}
+	if isTyping {
+		content["timeout"] = timeoutMillis
+	}
+	c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", c.UserID}, WithJSONBody(t, content))
+}
+
 // GetCapbabilities queries the server's capabilities
 func (c *CSAPI) GetCapabilities(t TestLike) []byte {
 	t.Helper()

@@ -352,10 +352,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		if httpError.Code != 403 {
 			t.Errorf("expected 403, got %d", httpError.Code)
 		}
-		errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-		if errcode != "M_FORBIDDEN" {
-			t.Errorf("errcode: got %s, want M_FORBIDDEN", errcode)
-		}
+		must.MatchJSONBytes(t, httpError.Contents, match.JSONKeyEqual("errcode", "M_FORBIDDEN"))
 	} else {
 		t.Errorf("SendJoin: non-HTTPError: %v", err)
 	}

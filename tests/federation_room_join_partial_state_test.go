@@ -30,8 +30,8 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
@@ -527,16 +527,7 @@ func TestPartialStateJoin(t *testing.T) {
 			client.SyncReq{
 				Filter: buildLazyLoadingSyncFilter(nil),
 			},
-			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
-				if result.Get("type").Str != "m.typing" {
-					return false
-				}
-				user_ids := result.Get("content.user_ids").Array()
-				if len(user_ids) != 1 {
-					return false
-				}
-				return user_ids[0].Str == derekUserId
-			}),
+			client.SyncUsersTyping(serverRoom.RoomID, []string{derekUserId}),
 		)
 
 		// Alice should still be able to see incoming PDUs in the room during
@@ -568,10 +559,7 @@ func TestPartialStateJoin(t *testing.T) {
 				Filter: buildLazyLoadingSyncFilter(nil),
 				Since:  aliceNextBatch,
 			},
-			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
-				return (result.Get("type").Str == "m.typing" &&
-					result.Get("content.user_ids.#").Int() == 0)
-			}),
+			client.SyncUsersTyping(serverRoom.RoomID, []string{}),
 		)
 
 	})
