@@ -14,8 +14,9 @@ import (
 	"github.com/matrix-org/util"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -246,7 +247,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	})
 	room.AddEvent(sentEvent)
 
-	waiter := NewWaiter()
+	waiter := helpers.NewWaiter()
 	onGetMissingEvents = func(w http.ResponseWriter, req *http.Request) {
 		defer waiter.Finish()
 		must.MatchRequest(t, req, match.HTTPRequest{
@@ -300,7 +301,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	})
 	room.AddEvent(message3)
 
-	waiter = NewWaiter()
+	waiter = helpers.NewWaiter()
 	onGetMissingEvents = func(w http.ResponseWriter, req *http.Request) {
 		must.MatchRequest(t, req, match.HTTPRequest{
 			JSON: []match.JSON{

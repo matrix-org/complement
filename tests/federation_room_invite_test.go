@@ -7,6 +7,7 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 )
 
@@ -22,7 +23,7 @@ func TestFederationRejectInvite(t *testing.T) {
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
 
 	// we'll awaken this Waiter when we receive a membership event for Charlie
-	var waiter *Waiter
+	var waiter *helpers.Waiter
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
@@ -47,13 +48,13 @@ func TestFederationRejectInvite(t *testing.T) {
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, delia)
 
 	// Alice invites Charlie; Delia should see the invite
-	waiter = NewWaiter()
+	waiter = helpers.NewWaiter()
 	alice.InviteRoom(t, roomID, charlie.UserID)
 	waiter.Wait(t, 5*time.Second)
 	room.MustHaveMembershipForUser(t, charlie.UserID, "invite")
 
 	// Charlie rejects the invite; Delia should see the rejection.
-	waiter = NewWaiter()
+	waiter = helpers.NewWaiter()
 	charlie.LeaveRoom(t, roomID)
 	waiter.Wait(t, 5*time.Second)
 	room.MustHaveMembershipForUser(t, charlie.UserID, "leave")

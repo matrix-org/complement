@@ -7,6 +7,7 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 )
 
@@ -23,7 +24,7 @@ func TestOutboundFederationSend(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	waiter := NewWaiter()
+	waiter := helpers.NewWaiter()
 	wantEventType := "m.room.message"
 
 	// create a remote homeserver

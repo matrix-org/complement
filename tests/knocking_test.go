@@ -19,8 +19,9 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/internal/match"
 	"github.com/matrix-org/complement/internal/must"
@@ -54,7 +55,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	charlie := deployment.Client(t, "hs2", charlieUserID)
 
 	// Create a server to observe
-	inviteWaiter := NewWaiter()
+	inviteWaiter := helpers.NewWaiter()
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleInviteRequests(func(ev gomatrixserverlib.PDU) {
@@ -90,7 +91,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 		"private_chat", // Set to private in order to get an invite-only room
 		roomVersion,
 	})
-	inviteWaiter = NewWaiter()
+	inviteWaiter = helpers.NewWaiter()
 	alice.InviteRoom(t, roomIDTwo, david)
 	inviteWaiter.Wait(t, 5*time.Second)
 	serverRoomTwo := srv.MustJoinRoom(t, deployment, "hs1", roomIDTwo, david)
