@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/tidwall/gjson"
-	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/slices"
 
 	"github.com/matrix-org/gomatrixserverlib/fclient"
@@ -219,23 +218,6 @@ func HaveInOrder[V comparable](t *testing.T, gots []V, wants []V) {
 	for i := range gots {
 		if gots[i] != wants[i] {
 			t.Errorf("HaveInOrder: index %d got %v want %v", i, gots[i], wants[i])
-		}
-	}
-}
-
-// EXPERIMENTAL
-// HaveInAnyOrder checks that the two slices match, ignoring ordering. Fails the test on additions or omissions.
-// Side-effects by sorting the gots/wants.
-func HaveInAnyOrder[V constraints.Ordered](t *testing.T, gots []V, wants []V) {
-	t.Helper()
-	if len(gots) != len(wants) {
-		t.Fatalf("HaveInAnyOrder: length mismatch, got %v want %v", gots, wants)
-	}
-	slices.Sort(gots)
-	slices.Sort(wants)
-	for i := range gots {
-		if gots[i] != wants[i] {
-			t.Errorf("HaveInAnyOrder: index %d got %v want %v", i, gots[i], wants[i])
 		}
 	}
 }
