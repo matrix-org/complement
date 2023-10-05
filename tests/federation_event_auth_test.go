@@ -7,7 +7,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/gomatrixserverlib"
@@ -92,16 +92,11 @@ func TestEventAuth(t *testing.T) {
 			t.Fatalf("got %d valid auth events (%d total), wanted %d.\n%s\nwant: %s", len(gotAuthEvents), len(eventAuthResp.AuthEvents), len(wantAuthEventIDs), msg, wantAuthEventIDs)
 		}
 		// make sure all the events match
-		wantIDs := map[string]bool{}
-		for _, id := range wantAuthEventIDs {
-			wantIDs[id] = true
+		gotIDs := make([]string, len(gotAuthEvents))
+		for i := range gotIDs {
+			gotIDs[i] = gotAuthEvents[i].EventID()
 		}
-		for _, e := range gotAuthEvents {
-			delete(wantIDs, e.EventID())
-		}
-		if len(wantIDs) > 0 {
-			t.Errorf("missing events %v", wantIDs)
-		}
+		must.ContainSubset(t, gotIDs, wantAuthEventIDs)
 	}
 
 	t.Run("returns auth events for the requested event", func(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/must"
 )
 
 func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {

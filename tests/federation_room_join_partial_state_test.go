@@ -30,12 +30,12 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 type server struct {
@@ -357,7 +357,7 @@ func TestPartialStateJoin(t *testing.T) {
 				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
 			}, nil,
 		)
-		if err := matcher([]byte(roomRes.Raw)); err != nil {
+		if err := matcher(roomRes); err != nil {
 			t.Errorf("Did not find expected state events in /sync response: %s", err)
 		}
 	}
@@ -527,16 +527,7 @@ func TestPartialStateJoin(t *testing.T) {
 			client.SyncReq{
 				Filter: buildLazyLoadingSyncFilter(nil),
 			},
-			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
-				if result.Get("type").Str != "m.typing" {
-					return false
-				}
-				user_ids := result.Get("content.user_ids").Array()
-				if len(user_ids) != 1 {
-					return false
-				}
-				return user_ids[0].Str == derekUserId
-			}),
+			client.SyncUsersTyping(serverRoom.RoomID, []string{derekUserId}),
 		)
 
 		// Alice should still be able to see incoming PDUs in the room during
@@ -568,10 +559,7 @@ func TestPartialStateJoin(t *testing.T) {
 				Filter: buildLazyLoadingSyncFilter(nil),
 				Since:  aliceNextBatch,
 			},
-			client.SyncEphemeralHas(serverRoom.RoomID, func(result gjson.Result) bool {
-				return (result.Get("type").Str == "m.typing" &&
-					result.Get("content.user_ids.#").Int() == 0)
-			}),
+			client.SyncUsersTyping(serverRoom.RoomID, []string{}),
 		)
 
 	})
@@ -774,7 +762,7 @@ func TestPartialStateJoin(t *testing.T) {
 					func(r gjson.Result) interface{} { return r.Str },
 					nil,
 				)
-				return matcher([]byte(res.Raw))
+				return matcher(res)
 			},
 		)
 	})
@@ -1377,10 +1365,10 @@ func TestPartialStateJoin(t *testing.T) {
 				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
 			}, nil,
 		)
-		if err := timelineMatcher([]byte(roomRes.Raw)); err != nil {
+		if err := timelineMatcher(roomRes); err != nil {
 			t.Errorf("Unexpected timeline events found in gappy /sync response: %s", err)
 		}
-		if err := stateMatcher([]byte(roomRes.Raw)); err != nil {
+		if err := stateMatcher(roomRes); err != nil {
 			t.Errorf("Did not find derek's m.room.member event in gappy /sync response: %s", err)
 		}
 	})
@@ -1805,10 +1793,7 @@ func TestPartialStateJoin(t *testing.T) {
 			if httpError.Code != 404 {
 				t.Errorf("expected 404, got %d", httpError.Code)
 			}
-			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-			if errcode != "M_NOT_FOUND" {
-				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
-			}
+			must.MatchGJSON(t, gjson.ParseBytes(httpError.Contents), match.JSONKeyEqual("errcode", "M_NOT_FOUND"))
 		} else {
 			t.Errorf("MakeJoin: non-HTTPError: %v", err)
 		}
@@ -1876,10 +1861,7 @@ func TestPartialStateJoin(t *testing.T) {
 			if httpError.Code != 404 {
 				t.Errorf("expected 404, got %d", httpError.Code)
 			}
-			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-			if errcode != "M_NOT_FOUND" {
-				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
-			}
+			must.MatchGJSON(t, gjson.ParseBytes(httpError.Contents), match.JSONKeyEqual("errcode", "M_NOT_FOUND"))
 		} else {
 			t.Errorf("SendJoin: non-HTTPError: %v", err)
 		}
@@ -1983,10 +1965,7 @@ func TestPartialStateJoin(t *testing.T) {
 			if httpError.Code != 404 {
 				t.Errorf("expected 404, got %d", httpError.Code)
 			}
-			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-			if errcode != "M_NOT_FOUND" {
-				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
-			}
+			must.MatchGJSON(t, gjson.ParseBytes(httpError.Contents), match.JSONKeyEqual("errcode", "M_NOT_FOUND"))
 		} else {
 			t.Errorf("MakeKnock: non-HTTPError: %v", err)
 		}
@@ -2054,10 +2033,7 @@ func TestPartialStateJoin(t *testing.T) {
 			if httpError.Code != 404 {
 				t.Errorf("expected 404, got %d", httpError.Code)
 			}
-			errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-			if errcode != "M_NOT_FOUND" {
-				t.Errorf("errcode: got %s, want M_NOT_FOUND", errcode)
-			}
+			must.MatchGJSON(t, gjson.ParseBytes(httpError.Contents), match.JSONKeyEqual("errcode", "M_NOT_FOUND"))
 		} else {
 			t.Errorf("SendKnock: non-HTTPError: %v", err)
 		}
@@ -4072,7 +4048,8 @@ func TestPartialStateJoin(t *testing.T) {
 			[]string{"_matrix", "client", "v3", "sync"},
 			client.WithQueries(queryParams),
 			client.WithRetryUntil(5*time.Second, func(res *http.Response) bool {
-				body := client.ParseJSON(t, res)
+				body := must.ParseJSON(t, res.Body)
+				res.Body.Close()
 				err := matcher(body)
 				return err == nil
 			}),

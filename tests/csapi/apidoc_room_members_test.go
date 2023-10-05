@@ -5,10 +5,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 func TestRoomMembers(t *testing.T) {
@@ -82,7 +82,7 @@ func TestRoomMembers(t *testing.T) {
 					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
 						return false
 					}
-					must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
+					must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
 					return true
 				},
 			))

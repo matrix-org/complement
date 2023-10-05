@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/tidwall/gjson"
-
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 type backupKey struct {
@@ -40,9 +38,9 @@ func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
 	}))
 	defer res.Body.Close()
 	body := must.ParseJSON(t, res.Body)
-	backupVersion := gjson.GetBytes(body, "version").Str
+	backupVersion := body.Get("version").Str
 	if backupVersion == "" {
-		t.Fatalf("failed to get 'version' key from response: %s", string(body))
+		t.Fatalf("failed to get 'version' key from response: %s", body.Raw)
 	}
 
 	testCases := []struct {

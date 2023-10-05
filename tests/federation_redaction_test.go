@@ -6,6 +6,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
 )
@@ -31,9 +32,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 			func(ev gomatrixserverlib.PDU) {
 				defer waiter.Finish()
 
-				if ev.Type() != wantEventType {
-					t.Errorf("Wrong event type, got %s want %s", ev.Type(), wantEventType)
-				}
+				must.Equal(t, ev.Type(), wantEventType, "wrong event type")
 			},
 			nil,
 		),
@@ -89,8 +88,5 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	}
 
 	// check that the event id of the redaction sent by alice is the same as the redaction event in the room
-	if res != lastEvent.EventID() {
-		t.Fatalf("Incorrent event id %s, wanted %s.", res, lastEvent.EventID())
-	}
-
+	must.Equal(t, lastEvent.EventID(), res, "incorrect event id")
 }
