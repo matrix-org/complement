@@ -255,15 +255,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 
 	// Confirm that Alice cannot issue invites (due to the default power levels).
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	body := map[string]interface{}{
-		"user_id": bob.UserID,
-	}
-	res := alice.Do(
-		t,
-		"POST",
-		[]string{"_matrix", "client", "v3", "rooms", room, "invite"},
-		client.WithJSONBody(t, body),
-	)
+	res := alice.InviteRoom(t, room, bob.UserID)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 403,
 	})

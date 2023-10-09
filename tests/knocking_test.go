@@ -119,17 +119,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 
 	t.Run("Attempting to join a room with join rule 'knock' without an invite should fail", func(t *testing.T) {
 		// Set server_name so we can find rooms via ID over federation
-		query := url.Values{
-			"server_name": []string{"hs1"},
-		}
-
-		res := knockingUser.Do(
-			t,
-			"POST",
-			[]string{"_matrix", "client", "v3", "join", roomID},
-			client.WithQueries(query),
-			client.WithRawBody([]byte(`{}`)),
-		)
+		res := knockingUser.JoinRoom(t, roomID, []string{"hs1"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 403,
 		})
@@ -182,14 +172,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			_, since := knockingUser.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 			// Rescind knock
-			knockingUser.MustDo(
-				t,
-				"POST",
-				[]string{"_matrix", "client", "v3", "rooms", roomID, "leave"},
-				client.WithJSONBody(t, map[string]interface{}{
-					"reason": "Just kidding!",
-				}),
-			)
+			knockingUser.MustLeaveRoom(t, roomID)
 
 			// Use our sync token from earlier to carry out an incremental sync. Initial syncs may not contain room
 			// leave information for obvious reasons
@@ -257,15 +240,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("A user in the room can accept a knock", func(t *testing.T) {
-		inRoomUser.MustDo(
-			t,
-			"POST",
-			[]string{"_matrix", "client", "v3", "rooms", roomID, "invite"},
-			client.WithJSONBody(t, map[string]string{
-				"user_id": knockingUser.UserID,
-				"reason":  "Seems like a trustworthy fellow",
-			}),
-		)
+		inRoomUser.MustInviteRoom(t, roomID, knockingUser.UserID)
 
 		// Wait until the invite membership event has come down sync
 		inRoomUser.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {

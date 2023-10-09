@@ -78,16 +78,8 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 
 	// join the room using ?server_name on HS2
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
-
-	queryParams := url.Values{}
-	queryParams.Set("server_name", "hs1")
-	res := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "join", serverRoom.RoomID}, client.WithQueries(queryParams))
-	must.MatchResponse(t, res, match.HTTPResponse{
-		StatusCode: 200,
-		JSON: []match.JSON{
-			match.JSONKeyEqual("room_id", serverRoom.RoomID),
-		},
-	})
+	roomID := bob.MustJoinRoom(t, serverRoom.RoomID, []string{"hs1"})
+	must.Equal(t, roomID, serverRoom.RoomID, "joined room mismatch")
 }
 
 // This tests that joining a room with multiple ?server_name=s works correctly.

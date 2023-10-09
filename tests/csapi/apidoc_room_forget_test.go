@@ -8,8 +8,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -199,7 +199,7 @@ func TestRoomForget(t *testing.T) {
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 			bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			// Try to re-join
-			joinRes := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "join", roomID}, client.WithJSONBody(t, struct{}{}))
+			joinRes := bob.JoinRoom(t, roomID, nil)
 			must.MatchResponse(t, joinRes, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 				JSON: []match.JSON{

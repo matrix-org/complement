@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/tidwall/gjson"
@@ -38,7 +38,7 @@ func TestRoomsInvite(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
-			res := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
+			res := bob.JoinRoom(t, roomID, nil)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 			})
@@ -85,10 +85,7 @@ func TestRoomsInvite(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
-			body := client.WithJSONBody(t, map[string]interface{}{
-				"user_id": alice.UserID,
-			})
-			res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
+			res := alice.InviteRoom(t, roomID, alice.UserID)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 			})
@@ -106,10 +103,7 @@ func TestRoomsInvite(t *testing.T) {
 			bob.MustJoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
-			body := client.WithJSONBody(t, map[string]interface{}{
-				"user_id": bob.UserID,
-			})
-			res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, body)
+			res := alice.InviteRoom(t, roomID, bob.UserID)
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 			})
