@@ -60,7 +60,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	)
 
 	// Alice creates a public room (so when Eve searches, she can see that Alice exists)
-	alice.CreateRoom(t, map[string]interface{}{"visibility": "public"})
+	alice.MustCreateRoom(t, map[string]interface{}{"visibility": "public"})
 	return alice, bob, eve, cleanup
 }
 
@@ -135,14 +135,14 @@ func TestRoomSpecificUsernameChange(t *testing.T) {
 	defer cleanup(t)
 
 	// Bob creates a new room and invites Alice.
-	privateRoom := bob.CreateRoom(t, map[string]interface{}{
+	privateRoom := bob.MustCreateRoom(t, map[string]interface{}{
 		"visibility": "private",
 		"invite":     []string{alice.UserID},
 	})
 
 	// Alice waits until she sees the invite, then accepts.
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, privateRoom))
-	alice.JoinRoom(t, privateRoom, nil)
+	alice.MustJoinRoom(t, privateRoom, nil)
 
 	// Alice reveals her private name to Bob
 	alice.MustDo(
@@ -163,7 +163,7 @@ func TestRoomSpecificUsernameAtJoin(t *testing.T) {
 	defer cleanup(t)
 
 	// Bob creates a new room and invites Alice.
-	privateRoom := bob.CreateRoom(t, map[string]interface{}{
+	privateRoom := bob.MustCreateRoom(t, map[string]interface{}{
 		"visibility": "private",
 		"invite":     []string{alice.UserID},
 	})
@@ -171,7 +171,7 @@ func TestRoomSpecificUsernameAtJoin(t *testing.T) {
 	// Alice waits until she sees the invite, then accepts.
 	// When she accepts, she does so with a specific displayname.
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, privateRoom))
-	alice.JoinRoom(t, privateRoom, nil)
+	alice.MustJoinRoom(t, privateRoom, nil)
 
 	// Alice reveals her private name to Bob
 	alice.MustDo(

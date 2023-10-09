@@ -63,7 +63,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	bob := srv.UserID("bob")
 
 	// 1) Create a room between the HS and Complement.
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 	srvRoom := srv.MustJoinRoom(t, deployment, "hs1", roomID, bob)
@@ -191,7 +191,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 	roomAlias := srv.MakeAliasMapping("flibble", room.RoomID)
 	// join the room
-	alice.JoinRoom(t, roomAlias, nil)
+	alice.MustJoinRoom(t, roomAlias, nil)
 
 	latestEvent := room.Timeline[len(room.Timeline)-1]
 
@@ -353,7 +353,7 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 	} {
 		// sytest: Inbound federation can return missing events for $vis visibility
 		t.Run(fmt.Sprintf("Inbound federation can return missing events for %s visibility", visibility), func(t *testing.T) {
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset":  "public_chat",
 				"version": roomVersion,
 			})

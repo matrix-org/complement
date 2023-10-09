@@ -30,11 +30,11 @@ func TestWriteMDirectAccountData(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
 	})
-	alice.SetGlobalAccountData(t, "m.direct", map[string]interface{}{
+	alice.MustSetGlobalAccountData(t, "m.direct", map[string]interface{}{
 		bob.UserID: []string{roomID},
 	})
 
@@ -48,17 +48,17 @@ func TestWriteMDirectAccountData(t *testing.T) {
 	t.Logf("%s: global account data set; syncing until it arrives", time.Now()) // synapse#13334
 	since := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncGlobalAccountDataHas(checkAccountData))
 	// now update the DM room and test that incremental syncing also pushes new account data
-	roomID = alice.CreateRoom(t, map[string]interface{}{
+	roomID = alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
 	})
-	alice.SetGlobalAccountData(t, "m.direct", map[string]interface{}{
+	alice.MustSetGlobalAccountData(t, "m.direct", map[string]interface{}{
 		bob.UserID: []string{roomID},
 	})
 	alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncGlobalAccountDataHas(checkAccountData))
 
 	// check that manually GETing the account data also works with the new updated value
-	must.MatchResponse(t, alice.GetGlobalAccountData(t, "m.direct"), match.HTTPResponse{
+	must.MatchResponse(t, alice.MustGetGlobalAccountData(t, "m.direct"), match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{
 			match.JSONKeyEqual(client.GjsonEscape(bob.UserID), []interface{}{roomID}),
@@ -74,7 +74,7 @@ func TestIsDirectFlagLocal(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
 	})

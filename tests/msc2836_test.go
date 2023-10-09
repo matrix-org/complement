@@ -47,7 +47,7 @@ func TestEventRelationships(t *testing.T) {
 
 	// Create the room and send events A,B,C,D
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 	eventA := alice.SendEventSynced(t, roomID, b.Event{
@@ -94,7 +94,7 @@ func TestEventRelationships(t *testing.T) {
 
 	// Join the room from another server
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
-	_ = bob.JoinRoom(t, roomID, []string{"hs1"})
+	_ = bob.MustJoinRoom(t, roomID, []string{"hs1"})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// Now hit /event_relationships with eventD
@@ -306,7 +306,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 
 	// join the room on HS1
 	// HS1 will not have any of these messages, only the room state.
-	alice.JoinRoom(t, room.RoomID, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, room.RoomID, []string{srv.ServerName()})
 
 	// send a new child in the thread (child of D) so the HS has something to latch on to.
 	eventE := srv.MustCreateEvent(t, room, federation.Event{

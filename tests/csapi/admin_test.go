@@ -7,8 +7,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -55,7 +55,7 @@ func TestServerNotices(t *testing.T) {
 		roomID = syncUntilInvite(t, alice)
 	})
 	t.Run("Alice cannot reject the invite", func(t *testing.T) {
-		res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"})
+		res := alice.LeaveRoom(t, roomID)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusForbidden,
 			JSON: []match.JSON{
@@ -64,11 +64,11 @@ func TestServerNotices(t *testing.T) {
 		})
 	})
 	t.Run("Alice can join the alert room", func(t *testing.T) {
-		alice.JoinRoom(t, roomID, []string{})
+		alice.MustJoinRoom(t, roomID, []string{})
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, eventID))
 	})
 	t.Run("Alice can leave the alert room, after joining it", func(t *testing.T) {
-		alice.LeaveRoom(t, roomID)
+		alice.MustLeaveRoom(t, roomID)
 	})
 	t.Run("After leaving the alert room and on re-invitation, no new room is created", func(t *testing.T) {
 		sendServerNotice(t, admin, reqBody, nil)

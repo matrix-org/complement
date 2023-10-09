@@ -44,18 +44,18 @@ func TestFederationRejectInvite(t *testing.T) {
 	delia := srv.UserID("delia")
 
 	// Alice creates the room, and delia joins
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, delia)
 
 	// Alice invites Charlie; Delia should see the invite
 	waiter = helpers.NewWaiter()
-	alice.InviteRoom(t, roomID, charlie.UserID)
+	alice.MustInviteRoom(t, roomID, charlie.UserID)
 	waiter.Wait(t, 5*time.Second)
 	room.MustHaveMembershipForUser(t, charlie.UserID, "invite")
 
 	// Charlie rejects the invite; Delia should see the rejection.
 	waiter = helpers.NewWaiter()
-	charlie.LeaveRoom(t, roomID)
+	charlie.MustLeaveRoom(t, roomID)
 	waiter.Wait(t, 5*time.Second)
 	room.MustHaveMembershipForUser(t, charlie.UserID, "leave")
 }

@@ -41,11 +41,11 @@ func TestNotPresentUserCannotBanOthers(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	alice.SendEventSynced(t, roomID, b.Event{
 		Type:     "m.room.power_levels",

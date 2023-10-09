@@ -53,7 +53,7 @@ func TestOutboundFederationSend(t *testing.T) {
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice.JoinRoom(t, roomAlias, []string{deployment.Config.HostnameRunningComplement})
+	alice.MustJoinRoom(t, roomAlias, []string{deployment.Config.HostnameRunningComplement})
 
 	// the local homeserver sends an event into the room
 	alice.SendEventSynced(t, serverRoom.RoomID, b.Event{

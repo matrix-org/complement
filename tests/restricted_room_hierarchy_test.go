@@ -40,7 +40,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 
 	// Create the rooms
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	space := alice.CreateRoom(t, map[string]interface{}{
+	space := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
 		"creation_content": map[string]interface{}{
@@ -58,7 +58,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 		},
 	})
 	// The room is room version 8 which supports the restricted join_rule.
-	room := alice.CreateRoom(t, map[string]interface{}{
+	room := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
 		"room_version": "8",
@@ -97,7 +97,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 	requestAndAssertSummary(t, bob, space, []interface{}{space})
 
 	// Join the space, and now the restricted room should appear.
-	bob.JoinRoom(t, space, []string{"hs1"})
+	bob.MustJoinRoom(t, space, []string{"hs1"})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, space))
 	requestAndAssertSummary(t, bob, space, []interface{}{space, room})
 }
@@ -122,7 +122,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	// Create the rooms
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	space := alice.CreateRoom(t, map[string]interface{}{
+	space := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
 		"creation_content": map[string]interface{}{
@@ -142,7 +142,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	// The room is room version 8 which supports the restricted join_rule and is
 	// created on hs2.
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
-	room := charlie.CreateRoom(t, map[string]interface{}{
+	room := charlie.MustCreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
 		"room_version": "8",
@@ -181,7 +181,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 
 	// charlie joins the space and now hs2 knows that alice is in the space (and
 	// can join the room).
-	charlie.JoinRoom(t, space, []string{"hs1"})
+	charlie.MustJoinRoom(t, space, []string{"hs1"})
 	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, space))
 
 	// The restricted room should appear for alice (who is in the space).

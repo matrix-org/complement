@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"reflect"
 	"sort"
@@ -142,6 +143,18 @@ func (c *CSAPI) MustSyncUntil(t TestLike, syncReq SyncReq, checks ...SyncCheckOp
 // Returns the top-level parsed /sync response JSON as well as the next_batch token from the response.
 func (c *CSAPI) MustSync(t TestLike, syncReq SyncReq) (gjson.Result, string) {
 	t.Helper()
+	jsonBody, res := c.Sync(t, syncReq)
+	mustRespond2xx(t, res)
+	return jsonBody, jsonBody.Get("next_batch").Str
+}
+
+// Perform a single /sync request with the given request options. To sync until something happens,
+// see `MustSyncUntil`.
+//
+// Always returns the HTTP response, even on non-2xx.
+// Returns the top-level parsed /sync response JSON on 2xx.
+func (c *CSAPI) Sync(t TestLike, syncReq SyncReq) (gjson.Result, *http.Response) {
+	t.Helper()
 	query := url.Values{
 		"timeout": []string{"1000"},
 	}
@@ -161,11 +174,13 @@ func (c *CSAPI) MustSync(t TestLike, syncReq SyncReq) (gjson.Result, string) {
 	if syncReq.SetPresence != "" {
 		query["set_presence"] = []string{syncReq.SetPresence}
 	}
-	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "sync"}, WithQueries(query))
+	res := c.Do(t, "GET", []string{"_matrix", "client", "v3", "sync"}, WithQueries(query))
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return gjson.Result{}, res
+	}
 	body := ParseJSON(t, res)
 	result := gjson.ParseBytes(body)
-	nextBatch := GetJSONFieldStr(t, body, "next_batch")
-	return result, nextBatch
+	return result, res
 }
 
 // Check that the timeline for `roomID` has an event which passes the check function.

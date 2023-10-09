@@ -32,7 +32,7 @@ func TestRemovingAccountData(t *testing.T) {
 	alice := deployment.Client(t, "hs1", aliceUserID)
 
 	// And create a room with that user where we can store some room account data
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	// Test deleting global account data.
 	t.Run("Deleting a user's account data via DELETE works", func(t *testing.T) {
@@ -66,7 +66,7 @@ func createUserAccountData(t *testing.T, c *client.CSAPI) {
 
 	// Set and check the account data
 	// Create user account data
-	c.SetGlobalAccountData(t, testAccountDataType, testAccountDataContent)
+	c.MustSetGlobalAccountData(t, testAccountDataType, testAccountDataContent)
 
 	// Wait for the account data to appear down /sync
 	c.MustSyncUntil(
@@ -78,7 +78,7 @@ func createUserAccountData(t *testing.T, c *client.CSAPI) {
 	)
 
 	// Also check the account data content by querying the appropriate endpoint
-	res := c.GetGlobalAccountData(t, testAccountDataType)
+	res := c.MustGetGlobalAccountData(t, testAccountDataType)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONKeyEqual("", testAccountDataContent),
@@ -96,7 +96,7 @@ func createRoomAccountData(t *testing.T, c *client.CSAPI, roomID string) {
 	)
 
 	// Create room account data
-	c.SetRoomAccountData(t, roomID, testAccountDataType, testAccountDataContent)
+	c.MustSetRoomAccountData(t, roomID, testAccountDataType, testAccountDataContent)
 
 	// Wait for the account data to appear down /sync
 	c.MustSyncUntil(
@@ -108,7 +108,7 @@ func createRoomAccountData(t *testing.T, c *client.CSAPI, roomID string) {
 	)
 
 	// Also check the account data content by querying the appropriate endpoint
-	res := c.GetRoomAccountData(t, roomID, testAccountDataType)
+	res := c.MustGetRoomAccountData(t, roomID, testAccountDataType)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONKeyEqual("", testAccountDataContent),
@@ -140,7 +140,7 @@ func deleteUserAccountData(t *testing.T, c *client.CSAPI, viaDelete bool) {
 	} else {
 		// Delete via the PUT method. PUT'ing with an empty dictionary will delete
 		// the account data type for this user.
-		c.SetGlobalAccountData(t, testAccountDataType, map[string]interface{}{})
+		c.MustSetGlobalAccountData(t, testAccountDataType, map[string]interface{}{})
 	}
 
 	// Check that the content of the user account data for this type
@@ -154,7 +154,7 @@ func deleteUserAccountData(t *testing.T, c *client.CSAPI, viaDelete bool) {
 	)
 
 	// Also check the account data item is no longer found
-	res := c.Do(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", testAccountDataType})
+	res := c.GetGlobalAccountData(t, testAccountDataType)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 404,
 	})
@@ -198,7 +198,7 @@ func deleteRoomAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID
 	} else {
 		// Delete via the PUT method. PUT'ing with an empty dictionary will delete
 		// the account data type for this room.
-		c.SetRoomAccountData(t, roomID, testAccountDataType, map[string]interface{}{})
+		c.MustSetRoomAccountData(t, roomID, testAccountDataType, map[string]interface{}{})
 	}
 
 	// Check that the content of the room account data for this type
@@ -212,7 +212,7 @@ func deleteRoomAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID
 	)
 
 	// Also check the account data item is no longer found
-	res := c.Do(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "room", roomID, "account_data", testAccountDataType})
+	res := c.GetRoomAccountData(t, roomID, testAccountDataType)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 404,
 	})

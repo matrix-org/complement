@@ -23,7 +23,7 @@ func TestTxnInEvent(t *testing.T) {
 	c := deployment.RegisterUser(t, "hs1", "alice", "password", false)
 
 	// Create a room where we can send events.
-	roomID := c.CreateRoom(t, map[string]interface{}{})
+	roomID := c.MustCreateRoom(t, map[string]interface{}{})
 
 	txnId := "abcdefg"
 	// Let's send an event, and wait for it to appear in the timeline.
@@ -78,7 +78,7 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, "alice", "password")
 
 	// Create a room where we can send events.
-	roomID := c1.CreateRoom(t, map[string]interface{}{})
+	roomID := c1.MustCreateRoom(t, map[string]interface{}{})
 
 	txnId := "abdefgh"
 	// Let's send an event, and wait for it to appear in the timeline.
@@ -117,7 +117,7 @@ func TestTxnIdempotencyScopedToDevice(t *testing.T) {
 	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, "alice", "password")
 
 	// Create a room where we can send events.
-	roomID := c1.CreateRoom(t, map[string]interface{}{})
+	roomID := c1.MustCreateRoom(t, map[string]interface{}{})
 
 	txnId := "abcdef"
 	event := b.Event{
@@ -157,8 +157,8 @@ func TestTxnIdempotency(t *testing.T) {
 	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, "alice", "password")
 
 	// Create a room where we can send events.
-	roomID1 := c1.CreateRoom(t, map[string]interface{}{})
-	roomID2 := c1.CreateRoom(t, map[string]interface{}{})
+	roomID1 := c1.MustCreateRoom(t, map[string]interface{}{})
+	roomID2 := c1.MustCreateRoom(t, map[string]interface{}{})
 
 	// choose a transaction ID
 	txnId := "abc"
@@ -213,7 +213,7 @@ func TestTxnIdWithRefreshToken(t *testing.T) {
 	c.UserID, c.AccessToken, refreshToken, c.DeviceID, _ = c.LoginUserWithRefreshToken(t, "alice", "password")
 
 	// Create a room where we can send events.
-	roomID := c.CreateRoom(t, map[string]interface{}{})
+	roomID := c.MustCreateRoom(t, map[string]interface{}{})
 
 	txnId := "abcdef"
 	// We send an event

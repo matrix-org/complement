@@ -19,7 +19,7 @@ func TestRemoteAliasRequestsUnderstandUnicode(t *testing.T) {
 
 	const unicodeAlias = "#老虎Â£я🤨👉ඞ:hs1"
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "directory", "room", unicodeAlias}, client.WithJSONBody(t, map[string]interface{}{
 		"room_id": roomID,

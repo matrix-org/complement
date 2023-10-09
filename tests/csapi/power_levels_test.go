@@ -21,7 +21,7 @@ func TestDemotingUsersViaUsersDefault(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"power_level_content_override": map[string]interface{}{
 			"users_default": 100, // the default is 0
@@ -53,7 +53,7 @@ func TestPowerLevels(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	// sytest: GET /rooms/:room_id/state/m.room.power_levels can fetch levels
 	t.Run("GET /rooms/:room_id/state/m.room.power_levels can fetch levels", func(t *testing.T) {

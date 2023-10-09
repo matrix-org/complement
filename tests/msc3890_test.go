@@ -42,10 +42,8 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 		)
 
 		// Using the first device, create some local notification settings in the user's account data for the second device.
-		aliceDeviceOne.SetGlobalAccountData(
-			t,
-			accountDataType,
-			accountDataContent,
+		aliceDeviceOne.MustSetGlobalAccountData(
+			t, accountDataType, accountDataContent,
 		)
 
 		checkAccountDataContent := func(r gjson.Result) bool {
@@ -66,7 +64,7 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 		)
 		// Also check via the dedicated account data endpoint to ensure the similar check later is not 404'ing for some other reason.
 		// Using `MustDo` ensures that the response code is 2xx.
-		res := aliceDeviceOne.MustDo(t, "GET", []string{"_matrix", "client", "v3", "user", aliceDeviceOne.UserID, "account_data", accountDataType})
+		res := aliceDeviceOne.MustGetGlobalAccountData(t, accountDataType)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyEqual("is_silenced", true),
@@ -77,7 +75,7 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 		aliceDeviceTwo.MustDo(t, "POST", []string{"_matrix", "client", "v3", "logout"})
 
 		// Using the first device, check that the local notification setting account data for the deleted device was removed.
-		res = aliceDeviceOne.Do(t, "GET", []string{"_matrix", "client", "v3", "user", aliceDeviceOne.UserID, "account_data", accountDataType})
+		res = aliceDeviceOne.MustGetGlobalAccountData(t, accountDataType)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 			JSON: []match.JSON{

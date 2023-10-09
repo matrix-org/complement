@@ -10,8 +10,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -34,7 +34,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	chris := deployment.RegisterUser(t, "hs1", "chris", "sufficiently_long_password_chris", false)
 
 	// Alice creates a room for herself.
-	publicRoom := alice.CreateRoom(t, map[string]interface{}{
+	publicRoom := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
@@ -42,16 +42,11 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, publicRoom))
 
 	// Alice ignores Bob.
-	alice.MustDo(
-		t,
-		"PUT",
-		[]string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", "m.ignored_user_list"},
-		client.WithJSONBody(t, map[string]interface{}{
-			"ignored_users": map[string]interface{}{
-				bob.UserID: map[string]interface{}{},
-			},
-		}),
-	)
+	alice.MustSetGlobalAccountData(t, "m.ignored_user_list", map[string]interface{}{
+		"ignored_users": map[string]interface{}{
+			bob.UserID: map[string]interface{}{},
+		},
+	})
 
 	// Alice waits to see that the ignore was successful.
 	sinceJoinedAndIgnored := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncGlobalAccountDataHas(
@@ -63,13 +58,13 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	))
 
 	// Bob invites Alice to a private room.
-	bobRoom := bob.CreateRoom(t, map[string]interface{}{
+	bobRoom := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "private_chat",
 		"invite": []string{alice.UserID},
 	})
 
 	// So does Chris.
-	chrisRoom := chris.CreateRoom(t, map[string]interface{}{
+	chrisRoom := chris.MustCreateRoom(t, map[string]interface{}{
 		"preset": "private_chat",
 		"invite": []string{alice.UserID},
 	})

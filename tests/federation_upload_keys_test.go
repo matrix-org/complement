@@ -8,8 +8,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -24,7 +24,7 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 	// Do an initial sync so that we can see the changes come down sync.
 	_, nextBatchBeforeKeyUpload := bob.MustSync(t, client.SyncReq{})
 
-	deviceKeys, oneTimeKeys := alice.GenerateOneTimeKeys(t, 1)
+	deviceKeys, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 1)
 	// Upload keys
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"device_keys":   deviceKeys,
