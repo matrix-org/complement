@@ -19,11 +19,11 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -352,10 +352,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		if httpError.Code != 403 {
 			t.Errorf("expected 403, got %d", httpError.Code)
 		}
-		errcode := must.GetJSONFieldStr(t, httpError.Contents, "errcode")
-		if errcode != "M_FORBIDDEN" {
-			t.Errorf("errcode: got %s, want M_FORBIDDEN", errcode)
-		}
+		must.MatchJSONBytes(t, httpError.Contents, match.JSONKeyEqual("errcode", "M_FORBIDDEN"))
 	} else {
 		t.Errorf("SendJoin: non-HTTPError: %v", err)
 	}
@@ -366,9 +363,10 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", charlie},
 	)
-	stateResp := client.ParseJSON(t, res)
+	stateResp := must.ParseJSON(t, res.Body)
+	res.Body.Close()
 	membership := must.GetJSONFieldStr(t, stateResp, "membership")
-	must.EqualStr(t, membership, "ban", "membership of charlie")
+	must.Equal(t, membership, "ban", "membership of charlie")
 }
 
 // This test checks that we cannot submit anything via /v1/send_join except a join.

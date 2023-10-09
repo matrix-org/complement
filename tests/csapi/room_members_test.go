@@ -7,10 +7,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // Maps every object by extracting `type` and `state_key` into a "$type|$state_key" string.
@@ -43,7 +43,7 @@ func TestGetRoomMembers(t *testing.T) {
 	must.MatchResponse(t, resp, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-				must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+				must.Equal(t, result.Str, roomID, "unexpected roomID")
 				return nil
 			}),
 			match.JSONCheckOff("chunk",
@@ -103,7 +103,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 	must.MatchResponse(t, resp, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-				must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+				must.Equal(t, result.Str, roomID, "unexpected roomID")
 				return nil
 			}),
 			match.JSONCheckOff("chunk",
@@ -150,7 +150,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-					must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+					must.Equal(t, result.Str, roomID, "unexpected roomID")
 					return nil
 				}),
 				match.JSONCheckOff("chunk",
@@ -175,7 +175,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-					must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+					must.Equal(t, result.Str, roomID, "unexpected roomID")
 					return nil
 				}),
 				match.JSONCheckOff("chunk",
@@ -200,7 +200,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-					must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+					must.Equal(t, result.Str, roomID, "unexpected roomID")
 					return nil
 				}),
 				match.JSONCheckOff("chunk",

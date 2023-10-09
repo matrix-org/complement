@@ -8,8 +8,8 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // https://spec.matrix.org/v1.1/#specification-versions
@@ -52,8 +52,8 @@ func TestVersionStructure(t *testing.T) {
 					return nil
 				}),
 				// Check when unstable_features is present if it's an object
-				func(body []byte) error {
-					res := gjson.GetBytes(body, "unstable_features")
+				func(body gjson.Result) error {
+					res := body.Get("unstable_features")
 					if !res.Exists() {
 						return nil
 					}

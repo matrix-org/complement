@@ -7,10 +7,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 func setRoomAliasResp(t *testing.T, c *client.CSAPI, roomID, roomAlias string) *http.Response {
@@ -120,8 +120,9 @@ func TestRoomAlias(t *testing.T) {
 							return false
 						}
 						eventResBody := client.ParseJSON(t, res)
+						parsedEventResBody := gjson.ParseBytes(eventResBody)
 						matcher := match.JSONKeyEqual("aliases", []interface{}{roomAlias})
-						err := matcher(eventResBody)
+						err := matcher(parsedEventResBody)
 						if err != nil {
 							t.Log(err)
 							return false

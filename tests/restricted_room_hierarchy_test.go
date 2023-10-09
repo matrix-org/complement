@@ -9,8 +9,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // Request the room summary and ensure the expected rooms are in the response.

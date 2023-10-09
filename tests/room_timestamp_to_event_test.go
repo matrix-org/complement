@@ -17,9 +17,10 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/tidwall/gjson"
+	"golang.org/x/exp/slices"
 )
 
 func TestJumpToDateEndpoint(t *testing.T) {
@@ -395,7 +396,8 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 	}
 
 	// Make the events go from oldest-in-time -> newest-in-time
-	events := reverseGjsonArray(keyRes.Array())
+	events := keyRes.Array()
+	slices.Reverse(events)
 	if len(events) == 0 {
 		t.Fatalf(
 			"getDebugMessageListFromMessagesResponse found no messages in the room(%s).",
@@ -463,12 +465,4 @@ const AnsiColorYellow string = "33"
 
 func decorateStringWithAnsiColor(inputString, decorationColor string) string {
 	return fmt.Sprintf("\033[%sm%s\033[0m", decorationColor, inputString)
-}
-
-func reverseGjsonArray(in []gjson.Result) []gjson.Result {
-	out := make([]gjson.Result, len(in))
-	for i := 0; i < len(in); i++ {
-		out[i] = in[len(in)-i-1]
-	}
-	return out
 }
