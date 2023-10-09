@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/gomatrixserverlib/spec"
@@ -34,7 +35,7 @@ func TestEventAuth(t *testing.T) {
 
 	// create a remote homeserver which will make the /event_auth request
 	var joinRuleEvent gomatrixserverlib.PDU
-	waiter := NewWaiter()
+	waiter := helpers.NewWaiter()
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),

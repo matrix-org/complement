@@ -21,6 +21,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -266,7 +267,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	t.Logf("D: %s", eventD.EventID())
 
 	// we expect to be called with event D, and will return D,C,B,A
-	waiter := NewWaiter()
+	waiter := helpers.NewWaiter()
 	srv.Mux().HandleFunc("/_matrix/federation/unstable/event_relationships", func(w http.ResponseWriter, req *http.Request) {
 		defer waiter.Finish()
 		must.MatchRequest(t, req, match.HTTPRequest{
