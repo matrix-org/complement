@@ -409,7 +409,7 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 
 	// hs2 doesn't have anyone to invite from, so the join fails.
 	t.Logf("%s joins the restricted room via hs2, which is expected to fail.", charlie.UserID)
-	res := bob.JoinRoom(t, room, []string{"hs2"})
+	res := charlie.JoinRoom(t, room, []string{"hs2"})
 	must.MatchFailure(t, res)
 
 	// Including hs1 (and failing over to it) allows the join to succeed.
@@ -461,7 +461,7 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	// hs2 cannot complete the join since they do not know if Charlie meets the
 	// requirements (since it is no longer in the allowed room).
 	t.Logf("%s joins the restricted room via hs2, which is expected to fail.", charlie.UserID)
-	must.MatchFailure(t, bob.JoinRoom(t, room, []string{"hs2"}))
+	must.MatchFailure(t, charlie.JoinRoom(t, room, []string{"hs2"}))
 
 	// Including hs1 (and failing over to it) allows the join to succeed.
 	t.Logf("%s joins the restricted room via {hs2,hs1}.", charlie.UserID)
