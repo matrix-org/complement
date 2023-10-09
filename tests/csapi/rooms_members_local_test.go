@@ -26,7 +26,7 @@ func TestMembersLocal(t *testing.T) {
 	)
 
 	_, incrementalSyncTokenBeforeBobJoinsRoom := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
-	bob.JoinRoom(t, roomID, []string{})
+	bob.MustJoinRoom(t, roomID, []string{})
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: New room members see their own join event

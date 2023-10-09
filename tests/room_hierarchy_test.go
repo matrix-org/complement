@@ -462,7 +462,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 
 	// Querying is done by bob who is not yet in any of the rooms.
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	bob.JoinRoom(t, root, []string{"hs1"})
+	bob.MustJoinRoom(t, root, []string{"hs1"})
 
 	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{

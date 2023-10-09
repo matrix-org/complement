@@ -34,7 +34,7 @@ func TestLeftRoomFixture(t *testing.T) {
 		"preset": "public_chat",
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
@@ -117,7 +117,7 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	// Have charlie join the room, to check against /members calls later
 	// (Bob should not see Charlie in /members after he leaves the room.)
-	charlie.JoinRoom(t, roomID, nil)
+	charlie.MustJoinRoom(t, roomID, nil)
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
 
 	// sytest: Can get rooms/{roomId}/state for a departed room (SPEC-216)

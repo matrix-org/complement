@@ -148,7 +148,7 @@ func TestArchivedRoomsHistory(t *testing.T) {
 		"preset": "public_chat",
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	_, bobSince := bob.MustSync(t, client.SyncReq{Filter: bobFilter, TimeoutMillis: "0"})
@@ -255,8 +255,8 @@ func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 		"preset": "public_chat",
 	})
 
-	bob.JoinRoom(t, roomToLeave, nil)
-	bob.JoinRoom(t, roomToSpam, nil)
+	bob.MustJoinRoom(t, roomToLeave, nil)
+	bob.MustJoinRoom(t, roomToSpam, nil)
 	bob.MustSyncUntil(
 		t,
 		client.SyncReq{},
@@ -339,7 +339,7 @@ func TestLeaveEventVisibility(t *testing.T) {
 		},
 		"preset": "public_chat",
 	})
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	aliceSince := alice.MustSyncUntil(
 		t,

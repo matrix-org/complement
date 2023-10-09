@@ -92,7 +92,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 				"invite":    []string{bob.UserID},
 				"is_direct": true,
 			})
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			bob.MustSyncUntil(t, client.SyncReq{},
 				client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
 					// We expect a membership event ..

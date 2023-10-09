@@ -98,7 +98,7 @@ func TestRoomMembers(t *testing.T) {
 
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
-			bob.JoinRoom(t, roomID, nil)
+			bob.MustJoinRoom(t, roomID, nil)
 
 			// Sync to make sure bob has joined
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
@@ -130,7 +130,7 @@ func TestRoomMembers(t *testing.T) {
 
 			bob.InviteRoom(t, roomID, alice.UserID)
 			since := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
-			alice.JoinRoom(t, roomID, nil)
+			alice.MustJoinRoom(t, roomID, nil)
 			alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncJoinedTo(alice.UserID, roomID))
 		})
 		// sytest: POST /join/:room_id can join a room with custom content
@@ -247,7 +247,7 @@ func TestRoomMembers(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{})
 			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			bob.LeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))

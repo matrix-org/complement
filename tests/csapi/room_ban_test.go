@@ -45,7 +45,7 @@ func TestNotPresentUserCannotBanOthers(t *testing.T) {
 		"preset": "public_chat",
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	alice.SendEventSynced(t, roomID, b.Event{
 		Type:     "m.room.power_levels",

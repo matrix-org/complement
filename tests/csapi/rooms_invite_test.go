@@ -27,7 +27,7 @@ func TestRoomsInvite(t *testing.T) {
 			})
 			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 		})
@@ -103,7 +103,7 @@ func TestRoomsInvite(t *testing.T) {
 
 			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			body := client.WithJSONBody(t, map[string]interface{}{
@@ -140,7 +140,7 @@ func TestRoomsInvite(t *testing.T) {
 			// Invite & join bob
 			alice.InviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 			// Raise the powerlevel
@@ -158,7 +158,7 @@ func TestRoomsInvite(t *testing.T) {
 			bob.InviteRoom(t, roomID, alice.UserID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
 			// Alice should be able to rejoin
-			alice.JoinRoom(t, roomID, []string{})
+			alice.MustJoinRoom(t, roomID, []string{})
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 		})
 	})

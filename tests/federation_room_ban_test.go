@@ -20,7 +20,7 @@ func TestUnbanViaInvite(t *testing.T) {
 	roomID := bob.CreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
-	alice.JoinRoom(t, roomID, []string{"hs2"})
+	alice.MustJoinRoom(t, roomID, []string{"hs2"})
 
 	// Ban Alice
 	bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
@@ -40,5 +40,5 @@ func TestUnbanViaInvite(t *testing.T) {
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
 
 	// Alice accepts (this is what previously failed in the issue)
-	alice.JoinRoom(t, roomID, []string{"hs2"})
+	alice.MustJoinRoom(t, roomID, []string{"hs2"})
 }

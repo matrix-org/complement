@@ -71,7 +71,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 
 	// join the room by room ID, providing the serverName to join via
-	alice.JoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
 
 	// remove the make/send join paths from the Complement server to force HS2 to join via HS1
 	acceptMakeSendJoinRequests = false
@@ -116,7 +116,7 @@ func TestJoinFederatedRoomFailOver(t *testing.T) {
 	t.Logf("%s created room %s.", bob.UserID, roomID)
 
 	t.Logf("%s joins the room via {complement,hs2}.", alice.UserID)
-	alice.JoinRoom(t, roomID, []string{srv.ServerName(), "hs2"})
+	alice.MustJoinRoom(t, roomID, []string{srv.ServerName(), "hs2"})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 }
 
@@ -174,7 +174,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		unsignedEvent, err := verImpl.NewEventFromTrustedJSON(raw, false)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
-		alice.JoinRoom(t, roomAlias, nil)
+		alice.MustJoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with bad signatures shouldn't block room join", func(t *testing.T) {
 		//t.Parallel()
@@ -204,7 +204,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		unsignedEvent, err := verImpl.NewEventFromTrustedJSON(raw, false)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
-		alice.JoinRoom(t, roomAlias, nil)
+		alice.MustJoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with unobtainable keys shouldn't block room join", func(t *testing.T) {
 		//t.Parallel()
@@ -235,7 +235,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		unsignedEvent, err := verImpl.NewEventFromTrustedJSON(raw, false)
 		must.NotError(t, "failed to make Event from unsigned event JSON", err)
 		room.AddEvent(unsignedEvent)
-		alice.JoinRoom(t, roomAlias, nil)
+		alice.MustJoinRoom(t, roomAlias, nil)
 	})
 	t.Run("/send_join response with state with unverifiable auth events shouldn't block room join", func(t *testing.T) {
 		// FIXME: https://github.com/matrix-org/dendrite/issues/2800
@@ -293,7 +293,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 		room.AddEvent(goodEvent)
 		t.Logf("Created state event %s", goodEvent.EventID())
 
-		alice.JoinRoom(t, roomAlias, nil)
+		alice.MustJoinRoom(t, roomAlias, nil)
 	})
 }
 
@@ -520,7 +520,7 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	// now we send a make_join...
 	charlie := srv.UserID("charlie")
@@ -609,6 +609,6 @@ func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
 		})
 
 		// Join the AS bridge user to the remote federated room (without a profile set)
-		as.JoinRoom(t, roomID, []string{"hs2"})
+		as.MustJoinRoom(t, roomID, []string{"hs2"})
 	})
 }

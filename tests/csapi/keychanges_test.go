@@ -27,7 +27,7 @@ func TestKeyChangesLocal(t *testing.T) {
 		mustUploadKeys(t, bob)
 
 		roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-		bob.JoinRoom(t, roomID, []string{})
+		bob.MustJoinRoom(t, roomID, []string{})
 		nextBatch1 := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		reqBody := client.WithJSONBody(t, map[string]interface{}{

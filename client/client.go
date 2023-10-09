@@ -90,18 +90,26 @@ func (c *CSAPI) DownloadContent(t TestLike, mxcUri string) ([]byte, string) {
 	return b, contentType
 }
 
-// CreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
-func (c *CSAPI) CreateRoom(t TestLike, creationContent interface{}) string {
+// MustCreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
+func (c *CSAPI) MustCreateRoom(t TestLike, creationContent interface{}) string {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, creationContent))
+	res := c.CreateRoom(t, creationContent)
+	mustRespondOK(t, res)
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "room_id")
+}
+
+// CreateRoom creates a room with an optional HTTP request body.
+func (c *CSAPI) CreateRoom(t TestLike, creationContent interface{}) *http.Response {
+	t.Helper()
+	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, creationContent))
 }
 
 // MustJoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
 func (c *CSAPI) MustJoinRoom(t TestLike, roomIDOrAlias string, serverNames []string) string {
 	t.Helper()
 	res := c.JoinRoom(t, roomIDOrAlias, serverNames)
+	mustRespondOK(t, res)
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias

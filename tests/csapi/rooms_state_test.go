@@ -109,12 +109,12 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				"preset":     "public_chat",
 			})
 
-			alice.JoinRoom(t, roomID, nil)
+			alice.MustJoinRoom(t, roomID, nil)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 			firstID := *getEventIdForState(t, alice, roomID, "m.room.member", alice.UserID)
 
-			alice.JoinRoom(t, roomID, nil)
+			alice.MustJoinRoom(t, roomID, nil)
 
 			// Unfortunately there is no way to definitively wait
 			// for a 'potentially false second join event' without

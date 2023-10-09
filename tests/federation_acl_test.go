@@ -57,15 +57,15 @@ func TestACLs(t *testing.T) {
 	aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 	// 3. Join this room from 2nd server
-	bob.JoinRoom(t, roomID, []string{"hs1"})
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID))
 	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// create a different room used for a sentinel event
 	sentinelRoom := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(alice.UserID, sentinelRoom))
-	bob.JoinRoom(t, sentinelRoom, []string{"hs1"})
-	charlie.JoinRoom(t, sentinelRoom, []string{"hs1"})
+	bob.MustJoinRoom(t, sentinelRoom, []string{"hs1"})
+	charlie.MustJoinRoom(t, sentinelRoom, []string{"hs1"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince},
 		client.SyncJoinedTo(bob.UserID, sentinelRoom),
 		client.SyncJoinedTo(charlie.UserID, sentinelRoom),
@@ -87,7 +87,7 @@ func TestACLs(t *testing.T) {
 	bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncTimelineHasEventID(roomID, eventID))
 
 	// 5. Join from 3rd server.
-	charlie.JoinRoom(t, roomID, []string{"hs1"})
+	charlie.MustJoinRoom(t, roomID, []string{"hs1"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(charlie.UserID, roomID))
 	charlieSince := charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
 

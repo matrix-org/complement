@@ -97,7 +97,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 	requestAndAssertSummary(t, bob, space, []interface{}{space})
 
 	// Join the space, and now the restricted room should appear.
-	bob.JoinRoom(t, space, []string{"hs1"})
+	bob.MustJoinRoom(t, space, []string{"hs1"})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, space))
 	requestAndAssertSummary(t, bob, space, []interface{}{space, room})
 }
@@ -181,7 +181,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 
 	// charlie joins the space and now hs2 knows that alice is in the space (and
 	// can join the room).
-	charlie.JoinRoom(t, space, []string{"hs1"})
+	charlie.MustJoinRoom(t, space, []string{"hs1"})
 	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, space))
 
 	// The restricted room should appear for alice (who is in the space).

@@ -31,7 +31,7 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 	// Get floating next_batch from before joining at all
 	_, since = alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
-	alice.JoinRoom(t, roomID, nil)
+	alice.MustJoinRoom(t, roomID, nil)
 
 	// This assumes that sync does not have side-effects in servers.
 	//
@@ -42,7 +42,7 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 
 	sinceLeave := alice.MustSyncUntil(t, client.SyncReq{Since: sinceJoin}, client.SyncLeftFrom(alice.UserID, roomID))
 
-	alice.JoinRoom(t, roomID, nil)
+	alice.MustJoinRoom(t, roomID, nil)
 
 	alice.MustSyncUntil(t, client.SyncReq{Since: sinceLeave}, client.SyncJoinedTo(alice.UserID, roomID))
 
@@ -88,7 +88,7 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 		t.Errorf("Bob just rejected an invite, it should show up under 'leave' in a full sync")
 	}
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	start = time.Now()
 	leaveExists = true
@@ -178,7 +178,7 @@ func TestSync(t *testing.T) {
 			sendMessages(t, alice, roomID, "alice message 1-", 4)
 			_, nextBatch := bob.MustSync(t, client.SyncReq{Filter: filterBob})
 			sendMessages(t, alice, roomID, "alice message 2-", 4)
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			res, _ := bob.MustSync(t, client.SyncReq{Filter: filterBob, Since: nextBatch})
 			room := res.Get("rooms.join." + client.GjsonEscape(roomID))
@@ -206,7 +206,7 @@ func TestSync(t *testing.T) {
 			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			_, nextBatch := bob.MustSync(t, client.SyncReq{})
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			nextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(userID string, sync gjson.Result) error {
 				presence := sync.Get("presence")
@@ -227,7 +227,7 @@ func TestSync(t *testing.T) {
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			sendMessages(t, alice, roomID, "dummy message", 1)
 			_, nextBatch = alice.MustSync(t, client.SyncReq{Since: nextBatch})
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			// wait until there are presence events
@@ -389,8 +389,8 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 
 	alice.InviteRoom(t, bobRoomID, bob.UserID)
 	alice.InviteRoom(t, charlieRoomID, charlie.UserID)
-	bob.JoinRoom(t, bobRoomID, nil)
-	charlie.JoinRoom(t, charlieRoomID, nil)
+	bob.MustJoinRoom(t, bobRoomID, nil)
+	charlie.MustJoinRoom(t, charlieRoomID, nil)
 
 	nextBatch = alice.MustSyncUntil(t,
 		client.SyncReq{Since: nextBatch},
@@ -471,7 +471,7 @@ func TestRoomSummary(t *testing.T) {
 	}
 
 	sinceToken := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-	bob.JoinRoom(t, roomID, []string{})
+	bob.MustJoinRoom(t, roomID, []string{})
 	// Verify Bob sees the correct room summary
 	bob.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
 	// .. and Alice as well.

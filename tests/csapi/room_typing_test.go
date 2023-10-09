@@ -17,7 +17,7 @@ func TestTyping(t *testing.T) {
 
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	token := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 	alice.SendTyping(t, roomID, true, 10000)
@@ -45,7 +45,7 @@ func TestLeakyTyping(t *testing.T) {
 
 	// Alice creates a room. Bob joins it.
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	bobToken := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 

@@ -53,7 +53,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice.JoinRoom(t, roomAlias, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, roomAlias, []string{srv.ServerName()})
 
 	// inject event to redact in the room
 	badEvent := srv.MustCreateEvent(t, serverRoom, federation.Event{

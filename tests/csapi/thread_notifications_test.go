@@ -79,7 +79,7 @@ func TestThreadedReceipts(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	// A next batch token which is past the initial room creation.
 	bobNextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))

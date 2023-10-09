@@ -45,7 +45,7 @@ func TestCannotKickLeftUser(t *testing.T) {
 		"preset": "public_chat",
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 

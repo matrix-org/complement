@@ -136,8 +136,8 @@ func TestRoomMessagesLazyLoading(t *testing.T) {
 	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
 
 	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	bob.JoinRoom(t, roomID, nil)
-	charlie.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
+	charlie.MustJoinRoom(t, roomID, nil)
 
 	bob.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",

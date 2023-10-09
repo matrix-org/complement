@@ -198,7 +198,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 				"preset": "public_chat",
 			})
 
-			bob.JoinRoom(t, roomID, nil)
+			bob.MustJoinRoom(t, roomID, nil)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			roomAlias := "#no_ops_delete:hs1"
@@ -230,7 +230,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 				"preset": "public_chat",
 			})
 
-			bob.JoinRoom(t, roomID, nil)
+			bob.MustJoinRoom(t, roomID, nil)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			roomAlias := "#no_ops_delete_canonical:hs1"
@@ -314,7 +314,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 			randomAlias := "#random_alias_2:hs1"
 
 			alice.InviteRoom(t, roomID, bob.UserID)
-			bob.JoinRoom(t, roomID, nil)
+			bob.MustJoinRoom(t, roomID, nil)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			res := setRoomAliasResp(t, bob, roomID, randomAlias)
@@ -345,7 +345,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 			randomAlias := "#random_alias_3:hs1"
 
 			alice.InviteRoom(t, roomID, bob.UserID)
-			bob.JoinRoom(t, roomID, nil)
+			bob.MustJoinRoom(t, roomID, nil)
 
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type:     "m.room.power_levels",
@@ -388,7 +388,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 			randomAlias := "#random_alias_4:hs1"
 
 			alice.InviteRoom(t, roomID, bob.UserID)
-			bob.JoinRoom(t, roomID, nil)
+			bob.MustJoinRoom(t, roomID, nil)
 
 			res := setRoomAliasResp(t, alice, roomID, randomAlias)
 			must.MatchResponse(t, res, match.HTTPResponse{
@@ -421,7 +421,7 @@ func TestRoomDeleteAlias(t *testing.T) {
 			randomAlias := "#random_alias_5:hs1"
 
 			alice.InviteRoom(t, roomID, bob.UserID)
-			bob.JoinRoom(t, roomID, nil)
+			bob.MustJoinRoom(t, roomID, nil)
 
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type:     "m.room.power_levels",

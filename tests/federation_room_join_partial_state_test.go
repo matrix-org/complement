@@ -1250,7 +1250,7 @@ func TestPartialStateJoin(t *testing.T) {
 		).Methods("GET")
 
 		// join charlie on hs2 to the room, via the complement homeserver
-		charlie.JoinRoom(t, roomID, []string{server.ServerName()})
+		charlie.MustJoinRoom(t, roomID, []string{server.ServerName()})
 
 		// and let hs1 know that charlie has joined,
 		// otherwise hs1 will refuse /state_ids requests
@@ -3463,7 +3463,7 @@ func TestPartialStateJoin(t *testing.T) {
 		defer psjResult.Destroy(t)
 
 		server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
-		bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+		bob.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
 		alice.MustSyncUntil(t,
 			client.SyncReq{
 				Filter: buildLazyLoadingSyncFilter(nil),
@@ -3653,7 +3653,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Bob joins too")
-			bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			bob.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
 
 			t.Log("Bob waits to see his join")
 			bobNextBatch := bob.MustSyncUntil(
@@ -3712,7 +3712,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The resync has not completed because we have not called psjResult.FinishStateRequest()
 			t.Log("Alice rejoins her room")
-			alice.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			alice.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
 			aliceNextBatch = alice.MustSyncUntil(
 				t,
 				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
@@ -3756,7 +3756,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The resync has not completed because we have not called psjResult.FinishStateRequest()
 			t.Log("Now Bob joins the room")
-			bob.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			bob.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
 			bob.MustSyncUntil(
 				t,
 				client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
@@ -4280,7 +4280,7 @@ func beginPartialStateJoin(t *testing.T, server *server, serverRoom *federation.
 	)
 
 	// have joiningUser join the room by room ID.
-	joiningUser.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+	joiningUser.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
 	t.Logf("/join request completed")
 
 	success = true

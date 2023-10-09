@@ -44,7 +44,7 @@ func TestFetchEvent(t *testing.T) {
 
 	roomID := createRoomWithVisibility(t, alice, "shared")
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
@@ -98,7 +98,7 @@ func TestFetchHistoricalJoinedEventDenied(t *testing.T) {
 		},
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
@@ -127,7 +127,7 @@ func TestFetchHistoricalSharedEvent(t *testing.T) {
 		},
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
@@ -174,7 +174,7 @@ func TestFetchHistoricalInvitedEventFromBetweenInvite(t *testing.T) {
 		},
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
@@ -221,7 +221,7 @@ func TestFetchHistoricalInvitedEventFromBeforeInvite(t *testing.T) {
 	alice.InviteRoom(t, roomID, bob.UserID)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)

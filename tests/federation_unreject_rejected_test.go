@@ -35,7 +35,7 @@ func TestUnrejectRejectedEvents(t *testing.T) {
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, bob))
 
 	// Join Alice to the new room on the federation server.
-	alice.JoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
 	alice.MustSyncUntil(
 		t, client.SyncReq{},
 		client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
