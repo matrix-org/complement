@@ -151,7 +151,7 @@ func (c *CSAPI) MustSync(t TestLike, syncReq SyncReq) (gjson.Result, string) {
 // Perform a single /sync request with the given request options. To sync until something happens,
 // see `MustSyncUntil`.
 //
-// Returns the HTTP response if the /sync request does not return 200 OK.
+// Always returns the HTTP response, even on non-2xx.
 // Returns the top-level parsed /sync response JSON on 200 OK.
 func (c *CSAPI) Sync(t TestLike, syncReq SyncReq) (gjson.Result, *http.Response) {
 	t.Helper()
@@ -180,7 +180,7 @@ func (c *CSAPI) Sync(t TestLike, syncReq SyncReq) (gjson.Result, *http.Response)
 	}
 	body := ParseJSON(t, res)
 	result := gjson.ParseBytes(body)
-	return result, nil
+	return result, res
 }
 
 // Check that the timeline for `roomID` has an event which passes the check function.
