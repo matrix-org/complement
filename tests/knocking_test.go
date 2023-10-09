@@ -370,7 +370,7 @@ func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, jo
 
 	// Create a public room
 	roomID = alice.MustCreateRoom(t, map[string]interface{}{
-		"preset":       "private_chat", // Set to private in order to get an invite-only room
+		"preset":       "public_chat",
 		"room_version": roomVersion,
 	})
 

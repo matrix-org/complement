@@ -70,11 +70,8 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	eventToRedact := eventID + ":" + fullServerName
 
 	// the client sends a request to the local homeserver to send the redaction
-	redactionEventID := alice.MustSendRedaction(t, serverRoom.RoomID, b.Event{
-		Type: wantEventType,
-		Content: map[string]interface{}{
-			"reason": "reasons...",
-		},
+	redactionEventID := alice.MustSendRedaction(t, serverRoom.RoomID, map[string]interface{}{
+		"reason": "reasons...",
 	}, eventToRedact)
 
 	// wait for redaction to arrive at remote homeserver
@@ -83,10 +80,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	// Check that the last event in the room is now the redaction
 	lastEvent := serverRoom.Timeline[len(serverRoom.Timeline)-1]
 	lastEventType := lastEvent.Type()
-	wantedType := "m.room.redaction"
-	if lastEventType != wantedType {
-		t.Fatalf("Incorrent event type %s, wanted m.room.redaction.", lastEventType)
-	}
+	must.Equal(t, lastEventType, "m.room.redaction", "incorrect event type")
 
 	// check that the event id of the redaction sent by alice is the same as the redaction event in the room
 	must.Equal(t, lastEvent.EventID(), redactionEventID, "incorrect event id")

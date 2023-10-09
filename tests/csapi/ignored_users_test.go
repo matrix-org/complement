@@ -10,8 +10,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -42,16 +42,11 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, publicRoom))
 
 	// Alice ignores Bob.
-	alice.MustDo(
-		t,
-		"PUT",
-		[]string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", "m.ignored_user_list"},
-		client.WithJSONBody(t, map[string]interface{}{
-			"ignored_users": map[string]interface{}{
-				bob.UserID: map[string]interface{}{},
-			},
-		}),
-	)
+	alice.MustSetGlobalAccountData(t, "m.ignored_user_list", map[string]interface{}{
+		"ignored_users": map[string]interface{}{
+			bob.UserID: map[string]interface{}{},
+		},
+	})
 
 	// Alice waits to see that the ignore was successful.
 	sinceJoinedAndIgnored := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncGlobalAccountDataHas(

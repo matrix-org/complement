@@ -34,7 +34,7 @@ func TestWriteMDirectAccountData(t *testing.T) {
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
 	})
-	alice.SetGlobalAccountData(t, "m.direct", map[string]interface{}{
+	alice.MustSetGlobalAccountData(t, "m.direct", map[string]interface{}{
 		bob.UserID: []string{roomID},
 	})
 
@@ -52,13 +52,13 @@ func TestWriteMDirectAccountData(t *testing.T) {
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
 	})
-	alice.SetGlobalAccountData(t, "m.direct", map[string]interface{}{
+	alice.MustSetGlobalAccountData(t, "m.direct", map[string]interface{}{
 		bob.UserID: []string{roomID},
 	})
 	alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncGlobalAccountDataHas(checkAccountData))
 
 	// check that manually GETing the account data also works with the new updated value
-	must.MatchResponse(t, alice.GetGlobalAccountData(t, "m.direct"), match.HTTPResponse{
+	must.MatchResponse(t, alice.MustGetGlobalAccountData(t, "m.direct"), match.HTTPResponse{
 		StatusCode: 200,
 		JSON: []match.JSON{
 			match.JSONKeyEqual(client.GjsonEscape(bob.UserID), []interface{}{roomID}),

@@ -165,19 +165,31 @@ func (c *CSAPI) InviteRoom(t TestLike, roomID string, userID string) *http.Respo
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
 }
 
-func (c *CSAPI) GetGlobalAccountData(t TestLike, eventType string) *http.Response {
-	return c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType})
+func (c *CSAPI) MustGetGlobalAccountData(t TestLike, eventType string) *http.Response {
+	res := c.GetGlobalAccountData(t, eventType)
+	mustRespond2xx(t, res)
+	return res
 }
 
-func (c *CSAPI) SetGlobalAccountData(t TestLike, eventType string, content map[string]interface{}) *http.Response {
+func (c *CSAPI) GetGlobalAccountData(t TestLike, eventType string) *http.Response {
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType})
+}
+
+func (c *CSAPI) MustSetGlobalAccountData(t TestLike, eventType string, content map[string]interface{}) *http.Response {
 	return c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
-func (c *CSAPI) GetRoomAccountData(t TestLike, roomID string, eventType string) *http.Response {
-	return c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "rooms", roomID, "account_data", eventType})
+func (c *CSAPI) MustGetRoomAccountData(t TestLike, roomID string, eventType string) *http.Response {
+	res := c.GetRoomAccountData(t, roomID, eventType)
+	mustRespond2xx(t, res)
+	return res
 }
 
-func (c *CSAPI) SetRoomAccountData(t TestLike, roomID string, eventType string, content map[string]interface{}) *http.Response {
+func (c *CSAPI) GetRoomAccountData(t TestLike, roomID string, eventType string) *http.Response {
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "rooms", roomID, "account_data", eventType})
+}
+
+func (c *CSAPI) MustSetRoomAccountData(t TestLike, roomID string, eventType string, content map[string]interface{}) *http.Response {
 	return c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "user", c.UserID, "rooms", roomID, "account_data", eventType}, WithJSONBody(t, content))
 }
 
