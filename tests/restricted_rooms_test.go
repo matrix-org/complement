@@ -3,7 +3,6 @@
 package tests
 
 import (
-	"net/url"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -15,21 +14,6 @@ import (
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 )
-
-func failJoinRoom(t *testing.T, c *client.CSAPI, roomIDOrAlias string, serverName string) {
-	t.Helper()
-
-	// This is copied from Client.JoinRoom to test a join failure.
-	query := make(url.Values, 1)
-	query.Set("server_name", serverName)
-	res := c.Do(
-		t,
-		"POST",
-		[]string{"_matrix", "client", "v3", "join", roomIDOrAlias},
-		client.WithQueries(query),
-	)
-	must.MatchFailure(t, res)
-}
 
 // Creates two rooms on room version 8 and sets the second room to have
 // restricted join rules with allow set to the first room.
@@ -73,7 +57,8 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 	t.Helper()
 
 	t.Run("Join should fail initially", func(t *testing.T) {
-		failJoinRoom(t, bob, room, "hs1")
+		res := bob.JoinRoom(t, room, []string{"hs1"})
+		must.MatchFailure(t, res)
 	})
 
 	t.Run("Join should succeed when joined to allowed room", func(t *testing.T) {
@@ -137,7 +122,8 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 				return ev.Get("content").Get("membership").Str == "leave"
 			}))
 
-		failJoinRoom(t, bob, room, "hs1")
+		res := bob.JoinRoom(t, room, []string{"hs1"})
+		must.MatchFailure(t, res)
 	})
 
 	t.Run("Join should succeed when invited", func(t *testing.T) {
@@ -168,7 +154,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 			},
 		)
 		// Fails since invalid values get filtered out of allow.
-		failJoinRoom(t, bob, room, "hs1")
+		must.MatchFailure(t, bob.JoinRoom(t, room, []string{"hs1"}))
 
 		alice.SendEventSynced(
 			t,
@@ -184,7 +170,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 			},
 		)
 		// Fails since a fully invalid allow key requires an invite.
-		failJoinRoom(t, bob, room, "hs1")
+		must.MatchFailure(t, bob.JoinRoom(t, room, []string{"hs1"}))
 	})
 }
 
@@ -283,7 +269,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 	})
 
 	// Bob cannot join the room.
-	failJoinRoom(t, bob, room, "hs1")
+	must.MatchFailure(t, bob.JoinRoom(t, room, []string{"hs1"}))
 
 	// Join the allowed room via hs2.
 	bob.JoinRoom(t, allowed_room, []string{"hs2"})
@@ -423,7 +409,8 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 
 	// hs2 doesn't have anyone to invite from, so the join fails.
 	t.Logf("%s joins the restricted room via hs2, which is expected to fail.", charlie.UserID)
-	failJoinRoom(t, charlie, room, "hs2")
+	res := bob.JoinRoom(t, room, []string{"hs2"})
+	must.MatchFailure(t, res)
 
 	// Including hs1 (and failing over to it) allows the join to succeed.
 	t.Logf("%s joins the restricted room via {hs2,hs1}.", charlie.UserID)
@@ -474,7 +461,7 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	// hs2 cannot complete the join since they do not know if Charlie meets the
 	// requirements (since it is no longer in the allowed room).
 	t.Logf("%s joins the restricted room via hs2, which is expected to fail.", charlie.UserID)
-	failJoinRoom(t, charlie, room, "hs2")
+	must.MatchFailure(t, bob.JoinRoom(t, room, []string{"hs2"}))
 
 	// Including hs1 (and failing over to it) allows the join to succeed.
 	t.Logf("%s joins the restricted room via {hs2,hs1}.", charlie.UserID)

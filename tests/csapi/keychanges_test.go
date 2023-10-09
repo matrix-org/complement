@@ -8,8 +8,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -97,7 +97,7 @@ func TestKeyChangesLocal(t *testing.T) {
 
 func mustUploadKeys(t *testing.T, user *client.CSAPI) {
 	t.Helper()
-	deviceKeys, oneTimeKeys := user.GenerateOneTimeKeys(t, 5)
+	deviceKeys, oneTimeKeys := user.MustGenerateOneTimeKeys(t, 5)
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"device_keys":   deviceKeys,
 		"one_time_keys": oneTimeKeys,

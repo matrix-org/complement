@@ -69,7 +69,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	eventToRedact := eventID + ":" + fullServerName
 
 	// the client sends a request to the local homeserver to send the redaction
-	res := alice.SendRedaction(t, serverRoom.RoomID, b.Event{
+	redactionEventID := alice.MustSendRedaction(t, serverRoom.RoomID, b.Event{
 		Type: wantEventType,
 		Content: map[string]interface{}{
 			"reason": "reasons...",
@@ -88,5 +88,5 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	}
 
 	// check that the event id of the redaction sent by alice is the same as the redaction event in the room
-	must.Equal(t, lastEvent.EventID(), res, "incorrect event id")
+	must.Equal(t, lastEvent.EventID(), redactionEventID, "incorrect event id")
 }

@@ -98,19 +98,10 @@ func (c *CSAPI) CreateRoom(t TestLike, creationContent interface{}) string {
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
-// JoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
-func (c *CSAPI) JoinRoom(t TestLike, roomIDOrAlias string, serverNames []string) string {
+// MustJoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
+func (c *CSAPI) MustJoinRoom(t TestLike, roomIDOrAlias string, serverNames []string) string {
 	t.Helper()
-	// construct URL query parameters
-	query := make(url.Values, len(serverNames))
-	for _, serverName := range serverNames {
-		query.Add("server_name", serverName)
-	}
-	// join the room
-	res := c.MustDo(
-		t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias},
-		WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
-	)
+	res := c.JoinRoom(t, roomIDOrAlias, serverNames)
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
@@ -118,6 +109,21 @@ func (c *CSAPI) JoinRoom(t TestLike, roomIDOrAlias string, serverNames []string)
 	// otherwise we should be told the room ID if we joined via an alias
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "room_id")
+}
+
+// JoinRoom joins the room ID or alias given. Returns the raw http response
+func (c *CSAPI) JoinRoom(t TestLike, roomIDOrAlias string, serverNames []string) *http.Response {
+	t.Helper()
+	// construct URL query parameters
+	query := make(url.Values, len(serverNames))
+	for _, serverName := range serverNames {
+		query.Add("server_name", serverName)
+	}
+	// join the room
+	return c.Do(
+		t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias},
+		WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
+	)
 }
 
 // LeaveRoom leaves the room ID, else fails the test.
@@ -266,25 +272,38 @@ func (c *CSAPI) SendEventSynced(t TestLike, roomID string, e b.Event) string {
 	return eventID
 }
 
-// SendRedaction sends a redaction request. Will fail if the returned HTTP request code is not 200
-func (c *CSAPI) SendRedaction(t TestLike, roomID string, e b.Event, eventID string) string {
-	t.Helper()
-	txnID := int(atomic.AddInt64(&c.txnID, 1))
-	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, strconv.Itoa(txnID)}
-	res := c.MustDo(t, "PUT", paths, WithJSONBody(t, e.Content))
+// SendRedaction sends a redaction request. Will fail if the returned HTTP request code is not 200. Returns the
+// event ID of the redaction event.
+func (c *CSAPI) MustSendRedaction(t TestLike, roomID string, e b.Event, eventID string) string {
+	res := c.SendRedaction(t, roomID, e, eventID)
+	mustRespondOK(t, res)
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "event_id")
 }
 
+// SendRedaction sends a redaction request.
+func (c *CSAPI) SendRedaction(t TestLike, roomID string, e b.Event, eventID string) *http.Response {
+	t.Helper()
+	txnID := int(atomic.AddInt64(&c.txnID, 1))
+	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, strconv.Itoa(txnID)}
+	return c.Do(t, "PUT", paths, WithJSONBody(t, e.Content))
+}
+
+// MustSendTyping marks this user as typing until the timeout is reached. If isTyping is false, timeout is ignored.
+func (c *CSAPI) MustSendTyping(t TestLike, roomID string, isTyping bool, timeoutMillis int) {
+	res := c.SendTyping(t, roomID, isTyping, timeoutMillis)
+	mustRespondOK(t, res)
+}
+
 // SendTyping marks this user as typing until the timeout is reached. If isTyping is false, timeout is ignored.
-func (c *CSAPI) SendTyping(t TestLike, roomID string, isTyping bool, timeoutMillis int) {
+func (c *CSAPI) SendTyping(t TestLike, roomID string, isTyping bool, timeoutMillis int) *http.Response {
 	content := map[string]interface{}{
 		"typing": isTyping,
 	}
 	if isTyping {
 		content["timeout"] = timeoutMillis
 	}
-	c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", c.UserID}, WithJSONBody(t, content))
+	return c.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "typing", c.UserID}, WithJSONBody(t, content))
 }
 
 // GetCapbabilities queries the server's capabilities
@@ -311,7 +330,7 @@ func (c *CSAPI) GetDefaultRoomVersion(t TestLike) gomatrixserverlib.RoomVersion 
 	return gomatrixserverlib.RoomVersion(defaultVersion.Str)
 }
 
-func (c *CSAPI) GenerateOneTimeKeys(t TestLike, otkCount uint) (deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) {
+func (c *CSAPI) MustGenerateOneTimeKeys(t TestLike, otkCount uint) (deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) {
 	t.Helper()
 	account := olm.NewAccount()
 	ed25519Key, curveKey := account.IdentityKeys()
@@ -641,10 +660,20 @@ func SplitMxc(mxcUri string) (string, string) {
 //
 // The messages parameter is nested as follows:
 // user_id -> device_id -> content (map[string]interface{})
-func (c *CSAPI) SendToDeviceMessages(t TestLike, evType string, messages map[string]map[string]map[string]interface{}) {
+func (c *CSAPI) MustSendToDeviceMessages(t TestLike, evType string, messages map[string]map[string]map[string]interface{}) {
+	t.Helper()
+	res := c.SendToDeviceMessages(t, evType, messages)
+	mustRespondOK(t, res)
+}
+
+// SendToDeviceMessages sends to-device messages over /sendToDevice/.
+//
+// The messages parameter is nested as follows:
+// user_id -> device_id -> content (map[string]interface{})
+func (c *CSAPI) SendToDeviceMessages(t TestLike, evType string, messages map[string]map[string]map[string]interface{}) (errRes *http.Response) {
 	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
-	c.MustDo(
+	return c.Do(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "v3", "sendToDevice", evType, strconv.Itoa(txnID)},
@@ -655,4 +684,13 @@ func (c *CSAPI) SendToDeviceMessages(t TestLike, evType string, messages map[str
 			},
 		),
 	)
+}
+
+func mustRespondOK(t TestLike, res *http.Response) {
+	if res.StatusCode >= 200 && res.StatusCode < 300 {
+		return // 2xx
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	t.Fatalf("CSAPI.Must: %s %s returned non-2xx code: %s - body: %s", res.Request.Method, res.Request.URL.String(), res.Status, string(body))
 }
