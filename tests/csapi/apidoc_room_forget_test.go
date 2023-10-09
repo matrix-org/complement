@@ -25,7 +25,7 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Can't forget room you're still in
 		t.Run("Can't forget room you're still in", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "private_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "private_chat"})
 			res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusBadRequest,
@@ -37,7 +37,7 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Forgotten room messages cannot be paginated
 		t.Run("Forgotten room messages cannot be paginated", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			bob.MustJoinRoom(t, roomID, []string{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
@@ -46,7 +46,7 @@ func TestRoomForget(t *testing.T) {
 					"body":    "Hello world!",
 				},
 			})
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"})
 			must.MatchResponse(t, res, match.HTTPResponse{
@@ -59,7 +59,7 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Forgetting room does not show up in v2 /sync
 		t.Run("Forgetting room does not show up in v2 initial /sync", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			bob.MustJoinRoom(t, roomID, []string{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
@@ -68,7 +68,7 @@ func TestRoomForget(t *testing.T) {
 					"body":    "Hello world!",
 				},
 			})
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			// Ensure Alice left the room
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
@@ -104,7 +104,7 @@ func TestRoomForget(t *testing.T) {
 			// that would make it impossible for other devices to determine that a room has been
 			// left if it is forgotten quickly. This is arguably a bug in the spec.
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			bob.MustJoinRoom(t, roomID, []string{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
@@ -114,7 +114,7 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			tokenBeforeLeave := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			// Ensure Alice left the room
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
@@ -142,7 +142,7 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Can forget room you've been kicked from
 		t.Run("Can forget room you've been kicked from", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			bob.MustJoinRoom(t, roomID, []string{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
@@ -174,9 +174,9 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Can re-join room if re-invited
 		t.Run("Can re-join room if re-invited", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "private_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "private_chat"})
 			// Invite Bob
-			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			// Update join_rules
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.join_rules",
@@ -194,7 +194,7 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			// Bob leaves and forgets room
-			bob.LeaveRoom(t, roomID)
+			bob.MustLeaveRoom(t, roomID)
 			// Ensure Bob has really left the room
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 			bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
@@ -207,7 +207,7 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			// Re-invite bob
-			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bob.MustJoinRoom(t, roomID, []string{})
 			// Query messages
 			queryParams := url.Values{}
@@ -246,14 +246,14 @@ func TestRoomForget(t *testing.T) {
 
 		t.Run("Can forget room we weren't an actual member", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "private_chat"})
-			alice.InviteRoom(t, roomID, bob.UserID)
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "private_chat"})
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			// Bob rejects the invite
-			bob.LeaveRoom(t, roomID)
+			bob.MustLeaveRoom(t, roomID)
 			// Bob tries to forget about this room
 			bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			// Alice also leaves the room
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			// Alice tries to forget about this room
 			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 		})

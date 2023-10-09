@@ -22,7 +22,7 @@ func TestRoomState(t *testing.T) {
 		// sytest: GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership
 		t.Run("GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership", func(t *testing.T) {
 			t.Parallel()
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
@@ -40,7 +40,7 @@ func TestRoomState(t *testing.T) {
 			t.Parallel()
 			queryParams := url.Values{}
 			queryParams.Set("format", "event")
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
@@ -60,7 +60,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /rooms/:room_id/state/m.room.power_levels fetches powerlevels", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility":      "public",
 				"preset":          "public_chat",
 				"room_alias_name": "room_alias",
@@ -83,7 +83,7 @@ func TestRoomState(t *testing.T) {
 		// sytest: GET /rooms/:room_id/joined_members fetches my membership
 		t.Run("GET /rooms/:room_id/joined_members fetches my membership", func(t *testing.T) {
 			t.Parallel()
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
@@ -101,7 +101,7 @@ func TestRoomState(t *testing.T) {
 		// sytest: GET /publicRooms lists newly-created room
 		t.Run("GET /publicRooms lists newly-created room", func(t *testing.T) {
 			t.Parallel()
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
@@ -136,7 +136,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /directory/room/:room_alias yields room ID", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility":      "public",
 				"preset":          "public_chat",
 				"room_alias_name": "room_new",
@@ -157,7 +157,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /joined_rooms lists newly-created room", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
@@ -187,7 +187,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /rooms/:room_id/state/m.room.name gets name", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 				"name":       "room_name_test",
@@ -206,7 +206,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("POST /rooms/:room_id/state/m.room.name sets name", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
@@ -230,7 +230,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /rooms/:room_id/state/m.room.topic gets topic", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 				"topic":      "room_topic_test",
@@ -249,7 +249,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("PUT /rooms/:room_id/state/m.room.topic sets topic", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
@@ -273,7 +273,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /rooms/:room_id/state fetches entire room state", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 				"name":       "room_test",
@@ -310,7 +310,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("PUT /createRoom with creation content", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 				"creation_content": map[string]interface{}{
@@ -329,8 +329,8 @@ func TestRoomState(t *testing.T) {
 		})
 		t.Run("GET /rooms/:room_id/joined_members is forbidden after leaving room", func(t *testing.T) {
 			t.Parallel()
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{})
-			authedClient.LeaveRoom(t, roomID)
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{})
+			authedClient.MustLeaveRoom(t, roomID)
 			res := authedClient.Do(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "joined_members"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,

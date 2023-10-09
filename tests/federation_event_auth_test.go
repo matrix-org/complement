@@ -55,7 +55,7 @@ func TestEventAuth(t *testing.T) {
 
 	// make a room and join it
 	charlie := srv.UserID("charlie")
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)

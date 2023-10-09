@@ -30,7 +30,7 @@ func TestWriteMDirectAccountData(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
 	})
@@ -48,7 +48,7 @@ func TestWriteMDirectAccountData(t *testing.T) {
 	t.Logf("%s: global account data set; syncing until it arrives", time.Now()) // synapse#13334
 	since := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncGlobalAccountDataHas(checkAccountData))
 	// now update the DM room and test that incremental syncing also pushes new account data
-	roomID = alice.CreateRoom(t, map[string]interface{}{
+	roomID = alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
 	})
@@ -74,7 +74,7 @@ func TestIsDirectFlagLocal(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
 	})

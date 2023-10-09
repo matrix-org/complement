@@ -21,7 +21,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bobpassword", false)
-	roomID := alice.CreateRoom(t, struct{}{})
+	roomID := alice.MustCreateRoom(t, struct{}{})
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Room creation reports m.room.create to myself
@@ -104,7 +104,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 		t.Run("Joining room twice is idempotent", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := bob.CreateRoom(t, map[string]interface{}{
+			roomID := bob.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})

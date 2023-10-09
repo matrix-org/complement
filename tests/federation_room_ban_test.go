@@ -17,7 +17,7 @@ func TestUnbanViaInvite(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs2", "@bob:hs2")
 
-	roomID := bob.CreateRoom(t, map[string]interface{}{
+	roomID := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 	alice.MustJoinRoom(t, roomID, []string{"hs2"})
@@ -35,7 +35,7 @@ func TestUnbanViaInvite(t *testing.T) {
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 
 	// Re-invite Alice
-	bob.InviteRoom(t, roomID, alice.UserID)
+	bob.MustInviteRoom(t, roomID, alice.UserID)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
 

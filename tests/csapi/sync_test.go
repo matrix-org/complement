@@ -22,7 +22,7 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	roomID := bob.CreateRoom(t, map[string]interface{}{
+	roomID := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
@@ -38,7 +38,7 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 	// The alternative would be to sleep, but that is not acceptable here.
 	sinceJoin := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
-	alice.LeaveRoom(t, roomID)
+	alice.MustLeaveRoom(t, roomID)
 
 	sinceLeave := alice.MustSyncUntil(t, client.SyncReq{Since: sinceJoin}, client.SyncLeftFrom(alice.UserID, roomID))
 
@@ -60,7 +60,7 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
@@ -70,12 +70,12 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 	// Get floating current next_batch
 	_, since = alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
-	alice.InviteRoom(t, roomID, bob.UserID)
+	alice.MustInviteRoom(t, roomID, bob.UserID)
 
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 	// This rejects the invite
-	bob.LeaveRoom(t, roomID)
+	bob.MustLeaveRoom(t, roomID)
 
 	// Full sync
 	leaveExists := false
@@ -121,7 +121,7 @@ func TestSync(t *testing.T) {
 		// sytest: Can sync a joined room
 		t.Run("Can sync a joined room", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, struct{}{})
+			roomID := alice.MustCreateRoom(t, struct{}{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			res, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID})
 			// check all required fields exist
@@ -135,7 +135,7 @@ func TestSync(t *testing.T) {
 		// sytest: Full state sync includes joined rooms
 		t.Run("Full state sync includes joined rooms", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, struct{}{})
+			roomID := alice.MustCreateRoom(t, struct{}{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			_, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID})
 
@@ -146,7 +146,7 @@ func TestSync(t *testing.T) {
 		t.Run("Newly joined room is included in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 			_, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID})
-			roomID := alice.CreateRoom(t, struct{}{})
+			roomID := alice.MustCreateRoom(t, struct{}{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			res, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID, Since: nextBatch})
 			checkJoinFieldsExist(t, res, roomID)
@@ -172,7 +172,7 @@ func TestSync(t *testing.T) {
 				},
 			})
 
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 			sendMessages(t, alice, roomID, "alice message 1-", 4)
@@ -203,7 +203,7 @@ func TestSync(t *testing.T) {
 		// sytest: Newly joined room includes presence in incremental sync
 		t.Run("Newly joined room includes presence in incremental sync", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			_, nextBatch := bob.MustSync(t, client.SyncReq{})
 			bob.MustJoinRoom(t, roomID, []string{})
@@ -223,7 +223,7 @@ func TestSync(t *testing.T) {
 		// sytest: Get presence for newly joined members in incremental sync
 		t.Run("Get presence for newly joined members in incremental sync", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			sendMessages(t, alice, roomID, "dummy message", 1)
 			_, nextBatch = alice.MustSync(t, client.SyncReq{Since: nextBatch})
@@ -281,10 +281,10 @@ func TestSync(t *testing.T) {
 
 			charlie := srv.UserID("charlie")
 
-			redactionRoomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			redactionRoomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			redactionRoom := srv.MustJoinRoom(t, deployment, "hs1", redactionRoomID, charlie)
 
-			sentinelRoomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			sentinelRoomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			sentinelRoom := srv.MustJoinRoom(t, deployment, "hs1", sentinelRoomID, charlie)
 
 			// charlie creates a bogus redaction, which he sends out, followed by
@@ -383,12 +383,12 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	charlie := deployment.NewUser(t, "charlie", "hs1")
 
 	// Alice creates two rooms: one with her and Bob, and a second with her and Charlie.
-	bobRoomID := alice.CreateRoom(t, struct{}{})
-	charlieRoomID := alice.CreateRoom(t, struct{}{})
+	bobRoomID := alice.MustCreateRoom(t, struct{}{})
+	charlieRoomID := alice.MustCreateRoom(t, struct{}{})
 	nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, bobRoomID), client.SyncJoinedTo(alice.UserID, charlieRoomID))
 
-	alice.InviteRoom(t, bobRoomID, bob.UserID)
-	alice.InviteRoom(t, charlieRoomID, charlie.UserID)
+	alice.MustInviteRoom(t, bobRoomID, bob.UserID)
+	alice.MustInviteRoom(t, charlieRoomID, charlie.UserID)
 	bob.MustJoinRoom(t, bobRoomID, nil)
 	charlie.MustJoinRoom(t, charlieRoomID, nil)
 
@@ -441,7 +441,7 @@ func TestRoomSummary(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"invite": []string{bob.UserID},
 	})

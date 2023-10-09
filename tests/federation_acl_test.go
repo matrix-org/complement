@@ -53,7 +53,7 @@ func TestACLs(t *testing.T) {
 	charlie := deployment.Client(t, "hs3", "@charlie:hs3")
 
 	// 2. Create room on 1st server
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 	// 3. Join this room from 2nd server
@@ -62,7 +62,7 @@ func TestACLs(t *testing.T) {
 	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// create a different room used for a sentinel event
-	sentinelRoom := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	sentinelRoom := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(alice.UserID, sentinelRoom))
 	bob.MustJoinRoom(t, sentinelRoom, []string{"hs1"})
 	charlie.MustJoinRoom(t, sentinelRoom, []string{"hs1"})

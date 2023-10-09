@@ -34,7 +34,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	chris := deployment.RegisterUser(t, "hs1", "chris", "sufficiently_long_password_chris", false)
 
 	// Alice creates a room for herself.
-	publicRoom := alice.CreateRoom(t, map[string]interface{}{
+	publicRoom := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
@@ -63,13 +63,13 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	))
 
 	// Bob invites Alice to a private room.
-	bobRoom := bob.CreateRoom(t, map[string]interface{}{
+	bobRoom := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "private_chat",
 		"invite": []string{alice.UserID},
 	})
 
 	// So does Chris.
-	chrisRoom := chris.CreateRoom(t, map[string]interface{}{
+	chrisRoom := chris.MustCreateRoom(t, map[string]interface{}{
 		"preset": "private_chat",
 		"invite": []string{alice.UserID},
 	})

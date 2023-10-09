@@ -25,7 +25,7 @@ func TestSyncLeaveSection(t *testing.T) {
 		},
 	})
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
@@ -44,7 +44,7 @@ func TestSyncLeaveSection(t *testing.T) {
 	})
 	incrementalSince := s(client.SyncReq{})
 
-	alice.LeaveRoom(t, roomID)
+	alice.MustLeaveRoom(t, roomID)
 
 	// sytest: Left rooms appear in the leave section of sync
 	t.Run("Left rooms appear in the leave section of sync", func(t *testing.T) {
@@ -89,15 +89,15 @@ func TestGappedSyncLeaveSection(t *testing.T) {
 		},
 	})
 
-	roomToLeave := alice.CreateRoom(t, map[string]interface{}{})
+	roomToLeave := alice.MustCreateRoom(t, map[string]interface{}{})
 	// j0j0: The original sytest creates an additional room to send events into,
 	//  my only suspicion as to why is to trigger a gapped-sync bug,
 	//  to see if it "skips" over the leave event.
-	roomToSpam := alice.CreateRoom(t, map[string]interface{}{})
+	roomToSpam := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	_, sinceToken := alice.MustSync(t, client.SyncReq{Filter: gappyFilter, TimeoutMillis: "0"})
 
-	alice.LeaveRoom(t, roomToLeave)
+	alice.MustLeaveRoom(t, roomToLeave)
 
 	for i := 0; i < 20; i++ {
 		alice.SendEventSynced(t, roomToSpam, b.Event{
@@ -144,7 +144,7 @@ func TestArchivedRoomsHistory(t *testing.T) {
 	//aliceFilter := createFilter(t, alice, filter)
 	bobFilter := createFilter(t, bob, filter)
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
@@ -169,7 +169,7 @@ func TestArchivedRoomsHistory(t *testing.T) {
 		},
 	})
 
-	bob.LeaveRoom(t, roomID)
+	bob.MustLeaveRoom(t, roomID)
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 
 	alice.SendEventSynced(t, roomID, b.Event{
@@ -248,10 +248,10 @@ func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 		},
 	})
 
-	roomToLeave := alice.CreateRoom(t, map[string]string{
+	roomToLeave := alice.MustCreateRoom(t, map[string]string{
 		"preset": "public_chat",
 	})
-	roomToSpam := alice.CreateRoom(t, map[string]string{
+	roomToSpam := alice.MustCreateRoom(t, map[string]string{
 		"preset": "public_chat",
 	})
 
@@ -266,7 +266,7 @@ func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 
 	_, aliceSince := alice.MustSync(t, client.SyncReq{Filter: aliceFilter, TimeoutMillis: "0"})
 
-	alice.LeaveRoom(t, roomToLeave)
+	alice.MustLeaveRoom(t, roomToLeave)
 
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Filter: aliceFilter, Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomToLeave))
 
@@ -327,7 +327,7 @@ func TestLeaveEventVisibility(t *testing.T) {
 		},
 	})
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"initial_state": []map[string]interface{}{
 			{
 				"content": map[string]interface{}{
@@ -348,7 +348,7 @@ func TestLeaveEventVisibility(t *testing.T) {
 		client.SyncJoinedTo(bob.UserID, roomID),
 	)
 
-	alice.LeaveRoom(t, roomID)
+	alice.MustLeaveRoom(t, roomID)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 
 	syncRes, _ := alice.MustSync(t, client.SyncReq{Filter: aliceFilter, Since: aliceSince, TimeoutMillis: "0"})
@@ -410,7 +410,7 @@ func TestLeaveEventInviteRejection(t *testing.T) {
 		},
 	})
 
-	roomID := bob.CreateRoom(t, map[string]interface{}{
+	roomID := bob.MustCreateRoom(t, map[string]interface{}{
 		"initial_state": []map[string]interface{}{
 			{
 				"content": map[string]interface{}{
@@ -424,7 +424,7 @@ func TestLeaveEventInviteRejection(t *testing.T) {
 
 	_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0", Filter: aliceFilter})
 
-	bob.InviteRoom(t, roomID, alice.UserID)
+	bob.MustInviteRoom(t, roomID, alice.UserID)
 
 	aliceSince = alice.MustSyncUntil(
 		t,
@@ -432,7 +432,7 @@ func TestLeaveEventInviteRejection(t *testing.T) {
 		client.SyncInvitedTo(alice.UserID, roomID),
 	)
 
-	alice.LeaveRoom(t, roomID)
+	alice.MustLeaveRoom(t, roomID)
 
 	aliceSince = alice.MustSyncUntil(
 		t,

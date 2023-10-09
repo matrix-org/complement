@@ -56,7 +56,7 @@ func TestRoomCreate(t *testing.T) {
 		t.Run("POST /createRoom makes a room with a topic", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"topic":  "Test Room",
 				"preset": "public_chat",
 			})
@@ -71,7 +71,7 @@ func TestRoomCreate(t *testing.T) {
 		// sytest: POST /createRoom makes a room with a name
 		t.Run("POST /createRoom makes a room with a name", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"name":   "Test Room",
 				"preset": "public_chat",
 			})
@@ -86,7 +86,7 @@ func TestRoomCreate(t *testing.T) {
 		// sytest: POST /createRoom creates a room with the given version
 		t.Run("POST /createRoom creates a room with the given version", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"room_version": "2",
 				"preset":       "public_chat",
 			})
@@ -144,7 +144,7 @@ func TestRoomCreate(t *testing.T) {
 		})
 		// sytest: Rooms can be created with an initial invite list (SYN-205)
 		t.Run("Rooms can be created with an initial invite list (SYN-205)", func(t *testing.T) {
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"invite": []string{bob.UserID},
 			})
 
@@ -153,7 +153,7 @@ func TestRoomCreate(t *testing.T) {
 
 		// sytest: Can /sync newly created room
 		t.Run("Can /sync newly created room", func(t *testing.T) {
-			roomID := alice.CreateRoom(t, map[string]interface{}{})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 			// This will do the syncing for us
 			alice.SendEventSynced(t, roomID, b.Event{
@@ -164,7 +164,7 @@ func TestRoomCreate(t *testing.T) {
 
 		// sytest: POST /createRoom ignores attempts to set the room version via creation_content
 		t.Run("POST /createRoom ignores attempts to set the room version via creation_content", func(t *testing.T) {
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"creation_content": map[string]interface{}{
 					"test":         "azerty",
 					"room_version": "test",

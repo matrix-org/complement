@@ -110,7 +110,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			timeBeforeRoomCreation := time.Now()
 
 			// Alice will create the private room
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 
@@ -138,7 +138,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			timeBeforeRoomCreation := time.Now()
 
 			// Alice will create the public room
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "public_chat",
 			})
 
@@ -251,7 +251,7 @@ func getTxnID(prefix string) (txnID string) {
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
 	t.Helper()
 
-	roomID = c.CreateRoom(t, map[string]interface{}{
+	roomID = c.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 

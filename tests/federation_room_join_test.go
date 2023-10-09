@@ -112,7 +112,7 @@ func TestJoinFederatedRoomFailOver(t *testing.T) {
 		}`))
 	})).Methods("GET")
 
-	roomID := bob.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := bob.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	t.Logf("%s created room %s.", bob.UserID, roomID)
 
 	t.Logf("%s joins the room via {complement,hs2}.", alice.UserID)
@@ -316,7 +316,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 
 	// alice creates a room, and bans charlie from it.
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
@@ -410,7 +410,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 
 	// alice creates a room, and charlie joins it
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	roomId := alice.CreateRoom(t, createRoomOpts)
+	roomId := alice.MustCreateRoom(t, createRoomOpts)
 	charlie := srv.UserID("charlie")
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomId, charlie)
 
@@ -519,7 +519,7 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	// alice creates a room, which bob joins
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, nil)
 
 	// now we send a make_join...
@@ -603,7 +603,7 @@ func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
 	t.Run("join remote federated room as application service user", func(t *testing.T) {
 		//t.Parallel()
 		// Create the room from a remote homeserver
-		roomID := remoteCharlie.CreateRoom(t, map[string]interface{}{
+		roomID := remoteCharlie.MustCreateRoom(t, map[string]interface{}{
 			"preset": "public_chat",
 			"name":   "hs2 room",
 		})

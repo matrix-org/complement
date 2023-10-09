@@ -16,7 +16,7 @@ func TestRemoteTyping(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, nil)
 	charlie.MustJoinRoom(t, roomID, []string{"hs1"})
 

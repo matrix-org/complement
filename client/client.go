@@ -134,22 +134,35 @@ func (c *CSAPI) JoinRoom(t TestLike, roomIDOrAlias string, serverNames []string)
 	)
 }
 
-// LeaveRoom leaves the room ID, else fails the test.
-func (c *CSAPI) LeaveRoom(t TestLike, roomID string) {
+// MustLeaveRoom leaves the room ID, else fails the test.
+func (c *CSAPI) MustLeaveRoom(t TestLike, roomID string) {
+	res := c.LeaveRoom(t, roomID)
+	mustRespondOK(t, res)
+}
+
+// LeaveRoom leaves the room ID.
+func (c *CSAPI) LeaveRoom(t TestLike, roomID string) *http.Response {
 	t.Helper()
 	// leave the room
 	body := map[string]interface{}{}
-	c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, WithJSONBody(t, body))
+	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, WithJSONBody(t, body))
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
-func (c *CSAPI) InviteRoom(t TestLike, roomID string, userID string) {
+func (c *CSAPI) MustInviteRoom(t TestLike, roomID string, userID string) {
+	t.Helper()
+	res := c.InviteRoom(t, roomID, userID)
+	mustRespondOK(t, res)
+}
+
+// InviteRoom invites userID to the room ID, else fails the test.
+func (c *CSAPI) InviteRoom(t TestLike, roomID string, userID string) *http.Response {
 	t.Helper()
 	// Invite the user to the room
 	body := map[string]interface{}{
 		"user_id": userID,
 	}
-	c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
+	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
 }
 
 func (c *CSAPI) GetGlobalAccountData(t TestLike, eventType string) *http.Response {

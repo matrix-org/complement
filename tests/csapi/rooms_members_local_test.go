@@ -16,7 +16,7 @@ func TestMembersLocal(t *testing.T) {
 	// Here we don't use the BlueprintOneToOneRoom because else Bob would be able to see Alice's presence changes through
 	// that pre-existing one-on-one DM room. So we exclude that here.
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bobspassword", false)
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 	bob.MustDo(
 		t, "PUT", []string{"_matrix", "client", "v3", "presence", bob.UserID, "status"},

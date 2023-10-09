@@ -36,7 +36,7 @@ func TestThreadsEndpoint(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	_, token := alice.MustSync(t, client.SyncReq{})
 
 	// Create 2 threads in the room.

@@ -32,7 +32,7 @@ func TestRemovingAccountData(t *testing.T) {
 	alice := deployment.Client(t, "hs1", aliceUserID)
 
 	// And create a room with that user where we can store some room account data
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	// Test deleting global account data.
 	t.Run("Deleting a user's account data via DELETE works", func(t *testing.T) {

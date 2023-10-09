@@ -42,7 +42,7 @@ func TestAddAccountData(t *testing.T) {
 	// sytest: Can get room account data without syncing
 	t.Run("Can add room account data", func(t *testing.T) {
 		// Create a room
-		roomID := alice.CreateRoom(t, map[string]interface{}{})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 		// Set the room account data entry
 		alice.SetRoomAccountData(t, roomID, "test.key", map[string]interface{}{"value": "room first"})

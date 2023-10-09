@@ -41,7 +41,7 @@ func TestNotPresentUserCannotBanOthers(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 

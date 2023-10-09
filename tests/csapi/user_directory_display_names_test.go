@@ -60,7 +60,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	)
 
 	// Alice creates a public room (so when Eve searches, she can see that Alice exists)
-	alice.CreateRoom(t, map[string]interface{}{"visibility": "public"})
+	alice.MustCreateRoom(t, map[string]interface{}{"visibility": "public"})
 	return alice, bob, eve, cleanup
 }
 
@@ -135,7 +135,7 @@ func TestRoomSpecificUsernameChange(t *testing.T) {
 	defer cleanup(t)
 
 	// Bob creates a new room and invites Alice.
-	privateRoom := bob.CreateRoom(t, map[string]interface{}{
+	privateRoom := bob.MustCreateRoom(t, map[string]interface{}{
 		"visibility": "private",
 		"invite":     []string{alice.UserID},
 	})
@@ -163,7 +163,7 @@ func TestRoomSpecificUsernameAtJoin(t *testing.T) {
 	defer cleanup(t)
 
 	// Bob creates a new room and invites Alice.
-	privateRoom := bob.CreateRoom(t, map[string]interface{}{
+	privateRoom := bob.MustCreateRoom(t, map[string]interface{}{
 		"visibility": "private",
 		"invite":     []string{alice.UserID},
 	})

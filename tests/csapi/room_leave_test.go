@@ -21,7 +21,7 @@ func TestLeftRoomFixture(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	charlie := deployment.RegisterUser(t, "hs1", "charlie", "sufficiently_long_password_charlie", false)
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"initial_state": []map[string]interface{}{
 			{
 				"content": map[string]interface{}{
@@ -85,7 +85,7 @@ func TestLeftRoomFixture(t *testing.T) {
 		},
 	})
 
-	bob.LeaveRoom(t, roomID)
+	bob.MustLeaveRoom(t, roomID)
 
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 

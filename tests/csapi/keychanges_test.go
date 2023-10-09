@@ -26,7 +26,7 @@ func TestKeyChangesLocal(t *testing.T) {
 	t.Run("New login should create a device_lists.changed entry", func(t *testing.T) {
 		mustUploadKeys(t, bob)
 
-		roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 		bob.MustJoinRoom(t, roomID, []string{})
 		nextBatch1 := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 

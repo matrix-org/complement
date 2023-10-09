@@ -68,14 +68,14 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	david := srv.UserID("david")
 
 	// Create a room for alice and bob to test knocking with
-	roomIDOne := alice.CreateRoom(t, struct {
+	roomIDOne := alice.MustCreateRoom(t, struct {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
 		"private_chat", // Set to private in order to get an invite-only room
 		roomVersion,
 	})
-	alice.InviteRoom(t, roomIDOne, david)
+	alice.MustInviteRoom(t, roomIDOne, david)
 	inviteWaiter.Wait(t, 5*time.Second)
 	serverRoomOne := srv.MustJoinRoom(t, deployment, "hs1", roomIDOne, david)
 
@@ -83,7 +83,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, serverRoomOne, false, joinRule)
 
 	// Create a room for alice and charlie to test knocking with
-	roomIDTwo := alice.CreateRoom(t, struct {
+	roomIDTwo := alice.MustCreateRoom(t, struct {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
@@ -91,7 +91,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 		roomVersion,
 	})
 	inviteWaiter = NewWaiter()
-	alice.InviteRoom(t, roomIDTwo, david)
+	alice.MustInviteRoom(t, roomIDTwo, david)
 	inviteWaiter.Wait(t, 5*time.Second)
 	serverRoomTwo := srv.MustJoinRoom(t, deployment, "hs1", roomIDTwo, david)
 
@@ -379,7 +379,7 @@ func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, jo
 	alice := deployment.Client(t, "hs1", aliceUserID)
 
 	// Create an invite-only room with the knock room version
-	roomID := alice.CreateRoom(t, struct {
+	roomID := alice.MustCreateRoom(t, struct {
 		Preset      string `json:"preset"`
 		RoomVersion string `json:"room_version"`
 	}{
@@ -402,7 +402,7 @@ func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, jo
 	publishAndCheckRoomJoinRule(t, alice, roomID, joinRule)
 
 	// Create a public room
-	roomID = alice.CreateRoom(t, struct {
+	roomID = alice.MustCreateRoom(t, struct {
 		Preset string `json:"preset"`
 	}{
 		"public_chat", // Set to public in order to get a public room

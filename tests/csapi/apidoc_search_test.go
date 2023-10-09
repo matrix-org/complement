@@ -27,7 +27,7 @@ func TestSearch(t *testing.T) {
 		// sytest: Can search for an event by body
 		t.Run("Can search for an event by body", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 			eventID := alice.SendEventSynced(t, roomID, b.Event{
@@ -71,7 +71,7 @@ func TestSearch(t *testing.T) {
 		// sytest: Can get context around search results
 		t.Run("Can get context around search results", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 
@@ -130,7 +130,7 @@ func TestSearch(t *testing.T) {
 		// sytest: Can back-paginate search results
 		t.Run("Can back-paginate search results", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 
@@ -198,7 +198,7 @@ func TestSearch(t *testing.T) {
 		// sytest: Search works across an upgraded room and its predecessor
 		t.Run("Search works across an upgraded room and its predecessor", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset":  "private_chat",
 				"version": "8",
 			})
@@ -277,7 +277,7 @@ func TestSearch(t *testing.T) {
 			// sytest: Search results with $ordering_type ordering do not include redacted events
 			t.Run(fmt.Sprintf("Search results with %s ordering do not include redacted events", ordering), func(t *testing.T) {
 				t.Parallel()
-				roomID := alice.CreateRoom(t, map[string]interface{}{
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{
 					"preset": "private_chat",
 				})
 

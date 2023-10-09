@@ -108,7 +108,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// have Alice create a room, and then join it
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	testRoomID := alice.CreateRoom(t, struct {
+	testRoomID := alice.MustCreateRoom(t, struct {
 		Preset string `json:"preset"`
 	}{
 		"public_chat",

@@ -40,7 +40,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 
 	// Create the rooms
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	space := alice.CreateRoom(t, map[string]interface{}{
+	space := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
 		"creation_content": map[string]interface{}{
@@ -58,7 +58,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 		},
 	})
 	// The room is room version 8 which supports the restricted join_rule.
-	room := alice.CreateRoom(t, map[string]interface{}{
+	room := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
 		"room_version": "8",
@@ -122,7 +122,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	// Create the rooms
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	space := alice.CreateRoom(t, map[string]interface{}{
+	space := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
 		"creation_content": map[string]interface{}{
@@ -142,7 +142,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 	// The room is room version 8 which supports the restricted join_rule and is
 	// created on hs2.
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
-	room := charlie.CreateRoom(t, map[string]interface{}{
+	room := charlie.MustCreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"name":         "Room",
 		"room_version": "8",

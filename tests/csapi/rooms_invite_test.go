@@ -22,10 +22,10 @@ func TestRoomsInvite(t *testing.T) {
 		// sytest: Can invite users to invite-only rooms
 		t.Run("Can invite users to invite-only rooms", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
-			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			bob.MustJoinRoom(t, roomID, []string{})
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
@@ -35,7 +35,7 @@ func TestRoomsInvite(t *testing.T) {
 		// sytest: Uninvited users cannot join the room
 		t.Run("Uninvited users cannot join the room", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 			res := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
@@ -47,28 +47,28 @@ func TestRoomsInvite(t *testing.T) {
 		// sytest: Invited user can reject invite
 		t.Run("Invited user can reject invite", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
-			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.LeaveRoom(t, roomID)
+			bob.MustLeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
 
 		// sytest: Invited user can reject invite for empty room
 		t.Run("Invited user can reject invite for empty room", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 
 			aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomID))
-			bob.LeaveRoom(t, roomID)
+			bob.MustLeaveRoom(t, roomID)
 			bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncLeftFrom(bob.UserID, roomID))
 			// sytest: Invited user can reject local invite after originator leaves
 			// Bob should not see an invite when syncing
@@ -82,7 +82,7 @@ func TestRoomsInvite(t *testing.T) {
 		// sytest: Users cannot invite themselves to a room
 		t.Run("Users cannot invite themselves to a room", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 			body := client.WithJSONBody(t, map[string]interface{}{
@@ -97,11 +97,11 @@ func TestRoomsInvite(t *testing.T) {
 		// sytest: Users cannot invite a user that is already in the room
 		t.Run("Users cannot invite a user that is already in the room", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 
-			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			bob.MustJoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
@@ -118,12 +118,12 @@ func TestRoomsInvite(t *testing.T) {
 		// sytest: Invited user can see room metadata
 		t.Run("Invited user can see room metadata", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"name":   "Invites room",
 			})
 
-			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			res, _ := bob.MustSync(t, client.SyncReq{})
 			verifyState(t, res, roomID, alice)
@@ -133,12 +133,12 @@ func TestRoomsInvite(t *testing.T) {
 		// This is a "multi_test" in Sytest
 		t.Run("Test that we can be reinvited to a room we created", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 
 			// Invite & join bob
-			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			bob.MustJoinRoom(t, roomID, []string{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
@@ -152,10 +152,10 @@ func TestRoomsInvite(t *testing.T) {
 			alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"}, reqBody)
 
 			// Alice leaves the room
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 			// Bob re-invites Alice
-			bob.InviteRoom(t, roomID, alice.UserID)
+			bob.MustInviteRoom(t, roomID, alice.UserID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
 			// Alice should be able to rejoin
 			alice.MustJoinRoom(t, roomID, []string{})

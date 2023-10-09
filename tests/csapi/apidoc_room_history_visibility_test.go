@@ -19,7 +19,7 @@ func fetchEvent(t *testing.T, c *client.CSAPI, roomId, eventId string) *http.Res
 }
 
 func createRoomWithVisibility(t *testing.T, c *client.CSAPI, visibility string) string {
-	return c.CreateRoom(t, map[string]interface{}{
+	return c.MustCreateRoom(t, map[string]interface{}{
 		"initial_state": []map[string]interface{}{
 			{
 				"content": map[string]interface{}{
@@ -163,7 +163,7 @@ func TestFetchHistoricalInvitedEventFromBetweenInvite(t *testing.T) {
 
 	roomID := createRoomWithVisibility(t, alice, "invited")
 
-	alice.InviteRoom(t, roomID, bob.UserID)
+	alice.MustInviteRoom(t, roomID, bob.UserID)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
@@ -218,7 +218,7 @@ func TestFetchHistoricalInvitedEventFromBeforeInvite(t *testing.T) {
 		},
 	})
 
-	alice.InviteRoom(t, roomID, bob.UserID)
+	alice.MustInviteRoom(t, roomID, bob.UserID)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 	bob.MustJoinRoom(t, roomID, nil)

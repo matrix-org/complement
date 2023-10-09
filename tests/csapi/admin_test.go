@@ -68,7 +68,7 @@ func TestServerNotices(t *testing.T) {
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, eventID))
 	})
 	t.Run("Alice can leave the alert room, after joining it", func(t *testing.T) {
-		alice.LeaveRoom(t, roomID)
+		alice.MustLeaveRoom(t, roomID)
 	})
 	t.Run("After leaving the alert room and on re-invitation, no new room is created", func(t *testing.T) {
 		sendServerNotice(t, admin, reqBody, nil)

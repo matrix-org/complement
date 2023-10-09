@@ -12,7 +12,7 @@ import (
 // tests/10apidoc/37room-receipts.pl
 
 func createRoomForReadReceipts(t *testing.T, c *client.CSAPI, deployment *docker.Deployment) (string, string) {
-	roomID := c.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := c.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 	c.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(c.UserID, roomID))
 

@@ -120,7 +120,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		barry := deployment.RegisterUser(t, otherHSName, generateLocalpart("barry"), "password", false)
 
 		// The observing user must share a room with the dummy barrier user.
-		roomID := barry.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := barry.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 		observingUser.MustJoinRoom(t, roomID, []string{otherHSName})
 		observingUser.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(observingUser.UserID, roomID))
 
@@ -147,7 +147,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Alice performs an initial sync
@@ -194,7 +194,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := bob.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := bob.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 		t.Logf("%s created test room %s.", bob.UserID, roomID)
 
 		// Alice performs an initial sync
@@ -239,7 +239,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Bob joins the room
@@ -255,7 +255,7 @@ func TestDeviceListUpdates(t *testing.T) {
 
 		// Bob leaves the room
 		t.Logf("%s leaves the test room.", bob.UserID)
-		bob.LeaveRoom(t, roomID)
+		bob.MustLeaveRoom(t, roomID)
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(bob.UserID, roomID))
 
 		// Check that Alice is notified that she will no longer receive updates about Bob's devices
@@ -290,7 +290,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := bob.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := bob.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 		t.Logf("%s created test room %s.", bob.UserID, roomID)
 
 		// Alice joins the room
@@ -306,7 +306,7 @@ func TestDeviceListUpdates(t *testing.T) {
 
 		// Alice leaves the room
 		t.Logf("%s leaves the test room.", alice.UserID)
-		alice.LeaveRoom(t, roomID)
+		alice.MustLeaveRoom(t, roomID)
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(alice.UserID, roomID))
 
 		// Check that Alice is notified that she will no longer receive updates about Bob's devices
@@ -341,7 +341,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Bob joins the room
@@ -358,7 +358,7 @@ func TestDeviceListUpdates(t *testing.T) {
 		// Both homeservers think Bob has joined now
 		// Bob leaves the room
 		t.Logf("%s leaves the test room.", bob.UserID)
-		bob.LeaveRoom(t, roomID)
+		bob.MustLeaveRoom(t, roomID)
 		bobNextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncLeftFrom(bob.UserID, roomID))
 
 		// Check that Alice is notified that she will no longer receive updates about Bob's devices
