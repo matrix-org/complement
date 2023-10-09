@@ -21,7 +21,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bobpassword", false)
-	roomID := alice.MustCreateRoom(t, struct{}{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Room creation reports m.room.create to myself

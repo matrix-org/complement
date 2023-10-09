@@ -5,8 +5,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -248,10 +248,10 @@ func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 		},
 	})
 
-	roomToLeave := alice.MustCreateRoom(t, map[string]string{
+	roomToLeave := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
-	roomToSpam := alice.MustCreateRoom(t, map[string]string{
+	roomToSpam := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 

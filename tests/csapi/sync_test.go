@@ -8,8 +8,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/runtime"
 )
@@ -121,7 +121,7 @@ func TestSync(t *testing.T) {
 		// sytest: Can sync a joined room
 		t.Run("Can sync a joined room", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.MustCreateRoom(t, struct{}{})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			res, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID})
 			// check all required fields exist
@@ -135,7 +135,7 @@ func TestSync(t *testing.T) {
 		// sytest: Full state sync includes joined rooms
 		t.Run("Full state sync includes joined rooms", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.MustCreateRoom(t, struct{}{})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			_, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID})
 
@@ -146,7 +146,7 @@ func TestSync(t *testing.T) {
 		t.Run("Newly joined room is included in an incremental sync", func(t *testing.T) {
 			t.Parallel()
 			_, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID})
-			roomID := alice.MustCreateRoom(t, struct{}{})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			res, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID, Since: nextBatch})
 			checkJoinFieldsExist(t, res, roomID)
@@ -383,8 +383,8 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	charlie := deployment.NewUser(t, "charlie", "hs1")
 
 	// Alice creates two rooms: one with her and Bob, and a second with her and Charlie.
-	bobRoomID := alice.MustCreateRoom(t, struct{}{})
-	charlieRoomID := alice.MustCreateRoom(t, struct{}{})
+	bobRoomID := alice.MustCreateRoom(t, map[string]interface{}{})
+	charlieRoomID := alice.MustCreateRoom(t, map[string]interface{}{})
 	nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, bobRoomID), client.SyncJoinedTo(alice.UserID, charlieRoomID))
 
 	alice.MustInviteRoom(t, bobRoomID, bob.UserID)

@@ -6,8 +6,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -26,7 +26,7 @@ func TestRoomImageRoundtrip(t *testing.T) {
 
 	mxcUri := alice.UploadContent(t, data.MatrixPng, "test.png", "image/png")
 
-	roomId := alice.MustCreateRoom(t, struct{}{})
+	roomId := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	alice.SendEventSynced(t, roomId, b.Event{
 		Type: "m.room.message",

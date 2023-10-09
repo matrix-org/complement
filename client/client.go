@@ -91,16 +91,16 @@ func (c *CSAPI) DownloadContent(t TestLike, mxcUri string) ([]byte, string) {
 }
 
 // MustCreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
-func (c *CSAPI) MustCreateRoom(t TestLike, creationContent interface{}) string {
+func (c *CSAPI) MustCreateRoom(t TestLike, creationContent map[string]interface{}) string {
 	t.Helper()
 	res := c.CreateRoom(t, creationContent)
-	mustRespondOK(t, res)
+	mustRespond2xx(t, res)
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "room_id")
 }
 
 // CreateRoom creates a room with an optional HTTP request body.
-func (c *CSAPI) CreateRoom(t TestLike, creationContent interface{}) *http.Response {
+func (c *CSAPI) CreateRoom(t TestLike, creationContent map[string]interface{}) *http.Response {
 	t.Helper()
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, creationContent))
 }
@@ -109,7 +109,7 @@ func (c *CSAPI) CreateRoom(t TestLike, creationContent interface{}) *http.Respon
 func (c *CSAPI) MustJoinRoom(t TestLike, roomIDOrAlias string, serverNames []string) string {
 	t.Helper()
 	res := c.JoinRoom(t, roomIDOrAlias, serverNames)
-	mustRespondOK(t, res)
+	mustRespond2xx(t, res)
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
 		return roomIDOrAlias
@@ -137,7 +137,7 @@ func (c *CSAPI) JoinRoom(t TestLike, roomIDOrAlias string, serverNames []string)
 // MustLeaveRoom leaves the room ID, else fails the test.
 func (c *CSAPI) MustLeaveRoom(t TestLike, roomID string) {
 	res := c.LeaveRoom(t, roomID)
-	mustRespondOK(t, res)
+	mustRespond2xx(t, res)
 }
 
 // LeaveRoom leaves the room ID.
@@ -152,7 +152,7 @@ func (c *CSAPI) LeaveRoom(t TestLike, roomID string) *http.Response {
 func (c *CSAPI) MustInviteRoom(t TestLike, roomID string, userID string) {
 	t.Helper()
 	res := c.InviteRoom(t, roomID, userID)
-	mustRespondOK(t, res)
+	mustRespond2xx(t, res)
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
@@ -297,7 +297,7 @@ func (c *CSAPI) SendEventSynced(t TestLike, roomID string, e b.Event) string {
 // event ID of the redaction event.
 func (c *CSAPI) MustSendRedaction(t TestLike, roomID string, e b.Event, eventID string) string {
 	res := c.SendRedaction(t, roomID, e, eventID)
-	mustRespondOK(t, res)
+	mustRespond2xx(t, res)
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "event_id")
 }
@@ -313,7 +313,7 @@ func (c *CSAPI) SendRedaction(t TestLike, roomID string, e b.Event, eventID stri
 // MustSendTyping marks this user as typing until the timeout is reached. If isTyping is false, timeout is ignored.
 func (c *CSAPI) MustSendTyping(t TestLike, roomID string, isTyping bool, timeoutMillis int) {
 	res := c.SendTyping(t, roomID, isTyping, timeoutMillis)
-	mustRespondOK(t, res)
+	mustRespond2xx(t, res)
 }
 
 // SendTyping marks this user as typing until the timeout is reached. If isTyping is false, timeout is ignored.
@@ -684,7 +684,7 @@ func SplitMxc(mxcUri string) (string, string) {
 func (c *CSAPI) MustSendToDeviceMessages(t TestLike, evType string, messages map[string]map[string]map[string]interface{}) {
 	t.Helper()
 	res := c.SendToDeviceMessages(t, evType, messages)
-	mustRespondOK(t, res)
+	mustRespond2xx(t, res)
 }
 
 // SendToDeviceMessages sends to-device messages over /sendToDevice/.
@@ -707,7 +707,7 @@ func (c *CSAPI) SendToDeviceMessages(t TestLike, evType string, messages map[str
 	)
 }
 
-func mustRespondOK(t TestLike, res *http.Response) {
+func mustRespond2xx(t TestLike, res *http.Response) {
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		return // 2xx
 	}

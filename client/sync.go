@@ -144,7 +144,7 @@ func (c *CSAPI) MustSyncUntil(t TestLike, syncReq SyncReq, checks ...SyncCheckOp
 func (c *CSAPI) MustSync(t TestLike, syncReq SyncReq) (gjson.Result, string) {
 	t.Helper()
 	jsonBody, res := c.Sync(t, syncReq)
-	mustRespondOK(t, res)
+	mustRespond2xx(t, res)
 	return jsonBody, jsonBody.Get("next_batch").Str
 }
 
@@ -152,7 +152,7 @@ func (c *CSAPI) MustSync(t TestLike, syncReq SyncReq) (gjson.Result, string) {
 // see `MustSyncUntil`.
 //
 // Always returns the HTTP response, even on non-2xx.
-// Returns the top-level parsed /sync response JSON on 200 OK.
+// Returns the top-level parsed /sync response JSON on 2xx.
 func (c *CSAPI) Sync(t TestLike, syncReq SyncReq) (gjson.Result, *http.Response) {
 	t.Helper()
 	query := url.Values{

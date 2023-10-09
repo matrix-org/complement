@@ -17,8 +17,8 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/must"
 )
@@ -108,10 +108,8 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// have Alice create a room, and then join it
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	testRoomID := alice.MustCreateRoom(t, struct {
-		Preset string `json:"preset"`
-	}{
-		"public_chat",
+	testRoomID := alice.MustCreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
 	})
 	charlie := srv.UserID("charlie")
 	room := srv.MustJoinRoom(t, deployment, "hs1", testRoomID, charlie)

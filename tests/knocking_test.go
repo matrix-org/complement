@@ -69,12 +69,9 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	david := srv.UserID("david")
 
 	// Create a room for alice and bob to test knocking with
-	roomIDOne := alice.MustCreateRoom(t, struct {
-		Preset      string `json:"preset"`
-		RoomVersion string `json:"room_version"`
-	}{
-		"private_chat", // Set to private in order to get an invite-only room
-		roomVersion,
+	roomIDOne := alice.MustCreateRoom(t, map[string]interface{}{
+		"preset":       "private_chat", // Set to private in order to get an invite-only room
+		"room_version": roomVersion,
 	})
 	alice.MustInviteRoom(t, roomIDOne, david)
 	inviteWaiter.Wait(t, 5*time.Second)
@@ -84,12 +81,9 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, serverRoomOne, false, joinRule)
 
 	// Create a room for alice and charlie to test knocking with
-	roomIDTwo := alice.MustCreateRoom(t, struct {
-		Preset      string `json:"preset"`
-		RoomVersion string `json:"room_version"`
-	}{
-		"private_chat", // Set to private in order to get an invite-only room
-		roomVersion,
+	roomIDTwo := alice.MustCreateRoom(t, map[string]interface{}{
+		"preset":       "private_chat", // Set to private in order to get an invite-only room
+		"room_version": roomVersion,
 	})
 	inviteWaiter = helpers.NewWaiter()
 	alice.MustInviteRoom(t, roomIDTwo, david)
@@ -355,12 +349,9 @@ func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, jo
 	alice := deployment.Client(t, "hs1", aliceUserID)
 
 	// Create an invite-only room with the knock room version
-	roomID := alice.MustCreateRoom(t, struct {
-		Preset      string `json:"preset"`
-		RoomVersion string `json:"room_version"`
-	}{
-		"private_chat", // Set to private in order to get an invite-only room
-		roomVersion,
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
+		"preset":       "private_chat", // Set to private in order to get an invite-only room
+		"room_version": roomVersion,
 	})
 
 	// Change the join_rule to allow knocking
@@ -378,10 +369,9 @@ func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, jo
 	publishAndCheckRoomJoinRule(t, alice, roomID, joinRule)
 
 	// Create a public room
-	roomID = alice.MustCreateRoom(t, struct {
-		Preset string `json:"preset"`
-	}{
-		"public_chat", // Set to public in order to get a public room
+	roomID = alice.MustCreateRoom(t, map[string]interface{}{
+		"preset":       "private_chat", // Set to private in order to get an invite-only room
+		"room_version": roomVersion,
 	})
 
 	// Publish the room, and check that the public room directory presents a 'join_rule' key of public
