@@ -4,16 +4,16 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 func queryUnknownEndpoint(t *testing.T, user *client.CSAPI, paths []string) {
 	t.Helper()
 
-	res := user.DoFunc(t, "GET", paths)
+	res := user.Do(t, "GET", paths)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusNotFound,
 		JSON: []match.JSON{
@@ -25,7 +25,7 @@ func queryUnknownEndpoint(t *testing.T, user *client.CSAPI, paths []string) {
 func queryUnknownMethod(t *testing.T, user *client.CSAPI, method string, paths []string) {
 	t.Helper()
 
-	res := user.DoFunc(t, method, paths)
+	res := user.Do(t, method, paths)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusMethodNotAllowed,
 		JSON: []match.JSON{

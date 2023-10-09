@@ -3,8 +3,8 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/tidwall/gjson"
 )
@@ -41,7 +41,7 @@ func TestRoomReceipts(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
 
-	alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
 
 	// Make sure the read receipt shows up in sync.
 	alice.MustSyncUntil(t, client.SyncReq{}, syncHasReadReceipt(roomID, alice.UserID, eventID))
@@ -58,7 +58,7 @@ func TestRoomReadMarkers(t *testing.T) {
 		"m.fully_read": eventID,
 		"m.read":       eventID,
 	})
-	alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "read_markers"}, reqBody)
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "read_markers"}, reqBody)
 
 	// Make sure the read receipt shows up in sync.
 	alice.MustSyncUntil(t, client.SyncReq{}, syncHasReadReceipt(roomID, alice.UserID, eventID))

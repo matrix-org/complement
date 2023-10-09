@@ -1,12 +1,14 @@
 package tests
 
 import (
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/runtime"
-	"github.com/matrix-org/gomatrixserverlib"
 	"testing"
 	"time"
+
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // test that a redaction is sent out over federation even if we don't have the original event
@@ -27,12 +29,10 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleTransactionRequests(
 			// listen for PDU events in transactions
-			func(ev *gomatrixserverlib.Event) {
+			func(ev gomatrixserverlib.PDU) {
 				defer waiter.Finish()
 
-				if ev.Type() != wantEventType {
-					t.Errorf("Wrong event type, got %s want %s", ev.Type(), wantEventType)
-				}
+				must.Equal(t, ev.Type(), wantEventType, "wrong event type")
 			},
 			nil,
 		),
@@ -56,13 +56,12 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	alice.JoinRoom(t, roomAlias, []string{srv.ServerName()})
 
 	// inject event to redact in the room
-	badEvent := srv.MustCreateEvent(t, serverRoom, b.Event{
+	badEvent := srv.MustCreateEvent(t, serverRoom, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
 			"body": "666",
-		},
-	})
+		}})
 	serverRoom.AddEvent(badEvent)
 
 	eventID := badEvent.EventID()
@@ -70,9 +69,12 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	eventToRedact := eventID + ":" + fullServerName
 
 	// the client sends a request to the local homeserver to send the redaction
-	res := alice.SendRedaction(t, serverRoom.RoomID, b.Event{Type: wantEventType, Content: map[string]interface{}{
-		"msgtype": "m.room.redaction"},
-		Redacts: eventToRedact}, eventToRedact)
+	res := alice.SendRedaction(t, serverRoom.RoomID, b.Event{
+		Type: wantEventType,
+		Content: map[string]interface{}{
+			"reason": "reasons...",
+		},
+	}, eventToRedact)
 
 	// wait for redaction to arrive at remote homeserver
 	waiter.Wait(t, 1*time.Second)
@@ -86,8 +88,5 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	}
 
 	// check that the event id of the redaction sent by alice is the same as the redaction event in the room
-	if res != lastEvent.EventID() {
-		t.Fatalf("Incorrent event id %s, wanted %s.", res, lastEvent.EventID())
-	}
-
+	must.Equal(t, lastEvent.EventID(), res, "incorrect event id")
 }

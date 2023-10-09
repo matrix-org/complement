@@ -7,10 +7,10 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 const aliceUserID = "@alice:hs1"
@@ -50,7 +50,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	// Alice sets her profile displayname. This ensures that her
 	// public name, private name and userid localpart are all
 	// distinguishable, even case-insensitively.
-	alice.MustDoFunc(
+	alice.MustDo(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "v3", "profile", alice.UserID, "displayname"},
@@ -66,7 +66,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 
 func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 	t.Run("Eve can find Alice by profile display name", func(t *testing.T) {
-		res := eve.MustDoFunc(
+		res := eve.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "user_directory", "search"},
@@ -78,7 +78,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 	})
 
 	t.Run("Eve can find Alice by mxid", func(t *testing.T) {
-		res := eve.MustDoFunc(
+		res := eve.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "user_directory", "search"},
@@ -90,7 +90,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 	})
 
 	t.Run("Eve cannot find Alice by room-specific name that Eve is not privy to", func(t *testing.T) {
-		res := eve.MustDoFunc(
+		res := eve.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "user_directory", "search"},
@@ -102,7 +102,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 	})
 
 	t.Run("Bob can find Alice by profile display name", func(t *testing.T) {
-		res := bob.MustDoFunc(
+		res := bob.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "user_directory", "search"},
@@ -116,7 +116,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 	})
 
 	t.Run("Bob can find Alice by mxid", func(t *testing.T) {
-		res := bob.MustDoFunc(
+		res := bob.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "user_directory", "search"},
@@ -145,7 +145,7 @@ func TestRoomSpecificUsernameChange(t *testing.T) {
 	alice.JoinRoom(t, privateRoom, nil)
 
 	// Alice reveals her private name to Bob
-	alice.MustDoFunc(
+	alice.MustDo(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "v3", "rooms", privateRoom, "state", "m.room.member", alice.UserID},
@@ -174,7 +174,7 @@ func TestRoomSpecificUsernameAtJoin(t *testing.T) {
 	alice.JoinRoom(t, privateRoom, nil)
 
 	// Alice reveals her private name to Bob
-	alice.MustDoFunc(
+	alice.MustDo(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "v3", "rooms", privateRoom, "state", "m.room.member", alice.UserID},

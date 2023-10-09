@@ -6,7 +6,7 @@ import (
 
 	"github.com/matrix-org/gomatrixserverlib"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
 )
 
@@ -15,7 +15,6 @@ import (
 // We start with two users in a room - alice@hs1, and 'delia' on the Complement test server.
 // alice sends an invite to charlie@hs2, which he rejects.
 // We check that delia sees the rejection.
-//
 func TestFederationRejectInvite(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
@@ -27,7 +26,7 @@ func TestFederationRejectInvite(t *testing.T) {
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
-		federation.HandleTransactionRequests(func(ev *gomatrixserverlib.Event) {
+		federation.HandleTransactionRequests(func(ev gomatrixserverlib.PDU) {
 			sk := "<nil>"
 			if ev.StateKey() != nil {
 				sk = *ev.StateKey()

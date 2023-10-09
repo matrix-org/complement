@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/gomatrixserverlib"
 )
@@ -21,10 +22,10 @@ import (
 // - Charlie on Complement joins the room over federation, then leaves, then rejoins
 // - Alice updates join rules for the room (test waits until it sees this event over federation)
 // At this point we can then test:
-// - /event_auth for the join rules event just returns the chain for the join rules event, which
-//   just means it returns the auth_events as that is equal to the auth chain for this event.
-// - /event_auth for the latest join event returns the complete auth chain for Charlie (all the
-//   joins and leaves are included), without any extraneous events.
+//   - /event_auth for the join rules event just returns the chain for the join rules event, which
+//     just means it returns the auth_events as that is equal to the auth chain for this event.
+//   - /event_auth for the latest join event returns the complete auth chain for Charlie (all the
+//     joins and leaves are included), without any extraneous events.
 func TestEventAuth(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
@@ -32,14 +33,14 @@ func TestEventAuth(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
 	// create a remote homeserver which will make the /event_auth request
-	var joinRuleEvent *gomatrixserverlib.Event
+	var joinRuleEvent gomatrixserverlib.PDU
 	waiter := NewWaiter()
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleTransactionRequests(
 			// listen for the new join rule event
-			func(ev *gomatrixserverlib.Event) {
+			func(ev gomatrixserverlib.PDU) {
 				if jr, _ := ev.JoinRule(); jr == "invite" {
 					joinRuleEvent = ev
 					waiter.Finish()
@@ -77,7 +78,7 @@ func TestEventAuth(t *testing.T) {
 	getEventAuth := func(t *testing.T, eventID string, wantAuthEventIDs []string) {
 		t.Helper()
 		t.Logf("/event_auth for %s - want %v", eventID, wantAuthEventIDs)
-		eventAuthResp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), gomatrixserverlib.ServerName(srv.ServerName()), "hs1", room.Version, roomID, eventID)
+		eventAuthResp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), spec.ServerName(srv.ServerName()), "hs1", room.Version, roomID, eventID)
 		must.NotError(t, "failed to /event_auth", err)
 		if len(eventAuthResp.AuthEvents) == 0 {
 			t.Fatalf("/event_auth returned 0 auth events")
@@ -91,16 +92,11 @@ func TestEventAuth(t *testing.T) {
 			t.Fatalf("got %d valid auth events (%d total), wanted %d.\n%s\nwant: %s", len(gotAuthEvents), len(eventAuthResp.AuthEvents), len(wantAuthEventIDs), msg, wantAuthEventIDs)
 		}
 		// make sure all the events match
-		wantIDs := map[string]bool{}
-		for _, id := range wantAuthEventIDs {
-			wantIDs[id] = true
+		gotIDs := make([]string, len(gotAuthEvents))
+		for i := range gotIDs {
+			gotIDs[i] = gotAuthEvents[i].EventID()
 		}
-		for _, e := range gotAuthEvents {
-			delete(wantIDs, e.EventID())
-		}
-		if len(wantIDs) > 0 {
-			t.Errorf("missing events %v", wantIDs)
-		}
+		must.ContainSubset(t, gotIDs, wantAuthEventIDs)
 	}
 
 	t.Run("returns auth events for the requested event", func(t *testing.T) {

@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 
 	"github.com/tidwall/gjson"
 )
@@ -81,17 +81,7 @@ func createUserAccountData(t *testing.T, c *client.CSAPI) {
 	res := c.GetGlobalAccountData(t, testAccountDataType)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
-			func(body []byte) error {
-				if !match.JSONDeepEqual(body, testAccountDataContent) {
-					return fmt.Errorf(
-						"Expected %s for room account data content, got '%s'",
-						testAccountDataType,
-						string(body),
-					)
-				}
-
-				return nil
-			},
+			match.JSONKeyEqual("", testAccountDataContent),
 		},
 	})
 }
@@ -121,17 +111,7 @@ func createRoomAccountData(t *testing.T, c *client.CSAPI, roomID string) {
 	res := c.GetRoomAccountData(t, roomID, testAccountDataType)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
-			func(body []byte) error {
-				if !match.JSONDeepEqual(body, testAccountDataContent) {
-					return fmt.Errorf(
-						"Expected %s for room account data content, got '%s'",
-						testAccountDataType,
-						string(body),
-					)
-				}
-
-				return nil
-			},
+			match.JSONKeyEqual("", testAccountDataContent),
 		},
 	})
 }
@@ -152,7 +132,7 @@ func deleteUserAccountData(t *testing.T, c *client.CSAPI, viaDelete bool) {
 	// Delete user account data
 	if viaDelete {
 		// Delete via the DELETE method
-		c.MustDoFunc(
+		c.MustDo(
 			t,
 			"DELETE",
 			[]string{"_matrix", "client", "unstable", "org.matrix.msc3391", "user", c.UserID, "account_data", testAccountDataType},
@@ -174,7 +154,7 @@ func deleteUserAccountData(t *testing.T, c *client.CSAPI, viaDelete bool) {
 	)
 
 	// Also check the account data item is no longer found
-	res := c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", testAccountDataType})
+	res := c.Do(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "account_data", testAccountDataType})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 404,
 	})
@@ -210,7 +190,7 @@ func deleteRoomAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID
 	// Delete room account data
 	if viaDelete {
 		// Delete via the DELETE method
-		c.MustDoFunc(
+		c.MustDo(
 			t,
 			"DELETE",
 			[]string{"_matrix", "client", "unstable", "org.matrix.msc3391", "user", c.UserID, "rooms", roomID, "account_data", testAccountDataType},
@@ -232,7 +212,7 @@ func deleteRoomAccountData(t *testing.T, c *client.CSAPI, viaDelete bool, roomID
 	)
 
 	// Also check the account data item is no longer found
-	res := c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "room", roomID, "account_data", testAccountDataType})
+	res := c.Do(t, "GET", []string{"_matrix", "client", "v3", "user", c.UserID, "room", roomID, "account_data", testAccountDataType})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 404,
 	})
@@ -259,10 +239,7 @@ func checkAccountDataContent(r gjson.Result) bool {
 	if r.Get("type").Str != testAccountDataType {
 		return false
 	}
-	content := r.Get("content")
-
-	// Ensure the content of this account data type is as we expect
-	return match.JSONDeepEqual([]byte(content.Raw), testAccountDataContent)
+	return match.JSONKeyEqual("content", testAccountDataContent)(r) == nil
 }
 
 // checkEmptyAccountData checks that the content of a user or account data object
@@ -272,11 +249,9 @@ func checkEmptyAccountData(r gjson.Result) bool {
 	if r.Get("type").Str != testAccountDataType {
 		return false
 	}
-	content := r.Get("content")
-
 	// Ensure the content of this account data type is an empty map.
 	// This means that it has been deleted.
-	return match.JSONDeepEqual([]byte(content.Raw), map[string]interface{}{})
+	return match.JSONKeyEqual("content", map[string]interface{}{})(r) == nil
 }
 
 // checkAccountDataTypeNotPresent checks that a given account data event type is not present

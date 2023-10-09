@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/data"
 )
 

@@ -16,22 +16,25 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // This test checks that federated threading works when the remote server joins after the messages
 // have been sent. The test configures a thread like:
-//    A
-//    |
-//    B
-//   / \
-//  C   D
+//
+//	  A
+//	  |
+//	  B
+//	 / \
+//	C   D
+//
 // Then a remote server joins the room. /event_relationships is then hit with event ID 'D' which the
 // joined server does not have. This should cause a remote /event_relationships request to service the
 // request. The request parameters will pull in events D,B. This gets repeated for a second time with
@@ -94,7 +97,7 @@ func TestEventRelationships(t *testing.T) {
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// Now hit /event_relationships with eventD
-	res := bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
+	res := bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":       eventD,
 		"room_id":        roomID, // required so the server knows which servers to ask
 		"direction":      "down", // no newer events, so nothing should be added
@@ -126,7 +129,7 @@ func TestEventRelationships(t *testing.T) {
 	}, []string{eventC, eventD})
 
 	// now hit /event_relationships again with B, which should return everything (and fetch the missing events A,C)
-	res = bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
+	res = bob.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":       eventB,
 		"room_id":        roomID, // required so the server knows which servers to ask
 		"direction":      "down", // this pulls in C,D
@@ -171,13 +174,15 @@ func TestEventRelationships(t *testing.T) {
 // This test checks that the homeserver makes a federated request to /event_relationships
 // when walking a thread when it encounters an unknown event ID. The test configures a
 // room on the Complement server with a thread which has following shape:
-//     A
-//    / \
-//   B   C
-//       |
-//       D <- Test server joins here
-//       |
-//       E
+//
+//	  A
+//	 / \
+//	B   C
+//	    |
+//	    D <- Test server joins here
+//	    |
+//	    E
+//
 // The test server is notified of event E in a /send transaction after joining the room.
 // The client on the test server then hits /event_relationships with event ID 'E' and direction 'up'.
 // This *should* cause the server to walk up the thread, realise it is missing event D and then ask
@@ -205,7 +210,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	roomVer := alice.GetDefaultRoomVersion(t)
 	charlie := srv.UserID("charlie")
 	room := srv.MustMakeRoom(t, roomVer, federation.InitialRoomEvents(roomVer, charlie))
-	eventA := srv.MustCreateEvent(t, room, b.Event{
+	eventA := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -214,7 +219,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 		},
 	})
 	room.AddEvent(eventA)
-	eventB := srv.MustCreateEvent(t, room, b.Event{
+	eventB := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -229,7 +234,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	room.AddEvent(eventB)
 	// wait 1ms to ensure that the timestamp changes, which is important when using the recent_first flag
 	time.Sleep(1 * time.Millisecond)
-	eventC := srv.MustCreateEvent(t, room, b.Event{
+	eventC := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -242,7 +247,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 		},
 	})
 	room.AddEvent(eventC)
-	eventD := srv.MustCreateEvent(t, room, b.Event{
+	eventD := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -303,7 +308,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	alice.JoinRoom(t, room.RoomID, []string{srv.ServerName()})
 
 	// send a new child in the thread (child of D) so the HS has something to latch on to.
-	eventE := srv.MustCreateEvent(t, room, b.Event{
+	eventE := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -319,9 +324,9 @@ func TestFederatedEventRelationships(t *testing.T) {
 	fedClient := srv.FederationClient(deployment)
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
-		Destination:    gomatrixserverlib.ServerName("hs1"),
-		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
+		Origin:         spec.ServerName(srv.ServerName()),
+		Destination:    spec.ServerName("hs1"),
+		OriginServerTS: spec.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			eventE.JSON(),
 		},
@@ -335,7 +340,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	}))
 
 	// Hit /event_relationships to make sure it spiders the whole thing by asking /event_relationships on Complement
-	res := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
+	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":  eventE.EventID(),
 		"max_depth": 10,
 		"direction": "up",
@@ -356,7 +361,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 	must.HaveInOrder(t, gotEventIDs, []string{eventE.EventID(), eventD.EventID(), eventC.EventID(), eventA.EventID()})
 
 	// now querying for the children of A should return A,B,C (it should've been remembered B from the previous /event_relationships request)
-	res = alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "event_relationships"}, client.WithJSONBody(t, map[string]interface{}{
 		"event_id":     eventA.EventID(),
 		"max_depth":    1,
 		"direction":    "down",

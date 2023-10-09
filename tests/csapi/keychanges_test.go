@@ -8,10 +8,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 func TestKeyChangesLocal(t *testing.T) {
@@ -39,7 +39,7 @@ func TestKeyChangesLocal(t *testing.T) {
 			"password": password,
 		})
 		// Create a new device by logging in
-		res := unauthedClient.MustDoFunc(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
+		res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
 		loginResp := must.ParseJSON(t, res.Body)
 		unauthedClient.AccessToken = must.GetJSONFieldStr(t, loginResp, "access_token")
 		unauthedClient.DeviceID = must.GetJSONFieldStr(t, loginResp, "device_id")
@@ -63,7 +63,7 @@ func TestKeyChangesLocal(t *testing.T) {
 		queryParams := url.Values{}
 		queryParams.Set("from", nextBatch1)
 		queryParams.Set("to", nextBatch)
-		resp := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "keys", "changes"}, client.WithQueries(queryParams))
+		resp := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "keys", "changes"}, client.WithQueries(queryParams))
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			StatusCode: http.StatusOK,
 			JSON: []match.JSON{
@@ -77,7 +77,7 @@ func TestKeyChangesLocal(t *testing.T) {
 				bob.UserID: {},
 			},
 		})
-		resp = alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, queryKeys)
+		resp = alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, queryKeys)
 		keyCount := 0
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			StatusCode: http.StatusOK,
@@ -97,10 +97,10 @@ func TestKeyChangesLocal(t *testing.T) {
 
 func mustUploadKeys(t *testing.T, user *client.CSAPI) {
 	t.Helper()
-	deviceKeys, oneTimeKeys := generateKeys(t, user, 5)
+	deviceKeys, oneTimeKeys := user.GenerateOneTimeKeys(t, 5)
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"device_keys":   deviceKeys,
 		"one_time_keys": oneTimeKeys,
 	})
-	user.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+	user.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
 }

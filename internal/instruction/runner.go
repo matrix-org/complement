@@ -18,7 +18,7 @@ import (
 	"github.com/tidwall/gjson"
 	"maunium.net/go/mautrix/crypto/olm"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 )
 
 // An instruction for the runner to run.

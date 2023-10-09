@@ -1,13 +1,12 @@
 package tests
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -120,30 +119,17 @@ func TestACLs(t *testing.T) {
 		syncResp, _ := user.MustSync(t, client.SyncReq{})
 
 		// we don't expect eventID (blocked) to be in the sync response
-		events := syncResp.Get(fmt.Sprintf("rooms.join.%s.timeline.events", client.GjsonEscape(roomID))).Array()
-		for _, ev := range events {
-			if ev.Get("event_id").Str == eventID {
-				t.Fatalf("unexpected eventID from ACLed room: %s", eventID)
-			}
-		}
+		events := must.GetTimelineEventIDs(t, syncResp, roomID)
+		must.NotContainSubset(t, events, []string{eventID})
 
 		// also check that our sentinel event is present
-		var seenSentinelEvent bool
-		events = syncResp.Get(fmt.Sprintf("rooms.join.%s.timeline.events", client.GjsonEscape(sentinelRoom))).Array()
-		for _, ev := range events {
-			if ev.Get("event_id").Str == sentinelEventID {
-				seenSentinelEvent = true
-				break
-			}
-		}
-
-		if !seenSentinelEvent {
-			t.Fatalf("expected to see sentinel event but didn't")
-		}
+		events = must.GetTimelineEventIDs(t, syncResp, sentinelRoom)
+		must.ContainSubset(t, events, []string{sentinelEventID})
 
 		// Validate the ACL event is actually in the rooms state
-		res := user.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.server_acl"})
+		res := user.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.server_acl"})
 		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 200,
 			JSON: []match.JSON{
 				match.JSONKeyEqual("allow", []string{"*"}),
 				match.JSONKeyEqual("deny", []string{"hs2"}),

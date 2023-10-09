@@ -7,10 +7,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 func TestLeftRoomFixture(t *testing.T) {
@@ -123,7 +123,7 @@ func TestLeftRoomFixture(t *testing.T) {
 	// sytest: Can get rooms/{roomId}/state for a departed room (SPEC-216)
 	t.Run("Can get rooms/{roomId}/state for a departed room", func(t *testing.T) {
 		// Bob gets the old state
-		resp := bob.MustDoFunc(
+		resp := bob.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", madeUpStateKey},
@@ -135,7 +135,7 @@ func TestLeftRoomFixture(t *testing.T) {
 		})
 
 		// ...While Alice gets the new state
-		resp = alice.MustDoFunc(
+		resp = alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", madeUpStateKey},
@@ -149,7 +149,7 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	// sytest: Can get rooms/{roomId}/members for a departed room (SPEC-216)
 	t.Run("Can get rooms/{roomId}/members for a departed room", func(t *testing.T) {
-		resp := bob.MustDoFunc(
+		resp := bob.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -174,7 +174,7 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	// sytest: Can get rooms/{roomId}/messages for a departed room (SPEC-216)
 	t.Run("Can get rooms/{roomId}/messages for a departed room", func(t *testing.T) {
-		resp := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(url.Values{
+		resp := bob.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(url.Values{
 			"dir":   []string{"b"},
 			"limit": []string{"3"},
 			"from":  []string{bobSinceToken},
@@ -200,7 +200,7 @@ func TestLeftRoomFixture(t *testing.T) {
 	// sytest: Can get 'm.room.name' state for a departed room (SPEC-216)
 	t.Run("Can get 'm.room.name' state for a departed room", func(t *testing.T) {
 		// Bob gets the old name
-		resp := bob.MustDoFunc(
+		resp := bob.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"},
@@ -212,7 +212,7 @@ func TestLeftRoomFixture(t *testing.T) {
 		})
 
 		// ...While Alice gets the new name
-		resp = alice.MustDoFunc(
+		resp = alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"},
@@ -227,7 +227,7 @@ func TestLeftRoomFixture(t *testing.T) {
 	// sytest: Getting messages going forward is limited for a departed room (SPEC-216)
 	t.Run("Getting messages going forward is limited for a departed room", func(t *testing.T) {
 		// TODO: try this with the most recent since token too
-		resp := bob.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(url.Values{
+		resp := bob.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(url.Values{
 			"dir":   []string{"f"},
 			"limit": []string{"100"},
 			"from":  []string{bobSinceToken},

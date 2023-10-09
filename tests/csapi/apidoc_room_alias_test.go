@@ -7,28 +7,28 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 func setRoomAliasResp(t *testing.T, c *client.CSAPI, roomID, roomAlias string) *http.Response {
-	return c.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "directory", "room", roomAlias}, client.WithJSONBody(t, map[string]interface{}{
+	return c.Do(t, "PUT", []string{"_matrix", "client", "v3", "directory", "room", roomAlias}, client.WithJSONBody(t, map[string]interface{}{
 		"room_id": roomID,
 	}))
 }
 
 func getRoomAliasResp(t *testing.T, c *client.CSAPI, roomAlias string) *http.Response {
-	return c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", roomAlias})
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", roomAlias})
 }
 
 func deleteRoomAliasResp(t *testing.T, c *client.CSAPI, roomAlias string) *http.Response {
-	return c.DoFunc(t, "DELETE", []string{"_matrix", "client", "v3", "directory", "room", roomAlias})
+	return c.Do(t, "DELETE", []string{"_matrix", "client", "v3", "directory", "room", roomAlias})
 }
 
 func listRoomAliasesResp(t *testing.T, c *client.CSAPI, roomID string) *http.Response {
-	return c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "aliases"})
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "aliases"})
 }
 
 func setCanonicalAliasResp(t *testing.T, c *client.CSAPI, roomID string, roomAlias string, altAliases *[]string) *http.Response {
@@ -39,7 +39,7 @@ func setCanonicalAliasResp(t *testing.T, c *client.CSAPI, roomID string, roomAli
 		content["alt_aliases"] = altAliases
 	}
 
-	return c.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.canonical_alias"}, client.WithJSONBody(t, content))
+	return c.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.canonical_alias"}, client.WithJSONBody(t, content))
 }
 
 func mustSetCanonicalAlias(t *testing.T, c *client.CSAPI, roomID string, roomAlias string, altAliases *[]string) string {
@@ -109,7 +109,7 @@ func TestRoomAlias(t *testing.T) {
 			//
 			// If (4) arrives at the reader before (2), the reader responds with
 			// old data. Bodge around this by retrying for up to a second.
-			res = alice.DoFunc(
+			res = alice.Do(
 				t,
 				"GET",
 				[]string{"_matrix", "client", "v3", "rooms", roomID, "aliases"},
@@ -120,8 +120,9 @@ func TestRoomAlias(t *testing.T) {
 							return false
 						}
 						eventResBody := client.ParseJSON(t, res)
+						parsedEventResBody := gjson.ParseBytes(eventResBody)
 						matcher := match.JSONKeyEqual("aliases", []interface{}{roomAlias})
-						err := matcher(eventResBody)
+						err := matcher(parsedEventResBody)
 						if err != nil {
 							t.Log(err)
 							return false
