@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/should"
 )
 
 func setRoomAliasResp(t *testing.T, c *client.CSAPI, roomID, roomAlias string) *http.Response {
@@ -116,13 +117,12 @@ func TestRoomAlias(t *testing.T) {
 				client.WithRetryUntil(
 					1*time.Second,
 					func(res *http.Response) bool {
-						if res.StatusCode != 200 {
-							return false
-						}
-						eventResBody := client.ParseJSON(t, res)
-						parsedEventResBody := gjson.ParseBytes(eventResBody)
-						matcher := match.JSONKeyEqual("aliases", []interface{}{roomAlias})
-						err := matcher(parsedEventResBody)
+						_, err := should.MatchResponse(res, match.HTTPResponse{
+							StatusCode: 200,
+							JSON: []match.JSON{
+								match.JSONKeyEqual("aliases", []interface{}{roomAlias}),
+							},
+						})
 						if err != nil {
 							t.Log(err)
 							return false
