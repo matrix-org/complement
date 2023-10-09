@@ -276,6 +276,11 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 		return nil, nil, 0
 	}
 
+	if body != nil {
+		// all bodies, if set, are JSON encoded
+		req.Header["Content-Type"] = []string{"application/json"}
+	}
+
 	q := req.URL.Query()
 	if instr.accessToken != "" {
 		at, ok := r.lookup.Load(instr.accessToken)

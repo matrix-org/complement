@@ -8,6 +8,7 @@ import (
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/complement/should"
 )
 
 // Test for https://github.com/matrix-org/dendrite/issues/3004
@@ -119,11 +120,11 @@ func TestACLs(t *testing.T) {
 		syncResp, _ := user.MustSync(t, client.SyncReq{})
 
 		// we don't expect eventID (blocked) to be in the sync response
-		events := must.GetTimelineEventIDs(t, syncResp, roomID)
+		events := should.GetTimelineEventIDs(syncResp, roomID)
 		must.NotContainSubset(t, events, []string{eventID})
 
 		// also check that our sentinel event is present
-		events = must.GetTimelineEventIDs(t, syncResp, sentinelRoom)
+		events = should.GetTimelineEventIDs(syncResp, sentinelRoom)
 		must.ContainSubset(t, events, []string{sentinelEventID})
 
 		// Validate the ACL event is actually in the rooms state

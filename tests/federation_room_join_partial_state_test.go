@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/runtime"
 
 	"github.com/gorilla/mux"
@@ -1230,8 +1231,8 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// we expect a /state_ids request from hs2 after it joins the room
 		// we will respond to the request with garbage
-		fedStateIdsRequestReceivedWaiter := NewWaiter()
-		fedStateIdsSendResponseWaiter := NewWaiter()
+		fedStateIdsRequestReceivedWaiter := helpers.NewWaiter()
+		fedStateIdsSendResponseWaiter := helpers.NewWaiter()
 		server.Mux().Handle(
 			fmt.Sprintf("/_matrix/federation/v1/state_ids/%s", roomID),
 			http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -3549,7 +3550,7 @@ func TestPartialStateJoin(t *testing.T) {
 				client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
 			)
 
-			leaveCompleted := NewWaiter()
+			leaveCompleted := helpers.NewWaiter()
 			t.Log("Alice starts a leave request")
 			server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
 			go func() {
@@ -4232,8 +4233,8 @@ type partialStateJoinResult struct {
 	Server                           *server
 	ServerRoom                       *federation.ServerRoom
 	User                             *client.CSAPI
-	fedStateIdsRequestReceivedWaiter *Waiter
-	fedStateIdsSendResponseWaiter    *Waiter
+	fedStateIdsRequestReceivedWaiter *helpers.Waiter
+	fedStateIdsSendResponseWaiter    *helpers.Waiter
 }
 
 // beginPartialStateJoin has a test user attempt to join the given room.
@@ -4258,8 +4259,8 @@ func beginPartialStateJoin(t *testing.T, server *server, serverRoom *federation.
 	}()
 
 	// some things for orchestration
-	result.fedStateIdsRequestReceivedWaiter = NewWaiter()
-	result.fedStateIdsSendResponseWaiter = NewWaiter()
+	result.fedStateIdsRequestReceivedWaiter = helpers.NewWaiter()
+	result.fedStateIdsSendResponseWaiter = helpers.NewWaiter()
 
 	// register a handler for /state_ids requests for the most recent event,
 	// which finishes fedStateIdsRequestReceivedWaiter, then
@@ -4359,7 +4360,7 @@ func (psj *partialStateJoinResult) FinishStateRequest() {
 func handleStateIdsRequests(
 	t *testing.T, srv *server, serverRoom *federation.ServerRoom,
 	eventID string, roomState []gomatrixserverlib.PDU,
-	requestReceivedWaiter *Waiter, sendResponseWaiter *Waiter,
+	requestReceivedWaiter *helpers.Waiter, sendResponseWaiter *helpers.Waiter,
 ) {
 	srv.Mux().NewRoute().Methods("GET").Path(
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s", serverRoom.RoomID),
@@ -4399,7 +4400,7 @@ func handleStateIdsRequests(
 func handleStateRequests(
 	t *testing.T, srv *server, serverRoom *federation.ServerRoom,
 	eventID string, roomState []gomatrixserverlib.PDU,
-	requestReceivedWaiter *Waiter, sendResponseWaiter *Waiter,
+	requestReceivedWaiter *helpers.Waiter, sendResponseWaiter *helpers.Waiter,
 ) {
 	srv.Mux().NewRoute().Methods("GET").Path(
 		fmt.Sprintf("/_matrix/federation/v1/state/%s", serverRoom.RoomID),

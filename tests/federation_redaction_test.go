@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -20,7 +21,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	waiter := NewWaiter()
+	waiter := helpers.NewWaiter()
 	wantEventType := "m.room.redaction"
 
 	// create a remote homeserver
