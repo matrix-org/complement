@@ -5,16 +5,11 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
-
-func doCreateRoom(t *testing.T, c *client.CSAPI, json map[string]interface{}, match match.HTTPResponse) {
-	res := c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, client.WithJSONBody(t, json))
-	must.MatchResponse(t, res, match)
-}
 
 func TestRoomCreate(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintOneToOneRoom)
@@ -29,10 +24,11 @@ func TestRoomCreate(t *testing.T) {
 			t.Parallel()
 			roomAlias := "30-room-create-alias-random"
 
-			doCreateRoom(t, alice, map[string]interface{}{
+			res := alice.CreateRoom(t, map[string]interface{}{
 				"visibility":      "public",
 				"room_alias_name": roomAlias,
-			}, match.HTTPResponse{
+			})
+			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("room_id", gjson.String),
@@ -43,9 +39,10 @@ func TestRoomCreate(t *testing.T) {
 		t.Run("POST /createRoom makes a private room", func(t *testing.T) {
 			t.Parallel()
 
-			doCreateRoom(t, alice, map[string]interface{}{
+			res := alice.CreateRoom(t, map[string]interface{}{
 				"visibility": "private",
-			}, match.HTTPResponse{
+			})
+			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("room_id", gjson.String),
@@ -102,10 +99,11 @@ func TestRoomCreate(t *testing.T) {
 		t.Run("POST /createRoom makes a private room with invites", func(t *testing.T) {
 			t.Parallel()
 
-			doCreateRoom(t, alice, map[string]interface{}{
+			res := alice.CreateRoom(t, map[string]interface{}{
 				"visibility": "private",
 				"invite":     []string{bob.UserID},
-			}, match.HTTPResponse{
+			})
+			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("room_id", gjson.String),
@@ -116,11 +114,12 @@ func TestRoomCreate(t *testing.T) {
 		t.Run("POST /createRoom rejects attempts to create rooms with numeric versions", func(t *testing.T) {
 			t.Parallel()
 
-			doCreateRoom(t, alice, map[string]interface{}{
+			res := alice.CreateRoom(t, map[string]interface{}{
 				"visibility":   "private",
 				"room_version": 1,
 				"preset":       "public_chat",
-			}, match.HTTPResponse{
+			})
+			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
 				JSON: []match.JSON{
 					match.JSONKeyEqual("errcode", "M_BAD_JSON"),
@@ -131,11 +130,12 @@ func TestRoomCreate(t *testing.T) {
 		t.Run("POST /createRoom rejects attempts to create rooms with unknown versions", func(t *testing.T) {
 			t.Parallel()
 
-			doCreateRoom(t, alice, map[string]interface{}{
+			res := alice.CreateRoom(t, map[string]interface{}{
 				"visibility":   "private",
 				"room_version": "ahfgwjyerhgiuveisbruvybseyrugvi",
 				"preset":       "public_chat",
-			}, match.HTTPResponse{
+			})
+			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
 				JSON: []match.JSON{
 					match.JSONKeyEqual("errcode", "M_UNSUPPORTED_ROOM_VERSION"),

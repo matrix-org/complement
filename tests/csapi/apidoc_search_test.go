@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/matrix-org/util"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/b"
@@ -299,11 +298,7 @@ func TestSearch(t *testing.T) {
 				})
 
 				// redact the event
-				redactBody := client.WithJSONBody(t, map[string]interface{}{"reason": "testing"})
-				txnID := util.RandomString(8) // random string, as time.Now().Unix() might create the same txnID
-				resp := alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "redact", redactedEventID, txnID}, redactBody)
-				j := must.ParseJSON(t, resp.Body)
-				redactionEventID := must.GetJSONFieldStr(t, j, "event_id")
+				redactionEventID := alice.MustSendRedaction(t, roomID, map[string]interface{}{"reason": "testing"}, redactedEventID)
 				// wait for the redaction to come down sync
 				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, redactionEventID))
 
@@ -320,7 +315,7 @@ func TestSearch(t *testing.T) {
 					},
 				})
 
-				resp = alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
+				resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
 				sce := "search_categories.room_events"
 				result0 := sce + ".results.0.result"
 				must.MatchResponse(t, resp, match.HTTPResponse{

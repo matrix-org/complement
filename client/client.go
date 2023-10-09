@@ -295,19 +295,19 @@ func (c *CSAPI) SendEventSynced(t TestLike, roomID string, e b.Event) string {
 
 // SendRedaction sends a redaction request. Will fail if the returned HTTP request code is not 200. Returns the
 // event ID of the redaction event.
-func (c *CSAPI) MustSendRedaction(t TestLike, roomID string, e b.Event, eventID string) string {
-	res := c.SendRedaction(t, roomID, e, eventID)
+func (c *CSAPI) MustSendRedaction(t TestLike, roomID string, content map[string]interface{}, eventID string) string {
+	res := c.SendRedaction(t, roomID, content, eventID)
 	mustRespond2xx(t, res)
 	body := ParseJSON(t, res)
 	return GetJSONFieldStr(t, body, "event_id")
 }
 
 // SendRedaction sends a redaction request.
-func (c *CSAPI) SendRedaction(t TestLike, roomID string, e b.Event, eventID string) *http.Response {
+func (c *CSAPI) SendRedaction(t TestLike, roomID string, content map[string]interface{}, eventID string) *http.Response {
 	t.Helper()
 	txnID := int(atomic.AddInt64(&c.txnID, 1))
 	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "redact", eventID, strconv.Itoa(txnID)}
-	return c.Do(t, "PUT", paths, WithJSONBody(t, e.Content))
+	return c.Do(t, "PUT", paths, WithJSONBody(t, content))
 }
 
 // MustSendTyping marks this user as typing until the timeout is reached. If isTyping is false, timeout is ignored.
