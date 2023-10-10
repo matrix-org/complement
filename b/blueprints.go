@@ -93,10 +93,10 @@ type ApplicationService struct {
 }
 
 type Event struct {
-	Type     string
-	Sender   string
-	StateKey *string
-	Content  map[string]interface{}
+	Type     string                 `json:"type"`
+	Sender   string                 `json:"sender"`
+	StateKey *string                `json:"state_key"`
+	Content  map[string]interface{} `json:"content"`
 }
 
 func MustValidate(bp Blueprint) Blueprint {
