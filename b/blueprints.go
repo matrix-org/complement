@@ -94,8 +94,8 @@ type ApplicationService struct {
 
 type Event struct {
 	Type     string                 `json:"type"`
-	Sender   string                 `json:"sender"`
-	StateKey *string                `json:"state_key"`
+	Sender   string                 `json:"sender,omitempty"`
+	StateKey *string                `json:"state_key,omitempty"`
 	Content  map[string]interface{} `json:"content"`
 }
 
