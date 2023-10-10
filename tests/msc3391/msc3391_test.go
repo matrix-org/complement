@@ -1,6 +1,3 @@
-//go:build msc3391
-// +build msc3391
-
 // This file contains tests for deleting account data as
 // defined by MSC3391, which you can read here:
 // https://github.com/matrix-org/matrix-doc/pull/3391

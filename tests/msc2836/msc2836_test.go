@@ -1,6 +1,3 @@
-//go:build msc2836
-// +build msc2836
-
 package tests
 
 import (

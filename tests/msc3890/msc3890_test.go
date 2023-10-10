@@ -1,6 +1,3 @@
-//go:build msc3890
-// +build msc3890
-
 // This file contains tests for local notification settings as
 // defined by MSC3890, which you can read here:
 // https://github.com/matrix-org/matrix-doc/pull/3890

@@ -1,7 +1,4 @@
-//go:build msc3874
-// +build msc3874
-
-package csapi_tests
+package tests
 
 import (
 	"net/http"
@@ -10,8 +7,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
