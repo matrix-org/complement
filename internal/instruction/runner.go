@@ -18,7 +18,7 @@ import (
 	"github.com/tidwall/gjson"
 	"maunium.net/go/mautrix/crypto/olm"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 )
 
 // An instruction for the runner to run.
@@ -274,6 +274,11 @@ func (r *Runner) next(instrs []instruction, hsURL string, i int) (*http.Request,
 	if err != nil {
 		r.log("Stopping. Failed to form NewRequest for instruction: %s -- %+v \n", err, instr)
 		return nil, nil, 0
+	}
+
+	if body != nil {
+		// all bodies, if set, are JSON encoded
+		req.Header["Content-Type"] = []string{"application/json"}
 	}
 
 	q := req.URL.Query()

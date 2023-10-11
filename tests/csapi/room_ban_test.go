@@ -3,10 +3,10 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // This is technically a tad different from the sytest, in that it doesnt try to ban a @random_dude:test,
@@ -41,11 +41,11 @@ func TestNotPresentUserCannotBanOthers(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	alice.SendEventSynced(t, roomID, b.Event{
 		Type:     "m.room.power_levels",
@@ -59,7 +59,7 @@ func TestNotPresentUserCannotBanOthers(t *testing.T) {
 
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
-	res := charlie.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
+	res := charlie.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
 		"user_id": bob.UserID,
 		"reason":  "testing",
 	}))

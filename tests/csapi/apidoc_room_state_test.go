@@ -8,10 +8,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 func TestRoomState(t *testing.T) {
@@ -22,11 +22,11 @@ func TestRoomState(t *testing.T) {
 		// sytest: GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership
 		t.Run("GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership", func(t *testing.T) {
 			t.Parallel()
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", authedClient.UserID})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", authedClient.UserID})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyPresent("membership"),
@@ -40,11 +40,11 @@ func TestRoomState(t *testing.T) {
 			t.Parallel()
 			queryParams := url.Values{}
 			queryParams.Set("format", "event")
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", authedClient.UserID}, client.WithQueries(queryParams))
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", authedClient.UserID}, client.WithQueries(queryParams))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyPresent("sender"),
@@ -60,12 +60,12 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /rooms/:room_id/state/m.room.power_levels fetches powerlevels", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility":      "public",
 				"preset":          "public_chat",
 				"room_alias_name": "room_alias",
 			})
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -83,12 +83,12 @@ func TestRoomState(t *testing.T) {
 		// sytest: GET /rooms/:room_id/joined_members fetches my membership
 		t.Run("GET /rooms/:room_id/joined_members fetches my membership", func(t *testing.T) {
 			t.Parallel()
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "joined_members"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "joined_members"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyPresent("joined"),
@@ -101,12 +101,12 @@ func TestRoomState(t *testing.T) {
 		// sytest: GET /publicRooms lists newly-created room
 		t.Run("GET /publicRooms lists newly-created room", func(t *testing.T) {
 			t.Parallel()
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
 
-			authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
+			authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
 				client.WithRetryUntil(time.Second, func(res *http.Response) bool {
 					foundRoom := false
 
@@ -136,13 +136,13 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /directory/room/:room_alias yields room ID", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility":      "public",
 				"preset":          "public_chat",
 				"room_alias_name": "room_new",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", "#room_new:hs1"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "directory", "room", "#room_new:hs1"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -157,11 +157,11 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /joined_rooms lists newly-created room", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "joined_rooms"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "joined_rooms"})
 
 			foundRoom := false
 
@@ -187,13 +187,13 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /rooms/:room_id/state/m.room.name gets name", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 				"name":       "room_name_test",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -206,7 +206,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("POST /rooms/:room_id/state/m.room.name sets name", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
@@ -215,9 +215,9 @@ func TestRoomState(t *testing.T) {
 				"name": "room_test_name",
 			})
 
-			_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"}, reqBody)
+			_ = authedClient.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"}, reqBody)
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -230,13 +230,13 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /rooms/:room_id/state/m.room.topic gets topic", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 				"topic":      "room_topic_test",
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -249,7 +249,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("PUT /rooms/:room_id/state/m.room.topic sets topic", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
@@ -258,9 +258,9 @@ func TestRoomState(t *testing.T) {
 				"topic": "room_test_topic",
 			})
 
-			_ = authedClient.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"}, reqBody)
+			_ = authedClient.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"}, reqBody)
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -273,7 +273,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("GET /rooms/:room_id/state fetches entire room state", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 				"name":       "room_test",
@@ -288,7 +288,7 @@ func TestRoomState(t *testing.T) {
 				"m.room.topic":        true,
 			}
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -310,7 +310,7 @@ func TestRoomState(t *testing.T) {
 		t.Run("PUT /createRoom with creation content", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 				"creation_content": map[string]interface{}{
@@ -318,7 +318,7 @@ func TestRoomState(t *testing.T) {
 				},
 			})
 
-			res := authedClient.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.create"})
+			res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.create"})
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -329,9 +329,9 @@ func TestRoomState(t *testing.T) {
 		})
 		t.Run("GET /rooms/:room_id/joined_members is forbidden after leaving room", func(t *testing.T) {
 			t.Parallel()
-			roomID := authedClient.CreateRoom(t, map[string]interface{}{})
-			authedClient.LeaveRoom(t, roomID)
-			res := authedClient.DoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "joined_members"})
+			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{})
+			authedClient.MustLeaveRoom(t, roomID)
+			res := authedClient.Do(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "joined_members"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 				JSON: []match.JSON{

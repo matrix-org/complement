@@ -6,10 +6,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // This test ensures that an authorised (PL 100) user is able to modify the users_default value
@@ -21,7 +21,7 @@ func TestDemotingUsersViaUsersDefault(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"power_level_content_override": map[string]interface{}{
 			"users_default": 100, // the default is 0
@@ -53,12 +53,12 @@ func TestPowerLevels(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	// sytest: GET /rooms/:room_id/state/m.room.power_levels can fetch levels
 	t.Run("GET /rooms/:room_id/state/m.room.power_levels can fetch levels", func(t *testing.T) {
 		// Test if the old state still exists
-		res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
+		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
 
 		// note: before v10 we technically cannot assume that powerlevel integers are json numbers,
 		//  as they can be both strings and numbers.
@@ -92,9 +92,9 @@ func TestPowerLevels(t *testing.T) {
 					}
 				}),
 
-				func(body []byte) error {
-					userDefault := int(gjson.GetBytes(body, "users_default").Num)
-					thisUser := int(gjson.GetBytes(body, "users."+client.GjsonEscape(alice.UserID)).Num)
+				func(body gjson.Result) error {
+					userDefault := int(body.Get("users_default").Num)
+					thisUser := int(body.Get("users." + client.GjsonEscape(alice.UserID)).Num)
 
 					if thisUser > userDefault {
 						return nil
@@ -123,7 +123,7 @@ func TestPowerLevels(t *testing.T) {
 			Content:  PLContent,
 		})
 
-		res := alice.MustDoFunc(
+		res := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "event", eventId},
@@ -157,7 +157,7 @@ func TestPowerLevels(t *testing.T) {
 		})
 
 		// This should give a 403 (not a 500)
-		res := alice.DoFunc(
+		res := alice.Do(
 			t,
 			"PUT",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"},
@@ -170,7 +170,7 @@ func TestPowerLevels(t *testing.T) {
 		})
 
 		// Test if the old state still exists
-		res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
+		res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 200,

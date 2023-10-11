@@ -12,10 +12,10 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/docker"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // TODO:
@@ -56,13 +56,10 @@ func TestInboundFederationKeys(t *testing.T) {
 
 				key := v.Get("key")
 
-				// Test key existence and string type
-				if !key.Exists() {
-					return fmt.Errorf("verify_keys: Key '%s' has no 'key' field", k.Str)
-				}
-				if key.Type != gjson.String {
-					return fmt.Errorf("verify_keys: Key '%s' has 'key' with unexpected type, expected String, got '%s'", k.Str, key.Type.String())
-				}
+				must.MatchGJSON(t, v,
+					match.JSONKeyPresent("key"),
+					match.JSONKeyTypeEqual("key", gjson.String),
+				)
 
 				var keyBytes []byte
 				keyBytes, err = base64.RawStdEncoding.DecodeString(key.Str)
@@ -79,25 +76,17 @@ func TestInboundFederationKeys(t *testing.T) {
 					return fmt.Errorf("old_verify_keys: Key '%s' has no 'ed25519:' prefix", k.Str)
 				}
 
-				expiredTs := v.Get("expired_ts")
+				must.MatchGJSON(t, v,
+					match.JSONKeyPresent("expired_ts"),
+					match.JSONKeyTypeEqual("expired_ts", gjson.Number),
+				)
 
-				// Test expired_ts existence and number type
-				if !expiredTs.Exists() {
-					return fmt.Errorf("old_verify_keys: Key '%s' has no 'expired_ts' field", k.Str)
-				}
-				if expiredTs.Type != gjson.Number {
-					return fmt.Errorf("old_verify_keys: Key '%s' has expired_ts with unexpected type, expected Number, got '%s'", k.Str, expiredTs.Type.String())
-				}
+				must.MatchGJSON(t, v,
+					match.JSONKeyPresent("key"),
+					match.JSONKeyTypeEqual("key", gjson.String),
+				)
 
 				key := v.Get("key")
-
-				// Test key existence and string type
-				if !key.Exists() {
-					return fmt.Errorf("old_verify_keys: Key '%s' has no 'key' field", k.Str)
-				}
-				if key.Type != gjson.String {
-					return fmt.Errorf("old_verify_keys: Key '%s' has 'key' with unexpected type, expected String, got '%s'", k.Str, key.Type.String())
-				}
 
 				var keyBytes []byte
 				keyBytes, err = base64.RawStdEncoding.DecodeString(key.Str)
@@ -193,7 +182,7 @@ func checkKeysAndSignatures(t *testing.T, body []byte, jsonObj gjson.Result, key
 
 	// Test signatures for all verify_keys, these *have* to exist.
 	for keyName, keyBytes := range keys {
-		sigBase64 := must.GetJSONFieldStr(t, body, fmt.Sprintf("signatures.hs1.%s", keyName))
+		sigBase64 := must.GetJSONFieldStr(t, jsonObj, fmt.Sprintf("signatures.hs1.%s", keyName))
 
 		var sigBytes []byte
 		sigBytes, err = base64.RawStdEncoding.DecodeString(sigBase64)

@@ -6,20 +6,20 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // TODO most of this can be refactored into data-driven tests
 
 func fetchEvent(t *testing.T, c *client.CSAPI, roomId, eventId string) *http.Response {
-	return c.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomId, "event", eventId})
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomId, "event", eventId})
 }
 
 func createRoomWithVisibility(t *testing.T, c *client.CSAPI, visibility string) string {
-	return c.CreateRoom(t, map[string]interface{}{
+	return c.MustCreateRoom(t, map[string]interface{}{
 		"initial_state": []map[string]interface{}{
 			{
 				"content": map[string]interface{}{
@@ -44,7 +44,7 @@ func TestFetchEvent(t *testing.T) {
 
 	roomID := createRoomWithVisibility(t, alice, "shared")
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
@@ -98,7 +98,7 @@ func TestFetchHistoricalJoinedEventDenied(t *testing.T) {
 		},
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
@@ -127,7 +127,7 @@ func TestFetchHistoricalSharedEvent(t *testing.T) {
 		},
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
@@ -163,7 +163,7 @@ func TestFetchHistoricalInvitedEventFromBetweenInvite(t *testing.T) {
 
 	roomID := createRoomWithVisibility(t, alice, "invited")
 
-	alice.InviteRoom(t, roomID, bob.UserID)
+	alice.MustInviteRoom(t, roomID, bob.UserID)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 	eventID := alice.SendEventSynced(t, roomID, b.Event{
@@ -174,7 +174,7 @@ func TestFetchHistoricalInvitedEventFromBetweenInvite(t *testing.T) {
 		},
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)
@@ -218,10 +218,10 @@ func TestFetchHistoricalInvitedEventFromBeforeInvite(t *testing.T) {
 		},
 	})
 
-	alice.InviteRoom(t, roomID, bob.UserID)
+	alice.MustInviteRoom(t, roomID, bob.UserID)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	res := fetchEvent(t, bob, roomID, eventID)

@@ -7,10 +7,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // Maps every object by extracting `type` and `state_key` into a "$type|$state_key" string.
@@ -26,15 +26,15 @@ func TestGetRoomMembers(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
-	resp := alice.MustDoFunc(
+	resp := alice.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -43,7 +43,7 @@ func TestGetRoomMembers(t *testing.T) {
 	must.MatchResponse(t, resp, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-				must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+				must.Equal(t, result.Str, roomID, "unexpected roomID")
 				return nil
 			}),
 			match.JSONCheckOff("chunk",
@@ -65,7 +65,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
@@ -80,7 +80,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 	syncResp, _ := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 	sinceToken := syncResp.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.prev_batch").Str
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	bob.SendEventSynced(t, roomID, b.Event{
@@ -91,7 +91,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 		},
 	})
 
-	resp := alice.MustDoFunc(
+	resp := alice.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -103,7 +103,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 	must.MatchResponse(t, resp, match.HTTPResponse{
 		JSON: []match.JSON{
 			match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-				must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+				must.Equal(t, result.Str, roomID, "unexpected roomID")
 				return nil
 			}),
 			match.JSONCheckOff("chunk",
@@ -125,20 +125,20 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
-	bob.JoinRoom(t, roomID, nil)
+	bob.MustJoinRoom(t, roomID, nil)
 
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
-	bob.LeaveRoom(t, roomID)
+	bob.MustLeaveRoom(t, roomID)
 
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 
 	t.Run("not_membership", func(t *testing.T) {
-		resp := alice.MustDoFunc(
+		resp := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -150,7 +150,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-					must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+					must.Equal(t, result.Str, roomID, "unexpected roomID")
 					return nil
 				}),
 				match.JSONCheckOff("chunk",
@@ -163,7 +163,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 	})
 
 	t.Run("membership/leave", func(t *testing.T) {
-		resp := alice.MustDoFunc(
+		resp := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -175,7 +175,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-					must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+					must.Equal(t, result.Str, roomID, "unexpected roomID")
 					return nil
 				}),
 				match.JSONCheckOff("chunk",
@@ -188,7 +188,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 	})
 
 	t.Run("membership/join", func(t *testing.T) {
-		resp := alice.MustDoFunc(
+		resp := alice.MustDo(
 			t,
 			"GET",
 			[]string{"_matrix", "client", "v3", "rooms", roomID, "members"},
@@ -200,7 +200,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 		must.MatchResponse(t, resp, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONArrayEach("chunk.#.room_id", func(result gjson.Result) error {
-					must.EqualStr(t, result.Str, roomID, "unexpected roomID")
+					must.Equal(t, result.Str, roomID, "unexpected roomID")
 					return nil
 				}),
 				match.JSONCheckOff("chunk",

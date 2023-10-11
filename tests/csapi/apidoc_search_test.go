@@ -6,13 +6,12 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/matrix-org/util"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // Note: In contrast to Sytest, we define a filter.rooms on each search request, this is to mimic
@@ -27,7 +26,7 @@ func TestSearch(t *testing.T) {
 		// sytest: Can search for an event by body
 		t.Run("Can search for an event by body", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 			eventID := alice.SendEventSynced(t, roomID, b.Event{
@@ -50,7 +49,7 @@ func TestSearch(t *testing.T) {
 				},
 			})
 
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
+			resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
 			sce := "search_categories.room_events"
 			result0 := sce + ".results.0.result"
 			must.MatchResponse(t, resp, match.HTTPResponse{
@@ -71,7 +70,7 @@ func TestSearch(t *testing.T) {
 		// sytest: Can get context around search results
 		t.Run("Can get context around search results", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 
@@ -103,7 +102,7 @@ func TestSearch(t *testing.T) {
 				},
 			})
 
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
+			resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
 			sce := "search_categories.room_events"
 			result0 := sce + ".results.0.result"
 			resBefore := sce + ".results.0.context.events_before"
@@ -130,7 +129,7 @@ func TestSearch(t *testing.T) {
 		// sytest: Can back-paginate search results
 		t.Run("Can back-paginate search results", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 
@@ -160,7 +159,7 @@ func TestSearch(t *testing.T) {
 				},
 			})
 
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
+			resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
 
 			// First search result
 			nextBatch := checkBackpaginateResult(t, resp, 20, eventIDs[19], eventIDs[10])
@@ -172,14 +171,14 @@ func TestSearch(t *testing.T) {
 			values := url.Values{}
 			values.Set("next_batch", nextBatch)
 			params := client.WithQueries(values)
-			resp = alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest, params)
+			resp = alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest, params)
 			// Second search result
 			nextBatch = checkBackpaginateResult(t, resp, 20, eventIDs[9], eventIDs[0])
 
 			// At this point we expect next_batch to be empty
 			values.Set("next_batch", nextBatch)
 			params = client.WithQueries(values)
-			resp = alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest, params)
+			resp = alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest, params)
 			// third search result
 			sce := "search_categories.room_events"
 			result0 := sce + ".results.0.result"
@@ -198,7 +197,7 @@ func TestSearch(t *testing.T) {
 		// sytest: Search works across an upgraded room and its predecessor
 		t.Run("Search works across an upgraded room and its predecessor", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset":  "private_chat",
 				"version": "8",
 			})
@@ -215,7 +214,7 @@ func TestSearch(t *testing.T) {
 			upgradeBody := client.WithJSONBody(t, map[string]string{
 				"new_version": "9",
 			})
-			upgradeResp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"}, upgradeBody)
+			upgradeResp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"}, upgradeBody)
 			body := must.ParseJSON(t, upgradeResp.Body)
 			newRoomID := must.GetJSONFieldStr(t, body, "replacement_room")
 			t.Logf("Replaced room %s with %s", roomID, newRoomID)
@@ -241,7 +240,7 @@ func TestSearch(t *testing.T) {
 				},
 			})
 
-			resp := alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
+			resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
 			sce := "search_categories.room_events"
 
 			expectedEvents := map[string]string{
@@ -263,7 +262,7 @@ func TestSearch(t *testing.T) {
 							match.JSONKeyEqual("result.content.body", expectedEvents[eventID.(string)]),
 						}
 						for _, jm := range matchers {
-							if err := jm([]byte(result.Raw)); err != nil {
+							if err := jm(result); err != nil {
 								return err
 							}
 						}
@@ -277,7 +276,7 @@ func TestSearch(t *testing.T) {
 			// sytest: Search results with $ordering_type ordering do not include redacted events
 			t.Run(fmt.Sprintf("Search results with %s ordering do not include redacted events", ordering), func(t *testing.T) {
 				t.Parallel()
-				roomID := alice.CreateRoom(t, map[string]interface{}{
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{
 					"preset": "private_chat",
 				})
 
@@ -299,11 +298,7 @@ func TestSearch(t *testing.T) {
 				})
 
 				// redact the event
-				redactBody := client.WithJSONBody(t, map[string]interface{}{"reason": "testing"})
-				txnID := util.RandomString(8) // random string, as time.Now().Unix() might create the same txnID
-				resp := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "redact", redactedEventID, txnID}, redactBody)
-				j := must.ParseJSON(t, resp.Body)
-				redactionEventID := must.GetJSONFieldStr(t, j, "event_id")
+				redactionEventID := alice.MustSendRedaction(t, roomID, map[string]interface{}{"reason": "testing"}, redactedEventID)
 				// wait for the redaction to come down sync
 				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, redactionEventID))
 
@@ -320,7 +315,7 @@ func TestSearch(t *testing.T) {
 					},
 				})
 
-				resp = alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
+				resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "search"}, searchRequest)
 				sce := "search_categories.room_events"
 				result0 := sce + ".results.0.result"
 				must.MatchResponse(t, resp, match.HTTPResponse{

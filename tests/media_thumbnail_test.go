@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"image/jpeg"
 	"image/png"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/data"
 )
 
@@ -52,7 +52,7 @@ func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string) {
 
 	origin, mediaId := client.SplitMxc(mxcUri)
 
-	res := c.MustDoFunc(t, "GET", []string{"_matrix", "media", "v3", "thumbnail", origin, mediaId}, client.WithQueries(url.Values{
+	res := c.MustDo(t, "GET", []string{"_matrix", "media", "v3", "thumbnail", origin, mediaId}, client.WithQueries(url.Values{
 		"width":  []string{"32"},
 		"height": []string{"32"},
 		"method": []string{"scale"},
@@ -62,7 +62,7 @@ func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string) {
 		t.Fatalf("thumbnail request for uploaded file failed")
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 
 	if err != nil {
 		t.Fatalf("thumbnail request for uploaded file failed: %s", err)

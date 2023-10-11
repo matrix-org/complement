@@ -13,12 +13,14 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/must"
 )
 
 func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
@@ -87,7 +89,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	/* Create a handler for /event_auth */
 	// a map from event ID to events to be returned by /event_auth
-	eventAuthMap := make(map[string][]*gomatrixserverlib.Event)
+	eventAuthMap := make(map[string][]gomatrixserverlib.PDU)
 	srv.Mux().HandleFunc("/_matrix/federation/v1/event_auth/{roomID}/{eventID}", func(w http.ResponseWriter, req *http.Request) {
 		vars := mux.Vars(req)
 		eventID := vars["eventID"]
@@ -98,7 +100,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 			_, _ = w.Write([]byte("{}"))
 			return
 		}
-		res := gomatrixserverlib.RespEventAuth{AuthEvents: gomatrixserverlib.NewEventJSONsFromEvents(authEvents)}
+		res := fclient.RespEventAuth{AuthEvents: gomatrixserverlib.NewEventJSONsFromEvents(authEvents)}
 		responseBytes, _ := json.Marshal(&res)
 		w.WriteHeader(200)
 		_, _ = w.Write(responseBytes)
@@ -106,17 +108,15 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// have Alice create a room, and then join it
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	testRoomID := alice.CreateRoom(t, struct {
-		Preset string `json:"preset"`
-	}{
-		"public_chat",
+	testRoomID := alice.MustCreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
 	})
 	charlie := srv.UserID("charlie")
 	room := srv.MustJoinRoom(t, deployment, "hs1", testRoomID, charlie)
 	charlieMembershipEvent := room.CurrentState("m.room.member", charlie)
 
 	// have Charlie send a PL event which will be rejected
-	rejectedEvent := srv.MustCreateEvent(t, room, b.Event{
+	rejectedEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:     "m.room.power_levels",
 		StateKey: b.Ptr(""),
 		Sender:   charlie,
@@ -126,9 +126,9 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement1",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
+		Origin:         spec.ServerName(srv.ServerName()),
 		Destination:    "hs1",
-		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
+		OriginServerTS: spec.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			rejectedEvent.JSON(),
 		},
@@ -138,7 +138,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// create an event to be pulled in as an outlier, which is valid according to its prev events,
 	// but uses the rejected event among its auth events.
-	outlierEvent := srv.MustCreateEvent(t, room, b.Event{
+	outlierEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:     "m.room.member",
 		StateKey: &charlie,
 		Sender:   charlie,
@@ -157,14 +157,14 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// create a regular event which refers to the outlier event in its auth events,
 	// so that the outlier gets pulled in.
-	sentEventAuthEvents := []*gomatrixserverlib.Event{
+	sentEventAuthEvents := []gomatrixserverlib.PDU{
 		room.CurrentState("m.room.create", ""),
 		room.CurrentState("m.room.join_rules", ""),
 		room.CurrentState("m.room.power_levels", ""),
 		charlieMembershipEvent,
 		outlierEvent,
 	}
-	sentEvent1 := srv.MustCreateEvent(t, room, b.Event{
+	sentEvent1 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:       "m.room.message",
 		Sender:     charlie,
 		Content:    map[string]interface{}{"body": "sentEvent1"},
@@ -176,7 +176,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// another a regular event which refers to the outlier event, but
 	// this time we will give a different answer to /event_auth
-	sentEvent2 := srv.MustCreateEvent(t, room, b.Event{
+	sentEvent2 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:       "m.room.message",
 		Sender:     charlie,
 		Content:    map[string]interface{}{"body": "sentEvent1"},
@@ -188,7 +188,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	t.Logf("Created sent event 2 %s", sentEvent2.EventID())
 
 	// finally, a genuine regular event.
-	sentinelEvent := srv.MustCreateEvent(t, room, b.Event{
+	sentinelEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:    "m.room.message",
 		Sender:  charlie,
 		Content: map[string]interface{}{"body": "sentinelEvent"},
@@ -197,9 +197,9 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	_, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement2",
-		Origin:         gomatrixserverlib.ServerName(srv.ServerName()),
+		Origin:         spec.ServerName(srv.ServerName()),
 		Destination:    "hs1",
-		OriginServerTS: gomatrixserverlib.AsTimestamp(time.Now()),
+		OriginServerTS: spec.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			sentEvent1.JSON(),
 			sentEvent2.JSON(),
@@ -219,7 +219,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// now inspect the results. Each of the rejected events should give a 404 for /event
 	t.Run("Outlier should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", outlierEvent.EventID()})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", outlierEvent.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching outlier event, but got %d", res.StatusCode)
@@ -227,7 +227,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 
 	t.Run("sent event 1 should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent1.EventID()})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent1.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching sent event 1, but got %d", res.StatusCode)
@@ -235,7 +235,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 
 	t.Run("sent event 2 should be rejected", func(t *testing.T) {
-		res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent2.EventID()})
+		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", room.RoomID, "event", sentEvent2.EventID()})
 		defer res.Body.Close()
 		if res.StatusCode != 404 {
 			t.Errorf("Expected a 404 when fetching sent event 2, but got %d", res.StatusCode)

@@ -1,12 +1,15 @@
 package tests
 
 import (
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/federation"
-	"github.com/matrix-org/complement/runtime"
-	"github.com/matrix-org/gomatrixserverlib"
 	"testing"
 	"time"
+
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // test that a redaction is sent out over federation even if we don't have the original event
@@ -18,7 +21,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	waiter := NewWaiter()
+	waiter := helpers.NewWaiter()
 	wantEventType := "m.room.redaction"
 
 	// create a remote homeserver
@@ -27,12 +30,10 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleTransactionRequests(
 			// listen for PDU events in transactions
-			func(ev *gomatrixserverlib.Event) {
+			func(ev gomatrixserverlib.PDU) {
 				defer waiter.Finish()
 
-				if ev.Type() != wantEventType {
-					t.Errorf("Wrong event type, got %s want %s", ev.Type(), wantEventType)
-				}
+				must.Equal(t, ev.Type(), wantEventType, "wrong event type")
 			},
 			nil,
 		),
@@ -53,16 +54,15 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice.JoinRoom(t, roomAlias, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, roomAlias, []string{srv.ServerName()})
 
 	// inject event to redact in the room
-	badEvent := srv.MustCreateEvent(t, serverRoom, b.Event{
+	badEvent := srv.MustCreateEvent(t, serverRoom, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
 			"body": "666",
-		},
-	})
+		}})
 	serverRoom.AddEvent(badEvent)
 
 	eventID := badEvent.EventID()
@@ -70,9 +70,9 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	eventToRedact := eventID + ":" + fullServerName
 
 	// the client sends a request to the local homeserver to send the redaction
-	res := alice.SendRedaction(t, serverRoom.RoomID, b.Event{Type: wantEventType, Content: map[string]interface{}{
-		"msgtype": "m.room.redaction"},
-		Redacts: eventToRedact}, eventToRedact)
+	redactionEventID := alice.MustSendRedaction(t, serverRoom.RoomID, map[string]interface{}{
+		"reason": "reasons...",
+	}, eventToRedact)
 
 	// wait for redaction to arrive at remote homeserver
 	waiter.Wait(t, 1*time.Second)
@@ -80,14 +80,8 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	// Check that the last event in the room is now the redaction
 	lastEvent := serverRoom.Timeline[len(serverRoom.Timeline)-1]
 	lastEventType := lastEvent.Type()
-	wantedType := "m.room.redaction"
-	if lastEventType != wantedType {
-		t.Fatalf("Incorrent event type %s, wanted m.room.redaction.", lastEventType)
-	}
+	must.Equal(t, lastEventType, "m.room.redaction", "incorrect event type")
 
 	// check that the event id of the redaction sent by alice is the same as the redaction event in the room
-	if res != lastEvent.EventID() {
-		t.Fatalf("Incorrent event id %s, wanted %s.", res, lastEvent.EventID())
-	}
-
+	must.Equal(t, lastEvent.EventID(), redactionEventID, "incorrect event id")
 }

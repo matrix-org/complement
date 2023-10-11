@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/util"
 )
@@ -22,9 +22,9 @@ type ResCreate struct {
 }
 
 // RouteCreate handles creating blueprint deployments. There are 3 supported types of requests:
-//  - A: Creating a blueprint from the static ones in `internal/b` : This is what Complement does.
-//  - B: Creating an in-line blueprint where the blueprint is in the request.
-//  - C: Creating a deployment from a pre-made blueprint image, e.g using account-snapshot.
+//   - A: Creating a blueprint from the static ones in `internal/b` : This is what Complement does.
+//   - B: Creating an in-line blueprint where the blueprint is in the request.
+//   - C: Creating a deployment from a pre-made blueprint image, e.g using account-snapshot.
 func RouteCreate(ctx context.Context, rt *Runtime, rc *ReqCreate) util.JSONResponse {
 	// Use case A: if the blueprint name is given, check for static ones
 	knownBlueprint, ok := b.KnownBlueprints[rc.BlueprintName]

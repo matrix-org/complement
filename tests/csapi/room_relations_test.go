@@ -8,10 +8,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -20,17 +20,17 @@ func TestRelations(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	_, token := alice.MustSync(t, client.SyncReq{})
 
-	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
+	res := alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "root",
 	}))
 	rootEventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
 	// Send a few related messages.
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-2"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-2"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "reply",
 		"m.relates_to": map[string]interface{}{
@@ -40,7 +40,7 @@ func TestRelations(t *testing.T) {
 	}))
 	threadEventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.dummy", "txn-3"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.dummy", "txn-3"}, client.WithJSONBody(t, map[string]interface{}{
 		"m.relates_to": map[string]interface{}{
 			"event_id": rootEventID,
 			"rel_type": "m.thread",
@@ -48,7 +48,7 @@ func TestRelations(t *testing.T) {
 	}))
 	dummyEventID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
-	res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-4"}, client.WithJSONBody(t, map[string]interface{}{
+	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-4"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "* edited root",
 		"m.new_content": map[string]interface{}{
@@ -68,7 +68,7 @@ func TestRelations(t *testing.T) {
 	}))
 
 	// Request the relations.
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID})
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -82,7 +82,7 @@ func TestRelations(t *testing.T) {
 	})
 
 	// Also test filtering by the relation type.
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID, "m.thread"})
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID, "m.thread"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -96,7 +96,7 @@ func TestRelations(t *testing.T) {
 	})
 
 	// And test filtering by relation type + event type.
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID, "m.thread", "m.room.message"})
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID, "m.thread", "m.room.message"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -115,10 +115,10 @@ func TestRelationsPagination(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	_, token := alice.MustSync(t, client.SyncReq{})
 
-	res := alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
+	res := alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-1"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "root",
 	}))
@@ -127,7 +127,7 @@ func TestRelationsPagination(t *testing.T) {
 	// Create some related events.
 	event_ids := [10]string{}
 	for i := 0; i < 10; i++ {
-		res = alice.MustDoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", fmt.Sprintf("txn-%d", 2+i)}, client.WithJSONBody(t, map[string]interface{}{
+		res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", fmt.Sprintf("txn-%d", 2+i)}, client.WithJSONBody(t, map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    fmt.Sprintf("reply %d", i),
 			"m.relates_to": map[string]interface{}{
@@ -146,7 +146,7 @@ func TestRelationsPagination(t *testing.T) {
 	// Fetch the first page.
 	queryParams := url.Values{}
 	queryParams.Set("limit", "3")
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	body := must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -161,7 +161,7 @@ func TestRelationsPagination(t *testing.T) {
 
 	// Fetch the next page.
 	queryParams.Set("from", client.GetJSONFieldStr(t, body, "next_batch"))
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -178,7 +178,7 @@ func TestRelationsPagination(t *testing.T) {
 	queryParams = url.Values{}
 	queryParams.Set("limit", "3")
 	queryParams.Set("dir", "f")
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	body = must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -193,7 +193,7 @@ func TestRelationsPagination(t *testing.T) {
 
 	// Fetch the next page in the forward direction.
 	queryParams.Set("from", client.GetJSONFieldStr(t, body, "next_batch"))
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -214,10 +214,10 @@ func TestRelationsPaginationSync(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	_, token := alice.MustSync(t, client.SyncReq{})
 
-	rootEventID := alice.SendEventUnsynced(t, roomID, b.Event{
+	rootEventID := alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
@@ -227,9 +227,9 @@ func TestRelationsPaginationSync(t *testing.T) {
 	})
 
 	// Create some related events.
-	event_id := ""
+	eventID := ""
 	for i := 0; i < 5; i++ {
-		event_id = alice.SendEventUnsynced(t, roomID, b.Event{
+		eventID = alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
@@ -245,13 +245,13 @@ func TestRelationsPaginationSync(t *testing.T) {
 
 	// Sync and keep the token.
 	nextBatch := alice.MustSyncUntil(t, client.SyncReq{Since: token}, client.SyncTimelineHas(roomID, func(r gjson.Result) bool {
-		return r.Get("event_id").Str == event_id
+		return r.Get("event_id").Str == eventID
 	}))
 
 	// Create more related events.
 	event_ids := [5]string{}
 	for i := 0; i < 5; i++ {
-		event_ids[i] = alice.SendEventUnsynced(t, roomID, b.Event{
+		event_ids[i] = alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
@@ -273,7 +273,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 	queryParams.Set("limit", "3")
 	queryParams.Set("from", nextBatch)
 	queryParams.Set("dir", "f")
-	res := alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	body := must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
@@ -288,7 +288,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 
 	// Fetch the next page.
 	queryParams.Set("from", client.GetJSONFieldStr(t, body, "next_batch"))
-	res = alice.MustDoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
+	res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "relations", rootEventID}, client.WithQueries(queryParams))
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{

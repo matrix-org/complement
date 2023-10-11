@@ -3,8 +3,8 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -16,9 +16,9 @@ func TestMembersLocal(t *testing.T) {
 	// Here we don't use the BlueprintOneToOneRoom because else Bob would be able to see Alice's presence changes through
 	// that pre-existing one-on-one DM room. So we exclude that here.
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bobspassword", false)
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
-	bob.MustDoFunc(
+	bob.MustDo(
 		t, "PUT", []string{"_matrix", "client", "v3", "presence", bob.UserID, "status"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"presence": "online",
@@ -26,7 +26,7 @@ func TestMembersLocal(t *testing.T) {
 	)
 
 	_, incrementalSyncTokenBeforeBobJoinsRoom := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
-	bob.JoinRoom(t, roomID, []string{})
+	bob.MustJoinRoom(t, roomID, []string{})
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: New room members see their own join event

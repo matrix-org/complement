@@ -11,7 +11,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
 )
 
 var (

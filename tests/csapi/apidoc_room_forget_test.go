@@ -8,10 +8,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // These tests ensure that forgetting about rooms works as intended
@@ -25,8 +25,8 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Can't forget room you're still in
 		t.Run("Can't forget room you're still in", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "private_chat"})
-			res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "private_chat"})
+			res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusBadRequest,
 				JSON: []match.JSON{
@@ -37,8 +37,8 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Forgotten room messages cannot be paginated
 		t.Run("Forgotten room messages cannot be paginated", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			bob.JoinRoom(t, roomID, []string{})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -46,9 +46,9 @@ func TestRoomForget(t *testing.T) {
 					"body":    "Hello world!",
 				},
 			})
-			alice.LeaveRoom(t, roomID)
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
-			res := alice.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"})
+			alice.MustLeaveRoom(t, roomID)
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
+			res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"})
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 				JSON: []match.JSON{
@@ -59,8 +59,8 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Forgetting room does not show up in v2 /sync
 		t.Run("Forgetting room does not show up in v2 initial /sync", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			bob.JoinRoom(t, roomID, []string{})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -68,10 +68,10 @@ func TestRoomForget(t *testing.T) {
 					"body":    "Hello world!",
 				},
 			})
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			// Ensure Alice left the room
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			bob.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -104,8 +104,8 @@ func TestRoomForget(t *testing.T) {
 			// that would make it impossible for other devices to determine that a room has been
 			// left if it is forgotten quickly. This is arguably a bug in the spec.
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			bob.JoinRoom(t, roomID, []string{})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -114,10 +114,10 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			tokenBeforeLeave := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			// Ensure Alice left the room
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			bob.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -142,8 +142,8 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Can forget room you've been kicked from
 		t.Run("Can forget room you've been kicked from", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			bob.JoinRoom(t, roomID, []string{})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+			bob.MustJoinRoom(t, roomID, []string{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -152,7 +152,7 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			// Kick Bob
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
 				client.WithJSONBody(t, map[string]interface{}{
 					"user_id": bob.UserID,
 				}),
@@ -174,9 +174,9 @@ func TestRoomForget(t *testing.T) {
 		// sytest: Can re-join room if re-invited
 		t.Run("Can re-join room if re-invited", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "private_chat"})
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "private_chat"})
 			// Invite Bob
-			alice.InviteRoom(t, roomID, bob.UserID)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			// Update join_rules
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.join_rules",
@@ -185,7 +185,7 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			// Bob joins room
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			messageID := alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -194,12 +194,12 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			// Bob leaves and forgets room
-			bob.LeaveRoom(t, roomID)
+			bob.MustLeaveRoom(t, roomID)
 			// Ensure Bob has really left the room
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
-			bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			// Try to re-join
-			joinRes := bob.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "join", roomID})
+			joinRes := bob.JoinRoom(t, roomID, nil)
 			must.MatchResponse(t, joinRes, match.HTTPResponse{
 				StatusCode: http.StatusForbidden,
 				JSON: []match.JSON{
@@ -207,14 +207,14 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			// Re-invite bob
-			alice.InviteRoom(t, roomID, bob.UserID)
-			bob.JoinRoom(t, roomID, []string{})
+			alice.MustInviteRoom(t, roomID, bob.UserID)
+			bob.MustJoinRoom(t, roomID, []string{})
 			// Query messages
 			queryParams := url.Values{}
 			queryParams.Set("dir", "b")
 			queryParams.Set("limit", "100")
 			// Check if we can see Bobs previous message
-			res := bob.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+			res := bob.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 			msgRes := &msgResult{}
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusOK,
@@ -234,7 +234,7 @@ func TestRoomForget(t *testing.T) {
 			msgRes.found = false
 			// We should now be able to see the new message
 			queryParams.Set("limit", "1")
-			res = bob.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+			res = bob.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: http.StatusOK,
 				JSON:       []match.JSON{findMessageId(messageID, msgRes)},
@@ -246,16 +246,16 @@ func TestRoomForget(t *testing.T) {
 
 		t.Run("Can forget room we weren't an actual member", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "private_chat"})
-			alice.InviteRoom(t, roomID, bob.UserID)
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "private_chat"})
+			alice.MustInviteRoom(t, roomID, bob.UserID)
 			// Bob rejects the invite
-			bob.LeaveRoom(t, roomID)
+			bob.MustLeaveRoom(t, roomID)
 			// Bob tries to forget about this room
-			bob.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 			// Alice also leaves the room
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			// Alice tries to forget about this room
-			alice.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"})
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "forget"}, client.WithJSONBody(t, struct{}{}))
 		})
 	})
 }

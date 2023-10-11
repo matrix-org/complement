@@ -10,14 +10,16 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // The Spec says here
-//     https://spec.matrix.org/v1.1/client-server-api/#server-behaviour-13
+//
+//	https://spec.matrix.org/v1.1/client-server-api/#server-behaviour-13
+//
 // that
 // > Servers must not send room invites from ignored users to clients.
 //
@@ -32,7 +34,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	chris := deployment.RegisterUser(t, "hs1", "chris", "sufficiently_long_password_chris", false)
 
 	// Alice creates a room for herself.
-	publicRoom := alice.CreateRoom(t, map[string]interface{}{
+	publicRoom := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
@@ -40,16 +42,11 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, publicRoom))
 
 	// Alice ignores Bob.
-	alice.MustDoFunc(
-		t,
-		"PUT",
-		[]string{"_matrix", "client", "v3", "user", alice.UserID, "account_data", "m.ignored_user_list"},
-		client.WithJSONBody(t, map[string]interface{}{
-			"ignored_users": map[string]interface{}{
-				bob.UserID: map[string]interface{}{},
-			},
-		}),
-	)
+	alice.MustSetGlobalAccountData(t, "m.ignored_user_list", map[string]interface{}{
+		"ignored_users": map[string]interface{}{
+			bob.UserID: map[string]interface{}{},
+		},
+	})
 
 	// Alice waits to see that the ignore was successful.
 	sinceJoinedAndIgnored := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncGlobalAccountDataHas(
@@ -61,13 +58,13 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	))
 
 	// Bob invites Alice to a private room.
-	bobRoom := bob.CreateRoom(t, map[string]interface{}{
+	bobRoom := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "private_chat",
 		"invite": []string{alice.UserID},
 	})
 
 	// So does Chris.
-	chrisRoom := chris.CreateRoom(t, map[string]interface{}{
+	chrisRoom := chris.MustCreateRoom(t, map[string]interface{}{
 		"preset": "private_chat",
 		"invite": []string{alice.UserID},
 	})
@@ -82,7 +79,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	}
 	// Note: SyncUntil only runs its callback on array elements. I want to investigate an object.
 	// So let's make the HTTP request more directly.
-	response := alice.MustDoFunc(
+	response := alice.MustDo(
 		t,
 		"GET",
 		[]string{"_matrix", "client", "v3", "sync"},

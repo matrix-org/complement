@@ -1,14 +1,14 @@
 package tests
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/complement/should"
 )
 
 // Test for https://github.com/matrix-org/dendrite/issues/3004
@@ -54,19 +54,19 @@ func TestACLs(t *testing.T) {
 	charlie := deployment.Client(t, "hs3", "@charlie:hs3")
 
 	// 2. Create room on 1st server
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 	// 3. Join this room from 2nd server
-	bob.JoinRoom(t, roomID, []string{"hs1"})
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID))
 	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// create a different room used for a sentinel event
-	sentinelRoom := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	sentinelRoom := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(alice.UserID, sentinelRoom))
-	bob.JoinRoom(t, sentinelRoom, []string{"hs1"})
-	charlie.JoinRoom(t, sentinelRoom, []string{"hs1"})
+	bob.MustJoinRoom(t, sentinelRoom, []string{"hs1"})
+	charlie.MustJoinRoom(t, sentinelRoom, []string{"hs1"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince},
 		client.SyncJoinedTo(bob.UserID, sentinelRoom),
 		client.SyncJoinedTo(charlie.UserID, sentinelRoom),
@@ -88,7 +88,7 @@ func TestACLs(t *testing.T) {
 	bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncTimelineHasEventID(roomID, eventID))
 
 	// 5. Join from 3rd server.
-	charlie.JoinRoom(t, roomID, []string{"hs1"})
+	charlie.MustJoinRoom(t, roomID, []string{"hs1"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(charlie.UserID, roomID))
 	charlieSince := charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
 
@@ -120,30 +120,17 @@ func TestACLs(t *testing.T) {
 		syncResp, _ := user.MustSync(t, client.SyncReq{})
 
 		// we don't expect eventID (blocked) to be in the sync response
-		events := syncResp.Get(fmt.Sprintf("rooms.join.%s.timeline.events", client.GjsonEscape(roomID))).Array()
-		for _, ev := range events {
-			if ev.Get("event_id").Str == eventID {
-				t.Fatalf("unexpected eventID from ACLed room: %s", eventID)
-			}
-		}
+		events := should.GetTimelineEventIDs(syncResp, roomID)
+		must.NotContainSubset(t, events, []string{eventID})
 
 		// also check that our sentinel event is present
-		var seenSentinelEvent bool
-		events = syncResp.Get(fmt.Sprintf("rooms.join.%s.timeline.events", client.GjsonEscape(sentinelRoom))).Array()
-		for _, ev := range events {
-			if ev.Get("event_id").Str == sentinelEventID {
-				seenSentinelEvent = true
-				break
-			}
-		}
-
-		if !seenSentinelEvent {
-			t.Fatalf("expected to see sentinel event but didn't")
-		}
+		events = should.GetTimelineEventIDs(syncResp, sentinelRoom)
+		must.ContainSubset(t, events, []string{sentinelEventID})
 
 		// Validate the ACL event is actually in the rooms state
-		res := user.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.server_acl"})
+		res := user.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.server_acl"})
 		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 200,
 			JSON: []match.JSON{
 				match.JSONKeyEqual("allow", []string{"*"}),
 				match.JSONKeyEqual("deny", []string{"hs2"}),

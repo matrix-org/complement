@@ -3,13 +3,13 @@ package tests
 import (
 	"testing"
 
-	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 func TestFederationRoomsInvite(t *testing.T) {
@@ -23,25 +23,25 @@ func TestFederationRoomsInvite(t *testing.T) {
 		// sytest: Invited user can reject invite over federation
 		t.Run("Invited user can reject invite over federation", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"invite": []string{bob.UserID},
 			})
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.LeaveRoom(t, roomID)
+			bob.MustLeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
 
 		// sytest: Invited user can reject invite over federation several times
 		t.Run("Invited user can reject invite over federation several times", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 			for i := 0; i < 3; i++ {
-				alice.InviteRoom(t, roomID, bob.UserID)
+				alice.MustInviteRoom(t, roomID, bob.UserID)
 				bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-				bob.LeaveRoom(t, roomID)
+				bob.MustLeaveRoom(t, roomID)
 				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
 			}
 		})
@@ -49,22 +49,22 @@ func TestFederationRoomsInvite(t *testing.T) {
 		// sytest: Invited user can reject invite over federation for empty room
 		t.Run("Invited user can reject invite over federation for empty room", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"invite": []string{bob.UserID},
 			})
 			aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			alice.LeaveRoom(t, roomID)
+			alice.MustLeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomID))
-			bob.LeaveRoom(t, roomID)
+			bob.MustLeaveRoom(t, roomID)
 			bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
 
 		// sytest: Remote invited user can see room metadata
 		t.Run("Remote invited user can see room metadata", func(t *testing.T) {
 			t.Parallel()
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"name":   "Invites room",
 				"invite": []string{bob.UserID},
@@ -85,18 +85,18 @@ func TestFederationRoomsInvite(t *testing.T) {
 		})
 
 		t.Run("Invited user has 'is_direct' flag in prev_content after joining", func(t *testing.T) {
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 				"name":   "Invites room",
 				// invite Bob and make the room a DM, so we can verify m.direct flag is in the prev_content after joining
 				"invite":    []string{bob.UserID},
 				"is_direct": true,
 			})
-			bob.JoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []string{})
 			bob.MustSyncUntil(t, client.SyncReq{},
 				client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
 					// We expect a membership event ..
-					if result.Get("type").Str != gomatrixserverlib.MRoomMember {
+					if result.Get("type").Str != spec.MRoomMember {
 						return false
 					}
 					// .. for Bob
@@ -128,7 +128,7 @@ func verifyState(t *testing.T, res gjson.Result, wantFields, wantValues map[stri
 		wantValue := wantValues[eventType]
 		eventStateKey := event.Get("state_key").Str
 
-		res := cl.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, eventStateKey})
+		res := cl.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, eventStateKey})
 
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{

@@ -6,7 +6,8 @@ import (
 
 	"github.com/matrix-org/gomatrixserverlib"
 
-	"github.com/matrix-org/complement/internal/b"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 )
 
@@ -15,7 +16,6 @@ import (
 // We start with two users in a room - alice@hs1, and 'delia' on the Complement test server.
 // alice sends an invite to charlie@hs2, which he rejects.
 // We check that delia sees the rejection.
-//
 func TestFederationRejectInvite(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
@@ -23,11 +23,11 @@ func TestFederationRejectInvite(t *testing.T) {
 	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
 
 	// we'll awaken this Waiter when we receive a membership event for Charlie
-	var waiter *Waiter
+	var waiter *helpers.Waiter
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
-		federation.HandleTransactionRequests(func(ev *gomatrixserverlib.Event) {
+		federation.HandleTransactionRequests(func(ev gomatrixserverlib.PDU) {
 			sk := "<nil>"
 			if ev.StateKey() != nil {
 				sk = *ev.StateKey()
@@ -44,18 +44,18 @@ func TestFederationRejectInvite(t *testing.T) {
 	delia := srv.UserID("delia")
 
 	// Alice creates the room, and delia joins
-	roomID := alice.CreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, delia)
 
 	// Alice invites Charlie; Delia should see the invite
-	waiter = NewWaiter()
-	alice.InviteRoom(t, roomID, charlie.UserID)
+	waiter = helpers.NewWaiter()
+	alice.MustInviteRoom(t, roomID, charlie.UserID)
 	waiter.Wait(t, 5*time.Second)
 	room.MustHaveMembershipForUser(t, charlie.UserID, "invite")
 
 	// Charlie rejects the invite; Delia should see the rejection.
-	waiter = NewWaiter()
-	charlie.LeaveRoom(t, roomID)
+	waiter = helpers.NewWaiter()
+	charlie.MustLeaveRoom(t, roomID)
 	waiter.Wait(t, 5*time.Second)
 	room.MustHaveMembershipForUser(t, charlie.UserID, "leave")
 }

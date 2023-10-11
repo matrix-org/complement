@@ -9,9 +9,9 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/must"
 )
 
 func TestRoomCreationReportsEventsToMyself(t *testing.T) {
@@ -21,7 +21,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
 	bob := deployment.RegisterUser(t, "hs1", "bob", "bobpassword", false)
-	roomID := alice.CreateRoom(t, struct{}{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Room creation reports m.room.create to myself
@@ -32,8 +32,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if ev.Get("type").Str != "m.room.create" {
 					return false
 				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("content").Get("creator").Str, userID, "wrong content.creator")
+				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
+				must.Equal(t, ev.Get("content").Get("creator").Str, userID, "wrong content.creator")
 				return true
 			}))
 		})
@@ -46,9 +46,9 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if ev.Get("type").Str != "m.room.member" {
 					return false
 				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("state_key").Str, userID, "wrong state_key")
-				must.EqualStr(t, ev.Get("content").Get("membership").Str, "join", "wrong content.membership")
+				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
+				must.Equal(t, ev.Get("state_key").Str, userID, "wrong state_key")
+				must.Equal(t, ev.Get("content").Get("membership").Str, "join", "wrong content.membership")
 				return true
 			}))
 		})
@@ -74,8 +74,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if !ev.Get("state_key").Exists() {
 					return false
 				}
-				must.EqualStr(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.EqualStr(t, ev.Get("content").Get("topic").Str, roomTopic, "wrong content.topic")
+				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
+				must.Equal(t, ev.Get("content").Get("topic").Str, roomTopic, "wrong content.topic")
 				return true
 			}))
 		})
@@ -104,17 +104,17 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 		t.Run("Joining room twice is idempotent", func(t *testing.T) {
 			t.Parallel()
 
-			roomID := bob.CreateRoom(t, map[string]interface{}{
+			roomID := bob.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
 			})
 
-			alice.JoinRoom(t, roomID, nil)
+			alice.MustJoinRoom(t, roomID, nil)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 			firstID := *getEventIdForState(t, alice, roomID, "m.room.member", alice.UserID)
 
-			alice.JoinRoom(t, roomID, nil)
+			alice.MustJoinRoom(t, roomID, nil)
 
 			// Unfortunately there is no way to definitively wait
 			// for a 'potentially false second join event' without
@@ -134,10 +134,9 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 }
 
 func getEventIdForState(t *testing.T, client *client.CSAPI, roomID, evType, stateKey string) *string {
-	res := client.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
+	res := client.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
 
-	jsonBody := must.ParseJSON(t, res.Body)
-	result := gjson.ParseBytes(jsonBody)
+	result := must.ParseJSON(t, res.Body)
 
 	for _, ev := range result.Array() {
 		if ev.Get("type").Str == evType && ev.Get("state_key").Str == stateKey {

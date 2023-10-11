@@ -6,8 +6,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 )
 
 // sytest: Can send a message directly to a device using PUT /sendToDevice
@@ -28,7 +28,7 @@ func TestToDeviceMessages(t *testing.T) {
 		"my_key": "my_value",
 	}
 
-	alice.SendToDeviceMessages(t, "my.test.type", map[string]map[string]map[string]interface{}{
+	alice.MustSendToDeviceMessages(t, "my.test.type", map[string]map[string]map[string]interface{}{
 		bob.UserID: {
 			bob.DeviceID: content,
 		},

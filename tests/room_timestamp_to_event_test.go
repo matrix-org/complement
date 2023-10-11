@@ -15,11 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/tidwall/gjson"
+	"golang.org/x/exp/slices"
 )
 
 func TestJumpToDateEndpoint(t *testing.T) {
@@ -70,7 +71,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 			// Join from the application service bridge user so we can use to send
 			// some messages at a specific time.
-			as.JoinRoom(t, roomID, []string{"hs1"})
+			as.MustJoinRoom(t, roomID, []string{"hs1"})
 
 			// Send a couple messages with the same timestamp after the other test
 			// messages in the room.
@@ -90,7 +91,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 			// Join from the application service bridge user so we can use to send
 			// some messages at a specific time.
-			as.JoinRoom(t, roomID, []string{"hs1"})
+			as.MustJoinRoom(t, roomID, []string{"hs1"})
 
 			// Send a couple messages with the same timestamp after the other test
 			// messages in the room.
@@ -109,7 +110,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			timeBeforeRoomCreation := time.Now()
 
 			// Alice will create the private room
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
 
@@ -119,7 +120,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
 			timestampString := strconv.FormatInt(timestamp, 10)
-			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			timestampToEventRes := nonMemberUser.Do(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"ts":  []string{timestampString},
 				"dir": []string{"f"},
 			}))
@@ -137,7 +138,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			timeBeforeRoomCreation := time.Now()
 
 			// Alice will create the public room
-			roomID := alice.CreateRoom(t, map[string]interface{}{
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "public_chat",
 			})
 
@@ -147,7 +148,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
 			timestampString := strconv.FormatInt(timestamp, 10)
-			timestampToEventRes := nonMemberUser.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			timestampToEventRes := nonMemberUser.Do(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 				"ts":  []string{timestampString},
 				"dir": []string{"f"},
 			}))
@@ -163,14 +164,14 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			t.Run("looking forwards, should be able to find event that was sent before we joined", func(t *testing.T) {
 				t.Parallel()
 				roomID, eventA, _ := createTestRoom(t, alice)
-				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				remoteCharlie.MustJoinRoom(t, roomID, []string{"hs1"})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventA.BeforeTimestamp, "f", eventA.EventID)
 			})
 
 			t.Run("looking backwards, should be able to find event that was sent before we joined", func(t *testing.T) {
 				t.Parallel()
 				roomID, _, eventB := createTestRoom(t, alice)
-				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				remoteCharlie.MustJoinRoom(t, roomID, []string{"hs1"})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 			})
 
@@ -181,24 +182,24 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 				// Join from the application service bridge user so we can use it to send
 				// some messages at a specific time.
-				as.JoinRoom(t, roomID, []string{"hs1"})
+				as.MustJoinRoom(t, roomID, []string{"hs1"})
 
 				// Import a message in the room before the room was created
 				importTime := time.Date(2022, 01, 03, 0, 0, 0, 0, time.Local)
 				importedEventID := sendMessageWithTimestamp(t, as, alice, roomID, importTime, "old imported event")
 
-				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				remoteCharlie.MustJoinRoom(t, roomID, []string{"hs1"})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, timeBeforeRoomCreation, "b", importedEventID)
 			})
 
 			t.Run("can paginate after getting remote event from timestamp to event endpoint", func(t *testing.T) {
 				t.Parallel()
 				roomID, eventA, eventB := createTestRoom(t, alice)
-				remoteCharlie.JoinRoom(t, roomID, []string{"hs1"})
+				remoteCharlie.MustJoinRoom(t, roomID, []string{"hs1"})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 
 				// Get a pagination token from eventB
-				contextRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"limit": []string{"0"},
 				}))
 				contextResResBody := client.ParseJSON(t, contextRes)
@@ -212,7 +213,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				})
 
 				// Paginate backwards from eventB
-				messagesRes := remoteCharlie.MustDoFunc(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 					"dir":   []string{"b"},
 					"limit": []string{"100"},
 					"from":  []string{paginationToken},
@@ -250,7 +251,7 @@ func getTxnID(prefix string) (txnID string) {
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
 	t.Helper()
 
-	roomID = c.CreateRoom(t, map[string]interface{}{
+	roomID = c.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
@@ -289,7 +290,7 @@ func sendMessageWithTimestamp(t *testing.T, as *client.CSAPI, c *client.CSAPI, r
 	//
 	// We can't use as.SendEventSynced(...) because application services can't use
 	// the /sync API.
-	sendRes := as.DoFunc(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
+	sendRes := as.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
 		"body":    message,
 		"msgtype": "m.text",
 	}), client.WithQueries(url.Values{
@@ -311,7 +312,7 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 
 	givenTimestamp := makeTimestampFromTime(givenTime)
 	timestampString := strconv.FormatInt(givenTimestamp, 10)
-	timestampToEventRes := c.DoFunc(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+	timestampToEventRes := c.Do(t, "GET", []string{"_matrix", "client", "v1", "rooms", roomID, "timestamp_to_event"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		"ts":  []string{timestampString},
 		"dir": []string{direction},
 	}))
@@ -348,7 +349,7 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", checkCounter)
 		}
 
-		messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+		messagesRes := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 			"dir":   []string{"b"},
 			"limit": []string{"100"},
 		}))
@@ -378,7 +379,7 @@ func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string,
 func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, roomID string, expectedEventId string, actualEventId string, givenTimestamp int64) string {
 	t.Helper()
 
-	messagesRes := c.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+	messagesRes := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
 		// The events returned will be from the newest -> oldest since we're going backwards
 		"dir":   []string{"b"},
 		"limit": []string{"100"},
@@ -395,7 +396,8 @@ func getDebugMessageListFromMessagesResponse(t *testing.T, c *client.CSAPI, room
 	}
 
 	// Make the events go from oldest-in-time -> newest-in-time
-	events := reverseGjsonArray(keyRes.Array())
+	events := keyRes.Array()
+	slices.Reverse(events)
 	if len(events) == 0 {
 		t.Fatalf(
 			"getDebugMessageListFromMessagesResponse found no messages in the room(%s).",
@@ -463,12 +465,4 @@ const AnsiColorYellow string = "33"
 
 func decorateStringWithAnsiColor(inputString, decorationColor string) string {
 	return fmt.Sprintf("\033[%sm%s\033[0m", decorationColor, inputString)
-}
-
-func reverseGjsonArray(in []gjson.Result) []gjson.Result {
-	out := make([]gjson.Result, len(in))
-	for i := 0; i < len(in); i++ {
-		out[i] = in[len(in)-i-1]
-	}
-	return out
 }

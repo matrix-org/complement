@@ -5,8 +5,8 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/b"
 )
 
 func TestAvatarUrlUpdate(t *testing.T) {
@@ -26,13 +26,13 @@ func testProfileFieldUpdate(t *testing.T, field string) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	roomID := alice.CreateRoom(t, map[string]interface{}{
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
 
 	sinceToken := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
-	alice.MustDoFunc(
+	alice.MustDo(
 		t,
 		"PUT",
 		[]string{"_matrix", "client", "v3", "profile", alice.UserID, field},

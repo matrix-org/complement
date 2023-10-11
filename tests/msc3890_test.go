@@ -10,10 +10,10 @@ package tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/tidwall/gjson"
 )
 
@@ -42,10 +42,8 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 		)
 
 		// Using the first device, create some local notification settings in the user's account data for the second device.
-		aliceDeviceOne.SetGlobalAccountData(
-			t,
-			accountDataType,
-			accountDataContent,
+		aliceDeviceOne.MustSetGlobalAccountData(
+			t, accountDataType, accountDataContent,
 		)
 
 		checkAccountDataContent := func(r gjson.Result) bool {
@@ -53,10 +51,7 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 			if r.Get("type").Str != accountDataType {
 				return false
 			}
-			content := r.Get("content")
-
-			// Ensure the content of this account data type is as we expect
-			return match.JSONDeepEqual([]byte(content.Raw), accountDataContent)
+			return match.JSONKeyEqual("content", accountDataContent)(r) == nil
 		}
 
 		// Check that the content of the user account data for this type has been set successfully
@@ -68,8 +63,8 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 			client.SyncGlobalAccountDataHas(checkAccountDataContent),
 		)
 		// Also check via the dedicated account data endpoint to ensure the similar check later is not 404'ing for some other reason.
-		// Using `MustDoFunc` ensures that the response code is 2xx.
-		res := aliceDeviceOne.MustDoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", aliceDeviceOne.UserID, "account_data", accountDataType})
+		// Using `MustDo` ensures that the response code is 2xx.
+		res := aliceDeviceOne.MustGetGlobalAccountData(t, accountDataType)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyEqual("is_silenced", true),
@@ -77,10 +72,10 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 		})
 
 		// Log out the second device
-		aliceDeviceTwo.MustDoFunc(t, "POST", []string{"_matrix", "client", "v3", "logout"})
+		aliceDeviceTwo.MustDo(t, "POST", []string{"_matrix", "client", "v3", "logout"})
 
 		// Using the first device, check that the local notification setting account data for the deleted device was removed.
-		res = aliceDeviceOne.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "user", aliceDeviceOne.UserID, "account_data", accountDataType})
+		res = aliceDeviceOne.MustGetGlobalAccountData(t, accountDataType)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 			JSON: []match.JSON{

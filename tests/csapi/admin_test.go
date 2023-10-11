@@ -7,10 +7,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // Check if this homeserver supports Synapse-style admin registration.
@@ -40,7 +40,7 @@ func TestServerNotices(t *testing.T) {
 		roomID  string
 	)
 	t.Run("/send_server_notice is not allowed as normal user", func(t *testing.T) {
-		res := alice.DoFunc(t, "POST", []string{"_synapse", "admin", "v1", "send_server_notice"})
+		res := alice.Do(t, "POST", []string{"_synapse", "admin", "v1", "send_server_notice"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusForbidden,
 			JSON: []match.JSON{
@@ -55,7 +55,7 @@ func TestServerNotices(t *testing.T) {
 		roomID = syncUntilInvite(t, alice)
 	})
 	t.Run("Alice cannot reject the invite", func(t *testing.T) {
-		res := alice.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"})
+		res := alice.LeaveRoom(t, roomID)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusForbidden,
 			JSON: []match.JSON{
@@ -64,11 +64,11 @@ func TestServerNotices(t *testing.T) {
 		})
 	})
 	t.Run("Alice can join the alert room", func(t *testing.T) {
-		alice.JoinRoom(t, roomID, []string{})
+		alice.MustJoinRoom(t, roomID, []string{})
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, eventID))
 	})
 	t.Run("Alice can leave the alert room, after joining it", func(t *testing.T) {
-		alice.LeaveRoom(t, roomID)
+		alice.MustLeaveRoom(t, roomID)
 	})
 	t.Run("After leaving the alert room and on re-invitation, no new room is created", func(t *testing.T) {
 		sendServerNotice(t, admin, reqBody, nil)
@@ -91,9 +91,9 @@ func TestServerNotices(t *testing.T) {
 func sendServerNotice(t *testing.T, admin *client.CSAPI, reqBody client.RequestOpt, txnID *string) (eventID string) {
 	var res *http.Response
 	if txnID != nil {
-		res = admin.MustDoFunc(t, "PUT", []string{"_synapse", "admin", "v1", "send_server_notice", *txnID}, reqBody)
+		res = admin.MustDo(t, "PUT", []string{"_synapse", "admin", "v1", "send_server_notice", *txnID}, reqBody)
 	} else {
-		res = admin.MustDoFunc(t, "POST", []string{"_synapse", "admin", "v1", "send_server_notice"}, reqBody)
+		res = admin.MustDo(t, "POST", []string{"_synapse", "admin", "v1", "send_server_notice"}, reqBody)
 	}
 	body := must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,

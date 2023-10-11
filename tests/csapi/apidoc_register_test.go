@@ -13,10 +13,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/internal/b"
-	"github.com/matrix-org/complement/internal/client"
-	"github.com/matrix-org/complement/internal/match"
-	"github.com/matrix-org/complement/internal/must"
+	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 )
 
 // TODO:
@@ -42,7 +42,7 @@ func TestRegistration(t *testing.T) {
 		// The name in Sytest is different, the test is actually doing a POST request.
 		t.Run("POST {} returns a set of flows", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{}`)))
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{}`)))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 401,
 				Headers: map[string]string{
@@ -61,7 +61,7 @@ func TestRegistration(t *testing.T) {
 		// sytest: POST /register can create a user
 		t.Run("POST /register can create a user", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
@@ -78,7 +78,7 @@ func TestRegistration(t *testing.T) {
 		// sytest: POST /register downcases capitals in usernames
 		t.Run("POST /register downcases capitals in usernames", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
@@ -96,7 +96,7 @@ func TestRegistration(t *testing.T) {
 		t.Run("POST /register returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
 			deviceID := "my_device_id"
-			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
@@ -132,7 +132,7 @@ func TestRegistration(t *testing.T) {
 				`'`,
 			}
 			for _, ch := range specialChars {
-				res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"},
+				res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"},
 					client.WithJSONBody(t, map[string]interface{}{
 						"auth": map[string]string{
 							"type": "m.login.dummy",
@@ -150,7 +150,7 @@ func TestRegistration(t *testing.T) {
 		})
 		t.Run("POST /register rejects if user already exists", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
@@ -163,7 +163,7 @@ func TestRegistration(t *testing.T) {
 					match.JSONKeyTypeEqual("user_id", gjson.String),
 				},
 			})
-			res = unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
+			res = unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
 				"auth": {
 					"type": "m.login.dummy"
 				},
@@ -232,7 +232,7 @@ func TestRegistration(t *testing.T) {
 				"password":                    "übers3kr1t",
 				"device_id":                   "xyzzy",
 				"initial_device_display_name": "display_name"}
-			resp := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqJson))
+			resp := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqJson))
 			body, err := ioutil.ReadAll(resp.Body)
 			session := gjson.GetBytes(body, "session")
 			if err != nil {
@@ -250,7 +250,7 @@ func TestRegistration(t *testing.T) {
 				"initial_device_display_name": "display_name",
 				"auth":                        auth,
 			}
-			resp2 := unauthedClient.DoFunc(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
+			resp2 := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 			must.MatchResponse(t, resp2, match.HTTPResponse{JSON: []match.JSON{
 				match.JSONKeyPresent("access_token"),
 			}})
@@ -259,7 +259,7 @@ func TestRegistration(t *testing.T) {
 		t.Run("GET /register/available returns available for unregistered user name", func(t *testing.T) {
 			t.Parallel()
 			testUserName := "username_should_be_available"
-			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
+			res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
 				"username": []string{testUserName},
 			}))
 			must.MatchResponse(t, res, match.HTTPResponse{
@@ -275,9 +275,9 @@ func TestRegistration(t *testing.T) {
 			testUserName := "username_not_available"
 			// Don't need the return value here, just need a user to be registered to test against
 			_ = deployment.NewUser(t, testUserName, "hs1")
-			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
-					"username": []string{testUserName},
-				}))
+			res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
+				"username": []string{testUserName},
+			}))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
 				JSON: []match.JSON{
@@ -290,9 +290,9 @@ func TestRegistration(t *testing.T) {
 		t.Run("GET /register/available returns M_INVALID_USERNAME for invalid user name", func(t *testing.T) {
 			t.Parallel()
 			testUserName := "username,should_not_be_valid"
-			res := unauthedClient.DoFunc(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
-					"username": []string{testUserName},
-				}))
+			res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
+				"username": []string{testUserName},
+			}))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
 				JSON: []match.JSON{
@@ -306,15 +306,15 @@ func TestRegistration(t *testing.T) {
 
 // registerSharedSecret tries to register using a shared secret, returns the *http.Response
 func registerSharedSecret(t *testing.T, c *client.CSAPI, user, pass string, isAdmin bool) *http.Response {
-	resp := c.DoFunc(t, "GET", []string{"_synapse", "admin", "v1", "register"})
+	resp := c.Do(t, "GET", []string{"_synapse", "admin", "v1", "register"})
 	if resp.StatusCode != 200 {
 		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
 		return resp
 	}
 	body := must.ParseJSON(t, resp.Body)
-	nonce := gjson.GetBytes(body, "nonce")
+	nonce := body.Get("nonce")
 	if !nonce.Exists() {
-		t.Fatalf("Malformed shared secret GET response: %s", string(body))
+		t.Fatalf("Malformed shared secret GET response: %s", body.Raw)
 	}
 	mac := hmac.New(sha1.New, []byte(client.SharedSecret))
 	mac.Write([]byte(nonce.Str))
@@ -336,6 +336,6 @@ func registerSharedSecret(t *testing.T, c *client.CSAPI, user, pass string, isAd
 		"mac":      hex.EncodeToString(sig),
 		"admin":    isAdmin,
 	}
-	resp = c.DoFunc(t, "POST", []string{"_synapse", "admin", "v1", "register"}, client.WithJSONBody(t, reqBody))
+	resp = c.Do(t, "POST", []string{"_synapse", "admin", "v1", "register"}, client.WithJSONBody(t, reqBody))
 	return resp
 }
