@@ -1,6 +1,3 @@
-//go:build msc3930
-// +build msc3930
-
 // This file contains tests for "push rules of polls" as defined by MSC3930.
 // The MSC that defines the design of the polls system is MSC3381.
 //

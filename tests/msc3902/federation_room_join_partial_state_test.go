@@ -1,8 +1,5 @@
-//go:build faster_joins
-// +build faster_joins
-
 // This file contains tests for joining rooms over federation, with the
-// features introduced in msc2775.
+// features introduced in msc3902.
 
 package tests
 
