@@ -44,7 +44,7 @@ func TestUrlPreview(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	webServer := web.NewServer(t, testPackage.Config, func(router *mux.Router) {
+	webServer := web.NewServer(t, deployment.Config, func(router *mux.Router) {
 		router.HandleFunc("/test.png", func(w http.ResponseWriter, req *http.Request) {
 			t.Log("/test.png fetched")
 
