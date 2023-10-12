@@ -4,15 +4,43 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/sirupsen/logrus"
 )
+
+type Deployment interface {
+	// Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
+	// Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
+	// if the userID is otherwise not found.
+	Client(t *testing.T, serverName, userID string) *client.CSAPI
+	// RegisterUser within a homeserver and return an authenticatedClient, Fails the test if the hsName is not found.
+	RegisterUser(t *testing.T, hsName, localpart, password string, isAdmin bool) *client.CSAPI
+	// NewUser creates a new user as a convenience method to RegisterUser. TODO REMOVE
+	//
+	// It registers the user with a deterministic password, and without admin privileges.
+	NewUser(t *testing.T, localpart, hs string) *client.CSAPI
+	// TODO remove this, only used in 1 test in msc3890
+	// LoginUser within a homeserver and return an authenticatedClient. Fails the test if the hsName is not found.
+	// Note that this will not change the access token of the client that is returned by `deployment.Client`.
+	LoginUser(t *testing.T, hsName, localpart, password string) *client.CSAPI
+	// Restart a deployment.
+	Restart(t *testing.T) error
+	// Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
+	// will print container logs before killing the container.
+	Destroy(t *testing.T)
+	// Return the complement config current active for this deployment
+	GetConfig() *config.Complement
+	// Return an HTTP round tripper interface which can map HS names to the actual container:port
+	RoundTripper() http.RoundTripper
+}
 
 // TestPackage represents the configuration for a package of tests. A package of tests
 // are all tests in the same Go package (directory).
@@ -57,7 +85,7 @@ func (tp *TestPackage) Cleanup() {
 // It will construct the blueprint if it doesn't already exist in the docker image cache.
 // This function is the main setup function for all tests as it provides a deployment with
 // which tests can interact with.
-func (tp *TestPackage) Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
+func (tp *TestPackage) Deploy(t *testing.T, blueprint b.Blueprint) Deployment {
 	t.Helper()
 	timeStartBlueprint := time.Now()
 	if err := tp.complementBuilder.ConstructBlueprintIfNotExist(blueprint); err != nil {
@@ -75,4 +103,8 @@ func (tp *TestPackage) Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deplo
 	}
 	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy))
 	return dep
+}
+
+func (tp *TestPackage) DeployDirty(t *testing.T, numServers int) Deployment {
+	return nil
 }

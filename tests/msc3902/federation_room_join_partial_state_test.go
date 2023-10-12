@@ -31,7 +31,6 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -51,7 +50,7 @@ type server struct {
 //
 // The `federation.HandleTransactionRequests` handler must not be used.
 // Instead, `AddPDUHandler` and `AddEDUHandler` should be used.
-func createTestServer(t *testing.T, deployment *docker.Deployment, opts ...func(*federation.Server)) *server {
+func createTestServer(t *testing.T, deployment complement.Deployment, opts ...func(*federation.Server)) *server {
 	t.Helper()
 
 	server := &server{
@@ -2043,7 +2042,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// Returns channels for device list updates arriving at the complement homeservers, which
 		// can be used with `mustReceiveDeviceListUpdate` and `mustNotReceiveDeviceListUpdate`.
 		setupOutgoingDeviceListUpdateTest := func(
-			t *testing.T, deployment *docker.Deployment, aliceLocalpart string,
+			t *testing.T, deployment complement.Deployment, aliceLocalpart string,
 			opts ...func(*federation.Server),
 		) (
 			alice *client.CSAPI, server1 *server, server2 *server,
@@ -2057,7 +2056,7 @@ func TestPartialStateJoin(t *testing.T) {
 			deviceListUpdateChannel2 = make(chan gomatrixserverlib.DeviceListUpdateEvent, 10)
 
 			createDeviceListUpdateTestServer := func(
-				t *testing.T, deployment *docker.Deployment,
+				t *testing.T, deployment complement.Deployment,
 				deviceListUpdateChannel chan gomatrixserverlib.DeviceListUpdateEvent,
 				opts ...func(*federation.Server),
 			) *server {
@@ -2292,7 +2291,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// As a side effect, @derek is promoted to admin and leaves the room before the homeserver
 		// under test joins.
 		setupIncorrectlyAcceptedKick := func(
-			t *testing.T, deployment *docker.Deployment, alice *client.CSAPI,
+			t *testing.T, deployment complement.Deployment, alice *client.CSAPI,
 			server1 *server, server2 *server,
 			deviceListUpdateChannel1 chan gomatrixserverlib.DeviceListUpdateEvent,
 			deviceListUpdateChannel2 chan gomatrixserverlib.DeviceListUpdateEvent,
@@ -2365,7 +2364,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// the public room, then leave the partial state room.
 		// Returns @alice:hs1's sync token after @elsie:server2 has left the partial state room.
 		setupAnotherSharedRoomThenLeave := func(
-			t *testing.T, deployment *docker.Deployment, alice *client.CSAPI,
+			t *testing.T, deployment complement.Deployment, alice *client.CSAPI,
 			server1 *server, server2 *server,
 			partialStateRoom *federation.ServerRoom, syncToken string,
 		) (nextSyncToken string, leaveSharedRoom func()) {
@@ -2405,7 +2404,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// believes @elsie:server2 not to be present and tests that server2 receives missed device
 		// list updates once hs1's partial state join has completed.
 		testMissedDeviceListUpdateSentOncePartialJoinCompletes := func(
-			t *testing.T, deployment *docker.Deployment, alice *client.CSAPI,
+			t *testing.T, deployment complement.Deployment, alice *client.CSAPI,
 			server1 *server, server2 *server,
 			deviceListUpdateChannel1 chan gomatrixserverlib.DeviceListUpdateEvent,
 			deviceListUpdateChannel2 chan gomatrixserverlib.DeviceListUpdateEvent,
@@ -2568,7 +2567,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// can be used with `mustQueryKeysWithFederationRequest` and
 		// `mustQueryKeysWithoutFederationRequest`.
 		setupDeviceListCachingTest := func(
-			t *testing.T, deployment *docker.Deployment, aliceLocalpart string,
+			t *testing.T, deployment complement.Deployment, aliceLocalpart string,
 		) (
 			alice *client.CSAPI, server *server, userDevicesQueryChannel chan string,
 			room *federation.ServerRoom, sendDeviceListUpdate func(string), cleanup func(),
@@ -3101,7 +3100,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// in the room when they have really been kicked. Once the partial state join completes,
 		// @elsie will be discovered to be no longer in the room.
 		setupUserIncorrectlyInRoom := func(
-			t *testing.T, deployment *docker.Deployment, alice *client.CSAPI,
+			t *testing.T, deployment complement.Deployment, alice *client.CSAPI,
 			server *server, room *federation.ServerRoom,
 		) (syncToken string, psjResult partialStateJoinResult) {
 			charlie := server.UserID("charlie")
@@ -4064,7 +4063,7 @@ func TestPartialStateJoin(t *testing.T) {
 // sends the given event to the homeserver under test, checks that a client can see it and checks
 // the state at the event. returns the new sync token after the event.
 func testReceiveEventDuringPartialStateJoin(
-	t *testing.T, deployment *docker.Deployment, alice *client.CSAPI, psjResult partialStateJoinResult, event gomatrixserverlib.PDU, syncToken string,
+	t *testing.T, deployment complement.Deployment, alice *client.CSAPI, psjResult partialStateJoinResult, event gomatrixserverlib.PDU, syncToken string,
 ) string {
 	// send the event to the homeserver
 	psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)

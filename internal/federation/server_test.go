@@ -7,14 +7,26 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/internal/config"
-	"github.com/matrix-org/complement/internal/docker"
 )
+
+type fedDeploy struct {
+	cfg     *config.Complement
+	tripper http.RoundTripper
+}
+
+func (d *fedDeploy) GetConfig() *config.Complement {
+	return d.cfg
+}
+func (d *fedDeploy) RoundTripper() http.RoundTripper {
+	return d.tripper
+}
 
 func TestComplementServerIsSigned(t *testing.T) {
 	cfg := config.NewConfigFromEnvVars("test", "unimportant")
 	cfg.HostnameRunningComplement = "localhost"
-	srv := NewServer(t, &docker.Deployment{
-		Config: cfg,
+	srv := NewServer(t, &fedDeploy{
+		cfg:     cfg,
+		tripper: http.DefaultClient.Transport,
 	})
 	srv.UnexpectedRequestsAreErrors = false
 	cancel := srv.Listen()

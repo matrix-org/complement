@@ -10,7 +10,6 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -18,7 +17,7 @@ import (
 
 // Creates two rooms on room version 8 and sets the second room to have
 // restricted join rules with allow set to the first room.
-func setupRestrictedRoom(t *testing.T, deployment *docker.Deployment, roomVersion string, joinRule string) (*client.CSAPI, string, string) {
+func setupRestrictedRoom(t *testing.T, deployment complement.Deployment, roomVersion string, joinRule string) (*client.CSAPI, string, string) {
 	t.Helper()
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")

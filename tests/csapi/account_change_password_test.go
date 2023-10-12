@@ -7,7 +7,6 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 
@@ -121,7 +120,7 @@ func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword stri
 	})
 }
 
-func createSession(t *testing.T, deployment *docker.Deployment, userID, password string) (deviceID string, authedClient *client.CSAPI) {
+func createSession(t *testing.T, deployment complement.Deployment, userID, password string) (deviceID string, authedClient *client.CSAPI) {
 	authedClient = deployment.Client(t, "hs1", "")
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"identifier": map[string]interface{}{

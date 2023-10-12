@@ -8,7 +8,6 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -112,7 +111,7 @@ func TestDeviceListUpdates(t *testing.T) {
 	// updates and queries before the barrier do not appear in `/sync` responses after the barrier.
 	makeBarrier := func(
 		t *testing.T,
-		deployment *docker.Deployment,
+		deployment complement.Deployment,
 		observingUser *client.CSAPI,
 		otherHSName string,
 	) func(t *testing.T, nextBatch string) string {
@@ -142,7 +141,7 @@ func TestDeviceListUpdates(t *testing.T) {
 	// We only care about what Alice sees.
 
 	// testOtherUserJoin tests another user joining a room Alice is already in.
-	testOtherUserJoin := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
+	testOtherUserJoin := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
@@ -188,7 +187,7 @@ func TestDeviceListUpdates(t *testing.T) {
 
 	// testJoin tests Alice joining a room another user is already in.
 	testJoin := func(
-		t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string,
+		t *testing.T, deployment complement.Deployment, hsName string, otherHSName string,
 	) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
@@ -234,7 +233,7 @@ func TestDeviceListUpdates(t *testing.T) {
 	}
 
 	// testOtherUserLeave tests another user leaving a room Alice is in.
-	testOtherUserLeave := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
+	testOtherUserLeave := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
@@ -285,7 +284,7 @@ func TestDeviceListUpdates(t *testing.T) {
 	}
 
 	// testLeave tests Alice leaving a room another user is in.
-	testLeave := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
+	testLeave := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
@@ -336,7 +335,7 @@ func TestDeviceListUpdates(t *testing.T) {
 	}
 
 	// testOtherUserRejoin tests another user leaving and rejoining a room Alice is in.
-	testOtherUserRejoin := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
+	testOtherUserRejoin := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
 		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
 		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
 		barrier := makeBarrier(t, deployment, alice, otherHSName)

@@ -14,7 +14,6 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -33,7 +32,7 @@ func TestInboundFederationKeys(t *testing.T) {
 
 	fedClient := &http.Client{
 		Timeout:   10 * time.Second,
-		Transport: &docker.RoundTripper{Deployment: deployment},
+		Transport: deployment.RoundTripper(),
 	}
 
 	res, err := fedClient.Get("https://hs1/_matrix/key/v2/server")
