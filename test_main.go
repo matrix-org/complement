@@ -37,5 +37,8 @@ func TestMain(m *testing.M, namespace string) {
 // which tests can interact with.
 func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	t.Helper()
+	if testPackage == nil {
+		t.Fatalf("Deploy: testPackage not set, did you forget to call complement.TestMain?")
+	}
 	return testPackage.Deploy(t, blueprint)
 }
