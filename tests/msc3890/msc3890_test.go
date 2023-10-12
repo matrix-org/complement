@@ -19,12 +19,10 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 	deployment := Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	// Create a user which we can log in to multiple times
+	t.Log("Alice registers on device 1 and logs in to device 2.")
 	aliceLocalpart := "alice"
 	alicePassword := "hunter2"
 	aliceDeviceOne := deployment.RegisterUser(t, "hs1", aliceLocalpart, alicePassword, false)
-
-	// Log in to another device on this user
 	aliceDeviceTwo := deployment.LoginUser(t, "hs1", aliceLocalpart, alicePassword)
 
 	accountDataType := "org.matrix.msc3890.local_notification_settings." + aliceDeviceTwo.DeviceID
@@ -38,7 +36,7 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 			client.SyncReq{},
 		)
 
-		// Using the first device, create some local notification settings in the user's account data for the second device.
+		t.Log("Using her first device, Alice creates some local notification settings in her account data for the second device.")
 		aliceDeviceOne.MustSetGlobalAccountData(
 			t, accountDataType, accountDataContent,
 		)
@@ -51,7 +49,7 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 			return match.JSONKeyEqual("content", accountDataContent)(r) == nil
 		}
 
-		// Check that the content of the user account data for this type has been set successfully
+		t.Log("Alice syncs on device 1 until she sees the account data she just wrote.")
 		aliceDeviceOne.MustSyncUntil(
 			t,
 			client.SyncReq{
@@ -59,8 +57,8 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 			},
 			client.SyncGlobalAccountDataHas(checkAccountDataContent),
 		)
-		// Also check via the dedicated account data endpoint to ensure the similar check later is not 404'ing for some other reason.
-		// Using `MustDo` ensures that the response code is 2xx.
+
+		t.Log("Alice also checks for the account data she wrote on the dedicated account data endpoint.")
 		res := aliceDeviceOne.MustGetGlobalAccountData(t, accountDataType)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -68,10 +66,10 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 			},
 		})
 
-		// Log out the second device
+		t.Log("Alice logs out her second device.")
 		aliceDeviceTwo.MustDo(t, "POST", []string{"_matrix", "client", "v3", "logout"})
 
-		// Using the first device, check that the local notification setting account data for the deleted device was removed.
+		t.Log("Alice re-fetches the global account data. The response should now have status 404.")
 		res = aliceDeviceOne.GetGlobalAccountData(t, accountDataType)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
