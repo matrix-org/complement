@@ -10,6 +10,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
@@ -27,7 +28,7 @@ import (
 // https://github.com/matrix-org/synapse/issues/11506
 // to ensure that Synapse complies with this part of the spec.
 func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 	alice := deployment.RegisterUser(t, "hs1", "alice", "sufficiently_long_password_alice", false)
 	bob := deployment.RegisterUser(t, "hs1", "bob", "sufficiently_long_password_bob", false)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
@@ -35,7 +36,7 @@ func requestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, exp
 // The user should be unable to see the room in the spaces summary unless they
 // are a member of the space.
 func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	// Create the rooms
@@ -116,7 +117,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 // different homeservers, and one might not have the proper information needed to
 // decide if a user is in a room.
 func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+	deployment := complement.Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 
 	// Create the rooms

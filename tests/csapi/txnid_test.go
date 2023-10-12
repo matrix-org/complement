@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/must"
@@ -17,7 +18,7 @@ func TestTxnInEvent(t *testing.T) {
 	// See https://github.com/matrix-org/dendrite/issues/3000
 	runtime.SkipIf(t, runtime.Dendrite)
 
-	deployment := Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
 	c := deployment.RegisterUser(t, "hs1", "alice", "password", false)
@@ -68,7 +69,7 @@ func mustHaveTransactionIDForEvent(t *testing.T, roomID, eventID, expectedTxnId 
 func TestTxnScopeOnLocalEcho(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
 
-	deployment := Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
 	deployment.RegisterUser(t, "hs1", "alice", "password", false)
@@ -107,7 +108,7 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 func TestTxnIdempotencyScopedToDevice(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
 
-	deployment := Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
 	deployment.RegisterUser(t, "hs1", "alice", "password", false)
@@ -147,7 +148,7 @@ func TestTxnIdempotency(t *testing.T) {
 	// Conduit appears to be tracking transaction IDs individually rather than combined with the request URI/room ID
 	runtime.SkipIf(t, runtime.Conduit)
 
-	deployment := Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
 	deployment.RegisterUser(t, "hs1", "alice", "password", false)
@@ -202,7 +203,7 @@ func TestTxnIdWithRefreshToken(t *testing.T) {
 	// Dendrite and Conduit don't support refresh tokens yet.
 	runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit)
 
-	deployment := Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
 	deployment.RegisterUser(t, "hs1", "alice", "password", false)

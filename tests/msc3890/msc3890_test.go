@@ -7,6 +7,7 @@ package tests
 import (
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
@@ -16,7 +17,7 @@ import (
 
 func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 	// Create a deployment with a single user
-	deployment := Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
 	// Create a user which we can log in to multiple times

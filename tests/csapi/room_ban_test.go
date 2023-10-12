@@ -3,8 +3,9 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -13,7 +14,7 @@ import (
 // but this will actually validate against a present user in the room.
 // sytest: Non-present room members cannot ban others
 func TestNotPresentUserCannotBanOthers(t *testing.T) {
-	deployment := Deploy(t, b.MustValidate(b.Blueprint{
+	deployment := complement.Deploy(t, b.MustValidate(b.Blueprint{
 		Name: "abc",
 		Homeservers: []b.Homeserver{
 			{

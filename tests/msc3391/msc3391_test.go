@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
@@ -21,7 +22,7 @@ const testAccountDataType = "org.example.test"
 var testAccountDataContent = map[string]interface{}{"test_data": 1}
 
 func TestRemovingAccountData(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	// Create a user to manipulate the account data of

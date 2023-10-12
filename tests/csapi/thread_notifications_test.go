@@ -6,8 +6,9 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -71,7 +72,7 @@ func syncHasThreadedReadReceipt(roomID, userID, eventID, threadID string) client
 // Notification counts and receipts are handled by bob.
 func TestThreadedReceipts(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // not supported
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	// Create a room with alice and bob.

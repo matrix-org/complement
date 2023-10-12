@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/data"
@@ -18,7 +19,7 @@ import (
 
 // sytest: POSTed media can be thumbnailed
 func TestLocalPngThumbnail(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -33,7 +34,7 @@ func TestLocalPngThumbnail(t *testing.T) {
 
 // sytest: Remote media can be thumbnailed
 func TestRemotePngThumbnail(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
