@@ -111,7 +111,7 @@ func (c *CSAPI) MustSyncUntil(t TestLike, syncReq SyncReq, checks ...SyncCheckOp
 	}
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
-			t.Fatalf("%s MustSyncUntil: timed out after %v. Seen %d /sync responses. %s", c.UserID, time.Since(start), numResponsesReturned, printErrors())
+			fatalf(t, "%s MustSyncUntil: timed out after %v. Seen %d /sync responses. %s", c.UserID, time.Since(start), numResponsesReturned, printErrors())
 		}
 		response, nextBatch := c.MustSync(t, syncReq)
 		syncReq.Since = nextBatch

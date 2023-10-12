@@ -17,11 +17,26 @@ import (
 	"github.com/matrix-org/complement/should"
 )
 
+const ansiRedForeground = "\x1b[31m"
+const ansiResetForeground = "\x1b[39m"
+
+// errorf is a wrapper around t.Errorf which prints the failing error message in red.
+func errorf(t *testing.T, format string, args ...any) {
+	format = ansiRedForeground + format + ansiResetForeground
+	t.Errorf(format, args...)
+}
+
+// fatalf is a wrapper around t.Fatalf which prints the failing error message in red.
+func fatalf(t *testing.T, format string, args ...any) {
+	format = ansiRedForeground + format + ansiResetForeground
+	t.Fatalf(format, args...)
+}
+
 // NotError will ensure `err` is nil else terminate the test with `msg`.
 func NotError(t *testing.T, msg string, err error) {
 	t.Helper()
 	if err != nil {
-		t.Fatalf("must.NotError: %s -> %s", msg, err)
+		fatalf(t, "must.NotError: %s -> %s", msg, err)
 	}
 }
 
@@ -31,7 +46,7 @@ func ParseJSON(t *testing.T, b io.ReadCloser) gjson.Result {
 	t.Helper()
 	res, err := should.ParseJSON(b)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 	return res
 }
@@ -42,7 +57,7 @@ func MatchRequest(t *testing.T, req *http.Request, m match.HTTPRequest) []byte {
 	t.Helper()
 	res, err := should.MatchRequest(req, m)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 	return res
 }
@@ -52,7 +67,7 @@ func MatchRequest(t *testing.T, req *http.Request, m match.HTTPRequest) []byte {
 func MatchSuccess(t *testing.T, res *http.Response) {
 	t.Helper()
 	if err := should.MatchSuccess(res); err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 }
 
@@ -61,7 +76,7 @@ func MatchSuccess(t *testing.T, res *http.Response) {
 func MatchFailure(t *testing.T, res *http.Response) {
 	t.Helper()
 	if err := should.MatchFailure(res); err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 }
 
@@ -71,7 +86,7 @@ func MatchResponse(t *testing.T, res *http.Response, m match.HTTPResponse) []byt
 	t.Helper()
 	body, err := should.MatchResponse(res, m)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 	return body
 }
@@ -81,7 +96,7 @@ func MatchFederationRequest(t *testing.T, fedReq *fclient.FederationRequest, mat
 	t.Helper()
 	err := should.MatchFederationRequest(fedReq)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 }
 
@@ -91,7 +106,7 @@ func MatchGJSON(t *testing.T, jsonResult gjson.Result, matchers ...match.JSON) {
 	t.Helper()
 	err := should.MatchGJSON(jsonResult, matchers...)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 }
 
@@ -101,7 +116,7 @@ func MatchJSONBytes(t *testing.T, rawJson []byte, matchers ...match.JSON) {
 	t.Helper()
 	err := should.MatchJSONBytes(rawJson, matchers...)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 }
 
@@ -110,7 +125,7 @@ func MatchJSONBytes(t *testing.T, rawJson []byte, matchers ...match.JSON) {
 func Equal[V comparable](t *testing.T, got, want V, msg string) {
 	t.Helper()
 	if got != want {
-		t.Errorf("Equal %s: got '%v' want '%v'", msg, got, want)
+		errorf(t, "Equal %s: got '%v' want '%v'", msg, got, want)
 	}
 }
 
@@ -119,7 +134,7 @@ func Equal[V comparable](t *testing.T, got, want V, msg string) {
 func NotEqual[V comparable](t *testing.T, got, want V, msg string) {
 	t.Helper()
 	if got == want {
-		t.Errorf("NotEqual %s: got '%v', want '%v'", msg, got, want)
+		errorf(t, "NotEqual %s: got '%v', want '%v'", msg, got, want)
 	}
 }
 
@@ -128,7 +143,7 @@ func NotEqual[V comparable](t *testing.T, got, want V, msg string) {
 func StartWithStr(t *testing.T, got, wantPrefix, msg string) {
 	t.Helper()
 	if !strings.HasPrefix(got, wantPrefix) {
-		t.Errorf("StartWithStr: %s: got '%s' without prefix '%s'", msg, got, wantPrefix)
+		errorf(t, "StartWithStr: %s: got '%s' without prefix '%s'", msg, got, wantPrefix)
 	}
 }
 
@@ -138,7 +153,7 @@ func GetJSONFieldStr(t *testing.T, body gjson.Result, wantKey string) string {
 	t.Helper()
 	str, err := should.GetJSONFieldStr(body, wantKey)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 	return str
 }
@@ -149,7 +164,7 @@ func HaveInOrder[V comparable](t *testing.T, gots []V, wants []V) {
 	t.Helper()
 	err := should.HaveInOrder(gots, wants)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 }
 
@@ -160,7 +175,7 @@ func ContainSubset[V comparable](t *testing.T, larger []V, smaller []V) {
 	t.Helper()
 	err := should.ContainSubset(larger, smaller)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 }
 
@@ -171,7 +186,7 @@ func NotContainSubset[V comparable](t *testing.T, larger []V, smaller []V) {
 	t.Helper()
 	err := should.NotContainSubset(larger, smaller)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 }
 
@@ -185,7 +200,7 @@ func CheckOffAll(t *testing.T, items []interface{}, wantItems []interface{}) {
 	t.Helper()
 	err := should.CheckOffAll(items, wantItems)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 }
 
@@ -199,7 +214,7 @@ func CheckOffAllAllowUnwanted(t *testing.T, items []interface{}, wantItems []int
 	t.Helper()
 	result, err := should.CheckOffAllAllowUnwanted(items, wantItems)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 	return result
 }
@@ -212,7 +227,7 @@ func CheckOff(t *testing.T, items []interface{}, wantItem interface{}) []interfa
 	t.Helper()
 	result, err := should.CheckOff(items, wantItem)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fatalf(t, err.Error())
 	}
 	return result
 }

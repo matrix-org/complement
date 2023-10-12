@@ -33,6 +33,21 @@ type TestLike interface {
 	Fatalf(msg string, args ...interface{})
 }
 
+const ansiRedForeground = "\x1b[31m"
+const ansiResetForeground = "\x1b[39m"
+
+// errorf is a wrapper around t.Errorf which prints the failing error message in red.
+func errorf(t TestLike, format string, args ...any) {
+	format = ansiRedForeground + format + ansiResetForeground
+	t.Errorf(format, args...)
+}
+
+// fatalf is a wrapper around t.Fatalf which prints the failing error message in red.
+func fatalf(t TestLike, format string, args ...any) {
+	format = ansiRedForeground + format + ansiResetForeground
+	t.Fatalf(format, args...)
+}
+
 type ctxKey string
 
 const (
@@ -85,7 +100,7 @@ func (c *CSAPI) DownloadContent(t TestLike, mxcUri string) ([]byte, string) {
 	contentType := res.Header.Get("Content-Type")
 	b, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Error(err)
+		errorf(t, err.Error())
 	}
 	return b, contentType
 }
@@ -285,7 +300,7 @@ func (c *CSAPI) Unsafe_SendEventUnsyncedWithTxnID(t TestLike, roomID string, e b
 		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
 	if e.Sender != "" && e.Sender != c.UserID {
-		t.Fatalf("Event.Sender must not be set, as this is set by the client in use (%s)", c.UserID)
+		fatalf(t, "Event.Sender must not be set, as this is set by the client in use (%s)", c.UserID)
 	}
 	res := c.MustDo(t, "PUT", paths, WithJSONBody(t, e.Content))
 	body := ParseJSON(t, res)
@@ -345,7 +360,7 @@ func (c *CSAPI) GetCapabilities(t TestLike) []byte {
 	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "capabilities"})
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
+		fatalf(t, "unable to read response body: %v", err)
 	}
 	return body
 }
@@ -439,7 +454,7 @@ func WithJSONBody(t TestLike, obj interface{}) RequestOpt {
 		t.Helper()
 		b, err := json.Marshal(obj)
 		if err != nil {
-			t.Fatalf("CSAPI.Do failed to marshal JSON body: %s", err)
+			fatalf(t, "CSAPI.Do failed to marshal JSON body: %s", err)
 		}
 		WithRawBody(b)(req)
 	}
@@ -471,7 +486,7 @@ func (c *CSAPI) MustDo(t TestLike, method string, paths []string, opts ...Reques
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		defer res.Body.Close()
 		body, _ := io.ReadAll(res.Body)
-		t.Fatalf("CSAPI.MustDo %s %s returned non-2xx code: %s - body: %s", method, res.Request.URL.String(), res.Status, string(body))
+		fatalf(t, "CSAPI.MustDo %s %s returned non-2xx code: %s - body: %s", method, res.Request.URL.String(), res.Status, string(body))
 	}
 	return res
 }
@@ -497,7 +512,7 @@ func (c *CSAPI) Do(t TestLike, method string, paths []string, opts ...RequestOpt
 	reqURL := c.BaseURL + "/" + strings.Join(paths, "/")
 	req, err := http.NewRequest(method, reqURL, nil)
 	if err != nil {
-		t.Fatalf("CSAPI.Do failed to create http.NewRequest: %s", err)
+		fatalf(t, "CSAPI.Do failed to create http.NewRequest: %s", err)
 	}
 	// set defaults before RequestOpts
 	if c.AccessToken != "" {
@@ -534,14 +549,14 @@ func (c *CSAPI) Do(t TestLike, method string, paths []string, opts ...RequestOpt
 		// Perform the HTTP request
 		res, err := c.Client.Do(req)
 		if err != nil {
-			t.Fatalf("CSAPI.Do response returned error: %s", err)
+			fatalf(t, "CSAPI.Do response returned error: %s", err)
 		}
 		// debug log the response
 		if c.Debug && res != nil {
 			var dump []byte
 			dump, err = httputil.DumpResponse(res, true)
 			if err != nil {
-				t.Fatalf("CSAPI.Do failed to dump response body: %s", err)
+				fatalf(t, "CSAPI.Do failed to dump response body: %s", err)
 			}
 			t.Logf("%s", string(dump))
 		}
@@ -554,7 +569,7 @@ func (c *CSAPI) Do(t TestLike, method string, paths []string, opts ...RequestOpt
 		if res.Body != nil {
 			resBody, err = io.ReadAll(res.Body)
 			if err != nil {
-				t.Fatalf("CSAPI.Do failed to read response body for RetryUntil check: %s", err)
+				fatalf(t, "CSAPI.Do failed to read response body for RetryUntil check: %s", err)
 			}
 			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
 		}
@@ -565,7 +580,7 @@ func (c *CSAPI) Do(t TestLike, method string, paths []string, opts ...RequestOpt
 		}
 		// condition not satisfied, do we timeout yet?
 		if time.Since(now) > retryUntil.timeout {
-			t.Fatalf("CSAPI.Do RetryUntil: %v %v timed out after %v", method, req.URL, retryUntil.timeout)
+			fatalf(t, "CSAPI.Do RetryUntil: %v %v timed out after %v", method, req.URL, retryUntil.timeout)
 		}
 		t.Logf("CSAPI.Do RetryUntil: %v %v response condition not yet met, retrying", method, req.URL)
 		// small sleep to avoid tight-looping
@@ -611,10 +626,10 @@ func GetJSONFieldStr(t TestLike, body []byte, wantKey string) string {
 	t.Helper()
 	res := gjson.GetBytes(body, wantKey)
 	if !res.Exists() {
-		t.Fatalf("JSONFieldStr: key '%s' missing from %s", wantKey, string(body))
+		fatalf(t, "JSONFieldStr: key '%s' missing from %s", wantKey, string(body))
 	}
 	if res.Str == "" {
-		t.Fatalf("JSONFieldStr: key '%s' is not a string, body: %s", wantKey, string(body))
+		fatalf(t, "JSONFieldStr: key '%s' is not a string, body: %s", wantKey, string(body))
 	}
 	return res.Str
 }
@@ -625,7 +640,7 @@ func GetJSONFieldStringArray(t TestLike, body []byte, wantKey string) []string {
 	res := gjson.GetBytes(body, wantKey)
 
 	if !res.Exists() {
-		t.Fatalf("JSONFieldStr: key '%s' missing from %s", wantKey, string(body))
+		fatalf(t, "JSONFieldStr: key '%s' missing from %s", wantKey, string(body))
 	}
 
 	arrLength := len(res.Array())
@@ -648,10 +663,10 @@ func ParseJSON(t TestLike, res *http.Response) []byte {
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("MustParseJSON: reading HTTP response body returned %s", err)
+		fatalf(t, "MustParseJSON: reading HTTP response body returned %s", err)
 	}
 	if !gjson.ValidBytes(body) {
-		t.Fatalf("MustParseJSON: Response is not valid JSON")
+		fatalf(t, "MustParseJSON: Response is not valid JSON")
 	}
 	return body
 }
@@ -725,5 +740,5 @@ func mustRespond2xx(t TestLike, res *http.Response) {
 	}
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
-	t.Fatalf("CSAPI.Must: %s %s returned non-2xx code: %s - body: %s", res.Request.Method, res.Request.URL.String(), res.Status, string(body))
+	fatalf(t, "CSAPI.Must: %s %s returned non-2xx code: %s - body: %s", res.Request.Method, res.Request.URL.String(), res.Status, string(body))
 }

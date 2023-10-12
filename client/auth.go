@@ -41,7 +41,7 @@ func (c *CSAPI) LoginUser(t TestLike, localpart, password string, opts ...LoginO
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
+		fatalf(t, "unable to read response body: %v", err)
 	}
 
 	userID = GetJSONFieldStr(t, body, "user_id")
@@ -67,7 +67,7 @@ func (c *CSAPI) LoginUserWithRefreshToken(t TestLike, localpart, password string
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
+		fatalf(t, "unable to read response body: %v", err)
 	}
 
 	userID = GetJSONFieldStr(t, body, "user_id")
@@ -88,7 +88,7 @@ func (c *CSAPI) ConsumeRefreshToken(t TestLike, refreshToken string) (newAccessT
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
+		fatalf(t, "unable to read response body: %v", err)
 	}
 
 	newAccessToken = GetJSONFieldStr(t, body, "access_token")
@@ -112,7 +112,7 @@ func (c *CSAPI) RegisterUser(t TestLike, localpart, password string) (userID, ac
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
+		fatalf(t, "unable to read response body: %v", err)
 	}
 
 	userID = GetJSONFieldStr(t, body, "user_id")
@@ -132,7 +132,7 @@ func (c *CSAPI) RegisterSharedSecret(t TestLike, user, pass string, isAdmin bool
 	body := ParseJSON(t, resp)
 	nonce := gjson.GetBytes(body, "nonce")
 	if !nonce.Exists() {
-		t.Fatalf("Malformed shared secret GET response: %s", string(body))
+		fatalf(t, "Malformed shared secret GET response: %s", string(body))
 	}
 	mac := hmac.New(sha1.New, []byte(SharedSecret))
 	mac.Write([]byte(nonce.Str))
