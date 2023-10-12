@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/must"
@@ -13,7 +14,7 @@ import (
 
 // Can handle uploads and remote/local downloads without a file name
 func TestMediaWithoutFileName(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")

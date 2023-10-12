@@ -3,6 +3,7 @@ package tests
 import (
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
@@ -15,7 +16,7 @@ import (
 func TestACLs(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // needs https://github.com/matrix-org/dendrite/pull/3008
 	// 1. Prepare 3 or more servers. 1st will be room host, 2nd will be blocked with m.room.server_acl and 3rd server will be affected by this issue. 1st and 2nd servers don't have to be powered by dendrite.
-	deployment := Deploy(t, b.Blueprint{
+	deployment := complement.Deploy(t, b.Blueprint{
 		Name: "federation_three_homeservers",
 		Homeservers: []b.Homeserver{
 			{

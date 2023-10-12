@@ -1,4 +1,4 @@
-package helpers
+package complement
 
 import (
 	"context"
@@ -60,9 +60,6 @@ func (tp *TestPackage) Cleanup() {
 func (tp *TestPackage) Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
 	t.Helper()
 	timeStartBlueprint := time.Now()
-	if tp.complementBuilder == nil {
-		t.Fatalf("complementBuilder not set, did you forget to call TestMain?")
-	}
 	if err := tp.complementBuilder.ConstructBlueprintIfNotExist(blueprint); err != nil {
 		t.Fatalf("Deploy: Failed to construct blueprint: %s", err)
 	}

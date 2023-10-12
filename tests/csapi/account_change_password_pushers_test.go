@@ -6,8 +6,9 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 
@@ -15,7 +16,7 @@ import (
 )
 
 func TestChangePasswordPushers(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	password1 := "superuser"
 	password2 := "my_new_password"

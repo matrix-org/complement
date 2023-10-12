@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
@@ -24,7 +25,7 @@ import (
 )
 
 func TestJumpToDateEndpoint(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintHSWithApplicationService)
+	deployment := complement.Deploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
 	// Create the normal user which will send messages in the room

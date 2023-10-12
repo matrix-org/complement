@@ -5,8 +5,9 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 )
 
 func TestAvatarUrlUpdate(t *testing.T) {
@@ -19,7 +20,7 @@ func TestDisplayNameUpdate(t *testing.T) {
 
 // sytest: $datum updates affect room member events
 func testProfileFieldUpdate(t *testing.T, field string) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	const bogusData = "LemurLover"

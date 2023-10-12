@@ -16,6 +16,7 @@ import (
 
 	"net/http"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
@@ -39,7 +40,7 @@ func TestKnocking(t *testing.T) {
 }
 
 func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
-	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+	deployment := complement.Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 
 	// Create a client for one local user
@@ -341,7 +342,7 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 }
 
 func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, joinRule string) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	// Create a client for a local user

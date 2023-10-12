@@ -7,6 +7,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
@@ -20,7 +21,7 @@ func typeToStateKeyMapper(result gjson.Result) interface{} {
 
 // sytest: Can get rooms/{roomId}/members
 func TestGetRoomMembers(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -59,7 +60,7 @@ func TestGetRoomMembers(t *testing.T) {
 // Utilize ?at= to get room members at a point in sync.
 // sytest: Can get rooms/{roomId}/members at a given point
 func TestGetRoomMembersAtPoint(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -119,7 +120,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 // sytest: Can filter rooms/{roomId}/members
 func TestGetFilteredRoomMembers(t *testing.T) {
 
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")

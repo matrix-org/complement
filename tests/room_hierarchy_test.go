@@ -20,6 +20,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
@@ -53,16 +54,19 @@ func roomToChildrenMapper(r gjson.Result) interface{} {
 }
 
 // Tests that the CS API for MSC2946 works correctly. Creates a space directory like:
-//     Root
-//      |
+//
+//	Root
+//	 |
+//
 // _____|________
 // |    |       |
 // R1  SS1      R2
-//      |       |
-//     SS2      R5
-//      |________
-//      |       |
-//      R3      R4
+//
+//	 |       |
+//	SS2      R5
+//	 |________
+//	 |       |
+//	 R3      R4
 //
 // Where:
 // - the user is joined to all rooms except R4.
@@ -78,7 +82,7 @@ func roomToChildrenMapper(r gjson.Result) interface{} {
 // - Events are returned correctly.
 // - Redacting links works correctly.
 func TestClientSpacesSummary(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	roomNames := make(map[string]string)
@@ -369,14 +373,17 @@ func TestClientSpacesSummary(t *testing.T) {
 }
 
 // Tests that the CS API for MSC2946 correctly handles join rules. Creates a space directory like:
-//     Root
-//      |
+//
+//	Root
+//	 |
+//
 // _____|
 // |    |
 // R1  SS1
-//      |________
-//      |       |
-//      R2      R3
+//
+//	|________
+//	|       |
+//	R2      R3
 //
 // Where:
 // - All rooms and spaces are invite-only, except R2 (which is public)
@@ -385,7 +392,7 @@ func TestClientSpacesSummary(t *testing.T) {
 // Tests that:
 // - Rooms/spaces the user is not invited to should not appear.
 func TestClientSpacesSummaryJoinRules(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	// create the rooms
@@ -515,22 +522,25 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 }
 
 // Tests that MSC2946 works over federation. Creates a space directory like:
-//     ROOT
-//      |
+//
+//	ROOT
+//	 |
+//
 // _____|________
 // |    |       |
 // R1  SS1      r2
-//      |________
-//      |        |
-//     ss2      r3
-//      |
-//      R4
+//
+//	 |________
+//	 |        |
+//	ss2      r3
+//	 |
+//	 R4
 //
 // Where R/SS = on hs1, and r/ss = on hs2. Links are space children state events only.
 // Tests that:
 // - Querying from root returns the entire graph
 func TestFederatedClientSpaces(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	worldReadable := map[string]interface{}{

@@ -6,6 +6,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 )
@@ -14,7 +15,7 @@ import (
 // sytest: Can recv a device message using /sync
 // sytest: Can send a to-device message to two users which both receive it using /sync
 func TestToDeviceMessages(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")

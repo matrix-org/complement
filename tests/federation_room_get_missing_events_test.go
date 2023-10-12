@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
@@ -41,7 +42,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	// 4) Respond to /get_missing_events with the missing events if the request is well-formed.
 	// 5) Ensure the HS doesn't do /state_ids or /state
 	// 6) Ensure Alice sees all injected events in the correct order.
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
@@ -165,7 +166,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 //
 // sytest: Outbound federation will ignore a missing event with bad JSON for room version 6
 func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
@@ -328,7 +329,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 }
 
 func TestInboundCanReturnMissingEvents(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")

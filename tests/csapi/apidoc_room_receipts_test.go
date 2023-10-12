@@ -3,8 +3,9 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/tidwall/gjson"
 )
@@ -36,7 +37,7 @@ func syncHasReadReceipt(roomID, userID, eventID string) client.SyncCheckOpt {
 
 // sytest: POST /rooms/:room_id/receipt can create receipts
 func TestRoomReceipts(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
@@ -49,7 +50,7 @@ func TestRoomReceipts(t *testing.T) {
 
 // sytest: POST /rooms/:room_id/read_markers can create read marker
 func TestRoomReadMarkers(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)

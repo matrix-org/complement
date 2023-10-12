@@ -3,8 +3,9 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -15,7 +16,7 @@ import (
 // like an array in Python and hence go un-noticed. In Go however it will result in a 400. The correct behaviour is
 // to return a 400. Element iOS uses this erroneous format.
 func TestKeysQueryWithDeviceIDAsObjectFails(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	userID := "@alice:hs1"

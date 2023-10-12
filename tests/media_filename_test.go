@@ -5,8 +5,9 @@ import (
 	"mime"
 	"testing"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/runtime"
 )
@@ -15,7 +16,7 @@ const asciiFileName = "ascii"
 const unicodeFileName = "\xf0\x9f\x90\x94"
 
 func TestMediaFilenames(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")

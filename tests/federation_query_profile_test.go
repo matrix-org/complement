@@ -6,11 +6,12 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 
-	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -22,7 +23,7 @@ import (
 // Test that the server can make outbound federation profile requests
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-federation-v1-query-profile
 func TestOutboundFederationProfile(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
@@ -70,7 +71,7 @@ func TestOutboundFederationProfile(t *testing.T) {
 }
 
 func TestInboundFederationProfile(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
