@@ -72,7 +72,7 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 		aliceDeviceTwo.MustDo(t, "POST", []string{"_matrix", "client", "v3", "logout"})
 
 		// Using the first device, check that the local notification setting account data for the deleted device was removed.
-		res = aliceDeviceOne.MustGetGlobalAccountData(t, accountDataType)
+		res = aliceDeviceOne.GetGlobalAccountData(t, accountDataType)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 			JSON: []match.JSON{
