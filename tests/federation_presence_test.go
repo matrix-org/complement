@@ -23,7 +23,7 @@ func TestRemotePresence(t *testing.T) {
 		_, bobSinceToken := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 		statusMsg := "Update for room members"
-		alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
+		alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "presence", alice.UserID, "status"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"status_msg": statusMsg,
 				"presence":   "online",
@@ -40,7 +40,7 @@ func TestRemotePresence(t *testing.T) {
 	t.Run("Presence changes to UNAVAILABLE are reported to remote room members", func(t *testing.T) {
 		_, bobSinceToken := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
-		alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@alice:hs1", "status"},
+		alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "presence", alice.UserID, "status"},
 			client.WithJSONBody(t, map[string]interface{}{
 				"presence": "unavailable",
 			}),

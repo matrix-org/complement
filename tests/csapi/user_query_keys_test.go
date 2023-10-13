@@ -20,10 +20,11 @@ func TestKeysQueryWithDeviceIDAsObjectFails(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"device_keys": map[string]interface{}{
-				"@bob:hs1": map[string]bool{
+				bob.UserID: map[string]bool{
 					"device_id1": true,
 					"device_id2": true,
 				},

@@ -121,7 +121,7 @@ func TestInboundFederationProfile(t *testing.T) {
 			origin,
 			"hs1",
 			"/_matrix/federation/v1/query/profile"+
-				"?user_id=@alice:hs1"+
+				"?user_id="+alice.UserID+
 				"&field=displayname",
 		)
 
