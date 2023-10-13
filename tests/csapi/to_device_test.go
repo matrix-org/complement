@@ -22,8 +22,8 @@ func TestToDeviceMessages(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "charlie",
-		Password:  "charliepassword",
+		LocalpartSuffix: "charlie",
+		Password:        "charliepassword",
 	})
 
 	_, bobSince := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})

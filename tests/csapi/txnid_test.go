@@ -10,6 +10,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 )
 
@@ -23,8 +24,8 @@ func TestTxnInEvent(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	c := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "alice",
-		Password:  "password",
+		LocalpartSuffix: "alice",
+		Password:        "password",
 	})
 
 	// Create a room where we can send events.
@@ -76,14 +77,14 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "alice",
-		Password:  "password",
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "alice",
+		Password:        "password",
 	})
 
 	// Create a first client, which allocates a device ID.
 	c1 := deployment.Client(t, "hs1", "")
-	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, "alice", "password")
+	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, alice.UserID, "password")
 
 	// Create a room where we can send events.
 	roomID := c1.MustCreateRoom(t, map[string]interface{}{})
@@ -118,14 +119,14 @@ func TestTxnIdempotencyScopedToDevice(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "alice",
-		Password:  "password",
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "alice",
+		Password:        "password",
 	})
 
 	// Create a first client, which allocates a device ID.
 	c1 := deployment.Client(t, "hs1", "")
-	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, "alice", "password")
+	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, alice.UserID, "password")
 
 	// Create a room where we can send events.
 	roomID := c1.MustCreateRoom(t, map[string]interface{}{})
@@ -161,14 +162,14 @@ func TestTxnIdempotency(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "alice",
-		Password:  "password",
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "alice",
+		Password:        "password",
 	})
 
 	// Create a first client, which allocates a device ID.
 	c1 := deployment.Client(t, "hs1", "")
-	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, "alice", "password")
+	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, alice.UserID, "password")
 
 	// Create a room where we can send events.
 	roomID1 := c1.MustCreateRoom(t, map[string]interface{}{})
@@ -219,15 +220,17 @@ func TestTxnIdWithRefreshToken(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "alice",
-		Password:  "password",
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "alice",
+		Password:        "password",
 	})
+	localpart, _, err := gomatrixserverlib.SplitID('@', alice.UserID)
+	must.NotError(t, "failed to get localpart from user ID", err)
 
 	c := deployment.Client(t, "hs1", "")
 
 	var refreshToken string
-	c.UserID, c.AccessToken, refreshToken, c.DeviceID, _ = c.LoginUserWithRefreshToken(t, "alice", "password")
+	c.UserID, c.AccessToken, refreshToken, c.DeviceID, _ = c.LoginUserWithRefreshToken(t, localpart, "password")
 
 	// Create a room where we can send events.
 	roomID := c.MustCreateRoom(t, map[string]interface{}{})

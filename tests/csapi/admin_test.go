@@ -21,9 +21,7 @@ func TestCanRegisterAdmin(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "admin",
-		Password:  "adminpassword",
-		IsAdmin:   true,
+		IsAdmin: true,
 	})
 }
 
@@ -32,9 +30,7 @@ func TestServerNotices(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	admin := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "admin",
-		Password:  "adminpassword",
-		IsAdmin:   true,
+		IsAdmin: true,
 	})
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 

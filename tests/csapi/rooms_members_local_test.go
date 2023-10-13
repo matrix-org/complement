@@ -18,8 +18,8 @@ func TestMembersLocal(t *testing.T) {
 	// Here we don't use the BlueprintOneToOneRoom because else Bob would be able to see Alice's presence changes through
 	// that pre-existing one-on-one DM room. So we exclude that here.
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "bob",
-		Password:  "bobspassword",
+		LocalpartSuffix: "bob",
+		Password:        "bobspassword",
 	})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 

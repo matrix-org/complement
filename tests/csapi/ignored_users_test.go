@@ -31,9 +31,9 @@ import (
 func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
-	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{Localpart: "alice"})
-	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{Localpart: "bob"})
-	chris := deployment.Register(t, "hs1", helpers.RegistrationOpts{Localpart: "chris"})
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "bob"})
+	chris := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "chris"})
 
 	// Alice creates a room for herself.
 	publicRoom := alice.MustCreateRoom(t, map[string]interface{}{

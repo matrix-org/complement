@@ -383,7 +383,7 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
 	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "charlie",
+		LocalpartSuffix: "charlie",
 	})
 
 	// Alice creates two rooms: one with her and Bob, and a second with her and Charlie.
@@ -407,7 +407,7 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 		"presence": "online",
 	})
 	bob.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
-	charlie.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
+	charlie.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", charlie.UserID, "status"}, reqBody)
 
 	// Alice should see that Bob and Charlie are online. She may see this happen
 	// simultaneously in one /sync response, or separately in two /sync

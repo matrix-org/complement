@@ -18,8 +18,7 @@ func TestDeviceManagement(t *testing.T) {
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
 	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "test_device_management_user",
-		Password:  "superuser",
+		Password: "superuser",
 	})
 
 	// sytest: GET /device/{deviceId}
@@ -199,8 +198,8 @@ func TestDeviceManagement(t *testing.T) {
 	// sytest: DELETE /device/{deviceId} requires UI auth user to match device owner
 	t.Run("DELETE /device/{deviceId} requires UI auth user to match device owner", func(t *testing.T) {
 		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "bob",
-			Password:  "bobspassword",
+			LocalpartSuffix: "bob",
+			Password:        "bobspassword",
 		})
 
 		newDeviceID, session2 := createSession(t, deployment, authedClient.UserID, "superuser")

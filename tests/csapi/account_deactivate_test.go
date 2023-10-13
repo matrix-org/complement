@@ -19,8 +19,7 @@ func TestDeactivateAccount(t *testing.T) {
 	defer deployment.Destroy(t)
 	password := "superuser"
 	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "test_deactivate_user",
-		Password:  password,
+		Password: password,
 	})
 	unauthedClient := deployment.Client(t, "hs1", "")
 
