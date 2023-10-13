@@ -32,10 +32,10 @@ func TestServerNotices(t *testing.T) {
 	admin := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		IsAdmin: true,
 	})
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
-		"user_id": "@alice:hs1",
+		"user_id": alice.UserID,
 		"content": map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "hello from server notices!",

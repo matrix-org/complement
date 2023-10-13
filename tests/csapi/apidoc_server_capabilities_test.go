@@ -6,6 +6,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -14,8 +15,8 @@ func TestServerCapabilities(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	unauthedClient := deployment.Client(t, "hs1", "")
-	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
+	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// sytest: GET /capabilities is present and well formed for registered user
 	data := authedClient.GetCapabilities(t)

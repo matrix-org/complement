@@ -5,6 +5,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -13,7 +14,7 @@ func TestAddAccountData(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// sytest: Can add account data
 	// sytest: Can get account data without syncing

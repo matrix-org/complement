@@ -20,8 +20,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	userID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", userID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		LocalpartSuffix: "bob",
 		Password:        "bobpassword",
@@ -37,8 +36,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if ev.Get("type").Str != "m.room.create" {
 					return false
 				}
-				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.Equal(t, ev.Get("content").Get("creator").Str, userID, "wrong content.creator")
+				must.Equal(t, ev.Get("sender").Str, alice.UserID, "wrong sender")
+				must.Equal(t, ev.Get("content").Get("creator").Str, alice.UserID, "wrong content.creator")
 				return true
 			}))
 		})
@@ -51,8 +50,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if ev.Get("type").Str != "m.room.member" {
 					return false
 				}
-				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.Equal(t, ev.Get("state_key").Str, userID, "wrong state_key")
+				must.Equal(t, ev.Get("sender").Str, alice.UserID, "wrong sender")
+				must.Equal(t, ev.Get("state_key").Str, alice.UserID, "wrong state_key")
 				must.Equal(t, ev.Get("content").Get("membership").Str, "join", "wrong content.membership")
 				return true
 			}))
@@ -79,7 +78,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if !ev.Get("state_key").Exists() {
 					return false
 				}
-				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
+				must.Equal(t, ev.Get("sender").Str, alice.UserID, "wrong sender")
 				must.Equal(t, ev.Get("content").Get("topic").Str, roomTopic, "wrong content.topic")
 				return true
 			}))

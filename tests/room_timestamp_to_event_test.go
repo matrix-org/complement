@@ -18,6 +18,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/tidwall/gjson"
@@ -29,12 +30,10 @@ func TestJumpToDateEndpoint(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Create the normal user which will send messages in the room
-	userID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", userID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Create the federated user which will fetch the messages from a remote homeserver
-	remoteUserID := "@charlie:hs2"
-	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+	remoteCharlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// Create the application service bridge user that can use the ?ts query parameter
 	asUserID := "@the-bridge-user:hs1"
@@ -116,7 +115,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			})
 
 			// We will use Bob to query the room they're not a member of
-			nonMemberUser := deployment.Client(t, "hs1", "@bob:hs1")
+			nonMemberUser := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)
@@ -144,7 +143,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			})
 
 			// We will use Bob to query the room they're not a member of
-			nonMemberUser := deployment.Client(t, "hs1", "@bob:hs1")
+			nonMemberUser := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 			// Make the `/timestamp_to_event` request from Bob's perspective (non room member)
 			timestamp := makeTimestampFromTime(timeBeforeRoomCreation)

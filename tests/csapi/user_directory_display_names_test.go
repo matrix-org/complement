@@ -15,14 +15,15 @@ import (
 	"github.com/matrix-org/complement/must"
 )
 
-const aliceUserID = "@alice:hs1"
 const alicePublicName = "Alice Cooper"
 const alicePrivateName = "Freddy"
 
-var justAliceByPublicName = []match.JSON{
-	match.JSONKeyArrayOfSize("results", 1),
-	match.JSONKeyEqual("results.0.display_name", alicePublicName),
-	match.JSONKeyEqual("results.0.user_id", aliceUserID),
+var justAliceByPublicName = func(alice *client.CSAPI) []match.JSON {
+	return []match.JSON{
+		match.JSONKeyArrayOfSize("results", 1),
+		match.JSONKeyEqual("results.0.display_name", alicePublicName),
+		match.JSONKeyEqual("results.0.user_id", alice.UserID),
+	}
 }
 
 var noResults = []match.JSON{
@@ -45,7 +46,9 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 		deployment.Destroy(t)
 	}
 
-	alice := deployment.Client(t, "hs1", aliceUserID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "alice",
+	})
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		LocalpartSuffix: "bob",
 	})
@@ -70,7 +73,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	return alice, bob, eve, cleanup
 }
 
-func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
+func checkExpectations(t *testing.T, alice, bob, eve *client.CSAPI) {
 	t.Run("Eve can find Alice by profile display name", func(t *testing.T) {
 		res := eve.MustDo(
 			t,
@@ -80,7 +83,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 				"search_term": alicePublicName,
 			}),
 		)
-		must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName})
+		must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName(alice)})
 	})
 
 	t.Run("Eve can find Alice by mxid", func(t *testing.T) {
@@ -89,10 +92,10 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 			"POST",
 			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
-				"search_term": aliceUserID,
+				"search_term": alice.UserID,
 			}),
 		)
-		must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName})
+		must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName(alice)})
 	})
 
 	t.Run("Eve cannot find Alice by room-specific name that Eve is not privy to", func(t *testing.T) {
@@ -117,7 +120,7 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 			}),
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: justAliceByPublicName,
+			JSON: justAliceByPublicName(alice),
 		})
 	})
 
@@ -127,11 +130,11 @@ func checkExpectations(t *testing.T, bob, eve *client.CSAPI) {
 			"POST",
 			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
-				"search_term": aliceUserID,
+				"search_term": alice.UserID,
 			}),
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: justAliceByPublicName,
+			JSON: justAliceByPublicName(alice),
 		})
 	})
 }
@@ -161,7 +164,7 @@ func TestRoomSpecificUsernameChange(t *testing.T) {
 		}),
 	)
 
-	checkExpectations(t, bob, eve)
+	checkExpectations(t, alice, bob, eve)
 }
 
 func TestRoomSpecificUsernameAtJoin(t *testing.T) {
@@ -190,5 +193,5 @@ func TestRoomSpecificUsernameAtJoin(t *testing.T) {
 		}),
 	)
 
-	checkExpectations(t, bob, eve)
+	checkExpectations(t, alice, bob, eve)
 }

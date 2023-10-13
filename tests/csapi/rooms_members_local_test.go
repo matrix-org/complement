@@ -14,7 +14,7 @@ func TestMembersLocal(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	// Here we don't use the BlueprintOneToOneRoom because else Bob would be able to see Alice's presence changes through
 	// that pre-existing one-on-one DM room. So we exclude that here.
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{

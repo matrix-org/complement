@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -16,7 +17,7 @@ import (
 func TestSyncFilter(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
+	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	// sytest: Can create filter
 	t.Run("Can create filter", func(t *testing.T) {
 		createFilter(t, authedClient, map[string]interface{}{

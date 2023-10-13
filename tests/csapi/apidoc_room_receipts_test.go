@@ -6,6 +6,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/tidwall/gjson"
 )
 
@@ -38,7 +39,7 @@ func syncHasReadReceipt(roomID, userID, eventID string) client.SyncCheckOpt {
 func TestRoomReceipts(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
 
 	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
@@ -51,7 +52,7 @@ func TestRoomReceipts(t *testing.T) {
 func TestRoomReadMarkers(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
 
 	reqBody := client.WithJSONBody(t, map[string]interface{}{

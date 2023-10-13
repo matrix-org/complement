@@ -36,8 +36,10 @@ type HomeserverDeployment struct {
 	accessTokensMutex   sync.RWMutex
 	ApplicationServices map[string]string // e.g { "my-as-id": "id: xxx\nas_token: xxx ..."} }
 	DeviceIDs           map[string]string // e.g { "@alice:hs1": "myDeviceID" }
-	CSAPIClients        []*client.CSAPI
-	CSAPIClientsMutex   sync.Mutex
+
+	// track all clients so if Restart() is called we can repoint to the new high-numbered port
+	CSAPIClients      []*client.CSAPI
+	CSAPIClientsMutex sync.Mutex
 }
 
 // Updates the client and federation base URLs of the homeserver deployment.
@@ -130,6 +132,26 @@ func (d *Deployment) Login(t *testing.T, hsName string, existing *client.CSAPI, 
 	client.UserID = userID
 	client.AccessToken = accessToken
 	client.DeviceID = deviceID
+	return client
+}
+
+func (d *Deployment) UnauthenticatedClient(t *testing.T, hsName string) *client.CSAPI {
+	t.Helper()
+	dep, ok := d.HS[hsName]
+	if !ok {
+		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)
+		return nil
+	}
+	client := &client.CSAPI{
+		BaseURL:          dep.BaseURL,
+		Client:           client.NewLoggedClient(t, hsName, nil),
+		SyncUntilTimeout: 5 * time.Second,
+		Debug:            d.Deployer.debugLogging,
+	}
+	// Appending a slice is not thread-safe. Protect the write with a mutex.
+	dep.CSAPIClientsMutex.Lock()
+	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	dep.CSAPIClientsMutex.Unlock()
 	return client
 }
 

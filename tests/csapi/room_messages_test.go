@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -23,7 +24,7 @@ func TestSendAndFetchMessage(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
@@ -66,7 +67,7 @@ func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := "!does-not-exist:hs1"
 
 	// then request messages from the room
@@ -84,7 +85,7 @@ func TestSendMessageWithTxn(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
@@ -132,9 +133,9 @@ func TestRoomMessagesLazyLoading(t *testing.T) {
 	}))
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, nil)
@@ -202,7 +203,7 @@ func TestRoomMessagesLazyLoadingLocalUser(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 

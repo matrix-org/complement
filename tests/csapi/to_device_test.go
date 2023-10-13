@@ -19,8 +19,8 @@ func TestToDeviceMessages(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		LocalpartSuffix: "charlie",
 		Password:        "charliepassword",

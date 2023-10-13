@@ -22,7 +22,7 @@ func TestChangePassword(t *testing.T) {
 	passwordClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		Password: password1,
 	})
-	unauthedClient := deployment.Client(t, "hs1", "")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 	_, sessionTest := createSession(t, deployment, passwordClient.UserID, "superuser")
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
@@ -124,7 +124,7 @@ func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword stri
 }
 
 func createSession(t *testing.T, deployment complement.Deployment, userID, password string) (deviceID string, authedClient *client.CSAPI) {
-	authedClient = deployment.Client(t, "hs1", "")
+	authedClient = deployment.UnauthenticatedClient(t, "hs1")
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"identifier": map[string]interface{}{
 			"type": "m.id.user",

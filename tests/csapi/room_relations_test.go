@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -20,7 +21,7 @@ func TestRelations(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	_, token := alice.MustSync(t, client.SyncReq{})
 
@@ -115,7 +116,7 @@ func TestRelationsPagination(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	_, token := alice.MustSync(t, client.SyncReq{})
 
@@ -214,7 +215,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	_, token := alice.MustSync(t, client.SyncReq{})
 

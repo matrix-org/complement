@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/internal/web"
 	"github.com/matrix-org/complement/match"
@@ -63,7 +64,7 @@ func TestUrlPreview(t *testing.T) {
 	})
 	defer webServer.Close()
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	res := alice.MustDo(t, "GET", []string{"_matrix", "media", "v3", "preview_url"},
 		client.WithQueries(url.Values{

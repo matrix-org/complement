@@ -8,6 +8,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -18,7 +19,7 @@ func TestSyncLeaveSection(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	includeLeaveFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -79,7 +80,7 @@ func TestGappedSyncLeaveSection(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	gappyFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -120,8 +121,8 @@ func TestArchivedRoomsHistory(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	const madeUpTestStateType = "a.madeup.test.state"
 
@@ -237,8 +238,8 @@ func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	aliceFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -319,8 +320,8 @@ func TestLeaveEventVisibility(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	aliceFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -402,8 +403,8 @@ func TestLeaveEventInviteRejection(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	aliceFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{

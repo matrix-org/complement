@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -18,7 +19,7 @@ import (
 func TestRoomState(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
+	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership
 		t.Run("GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership", func(t *testing.T) {

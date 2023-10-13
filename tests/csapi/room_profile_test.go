@@ -8,6 +8,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 )
 
 func TestAvatarUrlUpdate(t *testing.T) {
@@ -25,7 +26,7 @@ func testProfileFieldUpdate(t *testing.T, field string) {
 
 	const bogusData = "LemurLover"
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",

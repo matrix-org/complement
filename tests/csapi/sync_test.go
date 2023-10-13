@@ -21,8 +21,8 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -59,8 +59,8 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -108,8 +108,8 @@ func TestSync(t *testing.T) {
 	// sytest: Can sync
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	filterID := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -379,8 +379,8 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		LocalpartSuffix: "charlie",
@@ -441,8 +441,8 @@ func TestRoomSummary(t *testing.T) {
 	runtime.SkipIf(t, runtime.Synapse) // Currently more of a Dendrite test, so skip on Synapse
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{

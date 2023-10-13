@@ -19,10 +19,8 @@ import (
 
 // Deployment provides a way for tests to interact with a set of homeservers.
 type Deployment interface {
-	// Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
-	// Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
-	// if the userID is otherwise not found.
-	Client(t *testing.T, serverName, userID string) *client.CSAPI
+	// UnauthenticatedClient returns a blank CSAPI client.
+	UnauthenticatedClient(t *testing.T, serverName string) *client.CSAPI
 	// Register a new user on the given server.
 	Register(t *testing.T, hsName string, opts helpers.RegistrationOpts) *client.CSAPI
 	// Login to an existing user account on the given server. In order to make tests not hardcode full user IDs,

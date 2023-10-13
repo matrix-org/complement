@@ -7,6 +7,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -26,9 +27,8 @@ type backupKey struct {
 func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	userID := "@alice:hs1"
 	roomID := "!foo:hs1"
-	alice := deployment.Client(t, "hs1", userID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// make a new key backup
 	res := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "room_keys", "version"}, client.WithJSONBody(t, map[string]interface{}{

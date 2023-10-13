@@ -6,6 +6,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -19,8 +20,7 @@ func TestKeysQueryWithDeviceIDAsObjectFails(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	userID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", userID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"},
 		client.WithJSONBody(t, map[string]interface{}{
 			"device_keys": map[string]interface{}{

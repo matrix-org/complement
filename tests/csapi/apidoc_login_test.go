@@ -20,7 +20,7 @@ import (
 func TestLogin(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
-	unauthedClient := deployment.Client(t, "hs1", "")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 	testClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		Password: "superuser",
 	})

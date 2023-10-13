@@ -25,7 +25,7 @@ func TestVersionStructure(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	client := deployment.Client(t, "hs1", "")
+	client := deployment.UnauthenticatedClient(t, "hs1")
 
 	// sytest: Version responds 200 OK with valid structure
 	t.Run("Version responds 200 OK with valid structure", func(t *testing.T) {

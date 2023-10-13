@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -23,7 +24,7 @@ func TestRoomImageRoundtrip(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	mxcUri := alice.UploadContent(t, data.MatrixPng, "test.png", "image/png")
 
@@ -65,7 +66,7 @@ func TestMediaConfig(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	res := alice.MustDo(t, "GET", []string{"_matrix", "media", "v3", "config"})
 

@@ -21,7 +21,7 @@ func TestDeactivateAccount(t *testing.T) {
 	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		Password: password,
 	})
-	unauthedClient := deployment.Client(t, "hs1", "")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 
 	// Ensure that the first step, in which the client queries the server's user-interactive auth flows, returns
 	// at least one auth flow involving a password.
