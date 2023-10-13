@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Deployment provides a way for tests to interact with a set of homeservers.
 type Deployment interface {
 	// Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
 	// Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
