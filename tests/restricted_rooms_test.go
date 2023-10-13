@@ -10,6 +10,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -20,7 +21,7 @@ import (
 func setupRestrictedRoom(t *testing.T, deployment complement.Deployment, roomVersion string, joinRule string) (*client.CSAPI, string, string) {
 	t.Helper()
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	// The room which membership checks are delegated to. In practice, this will
 	// often be an MSC1772 space, but that is not required.
 	allowed_room := alice.MustCreateRoom(t, map[string]interface{}{
@@ -183,7 +184,7 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 	alice, allowed_room, room := setupRestrictedRoom(t, deployment, "8", "restricted")
 
 	// Create a second user on the same homeserver.
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Execute the checks.
 	checkRestrictedRoom(t, alice, bob, allowed_room, room, "restricted")
@@ -198,7 +199,7 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 	alice, allowed_room, room := setupRestrictedRoom(t, deployment, "8", "restricted")
 
 	// Create a second user on a different homeserver.
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// Execute the checks.
 	checkRestrictedRoom(t, alice, bob, allowed_room, room, "restricted")
@@ -220,7 +221,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 	//
 	// This is the room which membership checks are delegated to. In practice,
 	// this will often be an MSC1772 space, but that is not required.
-	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
+	charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 	allowed_room := charlie.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Space",
@@ -249,12 +250,12 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 	})
 
 	// Invite alice manually and accept it.
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	charlie.MustInviteRoom(t, room, alice.UserID)
 	alice.JoinRoom(t, room, []string{"hs2"})
 
 	// Confirm that Alice cannot issue invites (due to the default power levels).
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	res := alice.InviteRoom(t, room, bob.UserID)
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: 403,
@@ -386,7 +387,7 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	})
 
 	// Create a second user on a different homeserver.
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// Bob joins the room and allowed room.
 	t.Logf("%s joins the authorizing room via hs1.", bob.UserID)
@@ -395,7 +396,7 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	bob.JoinRoom(t, room, []string{"hs1"})
 
 	// Charlie should join the allowed room (which gives access to the room).
-	charlie := deployment.Client(t, "hs3", "@charlie:hs3")
+	charlie := deployment.Register(t, "hs3", helpers.RegistrationOpts{})
 	t.Logf("%s joins the authorizing room via hs1.", charlie.UserID)
 	charlie.JoinRoom(t, allowed_room, []string{"hs1"})
 

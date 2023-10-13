@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 
@@ -26,8 +27,7 @@ func TestRemovingAccountData(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Create a user to manipulate the account data of
-	aliceUserID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", aliceUserID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// And create a room with that user where we can store some room account data
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})

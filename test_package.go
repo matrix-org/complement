@@ -26,6 +26,9 @@ type Deployment interface {
 	// Login to an existing user account on the given server. In order to make tests not hardcode full user IDs,
 	// an existing logged in client must be supplied.
 	Login(t *testing.T, hsName string, existing *client.CSAPI, opts helpers.LoginOpts) *client.CSAPI
+	// AppServiceUser returns a client for the given app service user ID. The HS in question must have an appservice
+	// hooked up to it already. TODO: REMOVE
+	AppServiceUser(t *testing.T, hsName, appServiceUserID string) *client.CSAPI
 	// Restart a deployment.
 	Restart(t *testing.T) error
 	// Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,

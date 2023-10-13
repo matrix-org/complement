@@ -37,7 +37,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 	// Create the application service bridge user that can use the ?ts query parameter
 	asUserID := "@the-bridge-user:hs1"
-	as := deployment.Client(t, "hs1", asUserID)
+	as := deployment.AppServiceUser(t, "hs1", asUserID)
 
 	t.Run("parallel", func(t *testing.T) {
 		t.Run("should find event after given timestmap", func(t *testing.T) {

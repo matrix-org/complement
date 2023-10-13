@@ -13,6 +13,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 )
 
 var (
@@ -49,7 +50,7 @@ func TestRestrictedRoomsLocalJoinInMSC3787Room(t *testing.T) {
 	alice, allowed_room, room := setupRestrictedRoom(t, deployment, roomVersion, joinRule)
 
 	// Create a second user on the same homeserver.
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Execute the checks.
 	checkRestrictedRoom(t, alice, bob, allowed_room, room, joinRule)
@@ -64,7 +65,7 @@ func TestRestrictedRoomsRemoteJoinInMSC3787Room(t *testing.T) {
 	alice, allowed_room, room := setupRestrictedRoom(t, deployment, roomVersion, joinRule)
 
 	// Create a second user on a different homeserver.
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// Execute the checks.
 	checkRestrictedRoom(t, alice, bob, allowed_room, room, joinRule)

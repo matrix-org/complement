@@ -44,7 +44,7 @@ func TestEventRelationships(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	// Create the room and send events A,B,C,D
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
@@ -91,7 +91,7 @@ func TestEventRelationships(t *testing.T) {
 	t.Logf("Event ID A:%s  B:%s  C:%s  D:%s", eventA, eventB, eventC, eventD)
 
 	// Join the room from another server
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 	_ = bob.MustJoinRoom(t, roomID, []string{"hs1"})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
@@ -195,9 +195,9 @@ func TestFederatedEventRelationships(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
-	srv := federation.NewServer(t, deployment.GetConfig(), deployment.RoundTripper(),
+	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleTransactionRequests(nil, nil),

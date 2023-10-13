@@ -20,8 +20,8 @@ import (
 func TestFederationRejectInvite(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// we'll awaken this Waiter when we receive a membership event for Charlie
 	var waiter *helpers.Waiter

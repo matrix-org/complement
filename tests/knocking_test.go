@@ -44,16 +44,13 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	defer deployment.Destroy(t)
 
 	// Create a client for one local user
-	aliceUserID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", aliceUserID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Create a client for another local user
-	bobUserID := "@bob:hs1"
-	bob := deployment.Client(t, "hs1", bobUserID)
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Create a client for a remote user
-	charlieUserID := "@charlie:hs2"
-	charlie := deployment.Client(t, "hs2", charlieUserID)
+	charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// Create a server to observe
 	inviteWaiter := helpers.NewWaiter()
@@ -346,8 +343,7 @@ func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, jo
 	defer deployment.Destroy(t)
 
 	// Create a client for a local user
-	aliceUserID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", aliceUserID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Create an invite-only room with the knock room version
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{

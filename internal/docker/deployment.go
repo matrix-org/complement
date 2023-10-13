@@ -155,10 +155,9 @@ func (d *Deployment) UnauthenticatedClient(t *testing.T, hsName string) *client.
 	return client
 }
 
-// Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
-// Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
-// if the userID is otherwise not found.
-func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
+// AppServiceUser returns a client for the given app service user ID. The HS in question must have an appservice
+// hooked up to it already. TODO: REMOVE
+func (d *Deployment) AppServiceUser(t *testing.T, hsName, appServiceUserID string) *client.CSAPI {
 	t.Helper()
 	dep, ok := d.HS[hsName]
 	if !ok {
@@ -166,18 +165,18 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		return nil
 	}
 	dep.accessTokensMutex.RLock()
-	token := dep.AccessTokens[userID]
+	token := dep.AccessTokens[appServiceUserID]
 	dep.accessTokensMutex.RUnlock()
-	if token == "" && userID != "" {
-		t.Fatalf("Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, userID)
+	if token == "" && appServiceUserID != "" {
+		t.Fatalf("Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, appServiceUserID)
 		return nil
 	}
-	deviceID := dep.DeviceIDs[userID]
-	if deviceID == "" && userID != "" {
-		t.Logf("WARNING: Deployment.Client - HS name '%s' - user ID '%s' - deviceID not found", hsName, userID)
+	deviceID := dep.DeviceIDs[appServiceUserID]
+	if deviceID == "" && appServiceUserID != "" {
+		t.Logf("WARNING: Deployment.Client - HS name '%s' - user ID '%s' - deviceID not found", hsName, appServiceUserID)
 	}
 	client := &client.CSAPI{
-		UserID:           userID,
+		UserID:           appServiceUserID,
 		AccessToken:      token,
 		DeviceID:         deviceID,
 		BaseURL:          dep.BaseURL,

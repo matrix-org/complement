@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -29,8 +30,8 @@ func TestWriteMDirectAccountData(t *testing.T) {
 		deployment.Destroy(t)
 	}()
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
@@ -73,8 +74,8 @@ func TestIsDirectFlagLocal(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
@@ -114,7 +115,7 @@ func TestIsDirectFlagFederation(t *testing.T) {
 	srv.UnexpectedRequestsAreErrors = false // we expect to be pushed events
 	cancel := srv.Listen()
 	defer cancel()
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomVer := alice.GetDefaultRoomVersion(t)
 
 	bob := srv.UserID("bob")

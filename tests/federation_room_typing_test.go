@@ -6,6 +6,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 )
 
 // sytest: Typing notifications also sent to remote room members
@@ -13,9 +14,9 @@ func TestRemoteTyping(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.Client(t, "hs2", "@charlie:hs2")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, nil)

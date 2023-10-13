@@ -12,6 +12,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -60,7 +61,7 @@ func TestOutboundFederationProfile(t *testing.T) {
 		})).Methods("GET")
 
 		// query the display name which should do an outbound federation hit
-		unauthedClient := deployment.Client(t, "hs1", "")
+		unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 		res := unauthedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "profile", remoteUserID, "displayname"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -74,7 +75,7 @@ func TestInboundFederationProfile(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),

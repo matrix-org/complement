@@ -8,6 +8,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/runtime"
 )
@@ -19,8 +20,8 @@ func TestMediaFilenames(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	t.Run("Parallel", func(t *testing.T) {
 

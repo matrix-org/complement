@@ -507,7 +507,7 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("CanReceiveTypingDuringPartialStateJoin", func(t *testing.T) {
 		deployment := complement.Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -577,7 +577,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Skip("Presence EDUs are currently dropped during a resync")
 		deployment := complement.Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -624,7 +624,7 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("CanReceiveToDeviceDuringPartialStateJoin", func(t *testing.T) {
 		deployment := complement.Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -674,7 +674,7 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("CanReceiveReceiptDuringPartialStateJoin", func(t *testing.T) {
 		deployment := complement.Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -727,7 +727,7 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("CanReceiveDeviceListUpdateDuringPartialStateJoin", func(t *testing.T) {
 		deployment := complement.Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -778,7 +778,7 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("CanReceiveSigningKeyUpdateDuringPartialStateJoin", func(t *testing.T) {
 		deployment := complement.Deploy(t, b.BlueprintAlice)
 		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
+		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -1237,8 +1237,8 @@ func TestPartialStateJoin(t *testing.T) {
 		// set up 3 homeservers: hs1, hs2 and complement
 		deployment := complement.Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
 		defer deployment.Destroy(t)
-		alice := deployment.Client(t, "hs1", "@alice:hs1")
-		charlie := deployment.Client(t, "hs2", "@charlie:hs2")
+		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+		charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 		// create a public room
 		roomID := alice.MustCreateRoom(t, map[string]interface{}{
