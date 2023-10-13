@@ -7,7 +7,6 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib"
 
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 )
@@ -18,7 +17,7 @@ import (
 // alice sends an invite to charlie@hs2, which he rejects.
 // We check that delia sees the rejection.
 func TestFederationRejectInvite(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})

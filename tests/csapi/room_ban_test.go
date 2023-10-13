@@ -15,28 +15,7 @@ import (
 // but this will actually validate against a present user in the room.
 // sytest: Non-present room members cannot ban others
 func TestNotPresentUserCannotBanOthers(t *testing.T) {
-	deployment := complement.Deploy(t, b.MustValidate(b.Blueprint{
-		Name: "abc",
-		Homeservers: []b.Homeserver{
-			{
-				Name: "hs1",
-				Users: []b.User{
-					{
-						Localpart:   "@alice",
-						DisplayName: "Alice",
-					},
-					{
-						Localpart:   "@bob",
-						DisplayName: "Bob",
-					},
-					{
-						Localpart:   "@charlie",
-						DisplayName: "Charlie",
-					},
-				},
-			},
-		},
-	}))
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})

@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/helpers"
 )
 
@@ -43,7 +42,7 @@ func TestCannotSendKnockViaSendKnockInMSC3787Room(t *testing.T) {
 
 // See TestRestrictedRoomsLocalJoin
 func TestRestrictedRoomsLocalJoinInMSC3787Room(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.
@@ -58,7 +57,7 @@ func TestRestrictedRoomsLocalJoinInMSC3787Room(t *testing.T) {
 
 // See TestRestrictedRoomsRemoteJoin
 func TestRestrictedRoomsRemoteJoinInMSC3787Room(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.

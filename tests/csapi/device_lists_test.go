@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -422,7 +421,7 @@ func TestDeviceListUpdates(t *testing.T) {
 	// Create two homeservers
 	// The users and rooms in the blueprint won't be used.
 	// Each test creates their own Alice and Bob users.
-	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	t.Run("when local user joins a room", func(t *testing.T) { testOtherUserJoin(t, deployment, "hs1", "hs1") })

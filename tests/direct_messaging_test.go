@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
@@ -23,7 +22,7 @@ import (
 // Test that a client can write `m.direct` account data and get told about updates to that event.
 // Requires a functioning account data implementation.
 func TestWriteMDirectAccountData(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer func() {
 		// additional logging to debug https://github.com/matrix-org/synapse/issues/13334
 		t.Logf("%s: TestWriteMDirectAccountData complete: destroying HS deployment", time.Now())
@@ -71,7 +70,7 @@ func TestWriteMDirectAccountData(t *testing.T) {
 // Test that the `is_direct` flag on m.room.member invites propagate to the target user. Both users
 // are on the same homeserver.
 func TestIsDirectFlagLocal(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -104,7 +103,7 @@ func TestIsDirectFlagLocal(t *testing.T) {
 // Test that the `is_direct` flag on m.room.member invites propagate to the target user. Users
 // are on different homeservers.
 func TestIsDirectFlagFederation(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,

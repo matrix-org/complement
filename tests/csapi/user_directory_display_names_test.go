@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -41,7 +40,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	// - Eve knows about Alice,
 	// - Alice reveals a private name to another friend Bob
 	// - Eve shouldn't be able to see that private name via the directory.
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	cleanup := func(t *testing.T) {
 		deployment.Destroy(t)
 	}

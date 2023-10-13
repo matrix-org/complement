@@ -26,7 +26,7 @@ import (
 )
 
 func TestJumpToDateEndpoint(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintHSWithApplicationService)
+	deployment := complement.OldDeploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
 	// Create the normal user which will send messages in the room

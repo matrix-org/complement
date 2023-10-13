@@ -177,7 +177,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 
 // Test joining a room with join rules restricted to membership in another room.
 func TestRestrictedRoomsLocalJoin(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.
@@ -192,7 +192,7 @@ func TestRestrictedRoomsLocalJoin(t *testing.T) {
 
 // Test joining a room with join rules restricted to membership in another room.
 func TestRestrictedRoomsRemoteJoin(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.
@@ -214,7 +214,7 @@ func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
 func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, joinRule string) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2801
 
-	deployment := complement.Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	// Charlie sets up the allowed room so it is on the other server.
@@ -333,38 +333,7 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, joinRule string) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2801
 
-	deployment := complement.Deploy(t, b.Blueprint{
-		Name: "federation_three_homeservers",
-		Homeservers: []b.Homeserver{
-			{
-				Name: "hs1",
-				Users: []b.User{
-					{
-						Localpart:   "alice",
-						DisplayName: "Alice",
-					},
-				},
-			},
-			{
-				Name: "hs2",
-				Users: []b.User{
-					{
-						Localpart:   "bob",
-						DisplayName: "Bob",
-					},
-				},
-			},
-			{
-				Name: "hs3",
-				Users: []b.User{
-					{
-						Localpart:   "charlie",
-						DisplayName: "Charlie",
-					},
-				},
-			},
-		},
-	})
+	deployment := complement.Deploy(t, 3)
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.

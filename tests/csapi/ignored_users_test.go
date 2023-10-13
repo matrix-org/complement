@@ -11,7 +11,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -29,7 +28,7 @@ import (
 // https://github.com/matrix-org/synapse/issues/11506
 // to ensure that Synapse complies with this part of the spec.
 func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "bob"})

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/must"
@@ -17,7 +16,7 @@ import (
 func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
 
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})

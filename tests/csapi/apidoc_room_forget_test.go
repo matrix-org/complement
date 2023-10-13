@@ -18,7 +18,7 @@ import (
 
 // These tests ensure that forgetting about rooms works as intended
 func TestRoomForget(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})

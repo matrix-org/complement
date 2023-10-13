@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -25,7 +24,7 @@ type backupKey struct {
 //	if they have the same values for is_verified, then it will keep the key with a lower first_message_index;
 //	and finally, is is_verified and first_message_index are equal, then it will keep the key with a lower forwarded_count.
 func TestE2EKeyBackupReplaceRoomKeyRules(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	roomID := "!foo:hs1"
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})

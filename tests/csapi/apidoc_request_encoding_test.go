@@ -6,14 +6,13 @@ import (
 	"encoding/json"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestRequestEncodingFails(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 	testString := `{ "test":"a` + "\x81" + `" }`

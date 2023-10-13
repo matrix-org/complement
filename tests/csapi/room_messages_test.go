@@ -21,7 +21,7 @@ import (
 // sytest: GET /rooms/:room_id/messages returns a message
 func TestSendAndFetchMessage(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // flakey
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -64,7 +64,7 @@ func TestSendAndFetchMessage(t *testing.T) {
 // With a non-existent room_id, GET /rooms/:room_id/messages returns 403
 // forbidden ("You aren't a member of the room").
 func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -82,7 +82,7 @@ func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
 // sytest: PUT /rooms/:room_id/send/:event_type/:txn_id sends a message
 // sytest: PUT /rooms/:room_id/send/:event_type/:txn_id deduplicates the same txn id
 func TestSendMessageWithTxn(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -109,28 +109,7 @@ func TestSendMessageWithTxn(t *testing.T) {
 }
 
 func TestRoomMessagesLazyLoading(t *testing.T) {
-	deployment := complement.Deploy(t, b.MustValidate(b.Blueprint{
-		Name: "alice_bob_and_charlie",
-		Homeservers: []b.Homeserver{
-			{
-				Name: "hs1",
-				Users: []b.User{
-					{
-						Localpart:   "@alice",
-						DisplayName: "Alice",
-					},
-					{
-						Localpart:   "@bob",
-						DisplayName: "Bob",
-					},
-					{
-						Localpart:   "@charlie",
-						DisplayName: "Charlie",
-					},
-				},
-			},
-		},
-	}))
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -200,7 +179,7 @@ func TestRoomMessagesLazyLoading(t *testing.T) {
 //
 // sytest: GET /rooms/:room_id/messages lazy loads members correctly
 func TestRoomMessagesLazyLoadingLocalUser(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})

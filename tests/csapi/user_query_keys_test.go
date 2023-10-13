@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -17,7 +16,7 @@ import (
 // like an array in Python and hence go un-noticed. In Go however it will result in a 400. The correct behaviour is
 // to return a 400. Element iOS uses this erroneous format.
 func TestKeysQueryWithDeviceIDAsObjectFails(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})

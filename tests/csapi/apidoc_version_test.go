@@ -8,7 +8,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -22,7 +21,7 @@ const GlobalVersionRegex = `v[1-9]\d*\.\d+(?:-\S+)?`
 const r0Regex = `r0\.\d+\.\d+`
 
 func TestVersionStructure(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	client := deployment.UnauthenticatedClient(t, "hs1")

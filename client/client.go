@@ -38,12 +38,14 @@ const ansiResetForeground = "\x1b[39m"
 
 // errorf is a wrapper around t.Errorf which prints the failing error message in red.
 func errorf(t TestLike, format string, args ...any) {
+	t.Helper()
 	format = ansiRedForeground + format + ansiResetForeground
 	t.Errorf(format, args...)
 }
 
 // fatalf is a wrapper around t.Fatalf which prints the failing error message in red.
 func fatalf(t TestLike, format string, args ...any) {
+	t.Helper()
 	format = ansiRedForeground + format + ansiResetForeground
 	t.Fatalf(format, args...)
 }

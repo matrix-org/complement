@@ -18,7 +18,7 @@ import (
 
 // Observes "first bug" from https://github.com/matrix-org/dendrite/pull/1394#issuecomment-687056673
 func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -56,7 +56,7 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 
 // Observes "second bug" from https://github.com/matrix-org/dendrite/pull/1394#issuecomment-687056673
 func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -106,7 +106,7 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 func TestSync(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 	// sytest: Can sync
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -376,7 +376,7 @@ func TestSync(t *testing.T) {
 
 // Test presence from people in 2 different rooms in incremental sync
 func TestPresenceSyncDifferentRooms(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -406,7 +406,7 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"presence": "online",
 	})
-	bob.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
+	bob.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", bob.UserID, "status"}, reqBody)
 	charlie.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", charlie.UserID, "status"}, reqBody)
 
 	// Alice should see that Bob and Charlie are online. She may see this happen
@@ -439,7 +439,7 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 
 func TestRoomSummary(t *testing.T) {
 	runtime.SkipIf(t, runtime.Synapse) // Currently more of a Dendrite test, so skip on Synapse
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})

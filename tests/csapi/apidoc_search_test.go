@@ -19,7 +19,7 @@ import (
 // Note: In contrast to Sytest, we define a filter.rooms on each search request, this is to mimic
 // creating a new user and new room per test. This also allows us to run in parallel.
 func TestSearch(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})

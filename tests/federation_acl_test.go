@@ -17,20 +17,7 @@ import (
 func TestACLs(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // needs https://github.com/matrix-org/dendrite/pull/3008
 	// 1. Prepare 3 or more servers. 1st will be room host, 2nd will be blocked with m.room.server_acl and 3rd server will be affected by this issue. 1st and 2nd servers don't have to be powered by dendrite.
-	deployment := complement.Deploy(t, b.Blueprint{
-		Name: "federation_three_homeservers",
-		Homeservers: []b.Homeserver{
-			{
-				Name: "hs1",
-			},
-			{
-				Name: "hs2",
-			},
-			{
-				Name: "hs3",
-			},
-		},
-	})
+	deployment := complement.Deploy(t, 3)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})

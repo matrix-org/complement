@@ -221,7 +221,7 @@ func TestPartialStateJoin(t *testing.T) {
 		return syncToken
 	}
 
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	// Test that an eager (i.e. NOT lazy-loading members) /sync request made during a
@@ -505,7 +505,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to receive typing EDU over federation during the resync
 	t.Run("CanReceiveTypingDuringPartialStateJoin", func(t *testing.T) {
-		deployment := complement.Deploy(t, b.BlueprintAlice)
+		deployment := complement.Deploy(t, 1)
 		defer deployment.Destroy(t)
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
@@ -575,7 +575,7 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("CanReceivePresenceDuringPartialStateJoin", func(t *testing.T) {
 		// See https://github.com/matrix-org/synapse/issues/13008")
 		t.Skip("Presence EDUs are currently dropped during a resync")
-		deployment := complement.Deploy(t, b.BlueprintAlice)
+		deployment := complement.Deploy(t, 1)
 		defer deployment.Destroy(t)
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
@@ -622,7 +622,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to receive to_device EDU over federation during the resync
 	t.Run("CanReceiveToDeviceDuringPartialStateJoin", func(t *testing.T) {
-		deployment := complement.Deploy(t, b.BlueprintAlice)
+		deployment := complement.Deploy(t, 1)
 		defer deployment.Destroy(t)
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
@@ -672,7 +672,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to receive receipt EDU over federation during the resync
 	t.Run("CanReceiveReceiptDuringPartialStateJoin", func(t *testing.T) {
-		deployment := complement.Deploy(t, b.BlueprintAlice)
+		deployment := complement.Deploy(t, 1)
 		defer deployment.Destroy(t)
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
@@ -725,7 +725,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to receive device list update EDU over federation during the resync
 	t.Run("CanReceiveDeviceListUpdateDuringPartialStateJoin", func(t *testing.T) {
-		deployment := complement.Deploy(t, b.BlueprintAlice)
+		deployment := complement.Deploy(t, 1)
 		defer deployment.Destroy(t)
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
@@ -776,7 +776,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	// we should be able to receive signing key update EDU over federation during the resync
 	t.Run("CanReceiveSigningKeyUpdateDuringPartialStateJoin", func(t *testing.T) {
-		deployment := complement.Deploy(t, b.BlueprintAlice)
+		deployment := complement.Deploy(t, 1)
 		defer deployment.Destroy(t)
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
@@ -1235,7 +1235,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// partial state.
 	t.Run("PartialStateJoinSyncsUsingOtherHomeservers", func(t *testing.T) {
 		// set up 3 homeservers: hs1, hs2 and complement
-		deployment := complement.Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+		deployment := complement.Deploy(t, 2)
 		defer deployment.Destroy(t)
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 		charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
