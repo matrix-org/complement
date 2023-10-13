@@ -23,8 +23,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "bob",
-		Password:  "bobpassword",
+		LocalpartSuffix: "bob",
+		Password:        "bobpassword",
 	})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 

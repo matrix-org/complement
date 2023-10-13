@@ -1,10 +1,10 @@
 package helpers
 
 type RegistrationOpts struct {
-	Localpart string // default '' (don't care)
-	DeviceID  string // default '' (generate new)
-	Password  string // default 'complement_meets_min_password_requirement'
-	IsAdmin   bool   // default false
+	LocalpartSuffix string // default '' (don't care)
+	DeviceID        string // default '' (generate new)
+	Password        string // default 'complement_meets_min_password_requirement'
+	IsAdmin         bool   // default false
 }
 
 type LoginOpts struct {

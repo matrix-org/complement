@@ -23,8 +23,8 @@ func TestKeyChangesLocal(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	password := "$uperSecretPassword"
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "bob",
-		Password:  password,
+		LocalpartSuffix: "bob",
+		Password:        password,
 	})
 	unauthedClient := deployment.Client(t, "hs1", "")
 

@@ -47,12 +47,10 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 
 	alice := deployment.Client(t, "hs1", aliceUserID)
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "bob",
-		Password:  "bob-has-a-very-secret-pw",
+		LocalpartSuffix: "bob",
 	})
 	eve := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "eve",
-		Password:  "eve-has-a-very-secret-pw",
+		LocalpartSuffix: "eve",
 	})
 
 	// Alice sets her profile displayname. This ensures that her

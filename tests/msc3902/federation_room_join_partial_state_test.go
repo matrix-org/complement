@@ -246,7 +246,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	eagerSyncDuringPartialStateJoinTest := func(t *testing.T, usernameSuffix string, incremental bool) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t1alice_" + usernameSuffix,
+			LocalpartSuffix: "t1alice_" + usernameSuffix,
 		})
 
 		// Maintain two sync tokens: once for the eager syncs under test, and another
@@ -376,7 +376,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// resync completes. This test does exactly that.
 	t.Run("EagerLongPollingSyncWokenWhenResyncCompletes", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t1alice_long_polling",
+			LocalpartSuffix: "t1alice_long_polling",
 		})
 
 		t.Log("Alice partial-joins a remote room.")
@@ -441,7 +441,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// when Alice does a lazy-loading sync, she should see the room immediately
 	t.Run("CanLazyLoadingSyncDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t2alice",
+			LocalpartSuffix: "t2alice",
 		})
 
 		server := createTestServer(t, deployment)
@@ -463,7 +463,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// we should be able to send events in the room, during the resync
 	t.Run("CanSendEventsDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t3alice",
+			LocalpartSuffix: "t3alice",
 		})
 
 		server := createTestServer(t, deployment)
@@ -805,7 +805,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// we should be able to receive events over federation during the resync
 	t.Run("CanReceiveEventsDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t4alice",
+			LocalpartSuffix: "t4alice",
 		})
 		syncToken := getSyncToken(t, alice)
 
@@ -829,7 +829,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// we should be able to receive events with a missing prev event over federation during the resync
 	t.Run("CanReceiveEventsWithMissingParentsDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t5alice",
+			LocalpartSuffix: "t5alice",
 		})
 		syncToken := getSyncToken(t, alice)
 
@@ -869,7 +869,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// we should be able to receive events with partially missing prev events over federation during the resync
 	t.Run("CanReceiveEventsWithHalfMissingParentsDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t6alice",
+			LocalpartSuffix: "t6alice",
 		})
 		syncToken := getSyncToken(t, alice)
 
@@ -912,7 +912,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// over federation during the resync
 	t.Run("CanReceiveEventsWithHalfMissingGrandparentsDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t7alice",
+			LocalpartSuffix: "t7alice",
 		})
 		syncToken := getSyncToken(t, alice)
 
@@ -959,7 +959,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// partial room state.
 	t.Run("Lazy-loading initial sync includes remote memberships during partial state join", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t8alice",
+			LocalpartSuffix: "t8alice",
 		})
 
 		server := createTestServer(t, deployment)
@@ -1000,7 +1000,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// partial room state.
 	t.Run("Lazy-loading gappy sync includes remote memberships during partial state join", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t9alice",
+			LocalpartSuffix: "t9alice",
 		})
 		syncToken := getSyncToken(t, alice)
 
@@ -1072,7 +1072,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// the partial room state.
 	t.Run("Lazy-loading incremental sync includes remote memberships during partial state join", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t10alice",
+			LocalpartSuffix: "t10alice",
 		})
 		syncToken := getSyncToken(t, alice)
 
@@ -1122,7 +1122,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// TODO(faster_joins): also need to test /state, and /members without an `at`, which follow a different path
 	t.Run("MembersRequestBlocksDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t11alice",
+			LocalpartSuffix: "t11alice",
 		})
 
 		server := createTestServer(t, deployment)
@@ -1184,7 +1184,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// eager-syncing, and doesn't send a message to the partial-state room.)
 	t.Run("PartialStateJoinContinuesAfterRestart", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t12alice",
+			LocalpartSuffix: "t12alice",
 		})
 
 		server := createTestServer(t, deployment)
@@ -1311,7 +1311,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// since it was not sent on the previous sync.
 	t.Run("GappySyncAfterPartialStateSynced", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t13alice",
+			LocalpartSuffix: "t13alice",
 		})
 
 		server := createTestServer(t, deployment)
@@ -1407,7 +1407,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// an infinite loop of de-partial-stating.
 	t.Run("Resync completes even when events arrive before their prev_events", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t14alice",
+			LocalpartSuffix: "t14alice",
 		})
 		syncToken := getSyncToken(t, alice)
 
@@ -1521,7 +1521,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// do not suddenly become un-rejected during the resync
 	t.Run("Rejected events remain rejected after resync", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t15alice",
+			LocalpartSuffix: "t15alice",
 		})
 		syncToken := getSyncToken(t, alice)
 
@@ -1592,7 +1592,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	t.Run("State accepted incorrectly", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t16alice",
+			LocalpartSuffix: "t16alice",
 		})
 		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
@@ -1672,7 +1672,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	t.Run("State rejected incorrectly", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t17alice",
+			LocalpartSuffix: "t17alice",
 		})
 		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
@@ -1799,7 +1799,7 @@ func TestPartialStateJoin(t *testing.T) {
 		//   testServer2 (another Complement test server) with @charlie:<server name>
 		//     This is the server that will try to make a join via testServer1.
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t18alice",
+			LocalpartSuffix: "t18alice",
 		})
 
 		testServer1 := createTestServer(t, deployment)
@@ -1850,7 +1850,7 @@ func TestPartialStateJoin(t *testing.T) {
 		//     of being able to build a request to /send_join)
 		//
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t19alice",
+			LocalpartSuffix: "t19alice",
 		})
 
 		testServer1 := createTestServer(t, deployment)
@@ -1910,7 +1910,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// request blocks until the state is correctly synced.
 	t.Run("joined_members blocks during partial state join", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t20alice",
+			LocalpartSuffix: "t20alice",
 		})
 
 		server := createTestServer(t, deployment)
@@ -1977,7 +1977,7 @@ func TestPartialStateJoin(t *testing.T) {
 		//   testServer2 (another Complement test server) with @charlie:<server name>
 		//     This is the server that will try to make a knock via testServer1.
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t21alice",
+			LocalpartSuffix: "t21alice",
 		})
 
 		testServer1 := createTestServer(t, deployment)
@@ -2028,7 +2028,7 @@ func TestPartialStateJoin(t *testing.T) {
 		//     of being able to build a request to /send_knock)
 		//
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t22alice",
+			LocalpartSuffix: "t22alice",
 		})
 
 		testServer1 := createTestServer(t, deployment)
@@ -2098,7 +2098,7 @@ func TestPartialStateJoin(t *testing.T) {
 			room *federation.ServerRoom, cleanup func(),
 		) {
 			alice = deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: aliceLocalpart,
+				LocalpartSuffix: aliceLocalpart,
 			})
 
 			deviceListUpdateChannel1 = make(chan gomatrixserverlib.DeviceListUpdateEvent, 10)
@@ -2622,8 +2622,8 @@ func TestPartialStateJoin(t *testing.T) {
 			room *federation.ServerRoom, sendDeviceListUpdate func(string), cleanup func(),
 		) {
 			alice = deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: aliceLocalpart,
-				Password:  "secret",
+				LocalpartSuffix: aliceLocalpart,
+				Password:        "secret",
 			})
 
 			userDevicesQueryChannel = make(chan string, 1)
@@ -3414,8 +3414,8 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("Room aliases can be added and queried during a resync", func(t *testing.T) {
 		// Alice begins a partial join to a room.
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t40alice",
-			Password:  "secret",
+			LocalpartSuffix: "t40alice",
+			Password:        "secret",
 		})
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -3468,8 +3468,8 @@ func TestPartialStateJoin(t *testing.T) {
 	t.Run("Room aliases can be added and deleted during a resync", func(t *testing.T) {
 		// Alice begins a partial join to a room.
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t41alice",
-			Password:  "secret",
+			LocalpartSuffix: "t41alice",
+			Password:        "secret",
 		})
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -3508,10 +3508,10 @@ func TestPartialStateJoin(t *testing.T) {
 	// we should be able to join a room that is already joined & resyncing
 	t.Run("CanFastJoinDuringPartialStateJoin", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t44alice",
+			LocalpartSuffix: "t44alice",
 		})
 		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t44bob",
+			LocalpartSuffix: "t44bob",
 		})
 
 		server := createTestServer(t, deployment)
@@ -3545,7 +3545,7 @@ func TestPartialStateJoin(t *testing.T) {
 	// "join", and can be confused with join events.
 	t.Run("Can change display name during partial state join", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t45alice",
+			LocalpartSuffix: "t45alice",
 		})
 
 		server := createTestServer(t, deployment)
@@ -3595,7 +3595,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// Before testing that leaves during resyncs are seen during resyncs, sanity
 			// check that leaves during resyncs appear after the resync.
 			alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: "t42alice",
+				LocalpartSuffix: "t42alice",
 			})
 			server := createTestServer(t, deployment)
 			cancel := server.Listen()
@@ -3638,7 +3638,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Run("does not wait for resync", func(t *testing.T) {
 			alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: "t43alice",
+				LocalpartSuffix: "t43alice",
 			})
 			server := createTestServer(t, deployment)
 			cancel := server.Listen()
@@ -3698,10 +3698,10 @@ func TestPartialStateJoin(t *testing.T) {
 		// Test that the original joiner can leave during the resync, even after someone else has joined
 		t.Run("works after a second partial join", func(t *testing.T) {
 			alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: "t47alice",
+				LocalpartSuffix: "t47alice",
 			})
 			bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: "t47bob",
+				LocalpartSuffix: "t47bob",
 			})
 			server := createTestServer(t, deployment)
 			cancel := server.Listen()
@@ -3753,7 +3753,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Run("succeeds, then rejoin succeeds without resync completing", func(t *testing.T) {
 			alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: "t48alice",
+				LocalpartSuffix: "t48alice",
 			})
 			server := createTestServer(t, deployment)
 			cancel := server.Listen()
@@ -3795,10 +3795,10 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Run("succeeds, then another user can join without resync completing", func(t *testing.T) {
 			alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: "t49alice",
+				LocalpartSuffix: "t49alice",
 			})
 			bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: "t49bob",
+				LocalpartSuffix: "t49bob",
 			})
 			server := createTestServer(t, deployment)
 			cancel := server.Listen()
@@ -3843,7 +3843,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Run("can be triggered by remote kick", func(t *testing.T) {
 			alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: "t50alice",
+				LocalpartSuffix: "t50alice",
 			})
 			server := createTestServer(t, deployment)
 			cancel := server.Listen()
@@ -3897,7 +3897,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		t.Run("can be triggered by remote ban", func(t *testing.T) {
 			alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-				Localpart: "t51alice",
+				LocalpartSuffix: "t51alice",
 			})
 			server := createTestServer(t, deployment)
 			cancel := server.Listen()
@@ -3962,8 +3962,8 @@ func TestPartialStateJoin(t *testing.T) {
 		// create a user with admin powers as we will need this power to make the remote room visible in the
 		// local room list
 		terry := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "terry",
-			IsAdmin:   true,
+			LocalpartSuffix: "terry",
+			IsAdmin:         true,
 		})
 
 		server := createTestServer(t, deployment)
@@ -4012,7 +4012,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 	t.Run("User directory is correctly updated once state re-sync completes", func(t *testing.T) {
 		rocky := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "rocky",
+			LocalpartSuffix: "rocky",
 		})
 
 		server := createTestServer(t, deployment)
@@ -4080,8 +4080,8 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 		t.Log("Alice begins a partial join to a room")
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-			Localpart: "t46alice",
-			IsAdmin:   true,
+			LocalpartSuffix: "t46alice",
+			IsAdmin:         true,
 		})
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()

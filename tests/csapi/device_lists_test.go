@@ -2,7 +2,6 @@ package csapi_tests
 
 import (
 	"fmt"
-	"sync/atomic"
 	"testing"
 
 	"github.com/matrix-org/complement"
@@ -21,13 +20,6 @@ import (
 //  1. `/sync`'s `device_lists.changed/left` contain the correct user IDs.
 //  2. `/keys/query` returns the correct information after device list updates.
 func TestDeviceListUpdates(t *testing.T) {
-	var localpartIndex int64 = 0
-	// generateLocalpart generates a unique localpart based on the given name.
-	generateLocalpart := func(localpart string) string {
-		index := atomic.AddInt64(&localpartIndex, 1)
-		return fmt.Sprintf("%s%d", localpart, index)
-	}
-
 	// uploadNewKeys uploads a new set of keys for a given client.
 	// Returns a check function that can be passed to mustQueryKeys.
 	uploadNewKeys := func(t *testing.T, user *client.CSAPI) []match.JSON {
@@ -119,8 +111,8 @@ func TestDeviceListUpdates(t *testing.T) {
 		t.Helper()
 
 		barry := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("barry"),
-			Password:  "password",
+			LocalpartSuffix: "barry",
+			Password:        "password",
 		})
 
 		// The observing user must share a room with the dummy barrier user.
@@ -147,12 +139,12 @@ func TestDeviceListUpdates(t *testing.T) {
 	// testOtherUserJoin tests another user joining a room Alice is already in.
 	testOtherUserJoin := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
 		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("alice"),
-			Password:  "password",
+			LocalpartSuffix: "alice",
+			Password:        "password",
 		})
 		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("bob"),
-			Password:  "password",
+			LocalpartSuffix: "bob",
+			Password:        "password",
 		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
@@ -200,12 +192,12 @@ func TestDeviceListUpdates(t *testing.T) {
 		t *testing.T, deployment complement.Deployment, hsName string, otherHSName string,
 	) {
 		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("alice"),
-			Password:  "password",
+			LocalpartSuffix: "alice",
+			Password:        "password",
 		})
 		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("bob"),
-			Password:  "password",
+			LocalpartSuffix: "bob",
+			Password:        "password",
 		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
@@ -251,12 +243,12 @@ func TestDeviceListUpdates(t *testing.T) {
 	// testOtherUserLeave tests another user leaving a room Alice is in.
 	testOtherUserLeave := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
 		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("alice"),
-			Password:  "password",
+			LocalpartSuffix: "alice",
+			Password:        "password",
 		})
 		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("bob"),
-			Password:  "password",
+			LocalpartSuffix: "bob",
+			Password:        "password",
 		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
@@ -308,12 +300,12 @@ func TestDeviceListUpdates(t *testing.T) {
 	// testLeave tests Alice leaving a room another user is in.
 	testLeave := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
 		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("alice"),
-			Password:  "password",
+			LocalpartSuffix: "alice",
+			Password:        "password",
 		})
 		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("bob"),
-			Password:  "password",
+			LocalpartSuffix: "bob",
+			Password:        "password",
 		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
@@ -365,12 +357,12 @@ func TestDeviceListUpdates(t *testing.T) {
 	// testOtherUserRejoin tests another user leaving and rejoining a room Alice is in.
 	testOtherUserRejoin := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
 		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("alice"),
-			Password:  "password",
+			LocalpartSuffix: "alice",
+			Password:        "password",
 		})
 		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
-			Localpart: generateLocalpart("bob"),
-			Password:  "password",
+			LocalpartSuffix: "bob",
+			Password:        "password",
 		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)

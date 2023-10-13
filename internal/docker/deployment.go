@@ -85,10 +85,7 @@ func (d *Deployment) Register(t *testing.T, hsName string, opts helpers.Registra
 	if password == "" {
 		password = "complement_meets_min_password_req"
 	}
-	localpart := opts.Localpart
-	if localpart == "" {
-		localpart = fmt.Sprintf("user-%v", d.localpartCounter.Add(1))
-	}
+	localpart := fmt.Sprintf("user-%v-%v", d.localpartCounter.Add(1), opts.LocalpartSuffix)
 	var userID, accessToken, deviceID string
 	if opts.IsAdmin {
 		userID, accessToken, deviceID = client.RegisterSharedSecret(t, localpart, password, opts.IsAdmin)

@@ -19,6 +19,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // TODO:
@@ -183,8 +184,8 @@ func TestRegistration(t *testing.T) {
 				localpart := fmt.Sprintf("chrtestuser%s", string(testChars[x]))
 				t.Run(string(testChars[x]), func(t *testing.T) {
 					deployment.Register(t, "hs1", helpers.RegistrationOpts{
-						Localpart: localpart,
-						Password:  "sUp3rs3kr1t",
+						LocalpartSuffix: localpart,
+						Password:        "sUp3rs3kr1t",
 					})
 				})
 			}
@@ -279,9 +280,11 @@ func TestRegistration(t *testing.T) {
 			t.Parallel()
 			testUserName := "username_not_available"
 			// Don't need the return value here, just need a user to be registered to test against
-			deployment.Register(t, "hs1", helpers.RegistrationOpts{Localpart: testUserName})
+			inUseClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: testUserName})
+			localpart, _, err := gomatrixserverlib.SplitID('@', inUseClient.UserID)
+			must.NotError(t, "failed to get localpart from user ID", err)
 			res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
-				"username": []string{testUserName},
+				"username": []string{localpart},
 			}))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
