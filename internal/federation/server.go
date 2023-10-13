@@ -30,8 +30,13 @@ import (
 	"github.com/matrix-org/util"
 
 	"github.com/matrix-org/complement/internal/config"
-	"github.com/matrix-org/complement/internal/docker"
 )
+
+// Subset of Deployment used in federation
+type FederationDeployment interface {
+	GetConfig() *config.Complement
+	RoundTripper() http.RoundTripper
+}
 
 // Server represents a federation server
 type Server struct {
@@ -57,7 +62,7 @@ type Server struct {
 }
 
 // NewServer creates a new federation server with configured options.
-func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server)) *Server {
+func NewServer(t *testing.T, deployment FederationDeployment, opts ...func(*Server)) *Server {
 	// generate signing key
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -71,7 +76,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 		mux:   mux.NewRouter(),
 		// The server name will be updated when the caller calls Listen() to include the port number
 		// of the HTTP server e.g "host.docker.internal:56353"
-		serverName:                  deployment.Config.HostnameRunningComplement,
+		serverName:                  deployment.GetConfig().HostnameRunningComplement,
 		rooms:                       make(map[string]*ServerRoom),
 		aliases:                     make(map[string]string),
 		UnexpectedRequestsAreErrors: true,
@@ -79,10 +84,12 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	fetcher := &basicKeyFetcher{
 		KeyFetcher: &gomatrixserverlib.DirectKeyFetcher{
 			Client: fclient.NewClient(
-				fclient.WithTransport(&docker.RoundTripper{Deployment: deployment}),
+				fclient.WithTransport(deployment.RoundTripper()),
 			),
-			IsLocalServerName: func(s spec.ServerName) bool { return s == spec.ServerName(deployment.Config.HostnameRunningComplement) },
-			LocalPublicKey:    []byte(pub),
+			IsLocalServerName: func(s spec.ServerName) bool {
+				return s == spec.ServerName(deployment.GetConfig().HostnameRunningComplement)
+			},
+			LocalPublicKey: []byte(pub),
 		},
 		srv: srv,
 	}
@@ -111,7 +118,7 @@ func NewServer(t *testing.T, deployment *docker.Deployment, opts ...func(*Server
 	})
 
 	// generate certs and an http.Server
-	httpServer, certPath, keyPath, err := federationServer(deployment.Config, srv.mux)
+	httpServer, certPath, keyPath, err := federationServer(deployment.GetConfig(), srv.mux)
 	if err != nil {
 		t.Fatalf("complement: unable to create federation server and certificates: %s", err.Error())
 	}
@@ -185,8 +192,8 @@ func (s *Server) MustMakeRoom(t *testing.T, roomVer gomatrixserverlib.RoomVersio
 
 // FederationClient returns a client which will sign requests using this server's key.
 //
-// The requests will be routed according to the deployment map in `deployment`.
-func (s *Server) FederationClient(deployment *docker.Deployment) fclient.FederationClient {
+// The requests will be routed according to the deployment map in `deployment`, which satisfies the RoundTripper interface.
+func (s *Server) FederationClient(deployment FederationDeployment) fclient.FederationClient {
 	if !s.listening {
 		s.t.Fatalf("FederationClient() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the way federation requests are signed. Ensure you Listen() first!")
 	}
@@ -197,14 +204,14 @@ func (s *Server) FederationClient(deployment *docker.Deployment) fclient.Federat
 	}
 	f := fclient.NewFederationClient(
 		[]*fclient.SigningIdentity{&identity},
-		fclient.WithTransport(&docker.RoundTripper{Deployment: deployment}),
+		fclient.WithTransport(deployment.RoundTripper()),
 	)
 	return f
 }
 
 // MustSendTransaction sends the given PDUs/EDUs to the target destination, returning an error if the /send fails or if the response contains an error
 // for any sent PDUs. Times out after 10 seconds.
-func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment, destination string, pdus []json.RawMessage, edus []gomatrixserverlib.EDU) {
+func (s *Server) MustSendTransaction(t *testing.T, deployment FederationDeployment, destination string, pdus []json.RawMessage, edus []gomatrixserverlib.EDU) {
 	t.Helper()
 	cli := s.FederationClient(deployment)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -232,7 +239,7 @@ func (s *Server) MustSendTransaction(t *testing.T, deployment *docker.Deployment
 func (s *Server) SendFederationRequest(
 	ctx context.Context,
 	t *testing.T,
-	deployment *docker.Deployment,
+	deployment FederationDeployment,
 	req fclient.FederationRequest,
 	resBody interface{},
 ) error {
@@ -245,7 +252,7 @@ func (s *Server) SendFederationRequest(
 		return err
 	}
 
-	httpClient := fclient.NewClient(fclient.WithTransport(&docker.RoundTripper{Deployment: deployment}))
+	httpClient := fclient.NewClient(fclient.WithTransport(deployment.RoundTripper()))
 	start := time.Now()
 	err = httpClient.DoRequestAndParseResponse(ctx, httpReq, resBody)
 
@@ -263,7 +270,7 @@ func (s *Server) SendFederationRequest(
 func (s *Server) DoFederationRequest(
 	ctx context.Context,
 	t *testing.T,
-	deployment *docker.Deployment,
+	deployment FederationDeployment,
 	req fclient.FederationRequest) (*http.Response, error) {
 	if err := req.Sign(spec.ServerName(s.serverName), s.KeyID, s.Priv); err != nil {
 		return nil, err
@@ -274,7 +281,7 @@ func (s *Server) DoFederationRequest(
 		return nil, err
 	}
 
-	httpClient := fclient.NewClient(fclient.WithTransport(&docker.RoundTripper{Deployment: deployment}))
+	httpClient := fclient.NewClient(fclient.WithTransport(deployment.RoundTripper()))
 	start := time.Now()
 
 	var resp *http.Response
@@ -348,7 +355,7 @@ func (s *Server) MustCreateEvent(t *testing.T, room *ServerRoom, ev Event) gomat
 
 // MustJoinRoom will make the server send a make_join and a send_join to join a room
 // It returns the resultant room.
-func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remoteServer spec.ServerName, roomID string, userID string, partialState ...bool) *ServerRoom {
+func (s *Server) MustJoinRoom(t *testing.T, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string, partialState ...bool) *ServerRoom {
 	t.Helper()
 	origin := spec.ServerName(s.serverName)
 	fedClient := s.FederationClient(deployment)
@@ -427,7 +434,7 @@ func (s *Server) MustJoinRoom(t *testing.T, deployment *docker.Deployment, remot
 }
 
 // Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
-func (s *Server) MustLeaveRoom(t *testing.T, deployment *docker.Deployment, remoteServer spec.ServerName, roomID string, userID string) {
+func (s *Server) MustLeaveRoom(t *testing.T, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string) {
 	t.Helper()
 	origin := spec.ServerName(s.serverName)
 	fedClient := s.FederationClient(deployment)

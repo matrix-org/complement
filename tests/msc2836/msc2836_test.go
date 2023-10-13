@@ -197,7 +197,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 
-	srv := federation.NewServer(t, deployment,
+	srv := federation.NewServer(t, deployment.GetConfig(), deployment.RoundTripper(),
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleTransactionRequests(nil, nil),

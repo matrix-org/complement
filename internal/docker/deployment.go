@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -51,6 +52,14 @@ func (d *Deployment) Destroy(t *testing.T) {
 	d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs || t.Failed(), t.Name(), t.Failed())
 }
 
+func (d *Deployment) GetConfig() *config.Complement {
+	return d.Config
+}
+
+func (d *Deployment) RoundTripper() http.RoundTripper {
+	return &RoundTripper{Deployment: d}
+}
+
 // Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
 // Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
 // if the userID is otherwise not found.
@@ -91,7 +100,7 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 
 // NewUser creates a new user as a convenience method to RegisterUser.
 //
-//It registers the user with a deterministic password, and without admin privileges.
+// It registers the user with a deterministic password, and without admin privileges.
 func (d *Deployment) NewUser(t *testing.T, localpart, hs string) *client.CSAPI {
 	return d.RegisterUser(t, hs, localpart, "complement_meets_min_pasword_req_"+localpart, false)
 }

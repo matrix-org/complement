@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/docker"
 )
 
 var testPackage *TestPackage
@@ -35,7 +34,7 @@ func TestMain(m *testing.M, namespace string) {
 // It will construct the blueprint if it doesn't already exist in the docker image cache.
 // This function is the main setup function for all tests as it provides a deployment with
 // which tests can interact with.
-func Deploy(t *testing.T, blueprint b.Blueprint) *docker.Deployment {
+func Deploy(t *testing.T, blueprint b.Blueprint) Deployment {
 	t.Helper()
 	if testPackage == nil {
 		t.Fatalf("Deploy: testPackage not set, did you forget to call complement.TestMain?")

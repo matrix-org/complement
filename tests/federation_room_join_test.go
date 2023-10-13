@@ -183,7 +183,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			deployment.Config.HostnameRunningComplement: map[string]string{
+			deployment.GetConfig().HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -214,7 +214,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		})
 		newSignaturesBlock := map[string]interface{}{
-			deployment.Config.HostnameRunningComplement: map[string]string{
+			deployment.GetConfig().HostnameRunningComplement: map[string]string{
 				string(srv.KeyID) + "bogus": "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		}
@@ -249,7 +249,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 			},
 		}).JSON()
 		rawSig, err := json.Marshal(map[string]interface{}{
-			deployment.Config.HostnameRunningComplement: map[string]string{
+			deployment.GetConfig().HostnameRunningComplement: map[string]string{
 				string(srv.KeyID): "/3z+pJjiJXWhwfqIEzmNksvBHCoXTktK/y0rRuWJXw6i1+ygRG/suDCKhFuuz6gPapRmEMPVILi2mJqHHXPKAg",
 			},
 		})

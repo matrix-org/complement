@@ -6,13 +6,12 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/tidwall/gjson"
 )
 
 // tests/10apidoc/37room-receipts.pl
 
-func createRoomForReadReceipts(t *testing.T, c *client.CSAPI, deployment *docker.Deployment) (string, string) {
+func createRoomForReadReceipts(t *testing.T, c *client.CSAPI, deployment complement.Deployment) (string, string) {
 	roomID := c.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 	c.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(c.UserID, roomID))
