@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -21,7 +22,10 @@ func TestKeyChangesLocal(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	password := "$uperSecretPassword"
-	bob := deployment.RegisterUser(t, "hs1", "bob", password, false)
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "bob",
+		Password:  password,
+	})
 	unauthedClient := deployment.Client(t, "hs1", "")
 
 	t.Run("New login should create a device_lists.changed entry", func(t *testing.T) {

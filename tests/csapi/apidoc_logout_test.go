@@ -9,6 +9,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -18,7 +19,10 @@ func TestLogout(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	password := "superuser"
-	verifyClientUser := deployment.RegisterUser(t, "hs1", "testuser", password, false)
+	verifyClientUser := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "testuser",
+		Password:  password,
+	})
 
 	// sytest: Can logout current device
 	t.Run("Can logout current device", func(t *testing.T) {

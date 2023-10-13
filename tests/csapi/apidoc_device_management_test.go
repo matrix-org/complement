@@ -8,6 +8,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -16,7 +17,10 @@ func TestDeviceManagement(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
-	authedClient := deployment.RegisterUser(t, "hs1", "test_device_management_user", "superuser", false)
+	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "test_device_management_user",
+		Password:  "superuser",
+	})
 
 	// sytest: GET /device/{deviceId}
 	t.Run("GET /device/{deviceId}", func(t *testing.T) {
@@ -194,7 +198,10 @@ func TestDeviceManagement(t *testing.T) {
 	})
 	// sytest: DELETE /device/{deviceId} requires UI auth user to match device owner
 	t.Run("DELETE /device/{deviceId} requires UI auth user to match device owner", func(t *testing.T) {
-		bob := deployment.RegisterUser(t, "hs1", "bob", "bobspassword", false)
+		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+			Localpart: "bob",
+			Password:  "bobspassword",
+		})
 
 		newDeviceID, session2 := createSession(t, deployment, authedClient.UserID, "superuser")
 		session2.MustSync(t, client.SyncReq{})

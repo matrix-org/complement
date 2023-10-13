@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 
@@ -20,7 +21,10 @@ func TestChangePasswordPushers(t *testing.T) {
 	defer deployment.Destroy(t)
 	password1 := "superuser"
 	password2 := "my_new_password"
-	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_pusher_user", password1, false)
+	passwordClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "test_change_password_pusher_user",
+		Password:  password1,
+	})
 
 	// sytest: Pushers created with a different access token are deleted on password change
 	t.Run("Pushers created with a different access token are deleted on password change", func(t *testing.T) {

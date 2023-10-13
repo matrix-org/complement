@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -30,9 +31,9 @@ import (
 func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
-	alice := deployment.RegisterUser(t, "hs1", "alice", "sufficiently_long_password_alice", false)
-	bob := deployment.RegisterUser(t, "hs1", "bob", "sufficiently_long_password_bob", false)
-	chris := deployment.RegisterUser(t, "hs1", "chris", "sufficiently_long_password_chris", false)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{Localpart: "alice"})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{Localpart: "bob"})
+	chris := deployment.Register(t, "hs1", helpers.RegistrationOpts{Localpart: "chris"})
 
 	// Alice creates a room for herself.
 	publicRoom := alice.MustCreateRoom(t, map[string]interface{}{

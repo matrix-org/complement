@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
 )
 
@@ -21,7 +22,10 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 
 	userID := "@alice:hs1"
 	alice := deployment.Client(t, "hs1", userID)
-	bob := deployment.RegisterUser(t, "hs1", "bob", "bobpassword", false)
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "bob",
+		Password:  "bobpassword",
+	})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	t.Run("parallel", func(t *testing.T) {

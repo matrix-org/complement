@@ -10,6 +10,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -18,7 +19,10 @@ func TestLogin(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	unauthedClient := deployment.Client(t, "hs1", "")
-	_ = deployment.RegisterUser(t, "hs1", "test_login_user", "superuser", false)
+	deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "test_login_user",
+		Password:  "superuser",
+	})
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: GET /login yields a set of flows
 		t.Run("GET /login yields a set of flows", func(t *testing.T) {

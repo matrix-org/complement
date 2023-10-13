@@ -7,6 +7,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
@@ -21,7 +22,10 @@ func TestTxnInEvent(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	c := deployment.RegisterUser(t, "hs1", "alice", "password", false)
+	c := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "alice",
+		Password:  "password",
+	})
 
 	// Create a room where we can send events.
 	roomID := c.MustCreateRoom(t, map[string]interface{}{})
@@ -72,7 +76,10 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	deployment.RegisterUser(t, "hs1", "alice", "password", false)
+	deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "alice",
+		Password:  "password",
+	})
 
 	// Create a first client, which allocates a device ID.
 	c1 := deployment.Client(t, "hs1", "")
@@ -111,7 +118,10 @@ func TestTxnIdempotencyScopedToDevice(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	deployment.RegisterUser(t, "hs1", "alice", "password", false)
+	deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "alice",
+		Password:  "password",
+	})
 
 	// Create a first client, which allocates a device ID.
 	c1 := deployment.Client(t, "hs1", "")
@@ -151,7 +161,10 @@ func TestTxnIdempotency(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	deployment.RegisterUser(t, "hs1", "alice", "password", false)
+	deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "alice",
+		Password:  "password",
+	})
 
 	// Create a first client, which allocates a device ID.
 	c1 := deployment.Client(t, "hs1", "")
@@ -206,7 +219,10 @@ func TestTxnIdWithRefreshToken(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintCleanHS)
 	defer deployment.Destroy(t)
 
-	deployment.RegisterUser(t, "hs1", "alice", "password", false)
+	deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "alice",
+		Password:  "password",
+	})
 
 	c := deployment.Client(t, "hs1", "")
 

@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/runtime"
 )
@@ -381,7 +382,9 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
 
-	charlie := deployment.NewUser(t, "charlie", "hs1")
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "charlie",
+	})
 
 	// Alice creates two rooms: one with her and Bob, and a second with her and Charlie.
 	bobRoomID := alice.MustCreateRoom(t, map[string]interface{}{})
