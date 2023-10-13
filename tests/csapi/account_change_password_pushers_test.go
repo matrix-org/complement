@@ -22,8 +22,7 @@ func TestChangePasswordPushers(t *testing.T) {
 	password1 := "superuser"
 	password2 := "my_new_password"
 	passwordClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "test_change_password_pusher_user",
-		Password:  password1,
+		Password: password1,
 	})
 
 	// sytest: Pushers created with a different access token are deleted on password change

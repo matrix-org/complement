@@ -25,8 +25,8 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 	aliceLocalpart := "alice"
 	alicePassword := "hunter2"
 	aliceDeviceOne := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: aliceLocalpart,
-		Password:  alicePassword,
+		LocalpartSuffix: aliceLocalpart,
+		Password:        alicePassword,
 	})
 	aliceDeviceTwo := deployment.Login(t, "hs1", aliceDeviceOne, helpers.LoginOpts{
 		Password: alicePassword,

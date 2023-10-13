@@ -20,8 +20,7 @@ func TestLogout(t *testing.T) {
 
 	password := "superuser"
 	verifyClientUser := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "testuser",
-		Password:  password,
+		Password: password,
 	})
 
 	// sytest: Can logout current device

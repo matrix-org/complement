@@ -1,7 +1,7 @@
 package csapi_tests
 
 import (
-	"io/ioutil"
+	"io"
 	"testing"
 
 	"github.com/matrix-org/complement"
@@ -20,11 +20,10 @@ func TestChangePassword(t *testing.T) {
 	password1 := "superuser"
 	password2 := "my_new_password"
 	passwordClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		Localpart: "test_change_password_user",
-		Password:  password1,
+		Password: password1,
 	})
 	unauthedClient := deployment.Client(t, "hs1", "")
-	_, sessionTest := createSession(t, deployment, "test_change_password_user", "superuser")
+	_, sessionTest := createSession(t, deployment, passwordClient.UserID, "superuser")
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
 
@@ -82,7 +81,7 @@ func TestChangePassword(t *testing.T) {
 
 	// sytest: After changing password, different sessions can optionally be kept
 	t.Run("After changing password, different sessions can optionally be kept", func(t *testing.T) {
-		_, sessionOptional := createSession(t, deployment, "test_change_password_user", password2)
+		_, sessionOptional := createSession(t, deployment, passwordClient.UserID, password2)
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"auth": map[string]interface{}{
 				"type":     "m.login.password",
@@ -135,7 +134,7 @@ func createSession(t *testing.T, deployment complement.Deployment, userID, passw
 		"password": password,
 	})
 	res := authedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatalf("unable to read response body: %v", err)
 	}
