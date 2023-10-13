@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -103,8 +104,20 @@ func (tp *TestPackage) OldDeploy(t *testing.T, blueprint b.Blueprint) Deployment
 	return dep
 }
 
+var (
+	existingDeployments = map[int]*docker.Deployment{}
+	mu                  sync.Mutex
+)
+
 func (tp *TestPackage) Deploy(t *testing.T, numServers int) Deployment {
 	t.Helper()
+	mu.Lock()
+	existingDep := existingDeployments[numServers]
+	if existingDep != nil {
+		mu.Unlock()
+		return existingDep
+	}
+	mu.Unlock()
 	blueprint := mapServersToBlueprint(numServers)
 	timeStartBlueprint := time.Now()
 	if err := tp.complementBuilder.ConstructBlueprintIfNotExist(blueprint); err != nil {
@@ -121,6 +134,9 @@ func (tp *TestPackage) Deploy(t *testing.T, numServers int) Deployment {
 		t.Fatalf("Deploy: Deploy returned error %s", err)
 	}
 	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy))
+	mu.Lock()
+	existingDeployments[numServers] = dep
+	mu.Unlock()
 	return dep
 }
 
