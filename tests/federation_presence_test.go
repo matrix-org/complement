@@ -15,8 +15,12 @@ func TestRemotePresence(t *testing.T) {
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "bob"})
+
+	// for presence to be sent over federation alice and bob must share a room
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
 
 	// sytest: Presence changes are also reported to remote room members
 	t.Run("Presence changes are also reported to remote room members", func(t *testing.T) {

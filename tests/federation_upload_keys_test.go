@@ -22,6 +22,10 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
+	// for device lists to be shared between alice and bob they must share a room
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+
 	// Do an initial sync so that we can see the changes come down sync.
 	_, nextBatchBeforeKeyUpload := bob.MustSync(t, client.SyncReq{})
 
