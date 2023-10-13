@@ -4,17 +4,17 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestProfileDisplayName(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	unauthedClient := deployment.Client(t, "hs1", "")
-	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
+	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	displayName := "my_display_name"
 	// sytest: PUT /profile/:user_id/displayname sets my name
 	t.Run("PUT /profile/:user_id/displayname sets my name", func(t *testing.T) {

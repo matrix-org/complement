@@ -6,8 +6,8 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 )
 
 func TestAvatarUrlUpdate(t *testing.T) {
@@ -20,12 +20,12 @@ func TestDisplayNameUpdate(t *testing.T) {
 
 // sytest: $datum updates affect room member events
 func testProfileFieldUpdate(t *testing.T, field string) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	const bogusData = "LemurLover"
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",

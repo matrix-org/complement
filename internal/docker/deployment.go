@@ -36,8 +36,10 @@ type HomeserverDeployment struct {
 	accessTokensMutex   sync.RWMutex
 	ApplicationServices map[string]string // e.g { "my-as-id": "id: xxx\nas_token: xxx ..."} }
 	DeviceIDs           map[string]string // e.g { "@alice:hs1": "myDeviceID" }
-	CSAPIClients        []*client.CSAPI
-	CSAPIClientsMutex   sync.Mutex
+
+	// track all clients so if Restart() is called we can repoint to the new high-numbered port
+	CSAPIClients      []*client.CSAPI
+	CSAPIClientsMutex sync.Mutex
 }
 
 // Updates the client and federation base URLs of the homeserver deployment.
@@ -133,10 +135,29 @@ func (d *Deployment) Login(t *testing.T, hsName string, existing *client.CSAPI, 
 	return client
 }
 
-// Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
-// Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
-// if the userID is otherwise not found.
-func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
+func (d *Deployment) UnauthenticatedClient(t *testing.T, hsName string) *client.CSAPI {
+	t.Helper()
+	dep, ok := d.HS[hsName]
+	if !ok {
+		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)
+		return nil
+	}
+	client := &client.CSAPI{
+		BaseURL:          dep.BaseURL,
+		Client:           client.NewLoggedClient(t, hsName, nil),
+		SyncUntilTimeout: 5 * time.Second,
+		Debug:            d.Deployer.debugLogging,
+	}
+	// Appending a slice is not thread-safe. Protect the write with a mutex.
+	dep.CSAPIClientsMutex.Lock()
+	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	dep.CSAPIClientsMutex.Unlock()
+	return client
+}
+
+// AppServiceUser returns a client for the given app service user ID. The HS in question must have an appservice
+// hooked up to it already. TODO: REMOVE
+func (d *Deployment) AppServiceUser(t *testing.T, hsName, appServiceUserID string) *client.CSAPI {
 	t.Helper()
 	dep, ok := d.HS[hsName]
 	if !ok {
@@ -144,18 +165,18 @@ func (d *Deployment) Client(t *testing.T, hsName, userID string) *client.CSAPI {
 		return nil
 	}
 	dep.accessTokensMutex.RLock()
-	token := dep.AccessTokens[userID]
+	token := dep.AccessTokens[appServiceUserID]
 	dep.accessTokensMutex.RUnlock()
-	if token == "" && userID != "" {
-		t.Fatalf("Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, userID)
+	if token == "" && appServiceUserID != "" {
+		t.Fatalf("Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, appServiceUserID)
 		return nil
 	}
-	deviceID := dep.DeviceIDs[userID]
-	if deviceID == "" && userID != "" {
-		t.Logf("WARNING: Deployment.Client - HS name '%s' - user ID '%s' - deviceID not found", hsName, userID)
+	deviceID := dep.DeviceIDs[appServiceUserID]
+	if deviceID == "" && appServiceUserID != "" {
+		t.Logf("WARNING: Deployment.Client - HS name '%s' - user ID '%s' - deviceID not found", hsName, appServiceUserID)
 	}
 	client := &client.CSAPI{
-		UserID:           userID,
+		UserID:           appServiceUserID,
 		AccessToken:      token,
 		DeviceID:         deviceID,
 		BaseURL:          dep.BaseURL,

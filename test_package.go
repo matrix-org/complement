@@ -19,15 +19,16 @@ import (
 
 // Deployment provides a way for tests to interact with a set of homeservers.
 type Deployment interface {
-	// Client returns a CSAPI client targeting the given hsName, using the access token for the given userID.
-	// Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
-	// if the userID is otherwise not found.
-	Client(t *testing.T, serverName, userID string) *client.CSAPI
+	// UnauthenticatedClient returns a blank CSAPI client.
+	UnauthenticatedClient(t *testing.T, serverName string) *client.CSAPI
 	// Register a new user on the given server.
 	Register(t *testing.T, hsName string, opts helpers.RegistrationOpts) *client.CSAPI
 	// Login to an existing user account on the given server. In order to make tests not hardcode full user IDs,
 	// an existing logged in client must be supplied.
 	Login(t *testing.T, hsName string, existing *client.CSAPI, opts helpers.LoginOpts) *client.CSAPI
+	// AppServiceUser returns a client for the given app service user ID. The HS in question must have an appservice
+	// hooked up to it already. TODO: REMOVE
+	AppServiceUser(t *testing.T, hsName, appServiceUserID string) *client.CSAPI
 	// Restart a deployment.
 	Restart(t *testing.T) error
 	// Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
@@ -82,8 +83,29 @@ func (tp *TestPackage) Cleanup() {
 // It will construct the blueprint if it doesn't already exist in the docker image cache.
 // This function is the main setup function for all tests as it provides a deployment with
 // which tests can interact with.
-func (tp *TestPackage) Deploy(t *testing.T, blueprint b.Blueprint) Deployment {
+func (tp *TestPackage) OldDeploy(t *testing.T, blueprint b.Blueprint) Deployment {
 	t.Helper()
+	timeStartBlueprint := time.Now()
+	if err := tp.complementBuilder.ConstructBlueprintIfNotExist(blueprint); err != nil {
+		t.Fatalf("OldDeploy: Failed to construct blueprint: %s", err)
+	}
+	namespace := fmt.Sprintf("%d", atomic.AddUint64(&tp.namespaceCounter, 1))
+	d, err := docker.NewDeployer(namespace, tp.complementBuilder.Config)
+	if err != nil {
+		t.Fatalf("OldDeploy: NewDeployer returned error %s", err)
+	}
+	timeStartDeploy := time.Now()
+	dep, err := d.Deploy(context.Background(), blueprint.Name)
+	if err != nil {
+		t.Fatalf("OldDeploy: Deploy returned error %s", err)
+	}
+	t.Logf("OldDeploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy))
+	return dep
+}
+
+func (tp *TestPackage) Deploy(t *testing.T, numServers int) Deployment {
+	t.Helper()
+	blueprint := mapServersToBlueprint(numServers)
 	timeStartBlueprint := time.Now()
 	if err := tp.complementBuilder.ConstructBlueprintIfNotExist(blueprint); err != nil {
 		t.Fatalf("Deploy: Failed to construct blueprint: %s", err)
@@ -102,6 +124,16 @@ func (tp *TestPackage) Deploy(t *testing.T, blueprint b.Blueprint) Deployment {
 	return dep
 }
 
-func (tp *TestPackage) DeployDirty(t *testing.T, numServers int) Deployment {
-	return nil
+// converts the requested number of servers into a single blueprint, which can be deployed using normal blueprint machinery.
+func mapServersToBlueprint(numServers int) b.Blueprint {
+	servers := make([]b.Homeserver, numServers)
+	for i := range servers {
+		servers[i] = b.Homeserver{
+			Name: fmt.Sprintf("hs%d", i+1), // hs1,hs2,...
+		}
+	}
+	return b.MustValidate(b.Blueprint{
+		Name:        fmt.Sprintf("%d_servers", numServers),
+		Homeservers: servers,
+	})
 }

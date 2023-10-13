@@ -6,7 +6,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -14,9 +13,9 @@ import (
 )
 
 func TestDeviceManagement(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	unauthedClient := deployment.Client(t, "hs1", "")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		Password: "superuser",
 	})

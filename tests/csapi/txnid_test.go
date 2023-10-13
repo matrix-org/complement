@@ -20,7 +20,7 @@ func TestTxnInEvent(t *testing.T) {
 	// See https://github.com/matrix-org/dendrite/issues/3000
 	runtime.SkipIf(t, runtime.Dendrite)
 
-	deployment := complement.Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	c := deployment.Register(t, "hs1", helpers.RegistrationOpts{
@@ -74,7 +74,7 @@ func mustHaveTransactionIDForEvent(t *testing.T, roomID, eventID, expectedTxnId 
 func TestTxnScopeOnLocalEcho(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
 
-	deployment := complement.Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
@@ -83,7 +83,7 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 	})
 
 	// Create a first client, which allocates a device ID.
-	c1 := deployment.Client(t, "hs1", "")
+	c1 := deployment.UnauthenticatedClient(t, "hs1")
 	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, alice.UserID, "password")
 
 	// Create a room where we can send events.
@@ -103,7 +103,7 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 	c1.MustSyncUntil(t, client.SyncReq{}, mustHaveTransactionIDForEvent(t, roomID, eventID, txnId))
 
 	// Create a second client, inheriting the first device ID.
-	c2 := deployment.Client(t, "hs1", "")
+	c2 := deployment.UnauthenticatedClient(t, "hs1")
 	c2.UserID, c2.AccessToken, c2.DeviceID = c2.LoginUser(t, alice.UserID, "password", client.WithDeviceID(c1.DeviceID))
 	must.Equal(t, c1.DeviceID, c2.DeviceID, "Device ID should be the same")
 
@@ -116,7 +116,7 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 func TestTxnIdempotencyScopedToDevice(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
 
-	deployment := complement.Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
@@ -125,7 +125,7 @@ func TestTxnIdempotencyScopedToDevice(t *testing.T) {
 	})
 
 	// Create a first client, which allocates a device ID.
-	c1 := deployment.Client(t, "hs1", "")
+	c1 := deployment.UnauthenticatedClient(t, "hs1")
 	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, alice.UserID, "password")
 
 	// Create a room where we can send events.
@@ -143,7 +143,7 @@ func TestTxnIdempotencyScopedToDevice(t *testing.T) {
 	eventID1 := c1.Unsafe_SendEventUnsyncedWithTxnID(t, roomID, event, txnId)
 
 	// Create a second client, inheriting the first device ID.
-	c2 := deployment.Client(t, "hs1", "")
+	c2 := deployment.UnauthenticatedClient(t, "hs1")
 	c2.UserID, c2.AccessToken, c2.DeviceID = c2.LoginUser(t, alice.UserID, "password", client.WithDeviceID(c1.DeviceID))
 	must.Equal(t, c1.DeviceID, c2.DeviceID, "Device ID should be the same")
 
@@ -159,7 +159,7 @@ func TestTxnIdempotency(t *testing.T) {
 	// Conduit appears to be tracking transaction IDs individually rather than combined with the request URI/room ID
 	runtime.SkipIf(t, runtime.Conduit)
 
-	deployment := complement.Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
@@ -168,7 +168,7 @@ func TestTxnIdempotency(t *testing.T) {
 	})
 
 	// Create a first client, which allocates a device ID.
-	c1 := deployment.Client(t, "hs1", "")
+	c1 := deployment.UnauthenticatedClient(t, "hs1")
 	c1.UserID, c1.AccessToken, c1.DeviceID = c1.LoginUser(t, alice.UserID, "password")
 
 	// Create a room where we can send events.
@@ -217,7 +217,7 @@ func TestTxnIdWithRefreshToken(t *testing.T) {
 	// Dendrite and Conduit don't support refresh tokens yet.
 	runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit)
 
-	deployment := complement.Deploy(t, b.BlueprintCleanHS)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
@@ -227,7 +227,7 @@ func TestTxnIdWithRefreshToken(t *testing.T) {
 	localpart, _, err := gomatrixserverlib.SplitID('@', alice.UserID)
 	must.NotError(t, "failed to get localpart from user ID", err)
 
-	c := deployment.Client(t, "hs1", "")
+	c := deployment.UnauthenticatedClient(t, "hs1")
 
 	var refreshToken string
 	c.UserID, c.AccessToken, refreshToken, c.DeviceID, _ = c.LoginUserWithRefreshToken(t, localpart, "password")

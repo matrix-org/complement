@@ -22,6 +22,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -38,10 +39,10 @@ import (
 // m.room.create event would pick that up. We also can't tear down the Complement
 // server because otherwise signing key lookups will fail.
 func TestJoinViaRoomIDAndServerName(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	acceptMakeSendJoinRequests := true
 
@@ -78,7 +79,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	acceptMakeSendJoinRequests = false
 
 	// join the room using ?server_name on HS2
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 	roomID := bob.MustJoinRoom(t, serverRoom.RoomID, []string{"hs1"})
 	must.Equal(t, roomID, serverRoom.RoomID, "joined room mismatch")
 }
@@ -86,11 +87,11 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 // This tests that joining a room with multiple ?server_name=s works correctly.
 // The join should succeed even if the first server is not in the room.
 func TestJoinFederatedRoomFailOver(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	srv := federation.NewServer(t, deployment)
 	cancel := srv.Listen()
@@ -126,10 +127,10 @@ func TestJoinFederatedRoomFailOver(t *testing.T) {
 // the properties listed above, then asking HS1 to join them and make sure that
 // they 200 OK.
 func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
@@ -292,7 +293,7 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 
 // This test checks that users cannot circumvent the auth checks via send_join.
 func TestBannedUserCannotSendJoin(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
@@ -308,7 +309,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	charlie := srv.UserID("charlie")
 
 	// alice creates a room, and bans charlie from it.
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
@@ -391,7 +392,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 		}
 	}
 
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
@@ -402,7 +403,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 	defer cancel()
 
 	// alice creates a room, and charlie joins it
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomId := alice.MustCreateRoom(t, createRoomOpts)
 	charlie := srv.UserID("charlie")
 	room := srv.MustJoinRoom(t, deployment, "hs1", roomId, charlie)
@@ -494,7 +495,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 // Will be skipped if the server returns a full-state response.
 func TestSendJoinPartialStateResponse(t *testing.T) {
 	// start with a homeserver with two users
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
@@ -510,8 +511,8 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	// annoyingly we can't get to the room that alice and bob already share (see https://github.com/matrix-org/complement/issues/254)
 	// so we have to create a new one.
 	// alice creates a room, which bob joins
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, nil)
 
@@ -582,16 +583,15 @@ func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
 	// Dendrite doesn't read AS registration files from Complement yet
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/complement/issues/514
 
-	deployment := complement.Deploy(t, b.BlueprintHSWithApplicationService)
+	deployment := complement.OldDeploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
 	// Create the application service bridge user to try to join the room from
 	asUserID := "@the-bridge-user:hs1"
-	as := deployment.Client(t, "hs1", asUserID)
+	as := deployment.AppServiceUser(t, "hs1", asUserID)
 
 	// Create the federated remote user which will create the room
-	remoteUserID := "@charlie:hs2"
-	remoteCharlie := deployment.Client(t, "hs2", remoteUserID)
+	remoteCharlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	t.Run("join remote federated room as application service user", func(t *testing.T) {
 		//t.Parallel()

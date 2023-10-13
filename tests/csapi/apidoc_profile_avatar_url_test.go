@@ -4,17 +4,17 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestProfileAvatarURL(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	unauthedClient := deployment.Client(t, "hs1", "")
-	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
+	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	avatarURL := "mxc://example.com/SEsfnsuifSDFSSEF"
 	// sytest: PUT /profile/:user_id/avatar_url sets my avatar
 	t.Run("PUT /profile/:user_id/avatar_url sets my avatar", func(t *testing.T) {

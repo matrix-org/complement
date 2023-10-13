@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -20,10 +21,10 @@ import (
 // sytest: GET /rooms/:room_id/messages returns a message
 func TestSendAndFetchMessage(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // flakey
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
@@ -63,10 +64,10 @@ func TestSendAndFetchMessage(t *testing.T) {
 // With a non-existent room_id, GET /rooms/:room_id/messages returns 403
 // forbidden ("You aren't a member of the room").
 func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := "!does-not-exist:hs1"
 
 	// then request messages from the room
@@ -81,10 +82,10 @@ func TestFetchMessagesFromNonExistentRoom(t *testing.T) {
 // sytest: PUT /rooms/:room_id/send/:event_type/:txn_id sends a message
 // sytest: PUT /rooms/:room_id/send/:event_type/:txn_id deduplicates the same txn id
 func TestSendMessageWithTxn(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
@@ -108,33 +109,12 @@ func TestSendMessageWithTxn(t *testing.T) {
 }
 
 func TestRoomMessagesLazyLoading(t *testing.T) {
-	deployment := complement.Deploy(t, b.MustValidate(b.Blueprint{
-		Name: "alice_bob_and_charlie",
-		Homeservers: []b.Homeserver{
-			{
-				Name: "hs1",
-				Users: []b.User{
-					{
-						Localpart:   "@alice",
-						DisplayName: "Alice",
-					},
-					{
-						Localpart:   "@bob",
-						DisplayName: "Bob",
-					},
-					{
-						Localpart:   "@charlie",
-						DisplayName: "Charlie",
-					},
-				},
-			},
-		},
-	}))
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, nil)
@@ -199,10 +179,10 @@ func TestRoomMessagesLazyLoading(t *testing.T) {
 //
 // sytest: GET /rooms/:room_id/messages lazy loads members correctly
 func TestRoomMessagesLazyLoadingLocalUser(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 

@@ -23,6 +23,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -82,13 +83,13 @@ func roomToChildrenMapper(r gjson.Result) interface{} {
 // - Events are returned correctly.
 // - Redacting links works correctly.
 func TestClientSpacesSummary(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	roomNames := make(map[string]string)
 
 	// create the rooms
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	root := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Root",
@@ -130,7 +131,7 @@ func TestClientSpacesSummary(t *testing.T) {
 	})
 	roomNames[r3] = "R3"
 	// alice is not joined to R4
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	r4 := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "R4",
@@ -392,11 +393,11 @@ func TestClientSpacesSummary(t *testing.T) {
 // Tests that:
 // - Rooms/spaces the user is not invited to should not appear.
 func TestClientSpacesSummaryJoinRules(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	// create the rooms
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	root := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 		"name":   "Root",
@@ -468,7 +469,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	})
 
 	// Querying is done by bob who is not yet in any of the rooms.
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob.MustJoinRoom(t, root, []string{"hs1"})
 
 	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
@@ -540,7 +541,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 // Tests that:
 // - Querying from root returns the entire graph
 func TestFederatedClientSpaces(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	worldReadable := map[string]interface{}{
@@ -571,12 +572,12 @@ func TestFederatedClientSpaces(t *testing.T) {
 		},
 	}
 	// create the rooms
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	root := alice.MustCreateRoom(t, worldReadableSpace)
 	r1 := alice.MustCreateRoom(t, worldReadable)
 	ss1 := alice.MustCreateRoom(t, worldReadableSpace)
 	r4 := alice.MustCreateRoom(t, worldReadable)
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 	r2 := bob.MustCreateRoom(t, worldReadable)
 	ss2 := bob.MustCreateRoom(t, worldReadableSpace)
 	r3 := bob.MustCreateRoom(t, worldReadable)

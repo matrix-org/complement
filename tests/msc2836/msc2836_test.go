@@ -40,11 +40,11 @@ import (
 // an event which the server does have, event B, to ensure that this request also works and also does
 // federated hits to return missing events (A,C).
 func TestEventRelationships(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	// Create the room and send events A,B,C,D
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
@@ -91,7 +91,7 @@ func TestEventRelationships(t *testing.T) {
 	t.Logf("Event ID A:%s  B:%s  C:%s  D:%s", eventA, eventB, eventC, eventD)
 
 	// Join the room from another server
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 	_ = bob.MustJoinRoom(t, roomID, []string{"hs1"})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
@@ -192,12 +192,12 @@ func TestEventRelationships(t *testing.T) {
 // We then check that B, which wasn't on the return path on the previous request, was persisted by calling
 // /event_relationships again with event ID 'A' and direction 'down'.
 func TestFederatedEventRelationships(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
-	srv := federation.NewServer(t, deployment.GetConfig(), deployment.RoundTripper(),
+	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleTransactionRequests(nil, nil),

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -15,14 +14,14 @@ import (
 )
 
 func TestChangePassword(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	password1 := "superuser"
 	password2 := "my_new_password"
 	passwordClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		Password: password1,
 	})
-	unauthedClient := deployment.Client(t, "hs1", "")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 	_, sessionTest := createSession(t, deployment, passwordClient.UserID, "superuser")
 	// sytest: After changing password, can't log in with old password
 	t.Run("After changing password, can't log in with old password", func(t *testing.T) {
@@ -124,7 +123,7 @@ func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword stri
 }
 
 func createSession(t *testing.T, deployment complement.Deployment, userID, password string) (deviceID string, authedClient *client.CSAPI) {
-	authedClient = deployment.Client(t, "hs1", "")
+	authedClient = deployment.UnauthenticatedClient(t, "hs1")
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"identifier": map[string]interface{}{
 			"type": "m.id.user",

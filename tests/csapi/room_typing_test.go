@@ -4,18 +4,17 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 )
 
 // sytest: PUT /rooms/:room_id/typing/:user_id sets typing notification
 func TestTyping(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
@@ -38,11 +37,11 @@ func TestTyping(t *testing.T) {
 
 // sytest: Typing notifications don't leak
 func TestLeakyTyping(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		LocalpartSuffix: "charlie",
 		Password:        "charliepassword",

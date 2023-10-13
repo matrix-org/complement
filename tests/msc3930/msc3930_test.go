@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -27,12 +27,11 @@ const pollStartRuleID = ".org.matrix.msc3930.rule.poll_start"
 const pollEndRuleID = ".org.matrix.msc3930.rule.poll_end"
 
 func TestPollsLocalPushRules(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	// Create a user to poll the push rules of.
-	aliceUserID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", aliceUserID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Test for the presence of the expected push rules. Clients are expected
 	// to implement local matching of events based on the presented rules.
