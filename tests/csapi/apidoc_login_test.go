@@ -108,7 +108,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login as non-existing user is rejected
 		t.Run("POST /login as non-existing user is rejected", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
 				"type": "m.login.password",
 				"identifier": map[string]interface{}{
 					"type": "m.id.user",
@@ -123,7 +123,7 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login wrong password is rejected
 		t.Run("POST /login wrong password is rejected", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
 				"type": "m.login.password",
 				"identifier": map[string]interface{}{
 					"type": "m.id.user",
