@@ -6,6 +6,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 )
 
 // sytest: PUT /rooms/:room_id/typing/:user_id sets typing notification
@@ -42,7 +43,10 @@ func TestLeakyTyping(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.RegisterUser(t, "hs1", "charlie", "charliepassword", false)
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "charlie",
+		Password:  "charliepassword",
+	})
 
 	// Alice creates a room. Bob joins it.
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})

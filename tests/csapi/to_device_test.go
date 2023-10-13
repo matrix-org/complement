@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 )
 
 // sytest: Can send a message directly to a device using PUT /sendToDevice
@@ -20,7 +21,10 @@ func TestToDeviceMessages(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.RegisterUser(t, "hs1", "charlie", "charliepassword", false)
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "charlie",
+		Password:  "charliepassword",
+	})
 
 	_, bobSince := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 	_, charlieSince := charlie.MustSync(t, client.SyncReq{TimeoutMillis: "0"})

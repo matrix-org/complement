@@ -10,6 +10,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -45,8 +46,14 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	}
 
 	alice := deployment.Client(t, "hs1", aliceUserID)
-	bob := deployment.RegisterUser(t, "hs1", "bob", "bob-has-a-very-secret-pw", false)
-	eve := deployment.RegisterUser(t, "hs1", "eve", "eve-has-a-very-secret-pw", false)
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "bob",
+		Password:  "bob-has-a-very-secret-pw",
+	})
+	eve := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "eve",
+		Password:  "eve-has-a-very-secret-pw",
+	})
 
 	// Alice sets her profile displayname. This ensures that her
 	// public name, private name and userid localpart are all

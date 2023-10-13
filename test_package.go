@@ -11,6 +11,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/sirupsen/logrus"
@@ -22,16 +23,11 @@ type Deployment interface {
 	// Fails the test if the hsName is not found. Returns an unauthenticated client if userID is "", fails the test
 	// if the userID is otherwise not found.
 	Client(t *testing.T, serverName, userID string) *client.CSAPI
-	// RegisterUser within a homeserver and return an authenticatedClient, Fails the test if the hsName is not found.
-	RegisterUser(t *testing.T, hsName, localpart, password string, isAdmin bool) *client.CSAPI
-	// NewUser creates a new user as a convenience method to RegisterUser. TODO REMOVE
-	//
-	// It registers the user with a deterministic password, and without admin privileges.
-	NewUser(t *testing.T, localpart, hs string) *client.CSAPI
-	// TODO remove this, only used in 1 test in msc3890
-	// LoginUser within a homeserver and return an authenticatedClient. Fails the test if the hsName is not found.
-	// Note that this will not change the access token of the client that is returned by `deployment.Client`.
-	LoginUser(t *testing.T, hsName, localpart, password string) *client.CSAPI
+	// Register a new user on the given server.
+	Register(t *testing.T, hsName string, opts helpers.RegistrationOpts) *client.CSAPI
+	// Login to an existing user account on the given server. In order to make tests not hardcode full user IDs,
+	// an existing logged in client must be supplied.
+	Login(t *testing.T, hsName string, existing *client.CSAPI, opts helpers.LoginOpts) *client.CSAPI
 	// Restart a deployment.
 	Restart(t *testing.T) error
 	// Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,

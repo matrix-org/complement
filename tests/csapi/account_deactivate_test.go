@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -17,7 +18,10 @@ func TestDeactivateAccount(t *testing.T) {
 	deployment := complement.Deploy(t, b.BlueprintAlice)
 	defer deployment.Destroy(t)
 	password := "superuser"
-	authedClient := deployment.RegisterUser(t, "hs1", "test_deactivate_user", password, false)
+	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "test_deactivate_user",
+		Password:  password,
+	})
 	unauthedClient := deployment.Client(t, "hs1", "")
 
 	// Ensure that the first step, in which the client queries the server's user-interactive auth flows, returns

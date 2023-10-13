@@ -16,6 +16,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -181,7 +182,10 @@ func TestRegistration(t *testing.T) {
 			for x := range testChars {
 				localpart := fmt.Sprintf("chrtestuser%s", string(testChars[x]))
 				t.Run(string(testChars[x]), func(t *testing.T) {
-					deployment.RegisterUser(t, "hs1", localpart, "sUp3rs3kr1t", false)
+					deployment.Register(t, "hs1", helpers.RegistrationOpts{
+						Localpart: localpart,
+						Password:  "sUp3rs3kr1t",
+					})
 				})
 			}
 		})
@@ -275,7 +279,7 @@ func TestRegistration(t *testing.T) {
 			t.Parallel()
 			testUserName := "username_not_available"
 			// Don't need the return value here, just need a user to be registered to test against
-			_ = deployment.NewUser(t, testUserName, "hs1")
+			deployment.Register(t, "hs1", helpers.RegistrationOpts{Localpart: testUserName})
 			res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
 				"username": []string{testUserName},
 			}))

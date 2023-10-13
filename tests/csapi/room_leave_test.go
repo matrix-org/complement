@@ -10,6 +10,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -20,7 +21,10 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	alice := deployment.Client(t, "hs1", "@alice:hs1")
 	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.RegisterUser(t, "hs1", "charlie", "sufficiently_long_password_charlie", false)
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: "charlie",
+		Password:  "sufficiently_long_password_charlie",
+	})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"initial_state": []map[string]interface{}{

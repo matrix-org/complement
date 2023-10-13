@@ -10,6 +10,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/tidwall/gjson"
@@ -23,8 +24,13 @@ func TestDeletingDeviceRemovesDeviceLocalNotificationSettings(t *testing.T) {
 	t.Log("Alice registers on device 1 and logs in to device 2.")
 	aliceLocalpart := "alice"
 	alicePassword := "hunter2"
-	aliceDeviceOne := deployment.RegisterUser(t, "hs1", aliceLocalpart, alicePassword, false)
-	aliceDeviceTwo := deployment.LoginUser(t, "hs1", aliceLocalpart, alicePassword)
+	aliceDeviceOne := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Localpart: aliceLocalpart,
+		Password:  alicePassword,
+	})
+	aliceDeviceTwo := deployment.Login(t, "hs1", aliceDeviceOne, helpers.LoginOpts{
+		Password: alicePassword,
+	})
 
 	accountDataType := "org.matrix.msc3890.local_notification_settings." + aliceDeviceTwo.DeviceID
 	accountDataContent := map[string]interface{}{"is_silenced": true}
