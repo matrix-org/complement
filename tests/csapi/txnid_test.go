@@ -104,7 +104,7 @@ func TestTxnScopeOnLocalEcho(t *testing.T) {
 
 	// Create a second client, inheriting the first device ID.
 	c2 := deployment.UnauthenticatedClient(t, "hs1")
-	c2.UserID, c2.AccessToken, c2.DeviceID = c2.LoginUser(t, "alice", "password", client.WithDeviceID(c1.DeviceID))
+	c2.UserID, c2.AccessToken, c2.DeviceID = c2.LoginUser(t, alice.UserID, "password", client.WithDeviceID(c1.DeviceID))
 	must.Equal(t, c1.DeviceID, c2.DeviceID, "Device ID should be the same")
 
 	// When syncing, we should find the event and it should have the same transaction ID on the second client.
@@ -144,7 +144,7 @@ func TestTxnIdempotencyScopedToDevice(t *testing.T) {
 
 	// Create a second client, inheriting the first device ID.
 	c2 := deployment.UnauthenticatedClient(t, "hs1")
-	c2.UserID, c2.AccessToken, c2.DeviceID = c2.LoginUser(t, "alice", "password", client.WithDeviceID(c1.DeviceID))
+	c2.UserID, c2.AccessToken, c2.DeviceID = c2.LoginUser(t, alice.UserID, "password", client.WithDeviceID(c1.DeviceID))
 	must.Equal(t, c1.DeviceID, c2.DeviceID, "Device ID should be the same")
 
 	// send another event with the same txnId via the second client
