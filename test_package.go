@@ -84,6 +84,12 @@ func NewTestPackage(pkgNamespace string) (*TestPackage, error) {
 }
 
 func (tp *TestPackage) Cleanup() {
+	// any dirty deployments need logs printed and post scripts run
+	tp.existingDeploymentsMu.Lock()
+	for _, dep := range tp.existingDeployments {
+		dep.DestroyAtCleanup()
+	}
+	tp.existingDeploymentsMu.Unlock()
 	tp.complementBuilder.Cleanup()
 }
 

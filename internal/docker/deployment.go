@@ -54,6 +54,16 @@ func (hsDep *HomeserverDeployment) SetEndpoints(baseURL string, fedBaseURL strin
 	}
 }
 
+// DestroyAtCleanup destroys the entire deployment. It should be called at cleanup time for dirty
+// deployments only. Handles configuration options for things which should run at container destroy
+// time, like post-run scripts and printing logs.
+func (d *Deployment) DestroyAtCleanup() {
+	if !d.Dirty {
+		return
+	}
+	d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs, "COMPLEMENT_ENABLE_DIRTY_RUNS", false)
+}
+
 // Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
 // will print container logs before killing the container.
 func (d *Deployment) Destroy(t *testing.T) {
