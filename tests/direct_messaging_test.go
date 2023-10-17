@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -22,15 +22,15 @@ import (
 // Test that a client can write `m.direct` account data and get told about updates to that event.
 // Requires a functioning account data implementation.
 func TestWriteMDirectAccountData(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer func() {
 		// additional logging to debug https://github.com/matrix-org/synapse/issues/13334
 		t.Logf("%s: TestWriteMDirectAccountData complete: destroying HS deployment", time.Now())
 		deployment.Destroy(t)
 	}()
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
@@ -70,11 +70,11 @@ func TestWriteMDirectAccountData(t *testing.T) {
 // Test that the `is_direct` flag on m.room.member invites propagate to the target user. Both users
 // are on the same homeserver.
 func TestIsDirectFlagLocal(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"invite":    []string{bob.UserID},
 		"is_direct": true,
@@ -103,7 +103,7 @@ func TestIsDirectFlagLocal(t *testing.T) {
 // Test that the `is_direct` flag on m.room.member invites propagate to the target user. Users
 // are on different homeservers.
 func TestIsDirectFlagFederation(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
@@ -114,7 +114,7 @@ func TestIsDirectFlagFederation(t *testing.T) {
 	srv.UnexpectedRequestsAreErrors = false // we expect to be pushed events
 	cancel := srv.Listen()
 	defer cancel()
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomVer := alice.GetDefaultRoomVersion(t)
 
 	bob := srv.UserID("bob")

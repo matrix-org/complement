@@ -42,7 +42,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	// 4) Respond to /get_missing_events with the missing events if the request is well-formed.
 	// 5) Ensure the HS doesn't do /state_ids or /state
 	// 6) Ensure Alice sees all injected events in the correct order.
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
@@ -60,7 +60,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	cancel := srv.Listen()
 	defer cancel()
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := srv.UserID("bob")
 
 	// 1) Create a room between the HS and Complement.
@@ -166,10 +166,10 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 //
 // sytest: Outbound federation will ignore a missing event with bad JSON for room version 6
 func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
@@ -329,10 +329,10 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 }
 
 func TestInboundCanReturnMissingEvents(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),

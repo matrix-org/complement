@@ -9,7 +9,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -17,16 +16,16 @@ import (
 )
 
 func TestKeyChangesLocal(t *testing.T) {
-	deployment := complement.Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	password := "$uperSecretPassword"
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		LocalpartSuffix: "bob",
 		Password:        password,
 	})
-	unauthedClient := deployment.Client(t, "hs1", "")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 
 	t.Run("New login should create a device_lists.changed entry", func(t *testing.T) {
 		mustUploadKeys(t, bob)
