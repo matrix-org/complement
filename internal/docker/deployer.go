@@ -148,6 +148,12 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	return dep, lastErr
 }
 
+func (d *Deployer) PrintLogs(dep *Deployment) {
+	for _, hsDep := range dep.HS {
+		printLogs(d.Docker, hsDep.ContainerID, hsDep.ContainerID)
+	}
+}
+
 // Destroy a deployment. This will kill all running containers.
 func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName string, failed bool) {
 	for _, hsDep := range dep.HS {

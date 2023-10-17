@@ -21,6 +21,8 @@ type Deployment struct {
 	Deployer *Deployer
 	// The name of the deployed blueprint
 	BlueprintName string
+	// Set to true if this deployment is a dirty deployment and so should not be destroyed.
+	Dirty bool
 	// A map of HS name to a HomeserverDeployment
 	HS               map[string]*HomeserverDeployment
 	Config           *config.Complement
@@ -56,7 +58,13 @@ func (hsDep *HomeserverDeployment) SetEndpoints(baseURL string, fedBaseURL strin
 // will print container logs before killing the container.
 func (d *Deployment) Destroy(t *testing.T) {
 	t.Helper()
-	// d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs || t.Failed(), t.Name(), t.Failed())
+	if d.Dirty {
+		if t.Failed() {
+			d.Deployer.PrintLogs(d)
+		}
+		return
+	}
+	d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs || t.Failed(), t.Name(), t.Failed())
 }
 
 func (d *Deployment) GetConfig() *config.Complement {

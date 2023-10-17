@@ -50,6 +50,11 @@ type TestPackage struct {
 	complementBuilder *docker.Builder
 	// a counter to stop tests from allocating the same container name
 	namespaceCounter uint64
+
+	// pointers to existing deployments for Deploy(t, 1) style deployments which are reused when run
+	// in dirty mode.
+	existingDeployments   map[int]*docker.Deployment
+	existingDeploymentsMu *sync.Mutex
 }
 
 // NewTestPackage creates a new test package which can be used to deploy containers for all tests
@@ -70,9 +75,11 @@ func NewTestPackage(pkgNamespace string) (*TestPackage, error) {
 	logrus.SetLevel(logrus.ErrorLevel)
 
 	return &TestPackage{
-		complementBuilder: builder,
-		namespaceCounter:  0,
-		Config:            cfg,
+		complementBuilder:     builder,
+		namespaceCounter:      0,
+		Config:                cfg,
+		existingDeployments:   make(map[int]*docker.Deployment),
+		existingDeploymentsMu: &sync.Mutex{},
 	}, nil
 }
 
@@ -104,20 +111,16 @@ func (tp *TestPackage) OldDeploy(t *testing.T, blueprint b.Blueprint) Deployment
 	return dep
 }
 
-var (
-	existingDeployments = map[int]*docker.Deployment{}
-	mu                  sync.Mutex
-)
-
 func (tp *TestPackage) Deploy(t *testing.T, numServers int) Deployment {
 	t.Helper()
-	mu.Lock()
-	existingDep := existingDeployments[numServers]
-	if existingDep != nil {
-		mu.Unlock()
-		return existingDep
+	if tp.Config.EnableDirtyRuns {
+		tp.existingDeploymentsMu.Lock()
+		existingDep := tp.existingDeployments[numServers]
+		tp.existingDeploymentsMu.Unlock()
+		if existingDep != nil {
+			return existingDep
+		}
 	}
-	mu.Unlock()
 	blueprint := mapServersToBlueprint(numServers)
 	timeStartBlueprint := time.Now()
 	if err := tp.complementBuilder.ConstructBlueprintIfNotExist(blueprint); err != nil {
@@ -134,9 +137,12 @@ func (tp *TestPackage) Deploy(t *testing.T, numServers int) Deployment {
 		t.Fatalf("Deploy: Deploy returned error %s", err)
 	}
 	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy))
-	mu.Lock()
-	existingDeployments[numServers] = dep
-	mu.Unlock()
+	if tp.Config.EnableDirtyRuns {
+		dep.Dirty = true // stop this deployment being destroyed.
+		tp.existingDeploymentsMu.Lock()
+		tp.existingDeployments[numServers] = dep
+		tp.existingDeploymentsMu.Unlock()
+	}
 	return dep
 }
 

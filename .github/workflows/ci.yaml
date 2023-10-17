@@ -43,13 +43,13 @@ jobs:
           - homeserver: Synapse
             tags: synapse_blacklist
             packages: ./tests/msc3874 ./tests/msc3902
-            env: "COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
+            env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1 COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
             timeout: 20m
 
           - homeserver: Dendrite
             tags: dendrite_blacklist
             packages: ""
-            env: ""
+            env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1"
             timeout: 10m
 
     steps:

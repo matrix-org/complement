@@ -86,6 +86,23 @@ type Complement struct {
 	// like Podman that uses `host.containers.internal` instead.
 	HostnameRunningComplement string
 
+	// Name: COMPLEMENT_ENABLE_DIRTY_RUNS
+	// Default: 0
+	// Description: If 1, eligible tests will be provided with reusable deployments rather than a clean deployment.
+	// Eligible tests are tests run with `Deploy(t, numHomeservers)`. If enabled, COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS
+	// and COMPLEMENT_POST_TEST_SCRIPT are ignored.
+	//
+	// Enabling dirty runs can greatly speed up tests, at the cost of clear server logs and the chance of tests
+	// polluting each other. Tests using `OldDeploy` and blueprints will still have a fresh image for each test.
+	// Fresh images can still be desirable e.g user directory tests need a clean homeserver else search results can
+	// be polluted, tests which can blacklist a server over federation also need isolated deployments to stop failures
+	// impacting other tests. For these reasons, there will always be a way for a test to override this setting and
+	// get a dedicated deployment.
+	//
+	// Eventually, dirty runs will become the default running mode of Complement, with an environment variable to
+	// disable this behaviour being added later, once this has stablised.
+	EnableDirtyRuns bool
+
 	HSPortBindingIP string
 
 	// Name: COMPLEMENT_POST_TEST_SCRIPT
@@ -106,6 +123,7 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	}
 	cfg.DebugLoggingEnabled = os.Getenv("COMPLEMENT_DEBUG") == "1"
 	cfg.AlwaysPrintServerLogs = os.Getenv("COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS") == "1"
+	cfg.EnableDirtyRuns = os.Getenv("COMPLEMENT_ENABLE_DIRTY_RUNS") == "1"
 	cfg.EnvVarsPropagatePrefix = os.Getenv("COMPLEMENT_SHARE_ENV_PREFIX")
 	cfg.PostTestScript = os.Getenv("COMPLEMENT_POST_TEST_SCRIPT")
 	cfg.SpawnHSTimeout = time.Duration(parseEnvWithDefault("COMPLEMENT_SPAWN_HS_TIMEOUT_SECS", 30)) * time.Second

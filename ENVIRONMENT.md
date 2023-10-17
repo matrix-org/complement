@@ -21,6 +21,11 @@ If 1, prints out more verbose logging such as HTTP request/response bodies.
 - Type: `bool`
 - Default: 0
 
+#### `COMPLEMENT_ENABLE_DIRTY_RUNS`
+If 1, eligible tests will be provided with reusable deployments rather than a clean deployment. Eligible tests are tests run with `Deploy(t, numHomeservers)`. If enabled, COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS and COMPLEMENT_POST_TEST_SCRIPT are ignored.  Enabling dirty runs can greatly speed up tests, at the cost of clear server logs and the chance of tests polluting each other. Tests using `OldDeploy` and blueprints will still have a fresh image for each test. Fresh images can still be desirable e.g user directory tests need a clean homeserver else search results can be polluted, tests which can blacklist a server over federation also need isolated deployments to stop failures impacting other tests. For these reasons, there will always be a way for a test to override this setting and get a dedicated deployment.  Eventually, dirty runs will become the default running mode of Complement, with an environment variable to disable this behaviour being added later, once this has stablised.  
+- Type: `bool`
+- Default: 0
+
 #### `COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT`
 The hostname of Complement from the perspective of a Homeserver running inside a container. This can be useful for container runtimes using another hostname to access the host from a container, like Podman that uses `host.containers.internal` instead.  
 - Type: `string`
