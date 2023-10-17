@@ -5,6 +5,7 @@
 package csapi_tests
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/matrix-org/complement"
@@ -85,13 +86,22 @@ func checkExpectations(t *testing.T, alice, bob, eve *client.CSAPI) {
 		must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName(alice)})
 	})
 
+	// Previously, this test searched for the literal mxid in the search_term.
+	// This was finnicky, because certain characters in the mxid would cause this test to fail, specifically '-'.
+	// Unfortunately, '-' is used by Complement when generating user ID localparts.
+	// See https://github.com/matrix-org/synapse/issues/13807 and specifically
+	// https://github.com/matrix-org/synapse/blob/888a29f4127723a8d048ce47cff37ee8a7a6f1b9/synapse/storage/databases/main/user_directory.py#L910-L924
+	// The net result is that we cannot search for a user by the complete user ID, nor can we search for the
+	// localpart suffix, as the code only does prefix matching.
+	// The thing we /can/ search on is the mxid up to the '-', so let's do that.
+	searchTerms := strings.Split(alice.UserID, "-")
 	t.Run("Eve can find Alice by mxid", func(t *testing.T) {
 		res := eve.MustDo(
 			t,
 			"POST",
 			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
-				"search_term": alice.UserID,
+				"search_term": searchTerms[0],
 			}),
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{JSON: justAliceByPublicName(alice)})
@@ -129,7 +139,7 @@ func checkExpectations(t *testing.T, alice, bob, eve *client.CSAPI) {
 			"POST",
 			[]string{"_matrix", "client", "v3", "user_directory", "search"},
 			client.WithJSONBody(t, map[string]interface{}{
-				"search_term": alice.UserID,
+				"search_term": searchTerms[0],
 			}),
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
