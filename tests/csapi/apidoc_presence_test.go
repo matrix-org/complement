@@ -25,6 +25,10 @@ func TestPresence(t *testing.T) {
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
+	// to share presence alice and bob must be in a shared room
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+
 	// sytest: GET /presence/:user_id/status fetches initial status
 	t.Run("GET /presence/:user_id/status fetches initial status", func(t *testing.T) {
 		res := alice.Do(t, "GET", []string{"_matrix", "client", "v3", "presence", alice.UserID, "status"})
