@@ -27,7 +27,9 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 	bob.MustJoinRoom(t, roomID, []string{"hs1"})
 
 	// Do an initial sync so that we can see the changes come down sync.
-	_, nextBatchBeforeKeyUpload := bob.MustSync(t, client.SyncReq{})
+	// We wait until we see the newly joined room as that can cause alice to appear in device_lists
+	// which we want to ignore for now.
+	nextBatchBeforeKeyUpload := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	deviceKeys, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 1)
 	// Upload keys
