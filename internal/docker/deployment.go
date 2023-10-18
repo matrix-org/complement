@@ -36,7 +36,7 @@ type HomeserverDeployment struct {
 	ContainerID         string            // e.g 10de45efba
 	AccessTokens        map[string]string // e.g { "@alice:hs1": "myAcc3ssT0ken" }
 	accessTokensMutex   sync.RWMutex
-	ApplicationServices map[string]string // e.g { "my-as-id": "id: xxx\nas_token: xxx ..."} }
+	ApplicationServices map[string]map[string]interface{}
 	DeviceIDs           map[string]string // e.g { "@alice:hs1": "myDeviceID" }
 
 	// track all clients so if Restart() is called we can repoint to the new high-numbered port
@@ -178,7 +178,7 @@ func (d *Deployment) UnauthenticatedClient(t *testing.T, hsName string) *client.
 }
 
 // AppServiceUser returns a client for the given app service user ID. The HS in question must have an appservice
-// hooked up to it already. TODO: REMOVE
+// hooked up to it already.
 func (d *Deployment) AppServiceUser(t *testing.T, hsName, appServiceUserID string) *client.CSAPI {
 	t.Helper()
 	dep, ok := d.HS[hsName]

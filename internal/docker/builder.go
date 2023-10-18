@@ -313,12 +313,6 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			labels["device_id"+userID] = deviceID
 		}
 
-		// Combine the labels for tokens and application services
-		asLabels := labelsForApplicationServices(res.homeserver)
-		for k, v := range asLabels {
-			labels[k] = v
-		}
-
 		// Stop the container before we commit it.
 		// This gives it chance to shut down gracefully.
 		// If we don't do this, then e.g. Postgres databases can become corrupt, which
@@ -392,7 +386,6 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 
 // deployBaseImage runs the base image and returns the baseURL, containerID or an error.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkName string) (*HomeserverDeployment, error) {
-	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 	var baseImageURI string
 	if hs.BaseImageURI == nil {
 		baseImageURI = d.Config.BaseImageURI
@@ -406,25 +399,9 @@ func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, context
 
 	return deployImage(
 		d.Docker, baseImageURI, fmt.Sprintf("complement_%s", contextStr),
-		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
+		d.Config.PackageNamespace, blueprintName, hs.Name, hs.ApplicationServices, contextStr,
 		networkName, d.Config,
 	)
-}
-
-// Multilines label using Dockerfile syntax is unsupported, let's inline \n instead
-func generateASRegistrationYaml(as b.ApplicationService) string {
-	return fmt.Sprintf("id: %s\\n", as.ID) +
-		fmt.Sprintf("hs_token: %s\\n", as.HSToken) +
-		fmt.Sprintf("as_token: %s\\n", as.ASToken) +
-		fmt.Sprintf("url: '%s'\\n", as.URL) +
-		fmt.Sprintf("sender_localpart: %s\\n", as.SenderLocalpart) +
-		fmt.Sprintf("rate_limited: %v\\n", as.RateLimited) +
-		"namespaces:\\n" +
-		"  users:\\n" +
-		"    - exclusive: false\\n" +
-		"      regex: .*\\n" +
-		"  rooms: []\\n" +
-		"  aliases: []\\n"
 }
 
 // createNetworkIfNotExists creates a docker network and returns its name.

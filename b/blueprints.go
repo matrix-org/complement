@@ -52,8 +52,12 @@ type Homeserver struct {
 	Users []User
 	// The list of rooms to create on this homeserver
 	Rooms []Room
-	// The list of application services to create on the homeserver
-	ApplicationServices []ApplicationService
+	// The list of application services to create on the homeserver.
+	// The maps are the registration file YAML contents. This does not have
+	// its own struct so we can support MSC extensions which have unknown fields
+	// e.g MSC2409 has push_ephemeral: true in the registration. The fields
+	// hs_token and as_token will be automatically generated.
+	ApplicationServices []map[string]interface{}
 	// Optionally override the baseImageURI for blueprint creation
 	BaseImageURI *string
 }
@@ -81,15 +85,6 @@ type Room struct {
 	Creator    string
 	CreateRoom map[string]interface{}
 	Events     []Event
-}
-
-type ApplicationService struct {
-	ID              string
-	HSToken         string
-	ASToken         string
-	URL             string
-	SenderLocalpart string
-	RateLimited     bool
 }
 
 type Event struct {
@@ -130,9 +125,21 @@ func Validate(bp Blueprint) (Blueprint, error) {
 			}
 		}
 		for i, as := range hs.ApplicationServices {
-			hs.ApplicationServices[i], err = normalizeApplicationService(as)
+			hs.ApplicationServices[i], err = generateAppServiceTokens(as)
 			if err != nil {
 				return bp, err
+			}
+			// ID is required
+			requiredStringFields := []string{"id", "sender_localpart"}
+			for _, required := range requiredStringFields {
+				val, ok := as[required]
+				if !ok {
+					return bp, fmt.Errorf("ApplicationService[%d] missing required field '%s'", i, required)
+				}
+				_, ok = val.(string)
+				if !ok {
+					return bp, fmt.Errorf("ApplicationService[%d] required field '%s' must be a string but it isn't", i, required)
+				}
 			}
 		}
 	}
@@ -181,7 +188,7 @@ func normaliseUser(u string, hsName string) (string, error) {
 	return u, nil
 }
 
-func normalizeApplicationService(as ApplicationService) (ApplicationService, error) {
+func generateAppServiceTokens(as map[string]interface{}) (map[string]interface{}, error) {
 	hsToken := make([]byte, 32)
 	_, err := rand.Read(hsToken)
 	if err != nil {
@@ -194,8 +201,8 @@ func normalizeApplicationService(as ApplicationService) (ApplicationService, err
 		return as, err
 	}
 
-	as.HSToken = hex.EncodeToString(hsToken)
-	as.ASToken = hex.EncodeToString(asToken)
+	as["hs_token"] = hex.EncodeToString(hsToken)
+	as["as_token"] = hex.EncodeToString(asToken)
 
 	return as, err
 }

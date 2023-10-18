@@ -32,7 +32,9 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+	"github.com/matrix-org/complement/b"
 	complementRuntime "github.com/matrix-org/complement/runtime"
+	"gopkg.in/yaml.v3"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -76,26 +78,26 @@ func (d *Deployer) log(str string, args ...interface{}) {
 	log.Printf(str, args...)
 }
 
-func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deployment, error) {
+func (d *Deployer) Deploy(ctx context.Context, blueprint b.Blueprint) (*Deployment, error) {
 	dep := &Deployment{
 		Deployer:      d,
-		BlueprintName: blueprintName,
+		BlueprintName: blueprint.Name,
 		HS:            make(map[string]*HomeserverDeployment),
 		Config:        d.config,
 	}
 	images, err := d.Docker.ImageList(ctx, types.ImageListOptions{
 		Filters: label(
 			"complement_pkg="+d.config.PackageNamespace,
-			"complement_blueprint="+blueprintName,
+			"complement_blueprint="+blueprint.Name,
 		),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("Deploy: failed to ImageList: %w", err)
 	}
 	if len(images) == 0 {
-		return nil, fmt.Errorf("Deploy: No images have been built for blueprint %s", blueprintName)
+		return nil, fmt.Errorf("Deploy: No images have been built for blueprint %s", blueprint.Name)
 	}
-	networkName, err := createNetworkIfNotExists(d.Docker, d.config.PackageNamespace, blueprintName)
+	networkName, err := createNetworkIfNotExists(d.Docker, d.config.PackageNamespace, blueprint.Name)
 	if err != nil {
 		return nil, fmt.Errorf("Deploy: %w", err)
 	}
@@ -112,12 +114,19 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		mu.Unlock()
 		contextStr := img.Labels["complement_context"]
 		hsName := img.Labels["complement_hs_name"]
-		asIDToRegistrationMap := asIDToRegistrationFromLabels(img.Labels)
+		// find appservices
+		var appServices []map[string]interface{}
+		for _, hs := range blueprint.Homeservers {
+			if hs.Name == hsName {
+				appServices = hs.ApplicationServices
+				break
+			}
+		}
 
 		// TODO: Make CSAPI port configurable
 		deployment, err := deployImage(
 			d.Docker, img.ID, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
-			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkName, d.config,
+			d.config.PackageNamespace, blueprint.Name, hsName, appServices, contextStr, networkName, d.config,
 		)
 		if err != nil {
 			if deployment != nil && deployment.ContainerID != "" {
@@ -232,7 +241,7 @@ func (d *Deployer) Restart(hsDep *HomeserverDeployment, cfg *config.Complement) 
 // nolint
 func deployImage(
 	docker *client.Client, imageID string, containerName, pkgNamespace, blueprintName, hsName string,
-	asIDToRegistrationMap map[string]string, contextStr, networkName string, cfg *config.Complement,
+	appServices []map[string]interface{}, contextStr, networkName string, cfg *config.Complement,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
 	var extraHosts []string
@@ -321,8 +330,12 @@ func deployImage(
 	}
 
 	// Create the application service files
-	for asID, registration := range asIDToRegistrationMap {
-		err = copyToContainer(docker, containerID, fmt.Sprintf("%s%s.yaml", MountAppServicePath, url.PathEscape(asID)), []byte(registration))
+	for _, appService := range appServices {
+		contents, err := yaml.Marshal(appService)
+		if err != nil {
+			return stubDeployment, err
+		}
+		err = copyToContainer(docker, containerID, fmt.Sprintf("%s%s.yaml", MountAppServicePath, appService["id"]), contents)
 		if err != nil {
 			return stubDeployment, err
 		}
@@ -369,12 +382,17 @@ func deployImage(
 		)
 	}
 
+	appServicesMap := make(map[string]map[string]interface{})
+	for i, as := range appServices {
+		appServicesMap[as["id"].(string)] = appServices[i]
+	}
+
 	d := &HomeserverDeployment{
 		BaseURL:             baseURL,
 		FedBaseURL:          fedBaseURL,
 		ContainerID:         containerID,
 		AccessTokens:        tokensFromLabels(inspect.Config.Labels),
-		ApplicationServices: asIDToRegistrationFromLabels(inspect.Config.Labels),
+		ApplicationServices: appServicesMap,
 		DeviceIDs:           deviceIDsFromLabels(inspect.Config.Labels),
 	}
 
