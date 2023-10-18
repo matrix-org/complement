@@ -507,11 +507,11 @@ func TestSyncTimelineGap(t *testing.T) {
 			events := section.Get("events").Array()
 			for _, ev := range events {
 				if limited {
-					if ev.Get("Sender").Str == alice.UserID {
+					if ev.Get("sender").Str == alice.UserID {
 						t.Fatalf("Got message from alice after limited flag")
 					}
 				} else {
-					if ev.Get("Sender").Str == charlie {
+					if ev.Get("sender").Str == charlie {
 						t.Fatalf("Got message from remote without limited flag being set")
 					}
 				}
