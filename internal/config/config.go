@@ -36,7 +36,9 @@ type Complement struct {
 	DebugLoggingEnabled bool
 	// Name: COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS
 	// Default: 0
-	// Description: If 1, always prints the Homeserver container logs even on success.
+	// Description: If 1, always prints the Homeserver container logs even on success. When used with
+	// COMPLEMENT_ENABLE_DIRTY_RUNS, server logs are only printed once for reused deployments, at the very
+	// end of the test suite.
 	AlwaysPrintServerLogs bool
 	// Name: COMPLEMENT_SHARE_ENV_PREFIX
 	// Description: If set, all environment variables on the host with this prefix will be shared with
@@ -86,13 +88,33 @@ type Complement struct {
 	// like Podman that uses `host.containers.internal` instead.
 	HostnameRunningComplement string
 
+	// Name: COMPLEMENT_ENABLE_DIRTY_RUNS
+	// Default: 0
+	// Description: If 1, eligible tests will be provided with reusable deployments rather than a clean deployment.
+	// Eligible tests are tests run with `Deploy(t, numHomeservers)`. If enabled, COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS
+	// and COMPLEMENT_POST_TEST_SCRIPT are run exactly once, at the end of all tests in the package. The post test script
+	// is run with the test name "COMPLEMENT_ENABLE_DIRTY_RUNS", and failed=false.
+	//
+	// Enabling dirty runs can greatly speed up tests, at the cost of clear server logs and the chance of tests
+	// polluting each other. Tests using `OldDeploy` and blueprints will still have a fresh image for each test.
+	// Fresh images can still be desirable e.g user directory tests need a clean homeserver else search results can
+	// be polluted, tests which can blacklist a server over federation also need isolated deployments to stop failures
+	// impacting other tests. For these reasons, there will always be a way for a test to override this setting and
+	// get a dedicated deployment.
+	//
+	// Eventually, dirty runs will become the default running mode of Complement, with an environment variable to
+	// disable this behaviour being added later, once this has stablised.
+	EnableDirtyRuns bool
+
 	HSPortBindingIP string
 
 	// Name: COMPLEMENT_POST_TEST_SCRIPT
 	// Default: ""
 	// Description: An arbitrary script to execute after a test was executed and before the container is removed.
 	// This can be used to extract, for example, server logs or database files. The script is passed the parameters:
-	// ContainerID, TestName, TestFailed (true/false)
+	// ContainerID, TestName, TestFailed (true/false). When combined with COMPLEMENT_ENABLE_DIRTY_RUNS, the script is
+	// called exactly once at the end of the test suite, and is called with the TestName of "COMPLEMENT_ENABLE_DIRTY_RUNS"
+	// and TestFailed=false.
 	PostTestScript string
 }
 
@@ -106,6 +128,7 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	}
 	cfg.DebugLoggingEnabled = os.Getenv("COMPLEMENT_DEBUG") == "1"
 	cfg.AlwaysPrintServerLogs = os.Getenv("COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS") == "1"
+	cfg.EnableDirtyRuns = os.Getenv("COMPLEMENT_ENABLE_DIRTY_RUNS") == "1"
 	cfg.EnvVarsPropagatePrefix = os.Getenv("COMPLEMENT_SHARE_ENV_PREFIX")
 	cfg.PostTestScript = os.Getenv("COMPLEMENT_POST_TEST_SCRIPT")
 	cfg.SpawnHSTimeout = time.Duration(parseEnvWithDefault("COMPLEMENT_SPAWN_HS_TIMEOUT_SECS", 30)) * time.Second

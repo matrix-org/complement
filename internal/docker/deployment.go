@@ -21,6 +21,8 @@ type Deployment struct {
 	Deployer *Deployer
 	// The name of the deployed blueprint
 	BlueprintName string
+	// Set to true if this deployment is a dirty deployment and so should not be destroyed.
+	Dirty bool
 	// A map of HS name to a HomeserverDeployment
 	HS               map[string]*HomeserverDeployment
 	Config           *config.Complement
@@ -52,10 +54,26 @@ func (hsDep *HomeserverDeployment) SetEndpoints(baseURL string, fedBaseURL strin
 	}
 }
 
+// DestroyAtCleanup destroys the entire deployment. It should be called at cleanup time for dirty
+// deployments only. Handles configuration options for things which should run at container destroy
+// time, like post-run scripts and printing logs.
+func (d *Deployment) DestroyAtCleanup() {
+	if !d.Dirty {
+		return
+	}
+	d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs, "COMPLEMENT_ENABLE_DIRTY_RUNS", false)
+}
+
 // Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
 // will print container logs before killing the container.
 func (d *Deployment) Destroy(t *testing.T) {
 	t.Helper()
+	if d.Dirty {
+		if t.Failed() {
+			d.Deployer.PrintLogs(d)
+		}
+		return
+	}
 	d.Deployer.Destroy(d, d.Deployer.config.AlwaysPrintServerLogs || t.Failed(), t.Name(), t.Failed())
 }
 
