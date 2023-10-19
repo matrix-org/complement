@@ -384,7 +384,7 @@ func TestSync(t *testing.T) {
 // room. Charlie sends 50+ messages into the room without sending to Alice's
 // server. Charlie then sends one more which get sent to Alice.
 //
-// Alice should observer that she receives some (though not all) of charlie's
+// Alice should observe that she receives some (though not all) of charlie's
 // events, with the `limited` flag set.
 func TestSyncTimelineGap(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
@@ -458,10 +458,12 @@ func TestSyncTimelineGap(t *testing.T) {
 
 	// We now test two different modes of /sync work. The first is when we are
 	// syncing when the server receives the `lastEvent` (and so, at least
-	// Synapse, will start sending down some events immediately).
+	// Synapse, will start sending down some events immediately). In this mode
+	// we may see alice's message, but charlie's messages should set the limited
+	// flag.
 	//
-	// The second mode is when we sync *after* all the events have finished
-	// being persisted, and so we get everything in one chunk.
+	// The second mode is when we incremental sync *after* all the events have
+	// finished being persisted, and so we get only charlie's messages.
 	t.Run("incremental", func(t *testing.T) {
 		timelineSequence := make([]gjson.Result, 0)
 
@@ -524,7 +526,8 @@ func TestSyncTimelineGap(t *testing.T) {
 	})
 
 	t.Run("full", func(t *testing.T) {
-		// Wait until we see `lastEvent` come down sync
+		// Wait until we see `lastEvent` come down sync implying that all events have been persisted
+		// by alice's homeserver.
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, lastEvent.EventID()))
 
 		// Now an incremental sync from before should return a limited batch for
