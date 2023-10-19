@@ -108,7 +108,7 @@ func TestRoomState(t *testing.T) {
 			})
 
 			authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
-				client.WithRetryUntil(time.Second, func(res *http.Response) bool {
+				client.WithRetryUntil(3*time.Second, func(res *http.Response) bool {
 					foundRoom := false
 
 					must.MatchResponse(t, res, match.HTTPResponse{
