@@ -387,7 +387,6 @@ func TestSync(t *testing.T) {
 // Alice should observe that she receives some (though not all) of charlie's
 // events, with the `limited` flag set.
 func TestSyncTimelineGap(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
