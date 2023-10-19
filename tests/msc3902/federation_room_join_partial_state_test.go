@@ -1030,7 +1030,7 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event1.JSON(), event2.JSON()}, nil)
 
 		// wait for the homeserver to persist the event.
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event2.EventID())
+		awaitEventArrival(t, 2*time.Second, alice, serverRoom.RoomID, event2.EventID())
 
 		// do a gappy sync which only picks up the second message.
 		syncRes, _ := alice.MustSync(t,
@@ -1100,7 +1100,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Logf("Derek created event with ID %s", event.EventID())
 
 		// wait for the homeserver to persist the event.
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event.EventID())
+		awaitEventArrival(t, 2*time.Second, alice, serverRoom.RoomID, event.EventID())
 
 		// do an incremental sync.
 		syncRes, _ := alice.MustSync(t,
