@@ -78,6 +78,54 @@ func (d *Deployer) log(str string, args ...interface{}) {
 	log.Printf(str, args...)
 }
 
+// CreateDirtyServer creates a new dirty server on the dirty network, creating one if needed.
+// This homeserver should be added to the dirty deployment. The hsName should start as 'hs1', then
+// 'hs2' ... 'hsN'.
+func (d *Deployer) CreateDirtyServer(hsName string) (*HomeserverDeployment, error) {
+	networkName, err := createNetworkIfNotExists(d.Docker, d.config.PackageNamespace, "dirty")
+	if err != nil {
+		return nil, fmt.Errorf("CreateDirtyDeployment: %w", err)
+	}
+	baseImageURI := d.config.BaseImageURI
+	// Use HS specific base image if defined
+	if uri, ok := d.config.BaseImageURIs[hsName]; ok {
+		baseImageURI = uri
+	}
+
+	hsDeployment, err := deployImage(
+		d.Docker, baseImageURI, fmt.Sprintf("complement_%s_dirty_%s", d.config.PackageNamespace, hsName),
+		d.config.PackageNamespace, "", hsName, nil, "dirty",
+		networkName, d.config,
+	)
+	if err != nil {
+		if hsDeployment != nil && hsDeployment.ContainerID != "" {
+			// print logs to help debug
+			printLogs(d.Docker, hsDeployment.ContainerID, "dirty")
+		}
+		return nil, fmt.Errorf("CreateDirtyServer: Failed to deploy image %v : %w", baseImageURI, err)
+	}
+	return hsDeployment, nil
+}
+
+// CreateDirtyDeployment creates a clean HS without any blueprints. More HSes can be added later via
+// CreateDirtyServer()
+func (d *Deployer) CreateDirtyDeployment() (*Deployment, error) {
+	hsName := "hs1"
+	hsDeployment, err := d.CreateDirtyServer(hsName)
+	if err != nil {
+		return nil, err
+	}
+	// assign the HS to the deployment
+	return &Deployment{
+		Deployer: d,
+		Dirty:    true,
+		HS: map[string]*HomeserverDeployment{
+			hsName: hsDeployment,
+		},
+		Config: d.config,
+	}, nil
+}
+
 func (d *Deployer) Deploy(ctx context.Context, blueprint b.Blueprint) (*Deployment, error) {
 	dep := &Deployment{
 		Deployer:      d,
