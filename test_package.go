@@ -53,8 +53,8 @@ type TestPackage struct {
 
 	// pointers to existing deployments for Deploy(t, 1) style deployments which are reused when run
 	// in dirty mode.
-	existingDeployments   map[int]*docker.Deployment
-	existingDeploymentsMu *sync.Mutex
+	existingDeployment   *docker.Deployment
+	existingDeploymentMu *sync.Mutex
 }
 
 // NewTestPackage creates a new test package which can be used to deploy containers for all tests
@@ -75,21 +75,20 @@ func NewTestPackage(pkgNamespace string) (*TestPackage, error) {
 	logrus.SetLevel(logrus.ErrorLevel)
 
 	return &TestPackage{
-		complementBuilder:     builder,
-		namespaceCounter:      0,
-		Config:                cfg,
-		existingDeployments:   make(map[int]*docker.Deployment),
-		existingDeploymentsMu: &sync.Mutex{},
+		complementBuilder:    builder,
+		namespaceCounter:     0,
+		Config:               cfg,
+		existingDeploymentMu: &sync.Mutex{},
 	}, nil
 }
 
 func (tp *TestPackage) Cleanup() {
 	// any dirty deployments need logs printed and post scripts run
-	tp.existingDeploymentsMu.Lock()
-	for _, dep := range tp.existingDeployments {
-		dep.DestroyAtCleanup()
+	tp.existingDeploymentMu.Lock()
+	if tp.existingDeployment != nil {
+		tp.existingDeployment.DestroyAtCleanup()
 	}
-	tp.existingDeploymentsMu.Unlock()
+	tp.existingDeploymentMu.Unlock()
 	tp.complementBuilder.Cleanup()
 }
 
@@ -120,13 +119,9 @@ func (tp *TestPackage) OldDeploy(t *testing.T, blueprint b.Blueprint) Deployment
 func (tp *TestPackage) Deploy(t *testing.T, numServers int) Deployment {
 	t.Helper()
 	if tp.Config.EnableDirtyRuns {
-		tp.existingDeploymentsMu.Lock()
-		existingDep := tp.existingDeployments[numServers]
-		tp.existingDeploymentsMu.Unlock()
-		if existingDep != nil {
-			return existingDep
-		}
+		return tp.dirtyDeploy(t, numServers)
 	}
+	// non-dirty deployments below
 	blueprint := mapServersToBlueprint(numServers)
 	timeStartBlueprint := time.Now()
 	if err := tp.complementBuilder.ConstructBlueprintIfNotExist(blueprint); err != nil {
@@ -143,13 +138,50 @@ func (tp *TestPackage) Deploy(t *testing.T, numServers int) Deployment {
 		t.Fatalf("Deploy: Deploy returned error %s", err)
 	}
 	t.Logf("Deploy times: %v blueprints, %v containers", timeStartDeploy.Sub(timeStartBlueprint), time.Since(timeStartDeploy))
-	if tp.Config.EnableDirtyRuns {
-		dep.Dirty = true // stop this deployment being destroyed.
-		tp.existingDeploymentsMu.Lock()
-		tp.existingDeployments[numServers] = dep
-		tp.existingDeploymentsMu.Unlock()
-	}
 	return dep
+}
+
+func (tp *TestPackage) dirtyDeploy(t *testing.T, numServers int) Deployment {
+	tp.existingDeploymentMu.Lock()
+	defer tp.existingDeploymentMu.Unlock()
+	// do we even have a deployment?
+	if tp.existingDeployment == nil {
+		d, err := docker.NewDeployer("dirty", tp.complementBuilder.Config)
+		if err != nil {
+			t.Fatalf("dirtyDeploy: NewDeployer returned error %s", err)
+		}
+		// this creates a single hs1
+		tp.existingDeployment, err = d.CreateDirtyDeployment()
+		if err != nil {
+			t.Fatalf("CreateDirtyDeployment failed: %s", err)
+		}
+	}
+
+	// if we have an existing deployment, can we use it? We can use it if we have at least that number of servers deployed already.
+	if len(tp.existingDeployment.HS) >= numServers {
+		return tp.existingDeployment
+	}
+
+	// we need to scale up the dirty deployment to more servers
+	d, err := docker.NewDeployer("dirty", tp.complementBuilder.Config)
+	if err != nil {
+		t.Fatalf("dirtyDeploy: NewDeployer returned error %s", err)
+	}
+	for i := 1; i <= numServers; i++ {
+		hsName := fmt.Sprintf("hs%d", i)
+		_, ok := tp.existingDeployment.HS[hsName]
+		if ok {
+			continue
+		}
+		// scale up
+		hsDep, err := d.CreateDirtyServer(hsName)
+		if err != nil {
+			t.Fatalf("dirtyDeploy: failed to add %s: %s", hsName, err)
+		}
+		tp.existingDeployment.HS[hsName] = hsDep
+	}
+
+	return tp.existingDeployment
 }
 
 // converts the requested number of servers into a single blueprint, which can be deployed using normal blueprint machinery.

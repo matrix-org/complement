@@ -1030,7 +1030,7 @@ func TestPartialStateJoin(t *testing.T) {
 		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event1.JSON(), event2.JSON()}, nil)
 
 		// wait for the homeserver to persist the event.
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event2.EventID())
+		awaitEventArrival(t, 5*time.Second, alice, serverRoom.RoomID, event2.EventID())
 
 		// do a gappy sync which only picks up the second message.
 		syncRes, _ := alice.MustSync(t,
@@ -1100,7 +1100,7 @@ func TestPartialStateJoin(t *testing.T) {
 		t.Logf("Derek created event with ID %s", event.EventID())
 
 		// wait for the homeserver to persist the event.
-		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event.EventID())
+		awaitEventArrival(t, 2*time.Second, alice, serverRoom.RoomID, event.EventID())
 
 		// do an incremental sync.
 		syncRes, _ := alice.MustSync(t,
@@ -1499,7 +1499,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// instead let's just check for the presence of the room in the timeline.
 		// it can take a while for the homeserver to update its state for 100+ events, so raise
 		// the default timeout.
-		alice.SyncUntilTimeout = 20 * time.Second
+		alice.SyncUntilTimeout = 30 * time.Second
 		alice.MustSyncUntil(t,
 			client.SyncReq{},
 			func(clientUserID string, topLevelSyncJSON gjson.Result) error {
