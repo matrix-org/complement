@@ -42,6 +42,9 @@ type HomeserverDeployment struct {
 	// track all clients so if Restart() is called we can repoint to the new high-numbered port
 	CSAPIClients      []*client.CSAPI
 	CSAPIClientsMutex sync.Mutex
+	// The docker network this HS is connected to.
+	// Useful if you want to connect other containers to the same network.
+	Network string
 }
 
 // Updates the client and federation base URLs of the homeserver deployment.
@@ -155,6 +158,14 @@ func (d *Deployment) Login(t *testing.T, hsName string, existing *client.CSAPI, 
 	client.AccessToken = accessToken
 	client.DeviceID = deviceID
 	return client
+}
+
+func (d *Deployment) Network() string {
+	// all HSes are on the same network
+	for _, hsd := range d.HS {
+		return hsd.Network
+	}
+	return ""
 }
 
 func (d *Deployment) UnauthenticatedClient(t *testing.T, hsName string) *client.CSAPI {

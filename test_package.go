@@ -39,6 +39,8 @@ type Deployment interface {
 	GetConfig() *config.Complement
 	// Return an HTTP round tripper interface which can map HS names to the actual container:port
 	RoundTripper() http.RoundTripper
+	// Return the network name if you want to attach additional containers to this network
+	Network() string
 }
 
 // TestPackage represents the configuration for a package of tests. A package of tests

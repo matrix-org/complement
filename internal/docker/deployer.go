@@ -429,6 +429,7 @@ func deployImage(
 		AccessTokens:        tokensFromLabels(inspect.Config.Labels),
 		ApplicationServices: asIDToRegistrationFromLabels(inspect.Config.Labels),
 		DeviceIDs:           deviceIDsFromLabels(inspect.Config.Labels),
+		Network:             networkName,
 	}
 
 	stopTime := time.Now().Add(cfg.SpawnHSTimeout)
