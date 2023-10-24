@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -324,8 +325,10 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		// If we don't do this, then e.g. Postgres databases can become corrupt, which
 		// then incurs a slow recovery process when we use the blueprint later.
 		d.log("%s: Stopping container: %s", res.contextStr, res.containerID)
-		timeout := 10 * time.Second
-		d.Docker.ContainerStop(context.Background(), res.containerID, &timeout)
+		tenSeconds := 10
+		d.Docker.ContainerStop(context.Background(), res.containerID, container.StopOptions{
+			Timeout: &tenSeconds,
+		})
 
 		// Log again so we can see the timings.
 		d.log("%s: Stopped container: %s", res.contextStr, res.containerID)
