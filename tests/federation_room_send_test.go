@@ -9,7 +9,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/helpers"
-	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/federation"
 )
 
 // TODO:
