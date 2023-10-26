@@ -1,3 +1,5 @@
+// package federation is an EXPERIMENTAL set of functions for creating mock federation servers, for testing over federation.
+// It is marked as EXPERIMENTAL as the API may break without warning.
 package federation
 
 import (
@@ -38,6 +40,7 @@ type FederationDeployment interface {
 	RoundTripper() http.RoundTripper
 }
 
+// EXPERIMENTAL
 // Server represents a federation server
 type Server struct {
 	t *testing.T
@@ -61,6 +64,7 @@ type Server struct {
 	keyRing               *gomatrixserverlib.KeyRing
 }
 
+// EXPERIMENTAL
 // NewServer creates a new federation server with configured options.
 func NewServer(t *testing.T, deployment FederationDeployment, opts ...func(*Server)) *Server {
 	// generate signing key

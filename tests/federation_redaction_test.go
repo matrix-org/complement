@@ -6,7 +6,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/helpers"
-	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
