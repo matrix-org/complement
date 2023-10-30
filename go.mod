@@ -1,6 +1,6 @@
 module github.com/matrix-org/complement
 
-go 1.18
+go 1.19
 
 require (
 	github.com/docker/docker v24.0.6+incompatible
