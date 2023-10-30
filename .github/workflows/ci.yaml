@@ -16,6 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3 # Checkout complement
       - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
       - name: "Install Complement Dependencies"
         run: |
           sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
@@ -56,6 +58,9 @@ jobs:
       - uses: actions/checkout@v3 # Checkout complement
 
       - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+
       # Similar steps as dockerfiles/ComplementCIBuildkite.Dockerfile but on the host. We need
       # to do this so we can _be_ the host when running Complement so we can snaffle all the ports. If
       # we run Complement _in_ Docker then we can't -p all high numbered ports which then breaks federation
