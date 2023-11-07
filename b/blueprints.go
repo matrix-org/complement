@@ -129,7 +129,7 @@ func Validate(bp Blueprint) (Blueprint, error) {
 			if err != nil {
 				return bp, err
 			}
-			// ID is required
+			// ID and sender_localpart are required
 			requiredStringFields := []string{"id", "sender_localpart"}
 			for _, required := range requiredStringFields {
 				val, ok := as[required]
