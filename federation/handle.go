@@ -15,6 +15,7 @@ import (
 	"github.com/matrix-org/util"
 )
 
+// EXPERIMENTAL
 // MakeJoinRequestsHandler is the http.Handler implementation for the make_join part of
 // HandleMakeSendJoinRequests.
 func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request) {
@@ -53,6 +54,7 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 	w.Write(b)
 }
 
+// EXPERIMENTAL
 // MakeRespMakeJoin makes the response for a /make_join request, without verifying any signatures
 // or dealing with HTTP responses itself.
 func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp fclient.RespMakeJoin, err error) {
@@ -84,6 +86,7 @@ func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp fclient.
 	return
 }
 
+// EXPERIMENTAL
 // MakeRespMakeKnock makes the response for a /make_knock request, without verifying any signatures
 // or dealing with HTTP responses itself.
 func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp fclient.RespMakeKnock, err error) {
@@ -115,6 +118,7 @@ func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp fclient
 	return
 }
 
+// EXPERIMENTAL
 // SendJoinRequestsHandler is the http.Handler implementation for the send_join part of
 // HandleMakeSendJoinRequests.
 //
@@ -212,6 +216,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 	w.Write(b)
 }
 
+// EXPERIMENTAL
 // HandleMakeSendJoinRequests is an option which will process make_join and send_join requests for rooms which are present
 // in this server. To add a room to this server, see Server.MustMakeRoom. No checks are done to see whether join requests
 // are allowed or not. If you wish to test that, write your own test.
@@ -240,6 +245,7 @@ func HandlePartialStateMakeSendJoinRequests() func(*Server) {
 	}
 }
 
+// EXPERIMENTAL
 // HandleInviteRequests is an option which makes the server process invite requests.
 //
 // inviteCallback is a callback function that if non-nil will be called and passed the incoming invite event
@@ -289,6 +295,7 @@ func HandleInviteRequests(inviteCallback func(gomatrixserverlib.PDU)) func(*Serv
 	}
 }
 
+// EXPERIMENTAL
 // HandleDirectoryLookups will automatically return room IDs for any aliases present on this server.
 func HandleDirectoryLookups() func(*Server) {
 	return func(s *Server) {
@@ -323,6 +330,7 @@ func HandleDirectoryLookups() func(*Server) {
 	}
 }
 
+// EXPERIMENTAL
 // HandleEventRequests is an option which will process GET /_matrix/federation/v1/event/{eventId} requests universally when requested.
 func HandleEventRequests() func(*Server) {
 	return func(srv *Server) {
@@ -366,6 +374,7 @@ func HandleEventRequests() func(*Server) {
 	}
 }
 
+// EXPERIMENTAL
 // HandleEventAuthRequests is an option which will process GET /_matrix/federation/v1/event_auth/{roomId}/{eventId}
 // requests universally when requested.
 func HandleEventAuthRequests() func(*Server) {
@@ -415,6 +424,7 @@ func HandleEventAuthRequests() func(*Server) {
 	}
 }
 
+// EXPERIMENTAL
 // HandleKeyRequests is an option which will process GET /_matrix/key/v2/server requests universally when requested.
 func HandleKeyRequests() func(*Server) {
 	return func(srv *Server) {
@@ -455,6 +465,7 @@ func HandleKeyRequests() func(*Server) {
 	}
 }
 
+// EXPERIMENTAL
 // HandleMediaRequests is an option which will process /_matrix/media/v1/download/* using the provided map
 // as a way to do so. The key of the map is the media ID to be handled.
 func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*Server) {
@@ -489,6 +500,7 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 	}
 }
 
+// EXPERIMENTAL
 // HandleTransactionRequests is an option which will process GET /_matrix/federation/v1/send/{transactionID} requests universally when requested.
 // pduCallback and eduCallback are functions that if non-nil will be called and passed each PDU or EDU event received in the transaction.
 // Callbacks will be fired AFTER the event has been stored onto the respective ServerRoom.

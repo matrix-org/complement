@@ -29,6 +29,7 @@ type Event struct {
 	Redacts string
 }
 
+// EXPERIMENTAL
 // ServerRoom represents a room on this test federation server
 type ServerRoom struct {
 	Version            gomatrixserverlib.RoomVersion

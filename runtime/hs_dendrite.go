@@ -5,8 +5,8 @@ package runtime
 
 import (
 	"context"
-	"time"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
 
@@ -15,7 +15,9 @@ func init() {
 	// For Dendrite, we want to always stop the container gracefully, as this is needed to
 	// extract e.g. coverage reports.
 	ContainerKillFunc = func(client *client.Client, containerID string) error {
-		timeout := 1 * time.Second
-		return client.ContainerStop(context.Background(), containerID, &timeout)
+		oneSecond := 1
+		return client.ContainerStop(context.Background(), containerID, container.StopOptions{
+			Timeout: &oneSecond,
+		})
 	}
 }

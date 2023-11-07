@@ -7,7 +7,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
-	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/federation"
 )
 
 // TestUnrejectRejectedEvents creates two events: A and B.

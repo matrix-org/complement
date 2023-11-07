@@ -217,8 +217,10 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName strin
 		if printServerLogs {
 			// If we want the logs we gracefully stop the containers to allow
 			// the logs to be flushed.
-			timeout := 1 * time.Second
-			err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, &timeout)
+			oneSecond := 1
+			err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, container.StopOptions{
+				Timeout: &oneSecond,
+			})
 			if err != nil {
 				log.Printf("Destroy: Failed to destroy container %s : %s\n", hsDep.ContainerID, err)
 			}
@@ -260,7 +262,10 @@ func (d *Deployer) executePostScript(hsDep *HomeserverDeployment, testName strin
 // Restart a homeserver deployment.
 func (d *Deployer) Restart(hsDep *HomeserverDeployment, cfg *config.Complement) error {
 	ctx := context.Background()
-	err := d.Docker.ContainerStop(ctx, hsDep.ContainerID, &cfg.SpawnHSTimeout)
+	secs := int(cfg.SpawnHSTimeout.Seconds())
+	err := d.Docker.ContainerStop(ctx, hsDep.ContainerID, container.StopOptions{
+		Timeout: &secs,
+	})
 	if err != nil {
 		return fmt.Errorf("Restart: Failed to stop container %s: %s", hsDep.ContainerID, err)
 	}
@@ -442,6 +447,7 @@ func deployImage(
 		AccessTokens:        tokensFromLabels(inspect.Config.Labels),
 		ApplicationServices: appServicesMap,
 		DeviceIDs:           deviceIDsFromLabels(inspect.Config.Labels),
+		Network:             networkName,
 	}
 
 	stopTime := time.Now().Add(cfg.SpawnHSTimeout)
