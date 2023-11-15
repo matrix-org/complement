@@ -79,6 +79,27 @@ type CSAPI struct {
 	txnID int64
 }
 
+// CreateMedia creates an MXC URI for asynchronous media uploads.
+func (c *CSAPI) CreateMedia(t TestLike) string {
+	t.Helper()
+	res := c.MustDo(t, "POST", []string{"_matrix", "media", "v1", "create"})
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "content_uri")
+}
+
+// UploadMediaAsync uploads the provided content to the given server and media ID. Fails the test on error.
+func (c *CSAPI) UploadMediaAsync(t TestLike, serverName, mediaID string, fileBody []byte, fileName string, contentType string) {
+	t.Helper()
+	query := url.Values{}
+	if fileName != "" {
+		query.Set("filename", fileName)
+	}
+	c.MustDo(
+		t, "PUT", []string{"_matrix", "media", "v3", "upload", serverName, mediaID},
+		WithRawBody(fileBody), WithContentType(contentType), WithQueries(query),
+	)
+}
+
 // UploadContent uploads the provided content with an optional file name. Fails the test on error. Returns the MXC URI.
 func (c *CSAPI) UploadContent(t TestLike, fileBody []byte, fileName string, contentType string) string {
 	t.Helper()
