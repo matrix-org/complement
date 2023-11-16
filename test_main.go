@@ -19,6 +19,13 @@ var testPackage *TestPackage
 // docker containers stepping on each other. For MSCs, use the MSC name. For versioned releases, use the version number
 // along with any sub-directory name.
 func TestMain(m *testing.M, namespace string) {
+	TestMainWithCleanup(m, namespace, nil)
+}
+
+// TestMainWithCleanup is TestMain but with a cleanup function prior to terminating the test suite.
+// This function should be used for per-suite cleanup operations e.g tearing down containers, killing
+// child processes, etc.
+func TestMainWithCleanup(m *testing.M, namespace string, cleanup func()) {
 	var err error
 	testPackage, err = NewTestPackage(namespace)
 	if err != nil {
@@ -27,6 +34,9 @@ func TestMain(m *testing.M, namespace string) {
 	}
 	exitCode := m.Run()
 	testPackage.Cleanup()
+	if cleanup != nil {
+		cleanup()
+	}
 	os.Exit(exitCode)
 }
 
