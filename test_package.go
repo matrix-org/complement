@@ -30,8 +30,16 @@ type Deployment interface {
 	// AppServiceUser returns a client for the given app service user ID. The HS in question must have an appservice
 	// hooked up to it already. TODO: REMOVE
 	AppServiceUser(t *testing.T, hsName, appServiceUserID string) *client.CSAPI
-	// Restart a deployment.
+	// Restart a deployment. Restarts all homeservers in this deployment.
+	// This function is designed to be used to make assertions that servers are persisting information to disk.
 	Restart(t *testing.T) error
+	// Stop the container running this HS. Fails the test if this is not possible.
+	// This function is designed to be used to make assertions when federated servers are unreachable.
+	StopServer(t *testing.T, hsName string)
+	// Start the container running this HS. The HS must exist in this deployment already and it must be stopped already.
+	// Fails the test if this isn't true, or there was a problem.
+	// This function is designed to be used to make assertions when federated servers are unreachable.
+	StartServer(t *testing.T, hsName string)
 	// Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
 	// will print container logs before killing the container.
 	Destroy(t *testing.T)
