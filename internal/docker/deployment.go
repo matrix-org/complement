@@ -260,3 +260,25 @@ func (d *Deployment) StopServer(t *testing.T, hsName string) {
 		t.Fatalf("StopServer: %s", err)
 	}
 }
+
+func (d *Deployment) PauseServer(t *testing.T, hsName string) {
+	t.Helper()
+	hsDep := d.HS[hsName]
+	if hsDep == nil {
+		t.Fatalf("PauseServer: %s does not exist in this deployment", hsName)
+	}
+	if err := d.Deployer.PauseServer(hsDep); err != nil {
+		t.Fatalf("PauseServer: %s", err)
+	}
+}
+
+func (d *Deployment) UnpauseServer(t *testing.T, hsName string) {
+	t.Helper()
+	hsDep := d.HS[hsName]
+	if hsDep == nil {
+		t.Fatalf("UnpauseServer: %s does not exist in this deployment", hsName)
+	}
+	if err := d.Deployer.UnpauseServer(hsDep); err != nil {
+		t.Fatalf("UnpauseServer: %s", err)
+	}
+}

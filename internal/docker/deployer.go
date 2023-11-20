@@ -250,6 +250,24 @@ func (d *Deployer) executePostScript(hsDep *HomeserverDeployment, testName strin
 	return cmd.CombinedOutput()
 }
 
+func (d *Deployer) PauseServer(hsDep *HomeserverDeployment) error {
+	ctx := context.Background()
+	err := d.Docker.ContainerPause(ctx, hsDep.ContainerID)
+	if err != nil {
+		return fmt.Errorf("failed to pause container %s: %s", hsDep.ContainerID, err)
+	}
+	return nil
+}
+
+func (d *Deployer) UnpauseServer(hsDep *HomeserverDeployment) error {
+	ctx := context.Background()
+	err := d.Docker.ContainerUnpause(ctx, hsDep.ContainerID)
+	if err != nil {
+		return fmt.Errorf("failed to unpause container %s: %s", hsDep.ContainerID, err)
+	}
+	return nil
+}
+
 func (d *Deployer) StopServer(hsDep *HomeserverDeployment) error {
 	ctx := context.Background()
 	secs := int(d.config.SpawnHSTimeout.Seconds())

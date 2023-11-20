@@ -35,11 +35,24 @@ type Deployment interface {
 	Restart(t *testing.T) error
 	// Stop the container running this HS. Fails the test if this is not possible.
 	// This function is designed to be used to make assertions when federated servers are unreachable.
+	// Do not use this function if you need the HS CSAPI URL to be stable, prefer PauseServer if you need this.
 	StopServer(t *testing.T, hsName string)
 	// Start the container running this HS. The HS must exist in this deployment already and it must be stopped already.
 	// Fails the test if this isn't true, or there was a problem.
 	// This function is designed to be used to make assertions when federated servers are unreachable.
+	// Do not use this function if you need the HS CSAPI URL to be stable, prefer UnpauseServer if you need this.
 	StartServer(t *testing.T, hsName string)
+	// Pause a running homeserver. The HS will be suspended, preserving data in memory.
+	// Prefer this function over StopServer if you need to keep the port allocations stable across your test.
+	// This function is designed to be used to make assertions when federated servers are unreachable.
+	// Fails the test if there is a problem pausing.
+	// See https://docs.docker.com/engine/reference/commandline/pause/
+	PauseServer(t *testing.T, hsName string)
+	// Unpause a running homeserver. The HS will be suspended, preserving data in memory.
+	// Fails the test if there is a problem unpausing.
+	// This function is designed to be used to make assertions when federated servers are unreachable.
+	// see https://docs.docker.com/engine/reference/commandline/unpause/
+	UnpauseServer(t *testing.T, hsName string)
 	// Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
 	// will print container logs before killing the container.
 	Destroy(t *testing.T)
