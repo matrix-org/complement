@@ -39,7 +39,7 @@ type Deployment interface {
 	StopServer(t *testing.T, hsName string)
 	// Start the container running this HS. The HS must exist in this deployment already and it must be stopped already.
 	// Fails the test if this isn't true, or there was a problem.
-	// This function is designed to be used to make assertions when federated servers are unreachable.
+	// This function is designed to be used to start a server previously stopped via StopServer.
 	// Do not use this function if you need the HS CSAPI URL to be stable, prefer UnpauseServer if you need this.
 	StartServer(t *testing.T, hsName string)
 	// Pause a running homeserver. The HS will be suspended, preserving data in memory.
