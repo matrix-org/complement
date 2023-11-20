@@ -36,8 +36,8 @@ type HomeserverDeployment struct {
 	ContainerID         string            // e.g 10de45efba
 	AccessTokens        map[string]string // e.g { "@alice:hs1": "myAcc3ssT0ken" }
 	accessTokensMutex   sync.RWMutex
-	ApplicationServices map[string]map[string]interface{}
-	DeviceIDs           map[string]string // e.g { "@alice:hs1": "myDeviceID" }
+	ApplicationServices map[string]map[string]interface{} // e.g { "my-as-id": { "id": "foo", "as_token": "bar", ... } }
+	DeviceIDs           map[string]string                 // e.g { "@alice:hs1": "myDeviceID" }
 
 	// track all clients so if Restart() is called we can repoint to the new high-numbered port
 	CSAPIClients      []*client.CSAPI
