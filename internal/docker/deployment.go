@@ -142,7 +142,7 @@ func (d *Deployment) Login(t *testing.T, hsName string, existing *client.CSAPI, 
 	if err != nil {
 		t.Fatalf("Deployment.Login: existing CSAPI client has invalid user ID '%s', cannot login as this user: %s", existing.UserID, err)
 	}
-	client := &client.CSAPI{
+	c := &client.CSAPI{
 		BaseURL:          dep.BaseURL,
 		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
@@ -150,14 +150,19 @@ func (d *Deployment) Login(t *testing.T, hsName string, existing *client.CSAPI, 
 	}
 	// Appending a slice is not thread-safe. Protect the write with a mutex.
 	dep.CSAPIClientsMutex.Lock()
-	dep.CSAPIClients = append(dep.CSAPIClients, client)
+	dep.CSAPIClients = append(dep.CSAPIClients, c)
 	dep.CSAPIClientsMutex.Unlock()
-	userID, accessToken, deviceID := client.LoginUser(t, localpart, opts.Password)
+	var userID, accessToken, deviceID string
+	if opts.DeviceID == "" {
+		userID, accessToken, deviceID = c.LoginUser(t, localpart, opts.Password)
+	} else {
+		userID, accessToken, deviceID = c.LoginUser(t, localpart, opts.Password, client.WithDeviceID(opts.DeviceID))
+	}
 
-	client.UserID = userID
-	client.AccessToken = accessToken
-	client.DeviceID = deviceID
-	return client
+	c.UserID = userID
+	c.AccessToken = accessToken
+	c.DeviceID = deviceID
+	return c
 }
 
 func (d *Deployment) Network() string {
