@@ -229,7 +229,7 @@ func (d *Deployment) AppServiceUser(t *testing.T, hsName, appServiceUserID strin
 func (d *Deployment) Restart(t *testing.T) error {
 	t.Helper()
 	for _, hsDep := range d.HS {
-		err := d.Deployer.Restart(hsDep, d.Config)
+		err := d.Deployer.Restart(hsDep)
 		if err != nil {
 			t.Errorf("Deployment.Restart: %s", err)
 			return err
@@ -237,4 +237,48 @@ func (d *Deployment) Restart(t *testing.T) error {
 	}
 
 	return nil
+}
+
+func (d *Deployment) StartServer(t *testing.T, hsName string) {
+	t.Helper()
+	hsDep := d.HS[hsName]
+	if hsDep == nil {
+		t.Fatalf("StartServer: %s does not exist in this deployment", hsName)
+	}
+	if err := d.Deployer.StartServer(hsDep); err != nil {
+		t.Fatalf("StartServer: %s", err)
+	}
+}
+
+func (d *Deployment) StopServer(t *testing.T, hsName string) {
+	t.Helper()
+	hsDep := d.HS[hsName]
+	if hsDep == nil {
+		t.Fatalf("StopServer: %s does not exist in this deployment", hsName)
+	}
+	if err := d.Deployer.StopServer(hsDep); err != nil {
+		t.Fatalf("StopServer: %s", err)
+	}
+}
+
+func (d *Deployment) PauseServer(t *testing.T, hsName string) {
+	t.Helper()
+	hsDep := d.HS[hsName]
+	if hsDep == nil {
+		t.Fatalf("PauseServer: %s does not exist in this deployment", hsName)
+	}
+	if err := d.Deployer.PauseServer(hsDep); err != nil {
+		t.Fatalf("PauseServer: %s", err)
+	}
+}
+
+func (d *Deployment) UnpauseServer(t *testing.T, hsName string) {
+	t.Helper()
+	hsDep := d.HS[hsName]
+	if hsDep == nil {
+		t.Fatalf("UnpauseServer: %s does not exist in this deployment", hsName)
+	}
+	if err := d.Deployer.UnpauseServer(hsDep); err != nil {
+		t.Fatalf("UnpauseServer: %s", err)
+	}
 }

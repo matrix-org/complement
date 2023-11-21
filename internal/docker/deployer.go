@@ -250,33 +250,65 @@ func (d *Deployer) executePostScript(hsDep *HomeserverDeployment, testName strin
 	return cmd.CombinedOutput()
 }
 
-// Restart a homeserver deployment.
-func (d *Deployer) Restart(hsDep *HomeserverDeployment, cfg *config.Complement) error {
+func (d *Deployer) PauseServer(hsDep *HomeserverDeployment) error {
 	ctx := context.Background()
-	secs := int(cfg.SpawnHSTimeout.Seconds())
+	err := d.Docker.ContainerPause(ctx, hsDep.ContainerID)
+	if err != nil {
+		return fmt.Errorf("failed to pause container %s: %s", hsDep.ContainerID, err)
+	}
+	return nil
+}
+
+func (d *Deployer) UnpauseServer(hsDep *HomeserverDeployment) error {
+	ctx := context.Background()
+	err := d.Docker.ContainerUnpause(ctx, hsDep.ContainerID)
+	if err != nil {
+		return fmt.Errorf("failed to unpause container %s: %s", hsDep.ContainerID, err)
+	}
+	return nil
+}
+
+func (d *Deployer) StopServer(hsDep *HomeserverDeployment) error {
+	ctx := context.Background()
+	secs := int(d.config.SpawnHSTimeout.Seconds())
 	err := d.Docker.ContainerStop(ctx, hsDep.ContainerID, container.StopOptions{
 		Timeout: &secs,
 	})
 	if err != nil {
-		return fmt.Errorf("Restart: Failed to stop container %s: %s", hsDep.ContainerID, err)
+		return fmt.Errorf("failed to stop container %s: %s", hsDep.ContainerID, err)
 	}
+	return nil
+}
 
-	err = d.Docker.ContainerStart(ctx, hsDep.ContainerID, types.ContainerStartOptions{})
+// Restart a homeserver deployment.
+func (d *Deployer) Restart(hsDep *HomeserverDeployment) error {
+	if err := d.StopServer(hsDep); err != nil {
+		return fmt.Errorf("Restart: %s", err)
+	}
+	if err := d.StartServer(hsDep); err != nil {
+		return fmt.Errorf("Restart: %s", err)
+	}
+	return nil
+}
+
+func (d *Deployer) StartServer(hsDep *HomeserverDeployment) error {
+	ctx := context.Background()
+	err := d.Docker.ContainerStart(ctx, hsDep.ContainerID, types.ContainerStartOptions{})
 	if err != nil {
-		return fmt.Errorf("Restart: Failed to start container %s: %s", hsDep.ContainerID, err)
+		return fmt.Errorf("failed to start container %s: %s", hsDep.ContainerID, err)
 	}
 
 	// Wait for the container to be ready.
 	baseURL, fedBaseURL, err := waitForPorts(ctx, d.Docker, hsDep.ContainerID)
 	if err != nil {
-		return fmt.Errorf("Restart: Failed to get ports for container %s: %s", hsDep.ContainerID, err)
+		return fmt.Errorf("failed to get ports for container %s: %s", hsDep.ContainerID, err)
 	}
 	hsDep.SetEndpoints(baseURL, fedBaseURL)
 
-	stopTime := time.Now().Add(cfg.SpawnHSTimeout)
+	stopTime := time.Now().Add(d.config.SpawnHSTimeout)
 	_, err = waitForContainer(ctx, d.Docker, hsDep, stopTime)
 	if err != nil {
-		return fmt.Errorf("Restart: Failed to restart container %s: %s", hsDep.ContainerID, err)
+		return fmt.Errorf("failed to wait for container %s: %s", hsDep.ContainerID, err)
 	}
 
 	return nil
