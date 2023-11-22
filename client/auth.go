@@ -4,8 +4,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/hex"
+	"fmt"
 	"io"
+	"sync/atomic"
 
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 )
 
@@ -160,4 +163,17 @@ func (c *CSAPI) RegisterSharedSecret(t TestLike, user, pass string, isAdmin bool
 	accessToken = GetJSONFieldStr(t, body, "access_token")
 	deviceID = GetJSONFieldStr(t, body, "device_id")
 	return userID, accessToken, deviceID
+}
+
+func (c *CSAPI) UploadOneTimeCryptoID(t TestLike, cryptoID spec.SenderID) {
+	t.Helper()
+	oneTimeID := int(atomic.AddInt64(&c.oneTimeID, 1))
+	reqBody := map[string]interface{}{
+		"one_time_cryptoids": map[string]interface{}{
+			fmt.Sprintf("ed25519:%d", oneTimeID): map[string]interface{}{
+				"key": cryptoID,
+			},
+		},
+	}
+	c.MustDo(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "keys", "upload"}, WithJSONBody(t, reqBody))
 }

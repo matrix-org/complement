@@ -1,5 +1,11 @@
 package helpers
 
+import "crypto/ed25519"
+
+type CryptoID struct {
+	PrivateKey ed25519.PrivateKey
+}
+
 type RegistrationOpts struct {
 	LocalpartSuffix string // default '' (don't care)
 	DeviceID        string // default '' (generate new)

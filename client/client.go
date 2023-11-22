@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context" // nolint:gosec
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,10 +16,12 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 )
 
 // TestLike is an interface that testing.T satisfies. All client functions accept a TestLike interface,
@@ -77,6 +80,29 @@ type CSAPI struct {
 	Debug bool
 
 	txnID int64
+
+	cryptoID  helpers.CryptoID
+	oneTimeID int64
+}
+
+func (c *CSAPI) NewCryptoID(t TestLike) spec.SenderID {
+	_, key, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("Failed generating key: %s", err.Error())
+	}
+	c.AssignCryptoID(key)
+
+	return spec.SenderIDFromPseudoIDKey(key)
+}
+
+func (c *CSAPI) AssignCryptoID(key ed25519.PrivateKey) {
+	c.cryptoID = helpers.CryptoID{
+		PrivateKey: key,
+	}
+}
+
+func (c *CSAPI) SenderID() spec.SenderID {
+	return spec.SenderIDFromPseudoIDKey(c.cryptoID.PrivateKey)
 }
 
 // CreateMedia creates an MXC URI for asynchronous media uploads.
@@ -128,25 +154,179 @@ func (c *CSAPI) DownloadContent(t TestLike, mxcUri string) ([]byte, string) {
 	return b, contentType
 }
 
+type CreateRoomOptions func(t TestLike, c *CSAPI, body map[string]interface{}) *http.Response
+
+var sendPDUsURLMSC4080 = []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "send_pdus"}
+
+type CreateRoomEndpoint int
+
+const (
+	CreateRoomURLV3 CreateRoomEndpoint = iota
+	CreateRoomURLMSC4080
+)
+
+var DefaultCreateRoomEndpoint = CreateRoomURLV3
+
+func WithCreateEndpointVersion(version CreateRoomEndpoint) CreateRoomOptions {
+	return func(t TestLike, c *CSAPI, body map[string]interface{}) *http.Response {
+		switch version {
+		case CreateRoomURLV3:
+			return c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, body))
+		case CreateRoomURLMSC4080:
+			res := c.Do(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "createRoom"}, WithJSONBody(t, body))
+			mustRespond2xx(t, res)
+			resBody := ParseJSON(t, res)
+
+			var creationContent struct {
+				RoomID      string         `json:"room_id"`
+				RoomVersion string         `json:"room_version"`
+				PDUs        []spec.RawJSON `json:"pdus"`
+			}
+			if err := json.Unmarshal(resBody, &creationContent); err != nil {
+				t.Fatalf("Failed parsing room creation body")
+			}
+
+			type PDUInfo struct {
+				Version   string          `json:"room_version"`
+				ViaServer string          `json:"via_server,omitempty"`
+				PDU       json.RawMessage `json:"pdu"`
+			}
+
+			type sendPDUsRequest struct {
+				PDUs []PDUInfo `json:"pdus"`
+			}
+
+			sendPDUsBody := sendPDUsRequest{}
+
+			roomVer := gomatrixserverlib.MustGetRoomVersion(gomatrixserverlib.RoomVersion(creationContent.RoomVersion))
+			for _, eventJSON := range creationContent.PDUs {
+				pdu, err := roomVer.NewEventFromUntrustedJSON(eventJSON)
+				if err != nil {
+					t.Fatalf("Failed creating PDU from event")
+				}
+				signedPDU := pdu.Sign(string(c.SenderID()), "ed25519:1", c.cryptoID.PrivateKey)
+				sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: creationContent.RoomVersion, PDU: signedPDU.JSON()})
+			}
+
+			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
+			sendRes := c.Do(t, "POST", url, WithJSONBody(t, sendPDUsBody))
+			mustRespond2xx(t, sendRes)
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(resBody))}
+		default:
+			t.Fatalf("Unknown endpoint version")
+		}
+		return &http.Response{StatusCode: 400}
+	}
+}
+
 // MustCreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
-func (c *CSAPI) MustCreateRoom(t TestLike, reqBody map[string]interface{}) string {
+func (c *CSAPI) MustCreateRoom(t TestLike, reqBody map[string]interface{}, opts ...CreateRoomOptions) string {
 	t.Helper()
-	res := c.CreateRoom(t, reqBody)
+	res := c.CreateRoom(t, reqBody, opts...)
 	mustRespond2xx(t, res)
 	resBody := ParseJSON(t, res)
 	return GetJSONFieldStr(t, resBody, "room_id")
 }
 
 // CreateRoom creates a room with an optional HTTP request body.
-func (c *CSAPI) CreateRoom(t TestLike, body map[string]interface{}) *http.Response {
+func (c *CSAPI) CreateRoom(t TestLike, body map[string]interface{}, opts ...CreateRoomOptions) *http.Response {
 	t.Helper()
-	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, body))
+	if len(opts) == 0 {
+		opts = append(opts, WithCreateEndpointVersion(DefaultCreateRoomEndpoint))
+	}
+
+	for _, opt := range opts {
+		res := opt(t, c, body)
+		if res != nil {
+			return res
+		}
+	}
+
+	return nil
+}
+
+type JoinRoomOptions func(t TestLike, c *CSAPI, roomIDOrAlias string, serverNames []string) *http.Response
+
+type JoinRoomEndpoint int
+
+const (
+	JoinRoomURLV3 JoinRoomEndpoint = iota
+	JoinRoomURLMSC4080
+)
+
+var DefaultJoinRoomEndpoint = JoinRoomURLV3
+
+func WithJoinEndpointVersion(version JoinRoomEndpoint) JoinRoomOptions {
+	return func(t TestLike, c *CSAPI, roomIDOrAlias string, serverNames []string) *http.Response {
+		switch version {
+		case JoinRoomURLV3:
+			// construct URL query parameters
+			query := make(url.Values, len(serverNames))
+			for _, serverName := range serverNames {
+				query.Add("server_name", serverName)
+			}
+			// join the room
+			return c.Do(
+				t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias},
+				WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
+			)
+		case JoinRoomURLMSC4080:
+			// construct URL query parameters
+			query := make(url.Values, len(serverNames))
+			for _, serverName := range serverNames {
+				query.Add("server_name", serverName)
+			}
+			// join the room
+			res := c.Do(
+				t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "join", roomIDOrAlias},
+				WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
+			)
+			mustRespond2xx(t, res)
+			resBody := ParseJSON(t, res)
+
+			var joinContent struct {
+				PDU spec.RawJSON `json:"pdu"`
+			}
+			if err := json.Unmarshal(resBody, &joinContent); err != nil {
+				t.Fatalf("Failed parsing room join body")
+			}
+
+			type PDUInfo struct {
+				Version   string          `json:"room_version"`
+				ViaServer string          `json:"via_server,omitempty"`
+				PDU       json.RawMessage `json:"pdu"`
+			}
+
+			type sendPDUsRequest struct {
+				PDUs []PDUInfo `json:"pdus"`
+			}
+
+			sendPDUsBody := sendPDUsRequest{}
+
+			version := gomatrixserverlib.RoomVersionCryptoIDs
+			roomVer := gomatrixserverlib.MustGetRoomVersion(version)
+			pdu, err := roomVer.NewEventFromUntrustedJSON(joinContent.PDU)
+			if err != nil {
+				t.Fatalf("Failed creating PDU from event")
+			}
+			signedPDU := pdu.Sign(string(c.SenderID()), "ed25519:1", c.cryptoID.PrivateKey)
+			sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: string(version), PDU: signedPDU.JSON()})
+
+			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
+			sendRes := c.Do(t, "POST", url, WithJSONBody(t, sendPDUsBody))
+			mustRespond2xx(t, sendRes)
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(resBody))}
+		default:
+			t.Fatalf("Unknown endpoint version")
+		}
+		return &http.Response{StatusCode: 400}
+	}
 }
 
 // MustJoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
-func (c *CSAPI) MustJoinRoom(t TestLike, roomIDOrAlias string, serverNames []string) string {
+func (c *CSAPI) MustJoinRoom(t TestLike, roomIDOrAlias string, serverNames []string, opts ...JoinRoomOptions) string {
 	t.Helper()
-	res := c.JoinRoom(t, roomIDOrAlias, serverNames)
+	res := c.JoinRoom(t, roomIDOrAlias, serverNames, opts...)
 	mustRespond2xx(t, res)
 	// return the room ID if we joined with it
 	if roomIDOrAlias[0] == '!' {
@@ -158,18 +338,20 @@ func (c *CSAPI) MustJoinRoom(t TestLike, roomIDOrAlias string, serverNames []str
 }
 
 // JoinRoom joins the room ID or alias given. Returns the raw http response
-func (c *CSAPI) JoinRoom(t TestLike, roomIDOrAlias string, serverNames []string) *http.Response {
+func (c *CSAPI) JoinRoom(t TestLike, roomIDOrAlias string, serverNames []string, opts ...JoinRoomOptions) *http.Response {
 	t.Helper()
-	// construct URL query parameters
-	query := make(url.Values, len(serverNames))
-	for _, serverName := range serverNames {
-		query.Add("server_name", serverName)
+	if len(opts) == 0 {
+		opts = append(opts, WithJoinEndpointVersion(DefaultJoinRoomEndpoint))
 	}
-	// join the room
-	return c.Do(
-		t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias},
-		WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
-	)
+
+	for _, opt := range opts {
+		res := opt(t, c, roomIDOrAlias, serverNames)
+		if res != nil {
+			return res
+		}
+	}
+
+	return nil
 }
 
 // MustLeaveRoom leaves the room ID, else fails the test.
@@ -186,21 +368,94 @@ func (c *CSAPI) LeaveRoom(t TestLike, roomID string) *http.Response {
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, WithJSONBody(t, body))
 }
 
+type InviteRoomOptions func(t TestLike, c *CSAPI, roomID string, body map[string]interface{}) *http.Response
+
+type InviteRoomEndpoint int
+
+const (
+	InviteRoomURLV3 InviteRoomEndpoint = iota
+	InviteRoomURLMSC4080
+)
+
+var DefaultInviteRoomEndpoint = InviteRoomURLV3
+
+func WithInviteEndpointVersion(version InviteRoomEndpoint) InviteRoomOptions {
+	return func(t TestLike, c *CSAPI, roomID string, body map[string]interface{}) *http.Response {
+		switch version {
+		case InviteRoomURLV3:
+			return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
+		case InviteRoomURLMSC4080:
+			res := c.Do(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "rooms", roomID, "invite"}, WithJSONBody(t, body))
+			mustRespond2xx(t, res)
+
+			resBody := ParseJSON(t, res)
+
+			var inviteContent struct {
+				PDU spec.RawJSON `json:"pdu"`
+			}
+			if err := json.Unmarshal(resBody, &inviteContent); err != nil {
+				t.Fatalf("Failed parsing room invite body")
+			}
+
+			type PDUInfo struct {
+				Version   string          `json:"room_version"`
+				ViaServer string          `json:"via_server,omitempty"`
+				PDU       json.RawMessage `json:"pdu"`
+			}
+
+			type sendPDUsRequest struct {
+				PDUs []PDUInfo `json:"pdus"`
+			}
+
+			sendPDUsBody := sendPDUsRequest{}
+
+			version := gomatrixserverlib.RoomVersionCryptoIDs
+			roomVer := gomatrixserverlib.MustGetRoomVersion(version)
+			pdu, err := roomVer.NewEventFromUntrustedJSON(inviteContent.PDU)
+			if err != nil {
+				t.Fatalf("Failed creating PDU from event")
+			}
+			signedPDU := pdu.Sign(string(c.SenderID()), "ed25519:1", c.cryptoID.PrivateKey)
+			sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: string(version), PDU: signedPDU.JSON()})
+
+			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
+			sendRes := c.Do(t, "POST", url, WithJSONBody(t, sendPDUsBody))
+			mustRespond2xx(t, sendRes)
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(resBody))}
+		default:
+			t.Fatalf("Unknown endpoint version")
+		}
+		return &http.Response{StatusCode: 400}
+	}
+}
+
 // InviteRoom invites userID to the room ID, else fails the test.
-func (c *CSAPI) MustInviteRoom(t TestLike, roomID string, userID string) {
+func (c *CSAPI) MustInviteRoom(t TestLike, roomID string, userID string, opts ...InviteRoomOptions) {
 	t.Helper()
-	res := c.InviteRoom(t, roomID, userID)
+	res := c.InviteRoom(t, roomID, userID, opts...)
 	mustRespond2xx(t, res)
 }
 
 // InviteRoom invites userID to the room ID, else fails the test.
-func (c *CSAPI) InviteRoom(t TestLike, roomID string, userID string) *http.Response {
+func (c *CSAPI) InviteRoom(t TestLike, roomID string, userID string, opts ...InviteRoomOptions) *http.Response {
 	t.Helper()
+
+	if len(opts) == 0 {
+		opts = append(opts, WithInviteEndpointVersion(InviteRoomURLV3))
+	}
+
 	// Invite the user to the room
 	body := map[string]interface{}{
 		"user_id": userID,
 	}
-	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
+	for _, opt := range opts {
+		res := opt(t, c, roomID, body)
+		if res != nil {
+			return res
+		}
+	}
+
+	return nil
 }
 
 func (c *CSAPI) MustGetGlobalAccountData(t TestLike, eventType string) *http.Response {

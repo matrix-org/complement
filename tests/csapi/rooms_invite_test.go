@@ -24,11 +24,14 @@ func TestRoomsInvite(t *testing.T) {
 		t.Run("Can invite users to invite-only rooms", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
-				"preset": "private_chat",
-			})
-			alice.MustInviteRoom(t, roomID, bob.UserID)
+				"preset":    "private_chat",
+				"sender_id": alice.SenderID(),
+			}, client.WithCreateEndpointVersion(client.CreateRoomURLMSC4080))
+			alice.MustInviteRoom(t, roomID, bob.UserID, client.WithInviteEndpointVersion(client.InviteRoomURLMSC4080))
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.MustJoinRoom(t, roomID, []string{})
+			// TODO: upload different cryptoID for one-time cryptoIDs
+			// TODO: grab cryptoID from sync response
+			bob.MustJoinRoom(t, roomID, []string{}, client.WithJoinEndpointVersion(client.JoinRoomURLMSC4080))
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 		})

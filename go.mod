@@ -1,5 +1,7 @@
 module github.com/matrix-org/complement
 
+replace github.com/matrix-org/gomatrixserverlib => ../gomatrixserverlib/crypto-ids/
+
 go 1.19
 
 require (

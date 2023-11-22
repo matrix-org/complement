@@ -128,6 +128,10 @@ func (d *Deployment) Register(t *testing.T, hsName string, opts helpers.Registra
 	client.UserID = userID
 	client.AccessToken = accessToken
 	client.DeviceID = deviceID
+
+	cryptoID := client.NewCryptoID(t)
+	client.UploadOneTimeCryptoID(t, cryptoID)
+
 	return client
 }
 
