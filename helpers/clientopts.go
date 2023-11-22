@@ -9,4 +9,5 @@ type RegistrationOpts struct {
 
 type LoginOpts struct {
 	Password string // default 'complement_meets_min_password_requirement'
+	DeviceID string // default '' (generate new)
 }
