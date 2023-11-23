@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // Deployment is the complete instantiation of a Blueprint, with running containers
@@ -99,6 +100,8 @@ func (d *Deployment) Register(t *testing.T, hsName string, opts helpers.Registra
 		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
+		CryptoIDRoomMap:  make(map[string]helpers.CryptoID),
+		CryptoIDs:        make(map[spec.SenderID]helpers.CryptoID),
 	}
 	// Appending a slice is not thread-safe. Protect the write with a mutex.
 	dep.CSAPIClientsMutex.Lock()

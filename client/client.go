@@ -81,8 +81,10 @@ type CSAPI struct {
 
 	txnID int64
 
-	cryptoID  helpers.CryptoID
-	oneTimeID int64
+	cryptoID        helpers.CryptoID
+	CryptoIDRoomMap map[string]helpers.CryptoID
+	CryptoIDs       map[spec.SenderID]helpers.CryptoID
+	oneTimeID       int64
 }
 
 func (c *CSAPI) NewCryptoID(t TestLike) spec.SenderID {
@@ -96,13 +98,29 @@ func (c *CSAPI) NewCryptoID(t TestLike) spec.SenderID {
 }
 
 func (c *CSAPI) AssignCryptoID(key ed25519.PrivateKey) {
-	c.cryptoID = helpers.CryptoID{
+	c.CryptoIDs[spec.SenderIDFromPseudoIDKey(key)] = helpers.CryptoID{
 		PrivateKey: key,
 	}
 }
 
-func (c *CSAPI) SenderID() spec.SenderID {
-	return spec.SenderIDFromPseudoIDKey(c.cryptoID.PrivateKey)
+func (c *CSAPI) GetCryptoID(senderID spec.SenderID) helpers.CryptoID {
+	return c.CryptoIDs[senderID]
+}
+
+func (c *CSAPI) GetCryptoIDForRoom(roomID string) helpers.CryptoID {
+	return c.CryptoIDRoomMap[roomID]
+}
+
+func (c *CSAPI) SenderIDForRoom(roomID string) spec.SenderID {
+	return spec.SenderIDFromPseudoIDKey(c.CryptoIDRoomMap[roomID].PrivateKey)
+}
+
+func (c *CSAPI) AssociateCryptoIDWithRoom(cryptoID spec.SenderID, roomID string) {
+	if id, ok := c.CryptoIDs[cryptoID]; ok {
+		c.CryptoIDRoomMap[roomID] = id
+	} else {
+		panic("Unknown cryptoID")
+	}
 }
 
 // CreateMedia creates an MXC URI for asynchronous media uploads.
@@ -204,8 +222,11 @@ func WithCreateEndpointVersion(version CreateRoomEndpoint) CreateRoomOptions {
 				if err != nil {
 					t.Fatalf("Failed creating PDU from event")
 				}
-				signedPDU := pdu.Sign(string(c.SenderID()), "ed25519:1", c.cryptoID.PrivateKey)
+				cryptoID := c.GetCryptoID(pdu.SenderID())
+				signedPDU := pdu.Sign(string(pdu.SenderID()), "ed25519:1", cryptoID.PrivateKey)
 				sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: creationContent.RoomVersion, PDU: signedPDU.JSON()})
+
+				c.AssociateCryptoIDWithRoom(pdu.SenderID(), pdu.RoomID().String())
 			}
 
 			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
@@ -309,7 +330,7 @@ func WithJoinEndpointVersion(version JoinRoomEndpoint) JoinRoomOptions {
 			if err != nil {
 				t.Fatalf("Failed creating PDU from event")
 			}
-			signedPDU := pdu.Sign(string(c.SenderID()), "ed25519:1", c.cryptoID.PrivateKey)
+			signedPDU := pdu.Sign(string(pdu.SenderID()), "ed25519:1", c.GetCryptoIDForRoom(pdu.RoomID().String()).PrivateKey) //c.GetCryptoID(pdu.SenderID()).PrivateKey)
 			sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: string(version), PDU: signedPDU.JSON()})
 
 			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
@@ -415,7 +436,7 @@ func WithInviteEndpointVersion(version InviteRoomEndpoint) InviteRoomOptions {
 			if err != nil {
 				t.Fatalf("Failed creating PDU from event")
 			}
-			signedPDU := pdu.Sign(string(c.SenderID()), "ed25519:1", c.cryptoID.PrivateKey)
+			signedPDU := pdu.Sign(string(pdu.SenderID()), "ed25519:1", c.GetCryptoIDForRoom(pdu.RoomID().String()).PrivateKey) //c.GetCryptoID(pdu.SenderID()).PrivateKey)
 			sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: string(version), PDU: signedPDU.JSON()})
 
 			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))

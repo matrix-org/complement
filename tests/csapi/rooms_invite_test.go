@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 )
 
@@ -25,13 +26,12 @@ func TestRoomsInvite(t *testing.T) {
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset":    "private_chat",
-				"sender_id": alice.SenderID(),
+				"sender_id": alice.NewCryptoID(t),
 			}, client.WithCreateEndpointVersion(client.CreateRoomURLMSC4080))
 			alice.MustInviteRoom(t, roomID, bob.UserID, client.WithInviteEndpointVersion(client.InviteRoomURLMSC4080))
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID,
-				client.SyncInviteOption{Path: ".one_time_cryptoid", Value: string(bob.SenderID())}))
-			// TODO: upload different cryptoID for one-time cryptoIDs
-			// TODO: grab cryptoID from sync response
+			var bobOneTimeCryptoID string
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedToWithCryptoID(bob.UserID, roomID, &bobOneTimeCryptoID))
+			bob.AssociateCryptoIDWithRoom(spec.SenderID(bobOneTimeCryptoID), roomID)
 			bob.MustJoinRoom(t, roomID, []string{}, client.WithJoinEndpointVersion(client.JoinRoomURLMSC4080))
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))

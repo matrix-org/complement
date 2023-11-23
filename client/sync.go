@@ -295,17 +295,42 @@ func SyncInvitedTo(userID, roomID string, opts ...SyncInviteOption) SyncCheckOpt
 				return fmt.Errorf("SyncInvitedTo(%s): %s", roomID, err)
 			}
 
-			for _, opt := range opts {
-				value := gjson.Get(topLevelSyncJSON.Raw, "rooms.invite."+GjsonEscape(roomID)+opt.Path)
-				if !value.Exists() {
-					err = fmt.Errorf("Missing value for %s", opt.Path)
-				} else {
-					if value.Str != opt.Value {
-						err = fmt.Errorf("Incorrect value. Expected %s, got %s", opt.Value, value)
-					}
-				}
+			return nil
+		}
+		// passive
+		return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
+		})(clientUserID, topLevelSyncJSON)
+	}
+}
+
+func SyncInvitedToWithCryptoID(userID, roomID string, oneTimeCryptoID *string) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		// two forms which depend on what the client user is:
+		// - passively viewing an invite for a room you're joined to (timeline events)
+		// - actively being invited to a room.
+		if clientUserID == userID {
+			// active
+			err := checkArrayElements(
+				topLevelSyncJSON, "rooms.invite."+GjsonEscape(roomID)+".invite_state.events",
+				func(ev gjson.Result) bool {
+					return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("SyncInvitedTo(%s): %s", roomID, err)
 			}
-			// TODO: associate one-time cryptoID with room
+
+			value := gjson.Get(topLevelSyncJSON.Raw, "rooms.invite."+GjsonEscape(roomID)+".one_time_cryptoid")
+			if !value.Exists() {
+				return fmt.Errorf("Missing value for one_time_cryptoid")
+			} else {
+				//if value.Str != opt.Value {
+				//	return fmt.Errorf("Incorrect value. Expected %s, got %s", opt.Value, value)
+				//}
+				*oneTimeCryptoID = value.Str
+			}
+
 			return nil
 		}
 		// passive
