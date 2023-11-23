@@ -9,7 +9,6 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
-	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 )
 
@@ -29,9 +28,7 @@ func TestRoomsInvite(t *testing.T) {
 				"sender_id": alice.NewCryptoID(t),
 			}, client.WithCreateEndpointVersion(client.CreateRoomURLMSC4080))
 			alice.MustInviteRoom(t, roomID, bob.UserID, client.WithInviteEndpointVersion(client.InviteRoomURLMSC4080))
-			var bobOneTimeCryptoID string
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedToWithCryptoID(bob.UserID, roomID, &bobOneTimeCryptoID))
-			bob.AssociateCryptoIDWithRoom(spec.SenderID(bobOneTimeCryptoID), roomID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedToWithCryptoID(bob.UserID, roomID, bob))
 			bob.MustJoinRoom(t, roomID, []string{}, client.WithJoinEndpointVersion(client.JoinRoomURLMSC4080))
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))

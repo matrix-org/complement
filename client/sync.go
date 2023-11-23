@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 )
 
@@ -304,7 +305,7 @@ func SyncInvitedTo(userID, roomID string, opts ...SyncInviteOption) SyncCheckOpt
 	}
 }
 
-func SyncInvitedToWithCryptoID(userID, roomID string, oneTimeCryptoID *string) SyncCheckOpt {
+func SyncInvitedToWithCryptoID(userID, roomID string, client *CSAPI) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		// two forms which depend on what the client user is:
 		// - passively viewing an invite for a room you're joined to (timeline events)
@@ -328,7 +329,7 @@ func SyncInvitedToWithCryptoID(userID, roomID string, oneTimeCryptoID *string) S
 				//if value.Str != opt.Value {
 				//	return fmt.Errorf("Incorrect value. Expected %s, got %s", opt.Value, value)
 				//}
-				*oneTimeCryptoID = value.Str
+				client.AssociateCryptoIDWithRoom(spec.SenderID(value.Str), roomID)
 			}
 
 			return nil
