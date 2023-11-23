@@ -268,12 +268,17 @@ func SyncPresenceHas(fromUser string, expectedPresence *string, checks ...func(g
 	}
 }
 
+type SyncInviteOption struct {
+	Path  string
+	Value string
+}
+
 // Checks that `userID` gets invited to `roomID`.
 //
 // This checks different parts of the /sync response depending on the client making the request.
 // If the client is also the person being invited to the room then the 'invite' block will be inspected.
 // If the client is different to the person being invited then the 'join' block will be inspected.
-func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
+func SyncInvitedTo(userID, roomID string, opts ...SyncInviteOption) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		// two forms which depend on what the client user is:
 		// - passively viewing an invite for a room you're joined to (timeline events)
@@ -289,6 +294,18 @@ func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
 			if err != nil {
 				return fmt.Errorf("SyncInvitedTo(%s): %s", roomID, err)
 			}
+
+			for _, opt := range opts {
+				value := gjson.Get(topLevelSyncJSON.Raw, "rooms.invite."+GjsonEscape(roomID)+opt.Path)
+				if !value.Exists() {
+					err = fmt.Errorf("Missing value for %s", opt.Path)
+				} else {
+					if value.Str != opt.Value {
+						err = fmt.Errorf("Incorrect value. Expected %s, got %s", opt.Value, value)
+					}
+				}
+			}
+			// TODO: associate one-time cryptoID with room
 			return nil
 		}
 		// passive

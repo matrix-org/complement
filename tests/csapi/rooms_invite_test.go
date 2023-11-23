@@ -28,7 +28,8 @@ func TestRoomsInvite(t *testing.T) {
 				"sender_id": alice.SenderID(),
 			}, client.WithCreateEndpointVersion(client.CreateRoomURLMSC4080))
 			alice.MustInviteRoom(t, roomID, bob.UserID, client.WithInviteEndpointVersion(client.InviteRoomURLMSC4080))
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID,
+				client.SyncInviteOption{Path: ".one_time_cryptoid", Value: string(bob.SenderID())}))
 			// TODO: upload different cryptoID for one-time cryptoIDs
 			// TODO: grab cryptoID from sync response
 			bob.MustJoinRoom(t, roomID, []string{}, client.WithJoinEndpointVersion(client.JoinRoomURLMSC4080))
