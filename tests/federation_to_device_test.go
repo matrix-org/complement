@@ -2,7 +2,9 @@ package tests
 
 import (
 	"reflect"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
@@ -29,10 +31,10 @@ func TestToDeviceMessagesOverFederation(t *testing.T) {
 			// cut networking but keep in-memory state
 			name: "interrupted connectivity",
 			makeUnreachable: func(t *testing.T) {
-				deployment.PauseServer(t, "hs2")
+				deployment.StopServer(t, "hs2")
 			},
 			makeReachable: func(t *testing.T) {
-				deployment.UnpauseServer(t, "hs2")
+				deployment.StartServer(t, "hs2")
 			},
 		},
 		{
@@ -42,6 +44,11 @@ func TestToDeviceMessagesOverFederation(t *testing.T) {
 				deployment.StopServer(t, "hs2")
 			},
 			makeReachable: func(t *testing.T) {
+				// kick over the sending server first to see if the server
+				// remembers to resend on startup
+				deployment.StopServer(t, "hs1")
+				deployment.StartServer(t, "hs1")
+				// now make the receiving server reachable.
 				deployment.StartServer(t, "hs2")
 			},
 		},
@@ -56,6 +63,8 @@ func TestToDeviceMessagesOverFederation(t *testing.T) {
 			bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{
 				LocalpartSuffix: "bob",
 			})
+			// it might take a while for retries, so keep on syncing!
+			bob.SyncUntilTimeout = 30 * time.Second
 
 			_, bobSince := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
@@ -86,10 +95,31 @@ func TestToDeviceMessagesOverFederation(t *testing.T) {
 
 				return reflect.DeepEqual(evContent, content)
 			}
+			// just in case the server returns 200 OK before flushing to disk, give it a grace period.
+			// This is too nice of us given in the real world no grace is provided..
+			time.Sleep(time.Second)
 
 			tc.makeReachable(t)
 
-			bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncToDeviceHas(alice.UserID, checkEvent))
+			var completed atomic.Bool
+			go func() {
+				time.Sleep(10 * time.Second)
+				if completed.Load() {
+					return
+				}
+				// maybe kicking the server will make things work if we're still waiting after 10s
+				alice.MustSendToDeviceMessages(t, "kick.type", map[string]map[string]map[string]interface{}{
+					bob.UserID: {
+						bob.DeviceID: content,
+					},
+				})
+			}()
+
+			bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+				t.Logf("%s", topLevelSyncJSON.Raw)
+				return client.SyncToDeviceHas(alice.UserID, checkEvent)(clientUserID, topLevelSyncJSON)
+			})
+			completed.Store(true)
 		})
 	}
 }
