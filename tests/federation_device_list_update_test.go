@@ -115,7 +115,7 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 				},
 			})
 			// it might take a while for retries, so keep on syncing!
-			bob.SyncUntilTimeout = 20 * time.Second
+			bob.SyncUntilTimeout = 50 * time.Second
 			_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 			bobSince := bob.MustSyncUntil(t, client.SyncReq{TimeoutMillis: "0"}, client.SyncInvitedTo(bob.UserID, roomID))
 
@@ -145,10 +145,6 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 				"device_keys":   deviceKeys,
 				"one_time_keys": oneTimeKeys,
 			}))
-
-			// just in case the server needs time to compute device list changes, give it a grace period.
-			// This is too nice of us given in the real world no grace is provided..
-			time.Sleep(time.Second)
 
 			// now federation comes back online
 			tc.makeReachable(t)
