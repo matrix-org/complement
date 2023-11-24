@@ -101,6 +101,8 @@ func TestToDeviceMessagesOverFederation(t *testing.T) {
 
 			tc.makeReachable(t)
 
+			// servers may need to be poked with another to-device msg. This isn't great.
+			// See https://github.com/matrix-org/synapse/issues/16680
 			var completed atomic.Bool
 			go func() {
 				time.Sleep(10 * time.Second)
