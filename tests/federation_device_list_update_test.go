@@ -59,32 +59,31 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 			makeUnreachable: func(t *testing.T) {},
 			makeReachable:   func(t *testing.T) {},
 		},
-		/*
-			{
-				// cut networking but keep in-memory state
-				name: "interrupted connectivity",
-				makeUnreachable: func(t *testing.T) {
-					deployment.StopServer(t, "hs2")
-				},
-				makeReachable: func(t *testing.T) {
-					deployment.StartServer(t, "hs2")
-				},
+		{
+			// cut networking but keep in-memory state
+			name: "interrupted connectivity",
+			makeUnreachable: func(t *testing.T) {
+				deployment.StopServer(t, "hs2")
 			},
-			{
-				// interesting because this nukes memory
-				name: "stopped server",
-				makeUnreachable: func(t *testing.T) {
-					deployment.StopServer(t, "hs2")
-				},
-				makeReachable: func(t *testing.T) {
-					// kick over the sending server first to see if the server
-					// remembers to resend on startup
-					deployment.StopServer(t, "hs1")
-					deployment.StartServer(t, "hs1")
-					// now make the receiving server reachable.
-					deployment.StartServer(t, "hs2")
-				},
-			}, */
+			makeReachable: func(t *testing.T) {
+				deployment.StartServer(t, "hs2")
+			},
+		},
+		{
+			// interesting because this nukes memory
+			name: "stopped server",
+			makeUnreachable: func(t *testing.T) {
+				deployment.StopServer(t, "hs2")
+			},
+			makeReachable: func(t *testing.T) {
+				// kick over the sending server first to see if the server
+				// remembers to resend on startup
+				deployment.StopServer(t, "hs1")
+				deployment.StartServer(t, "hs1")
+				// now make the receiving server reachable.
+				deployment.StartServer(t, "hs2")
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -137,10 +136,15 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 			tc.makeUnreachable(t)
 
 			// ..and alice logs in on a new device!
-			deployment.Login(t, "hs1", alice, helpers.LoginOpts{
+			alice2 := deployment.Login(t, "hs1", alice, helpers.LoginOpts{
 				DeviceID: "NEW_DEVICE",
 				Password: "this is alices password",
 			})
+			deviceKeys, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 1)
+			alice2.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, client.WithJSONBody(t, map[string]interface{}{
+				"device_keys":   deviceKeys,
+				"one_time_keys": oneTimeKeys,
+			}))
 
 			// just in case the server needs time to compute device list changes, give it a grace period.
 			// This is too nice of us given in the real world no grace is provided..
@@ -149,7 +153,7 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 			// now federation comes back online
 			tc.makeReachable(t)
 
-			// and ensure alice sees her new device login
+			// ensure alice sees her new device login
 			aliceSince = alice.MustSyncUntil(
 				t, client.SyncReq{TimeoutMillis: "1000", Since: aliceSince},
 				syncHasDeviceListChange([]string{alice.UserID}, []string{}),
@@ -158,7 +162,6 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 			// ensure bob sees the device list change
 			bobSince = bob.MustSyncUntil(
 				t, client.SyncReq{TimeoutMillis: "1000", Since: bobSince},
-				// bob is in this list because... his other devices may need to know.
 				syncHasDeviceListChange([]string{alice.UserID}, []string{}),
 			)
 		})
