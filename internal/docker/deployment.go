@@ -246,6 +246,7 @@ func (d *Deployment) Restart(t *testing.T) error {
 
 func (d *Deployment) StartServer(t *testing.T, hsName string) {
 	t.Helper()
+	t.Logf("StartServer %s", hsName)
 	hsDep := d.HS[hsName]
 	if hsDep == nil {
 		t.Fatalf("StartServer: %s does not exist in this deployment", hsName)
@@ -257,6 +258,7 @@ func (d *Deployment) StartServer(t *testing.T, hsName string) {
 
 func (d *Deployment) StopServer(t *testing.T, hsName string) {
 	t.Helper()
+	t.Logf("StopServer %s", hsName)
 	hsDep := d.HS[hsName]
 	if hsDep == nil {
 		t.Fatalf("StopServer: %s does not exist in this deployment", hsName)
@@ -268,6 +270,7 @@ func (d *Deployment) StopServer(t *testing.T, hsName string) {
 
 func (d *Deployment) PauseServer(t *testing.T, hsName string) {
 	t.Helper()
+	t.Logf("PauseServer %s", hsName)
 	hsDep := d.HS[hsName]
 	if hsDep == nil {
 		t.Fatalf("PauseServer: %s does not exist in this deployment", hsName)
@@ -279,6 +282,7 @@ func (d *Deployment) PauseServer(t *testing.T, hsName string) {
 
 func (d *Deployment) UnpauseServer(t *testing.T, hsName string) {
 	t.Helper()
+	t.Logf("UnpauseServer %s", hsName)
 	hsDep := d.HS[hsName]
 	if hsDep == nil {
 		t.Fatalf("UnpauseServer: %s does not exist in this deployment", hsName)
