@@ -35,13 +35,8 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 			}
 			sort.Strings(gotChanged)
 			sort.Strings(gotLeft)
-			var changedMatch, leftMatch bool
-			if reflect.DeepEqual(changed, gotChanged) {
-				changedMatch = true
-			}
-			if reflect.DeepEqual(left, gotLeft) {
-				leftMatch = true
-			}
+			changedMatch := reflect.DeepEqual(changed, gotChanged)
+			leftMatch := reflect.DeepEqual(left, gotLeft)
 			if changedMatch && leftMatch {
 				return nil
 			}
