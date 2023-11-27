@@ -103,6 +103,8 @@ func TestToDeviceMessagesOverFederation(t *testing.T) {
 
 			// servers may need to be poked with another to-device msg. This isn't great.
 			// See https://github.com/matrix-org/synapse/issues/16680
+			// bob has a sync timeout of 30s set, so if the test has not yet passed, we are kicking the server
+			// after 10s to ensure the server processes the previous sent to-device message.
 			var completed atomic.Bool
 			go func() {
 				time.Sleep(10 * time.Second)
