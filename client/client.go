@@ -107,6 +107,11 @@ func (c *CSAPI) GetCryptoID(senderID spec.SenderID) helpers.CryptoID {
 	return c.CryptoIDs[senderID]
 }
 
+func (c *CSAPI) CryptoIDAssociatedWithRoom(roomID string) bool {
+	_, ok := c.CryptoIDRoomMap[roomID]
+	return ok
+}
+
 func (c *CSAPI) GetCryptoIDForRoom(roomID string) helpers.CryptoID {
 	return c.CryptoIDRoomMap[roomID]
 }
@@ -192,7 +197,9 @@ func WithCreateEndpointVersion(version CreateRoomEndpoint) CreateRoomOptions {
 			return c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, body))
 		case CreateRoomURLMSC4080:
 			res := c.Do(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "createRoom"}, WithJSONBody(t, body))
-			mustRespond2xx(t, res)
+			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				return res
+			}
 			resBody := ParseJSON(t, res)
 
 			var creationContent struct {
@@ -231,7 +238,9 @@ func WithCreateEndpointVersion(version CreateRoomEndpoint) CreateRoomOptions {
 
 			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
 			sendRes := c.Do(t, "POST", url, WithJSONBody(t, sendPDUsBody))
-			mustRespond2xx(t, sendRes)
+			if sendRes.StatusCode < 200 || sendRes.StatusCode >= 300 {
+				return sendRes
+			}
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(resBody))}
 		default:
 			t.Fatalf("Unknown endpoint version")
@@ -297,12 +306,24 @@ func WithJoinEndpointVersion(version JoinRoomEndpoint) JoinRoomOptions {
 			for _, serverName := range serverNames {
 				query.Add("server_name", serverName)
 			}
+
+			var cryptoID spec.SenderID
+			if c.CryptoIDAssociatedWithRoom(roomIDOrAlias) {
+				cryptoID = c.SenderIDForRoom(roomIDOrAlias)
+			} else {
+				cryptoID = c.NewCryptoID(t)
+				c.AssociateCryptoIDWithRoom(cryptoID, roomIDOrAlias)
+			}
+
 			// join the room
 			res := c.Do(
 				t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "join", roomIDOrAlias},
-				WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
+				WithQueries(query), WithJSONBody(t, map[string]interface{}{"cryptoid": cryptoID}),
 			)
-			mustRespond2xx(t, res)
+			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				return res
+			}
+
 			resBody := ParseJSON(t, res)
 
 			var joinContent struct {
@@ -330,12 +351,15 @@ func WithJoinEndpointVersion(version JoinRoomEndpoint) JoinRoomOptions {
 			if err != nil {
 				t.Fatalf("Failed creating PDU from event")
 			}
+
 			signedPDU := pdu.Sign(string(pdu.SenderID()), "ed25519:1", c.GetCryptoIDForRoom(pdu.RoomID().String()).PrivateKey) //c.GetCryptoID(pdu.SenderID()).PrivateKey)
 			sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: string(version), PDU: signedPDU.JSON()})
 
 			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
 			sendRes := c.Do(t, "POST", url, WithJSONBody(t, sendPDUsBody))
-			mustRespond2xx(t, sendRes)
+			if sendRes.StatusCode < 200 || sendRes.StatusCode >= 300 {
+				return sendRes
+			}
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(resBody))}
 		default:
 			t.Fatalf("Unknown endpoint version")
@@ -407,7 +431,9 @@ func WithInviteEndpointVersion(version InviteRoomEndpoint) InviteRoomOptions {
 			return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
 		case InviteRoomURLMSC4080:
 			res := c.Do(t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "rooms", roomID, "invite"}, WithJSONBody(t, body))
-			mustRespond2xx(t, res)
+			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				return res
+			}
 
 			resBody := ParseJSON(t, res)
 
@@ -436,12 +462,19 @@ func WithInviteEndpointVersion(version InviteRoomEndpoint) InviteRoomOptions {
 			if err != nil {
 				t.Fatalf("Failed creating PDU from event")
 			}
+
+			if pdu.SenderID() != spec.SenderIDFromPseudoIDKey(c.GetCryptoIDForRoom(pdu.RoomID().String()).PrivateKey) {
+				t.Fatalf("cryptoIDs don't match!")
+			}
+
 			signedPDU := pdu.Sign(string(pdu.SenderID()), "ed25519:1", c.GetCryptoIDForRoom(pdu.RoomID().String()).PrivateKey) //c.GetCryptoID(pdu.SenderID()).PrivateKey)
 			sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: string(version), PDU: signedPDU.JSON()})
 
 			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
 			sendRes := c.Do(t, "POST", url, WithJSONBody(t, sendPDUsBody))
-			mustRespond2xx(t, sendRes)
+			if sendRes.StatusCode < 200 || sendRes.StatusCode >= 300 {
+				return sendRes
+			}
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(resBody))}
 		default:
 			t.Fatalf("Unknown endpoint version")
@@ -471,6 +504,321 @@ func (c *CSAPI) InviteRoom(t TestLike, roomID string, userID string, opts ...Inv
 	}
 	for _, opt := range opts {
 		res := opt(t, c, roomID, body)
+		if res != nil {
+			return res
+		}
+	}
+
+	return nil
+}
+
+type KickRoomOptions func(t TestLike, c *CSAPI, roomID string, userID string) *http.Response
+
+type KickRoomEndpoint int
+
+const (
+	KickRoomURLV3 KickRoomEndpoint = iota
+	KickRoomURLMSC4080
+)
+
+var DefaultKickRoomEndpoint = KickRoomURLV3
+
+func WithKickEndpointVersion(version KickRoomEndpoint) KickRoomOptions {
+	return func(t TestLike, c *CSAPI, roomID string, userID string) *http.Response {
+		switch version {
+		case KickRoomURLV3:
+			// join the room
+			return c.Do(
+				t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
+				WithJSONBody(t, map[string]interface{}{}),
+			)
+		case KickRoomURLMSC4080:
+			var cryptoID spec.SenderID
+			if c.CryptoIDAssociatedWithRoom(roomID) {
+				cryptoID = c.SenderIDForRoom(roomID)
+			} else {
+				cryptoID = c.NewCryptoID(t)
+				c.AssociateCryptoIDWithRoom(cryptoID, roomID)
+			}
+
+			// join the room
+			res := c.Do(
+				t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "rooms", roomID, "kick"},
+				WithJSONBody(t, map[string]interface{}{"user_id": userID}),
+			)
+			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				return res
+			}
+			resBody := ParseJSON(t, res)
+
+			var joinContent struct {
+				PDU spec.RawJSON `json:"pdu"`
+			}
+			if err := json.Unmarshal(resBody, &joinContent); err != nil {
+				t.Fatalf("Failed parsing room join body")
+			}
+
+			type PDUInfo struct {
+				Version   string          `json:"room_version"`
+				ViaServer string          `json:"via_server,omitempty"`
+				PDU       json.RawMessage `json:"pdu"`
+			}
+
+			type sendPDUsRequest struct {
+				PDUs []PDUInfo `json:"pdus"`
+			}
+
+			sendPDUsBody := sendPDUsRequest{}
+
+			version := gomatrixserverlib.RoomVersionCryptoIDs
+			roomVer := gomatrixserverlib.MustGetRoomVersion(version)
+			pdu, err := roomVer.NewEventFromUntrustedJSON(joinContent.PDU)
+			if err != nil {
+				t.Fatalf("Failed creating PDU from event")
+			}
+
+			signedPDU := pdu.Sign(string(pdu.SenderID()), "ed25519:1", c.GetCryptoIDForRoom(pdu.RoomID().String()).PrivateKey) //c.GetCryptoID(pdu.SenderID()).PrivateKey)
+			sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: string(version), PDU: signedPDU.JSON()})
+
+			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
+			sendRes := c.Do(t, "POST", url, WithJSONBody(t, sendPDUsBody))
+			if sendRes.StatusCode < 200 || sendRes.StatusCode >= 300 {
+				return sendRes
+			}
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(resBody))}
+		default:
+			t.Fatalf("Unknown endpoint version")
+		}
+		return &http.Response{StatusCode: 400}
+	}
+}
+
+// MustKickFromRoom kicks the given user from the room ID, else fails the test. Returns the room ID.
+func (c *CSAPI) MustKickFromRoom(t TestLike, roomID string, userID string, opts ...KickRoomOptions) {
+	t.Helper()
+	res := c.KickFromRoom(t, roomID, userID, opts...)
+	mustRespond2xx(t, res)
+}
+
+// KickFromRoom kicks the given user from the room ID. Returns the raw http response
+func (c *CSAPI) KickFromRoom(t TestLike, roomID string, userID string, opts ...KickRoomOptions) *http.Response {
+	t.Helper()
+	if len(opts) == 0 {
+		opts = append(opts, WithKickEndpointVersion(DefaultKickRoomEndpoint))
+	}
+
+	for _, opt := range opts {
+		res := opt(t, c, roomID, userID)
+		if res != nil {
+			return res
+		}
+	}
+
+	return nil
+}
+
+type BanRoomOptions func(t TestLike, c *CSAPI, roomID string, userID string) *http.Response
+
+type BanRoomEndpoint int
+
+const (
+	BanRoomURLV3 BanRoomEndpoint = iota
+	BanRoomURLMSC4080
+)
+
+var DefaultBanRoomEndpoint = BanRoomURLV3
+
+func WithBanEndpointVersion(version BanRoomEndpoint) BanRoomOptions {
+	return func(t TestLike, c *CSAPI, roomID string, userID string) *http.Response {
+		switch version {
+		case BanRoomURLV3:
+			// join the room
+			return c.Do(
+				t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"},
+				WithJSONBody(t, map[string]interface{}{}),
+			)
+		case BanRoomURLMSC4080:
+			var cryptoID spec.SenderID
+			if c.CryptoIDAssociatedWithRoom(roomID) {
+				cryptoID = c.SenderIDForRoom(roomID)
+			} else {
+				cryptoID = c.NewCryptoID(t)
+				c.AssociateCryptoIDWithRoom(cryptoID, roomID)
+			}
+
+			// join the room
+			res := c.Do(
+				t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "rooms", roomID, "ban"},
+				WithJSONBody(t, map[string]interface{}{"user_id": userID}),
+			)
+			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				return res
+			}
+			resBody := ParseJSON(t, res)
+
+			var joinContent struct {
+				PDU spec.RawJSON `json:"pdu"`
+			}
+			if err := json.Unmarshal(resBody, &joinContent); err != nil {
+				t.Fatalf("Failed parsing room join body")
+			}
+
+			type PDUInfo struct {
+				Version   string          `json:"room_version"`
+				ViaServer string          `json:"via_server,omitempty"`
+				PDU       json.RawMessage `json:"pdu"`
+			}
+
+			type sendPDUsRequest struct {
+				PDUs []PDUInfo `json:"pdus"`
+			}
+
+			sendPDUsBody := sendPDUsRequest{}
+
+			version := gomatrixserverlib.RoomVersionCryptoIDs
+			roomVer := gomatrixserverlib.MustGetRoomVersion(version)
+			pdu, err := roomVer.NewEventFromUntrustedJSON(joinContent.PDU)
+			if err != nil {
+				t.Fatalf("Failed creating PDU from event")
+			}
+
+			signedPDU := pdu.Sign(string(pdu.SenderID()), "ed25519:1", c.GetCryptoIDForRoom(pdu.RoomID().String()).PrivateKey) //c.GetCryptoID(pdu.SenderID()).PrivateKey)
+			sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: string(version), PDU: signedPDU.JSON()})
+
+			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
+			sendRes := c.Do(t, "POST", url, WithJSONBody(t, sendPDUsBody))
+			if sendRes.StatusCode < 200 || sendRes.StatusCode >= 300 {
+				return sendRes
+			}
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(resBody))}
+		default:
+			t.Fatalf("Unknown endpoint version")
+		}
+		return &http.Response{StatusCode: 400}
+	}
+}
+
+// MustBanFromRoom bans the given user from the room ID, else fails the test. Returns the room ID.
+func (c *CSAPI) MustBanFromRoom(t TestLike, roomID string, userID string, opts ...BanRoomOptions) {
+	t.Helper()
+	res := c.BanFromRoom(t, roomID, userID, opts...)
+	mustRespond2xx(t, res)
+}
+
+// BanFromRoom bans the given user from the room ID. Returns the raw http response
+func (c *CSAPI) BanFromRoom(t TestLike, roomID string, userID string, opts ...BanRoomOptions) *http.Response {
+	t.Helper()
+	if len(opts) == 0 {
+		opts = append(opts, WithBanEndpointVersion(DefaultBanRoomEndpoint))
+	}
+
+	for _, opt := range opts {
+		res := opt(t, c, roomID, userID)
+		if res != nil {
+			return res
+		}
+	}
+
+	return nil
+}
+
+type UnbanRoomOptions func(t TestLike, c *CSAPI, roomID string, userID string) *http.Response
+
+type UnbanRoomEndpoint int
+
+const (
+	UnbanRoomURLV3 UnbanRoomEndpoint = iota
+	UnbanRoomURLMSC4080
+)
+
+var DefaultUnbanRoomEndpoint = UnbanRoomURLV3
+
+func WithUnbanEndpointVersion(version UnbanRoomEndpoint) UnbanRoomOptions {
+	return func(t TestLike, c *CSAPI, roomID string, userID string) *http.Response {
+		switch version {
+		case UnbanRoomURLV3:
+			// join the room
+			return c.Do(
+				t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "unban"},
+				WithJSONBody(t, map[string]interface{}{}),
+			)
+		case UnbanRoomURLMSC4080:
+			var cryptoID spec.SenderID
+			if c.CryptoIDAssociatedWithRoom(roomID) {
+				cryptoID = c.SenderIDForRoom(roomID)
+			} else {
+				cryptoID = c.NewCryptoID(t)
+				c.AssociateCryptoIDWithRoom(cryptoID, roomID)
+			}
+
+			// join the room
+			res := c.Do(
+				t, "POST", []string{"_matrix", "client", "unstable", "org.matrix.msc4080", "rooms", roomID, "unban"},
+				WithJSONBody(t, map[string]interface{}{"user_id": userID}),
+			)
+			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				return res
+			}
+			resBody := ParseJSON(t, res)
+
+			var joinContent struct {
+				PDU spec.RawJSON `json:"pdu"`
+			}
+			if err := json.Unmarshal(resBody, &joinContent); err != nil {
+				t.Fatalf("Failed parsing room join body")
+			}
+
+			type PDUInfo struct {
+				Version   string          `json:"room_version"`
+				ViaServer string          `json:"via_server,omitempty"`
+				PDU       json.RawMessage `json:"pdu"`
+			}
+
+			type sendPDUsRequest struct {
+				PDUs []PDUInfo `json:"pdus"`
+			}
+
+			sendPDUsBody := sendPDUsRequest{}
+
+			version := gomatrixserverlib.RoomVersionCryptoIDs
+			roomVer := gomatrixserverlib.MustGetRoomVersion(version)
+			pdu, err := roomVer.NewEventFromUntrustedJSON(joinContent.PDU)
+			if err != nil {
+				t.Fatalf("Failed creating PDU from event")
+			}
+
+			signedPDU := pdu.Sign(string(pdu.SenderID()), "ed25519:1", c.GetCryptoIDForRoom(pdu.RoomID().String()).PrivateKey) //c.GetCryptoID(pdu.SenderID()).PrivateKey)
+			sendPDUsBody.PDUs = append(sendPDUsBody.PDUs, PDUInfo{Version: string(version), PDU: signedPDU.JSON()})
+
+			url := append(sendPDUsURLMSC4080, fmt.Sprint(atomic.AddInt64(&c.txnID, 1)))
+			sendRes := c.Do(t, "POST", url, WithJSONBody(t, sendPDUsBody))
+			if sendRes.StatusCode < 200 || sendRes.StatusCode >= 300 {
+				return sendRes
+			}
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(resBody))}
+		default:
+			t.Fatalf("Unknown endpoint version")
+		}
+		return &http.Response{StatusCode: 400}
+	}
+}
+
+// MustBanFromRoom unbans the given user from the room ID, else fails the test. Returns the room ID.
+func (c *CSAPI) MustUnbanFromRoom(t TestLike, roomID string, userID string, opts ...UnbanRoomOptions) {
+	t.Helper()
+	res := c.UnbanFromRoom(t, roomID, userID, opts...)
+	mustRespond2xx(t, res)
+}
+
+// BanFromRoom unbans the given user from the room ID. Returns the raw http response
+func (c *CSAPI) UnbanFromRoom(t TestLike, roomID string, userID string, opts ...UnbanRoomOptions) *http.Response {
+	t.Helper()
+	if len(opts) == 0 {
+		opts = append(opts, WithUnbanEndpointVersion(DefaultUnbanRoomEndpoint))
+	}
+
+	for _, opt := range opts {
+		res := opt(t, c, roomID, userID)
 		if res != nil {
 			return res
 		}
