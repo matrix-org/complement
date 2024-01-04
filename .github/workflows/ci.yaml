@@ -43,12 +43,14 @@ jobs:
       matrix:
         include:
           - homeserver: Synapse
+            repo: element-hq/synapse
             tags: synapse_blacklist
             packages: ./tests/msc3874 ./tests/msc3902
             env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1 COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
             timeout: 20m
 
           - homeserver: Dendrite
+            repo: matrix-org/dendrite
             tags: dendrite_blacklist
             packages: ""
             env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1"
@@ -95,7 +97,7 @@ jobs:
                 continue
                 ;;
             esac
-            (wget -O - "https://github.com/matrix-org/${{ matrix.homeserver }}/archive/$BRANCH_NAME.tar.gz" | tar -xz --strip-components=1 -C homeserver) && break
+            (wget -O - "https://github.com/${{ matrix.repo }}/archive/$BRANCH_NAME.tar.gz" | tar -xz --strip-components=1 -C homeserver) && break
           done
 
       # Build homeserver image
