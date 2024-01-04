@@ -78,11 +78,11 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests/...
 
 ### Running against Synapse
 
-If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
+If you're looking to run Complement against a local dev instance of Synapse, see [`element-hq/synapse` -> `scripts-dev/complement.sh`](https://github.com/element-hq/synapse/blob/develop/scripts-dev/complement.sh).
 
 If you want to develop Complement tests while working on a local dev instance
 of Synapse, use the
-[`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh)
+[`scripts-dev/complement.sh`](https://github.com/element-hq/synapse/blob/develop/scripts-dev/complement.sh)
 script and set the `COMPLEMENT_DIR` environment variable to the filepath of
 your local Complement checkout. Arguments to `go test` can be supplied as an argument to the script, e.g.:
 
