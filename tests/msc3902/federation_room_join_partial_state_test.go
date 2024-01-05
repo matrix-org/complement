@@ -161,6 +161,38 @@ func (s *server) WithWaitForLeave(
 	}
 }
 
+// Wait for the server to receive the event with given event ID.
+func (s *server) WaitForEvent(
+	t *testing.T, room *federation.ServerRoom, eventID string,
+) {
+	eventChannel := make(chan gomatrixserverlib.PDU, 1)
+
+	removePDUHandler := s.AddPDUHandler(
+		func(e gomatrixserverlib.PDU) bool {
+			if e.EventID() == eventID {
+				eventChannel <- e
+				return true
+			}
+			return false
+		},
+	)
+	defer removePDUHandler()
+
+	_, found := room.GetEventInTimeline(eventID)
+
+	if found {
+		return
+	}
+
+	select {
+	case <-eventChannel:
+		t.Logf("%s received PDU %s", s.ServerName(), eventID)
+		break
+	case <-time.After(1 * time.Second):
+		t.Fatalf("%s timed out waiting for event %s.", s.ServerName(), eventID)
+	}
+}
+
 func TestPartialStateJoin(t *testing.T) {
 	// createMemberEvent creates a membership event for the given user
 	createMembershipEvent := func(
@@ -314,6 +346,7 @@ func TestPartialStateJoin(t *testing.T) {
 			},
 			Sender: alice.UserID,
 		})
+		server.WaitForEvent(t, serverRoom, messageId)
 
 		t.Log("5. Have Alice lazy-sync until she sees (4).")
 		alice.MustSyncUntil(

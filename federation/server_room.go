@@ -216,6 +216,20 @@ func (r *ServerRoom) ServersInRoom() (servers []string) {
 	return
 }
 
+// Fetches the event with given event ID from the room timeline.
+func (r *ServerRoom) GetEventInTimeline(eventID string) (gomatrixserverlib.PDU, bool) {
+	r.TimelineMutex.Lock()
+	defer r.TimelineMutex.Unlock()
+
+	for _, ev := range r.Timeline {
+		if ev.EventID() == eventID {
+			return ev, true
+		}
+	}
+
+	return nil, false
+}
+
 func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLevelContent) {
 	c.Defaults()
 	c.Events = map[string]int64{
