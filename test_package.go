@@ -28,7 +28,8 @@ type Deployment interface {
 	// an existing logged in client must be supplied.
 	Login(t *testing.T, hsName string, existing *client.CSAPI, opts helpers.LoginOpts) *client.CSAPI
 	// AppServiceUser returns a client for the given app service user ID. The HS in question must have an appservice
-	// hooked up to it already. TODO: REMOVE
+	// hooked up to it already. The user ID can be the application service itself, or a controlled user in the application
+	// service's namespace.
 	AppServiceUser(t *testing.T, hsName, appServiceUserID string) *client.CSAPI
 	// Restart a deployment. Restarts all homeservers in this deployment.
 	// This function is designed to be used to make assertions that servers are persisting information to disk.
@@ -131,7 +132,7 @@ func (tp *TestPackage) OldDeploy(t *testing.T, blueprint b.Blueprint) Deployment
 		t.Fatalf("OldDeploy: NewDeployer returned error %s", err)
 	}
 	timeStartDeploy := time.Now()
-	dep, err := d.Deploy(context.Background(), blueprint.Name)
+	dep, err := d.Deploy(context.Background(), blueprint)
 	if err != nil {
 		t.Fatalf("OldDeploy: Deploy returned error %s", err)
 	}
@@ -156,7 +157,7 @@ func (tp *TestPackage) Deploy(t *testing.T, numServers int) Deployment {
 		t.Fatalf("Deploy: NewDeployer returned error %s", err)
 	}
 	timeStartDeploy := time.Now()
-	dep, err := d.Deploy(context.Background(), blueprint.Name)
+	dep, err := d.Deploy(context.Background(), blueprint)
 	if err != nil {
 		t.Fatalf("Deploy: Deploy returned error %s", err)
 	}

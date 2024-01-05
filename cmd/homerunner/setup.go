@@ -48,7 +48,7 @@ func (r *Runtime) CreateDeployment(imageURI string, blueprint *b.Blueprint) (*do
 	if err != nil {
 		return nil, expires, fmt.Errorf("CreateDeployment: NewDeployer returned error %s", err)
 	}
-	dep, err := d.Deploy(context.Background(), blueprint.Name)
+	dep, err := d.Deploy(context.Background(), *blueprint)
 	if err != nil {
 		return nil, expires, fmt.Errorf("CreateDeployment: Deploy returned error %s", err)
 	}

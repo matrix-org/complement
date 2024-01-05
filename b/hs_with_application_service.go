@@ -16,12 +16,12 @@ var BlueprintHSWithApplicationService = MustValidate(Blueprint{
 					DisplayName: "Bob",
 				},
 			},
-			ApplicationServices: []ApplicationService{
+			ApplicationServices: []map[string]interface{}{
 				{
-					ID:              "my_as_id",
-					URL:             "http://localhost:9000",
-					SenderLocalpart: "the-bridge-user",
-					RateLimited:     false,
+					"id":               "my_as_id",
+					"url":              "http://localhost:9000",
+					"sender_localpart": "the-bridge-user",
+					"rate_limited":     false,
 				},
 			},
 		},

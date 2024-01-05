@@ -30,7 +30,7 @@ func runTest(testName string, builder *docker.Builder, deployer *docker.Deployer
 	if err := builder.ConstructBlueprintIfNotExist(b.BlueprintCleanHS); err != nil {
 		return nil, err
 	}
-	deployment, err := deployer.Deploy(context.Background(), b.BlueprintCleanHS.Name)
+	deployment, err := deployer.Deploy(context.Background(), b.BlueprintCleanHS)
 	if err != nil {
 		return nil, err
 	}
