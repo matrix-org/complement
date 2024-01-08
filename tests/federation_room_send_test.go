@@ -18,6 +18,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 // TODO:
@@ -91,6 +92,7 @@ func TestOutboundFederationSend(t *testing.T) {
 //	  - using the prev_batch token here in /messages SHOULD return 4,3,2,1, to ensure clients cannot missing 4,3,2.
 //	    It may actually decide to filter topologically and just return 0, which would be incorrect.
 func TestNetworkPartitionOrdering(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // 500s trying to /backfill
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
