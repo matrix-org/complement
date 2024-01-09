@@ -91,6 +91,35 @@ func TestOutboundFederationSend(t *testing.T) {
 //	  - client requests timeline limit = 4 => [1',5,6,7] is returned because /sync is stream ordering. Everything is fine so far.
 //	  - using the prev_batch token here in /messages SHOULD return 4,3,2,1, to ensure clients cannot missing 4,3,2.
 //	    It may actually decide to filter topologically and just return 0, which would be incorrect.
+//
+// Additional notes from Erik who explains how it works _in Synapse_:
+// > There are two orderings Synapse uses, called "stream ordering" and "topological ordering" (which is a specific topological ordering).
+// Once an event is persisted these orderings do not change.
+// > There are also two types of tokens: stream tokens and topological tokens. These correspond with segmenting events based on the
+// stream ordering and the topological ordering respectively.
+// > The two requests that happen are:
+//  1. `/sync` which returns events in stream ordering and includes stream tokens for the start and end of the included set of events.
+//     The events returned are the latest N events based on stream ordering in the room.
+//  2. `/messages` which returns events in topological ordering and includes topological tokens for the start and end of the included
+//     set of events. You can specify either stream or topological tokens for the upper and lower bounds of requested events.
+//     The events returned are the latest N events based on topological ordering in the room, filtered by the tokens specified.
+//
+// > The question is: if we use a stream token from the start of the timeline in `/sync` to paginate via `/messages`, do we see all events?
+// > Let's say we do a `/sync` and get a `prev_batch` stream token of `s`. When we do `/messages` this will return the set of events ordered
+// > by topological ordering less than `s`, greatest first. i.e. there is a topological token `t`
+// > (corresponding to the first event `/messages` returns) for which any event before `t` will be returned by `/messages` (except maybe if
+// > the event is after `s`).
+//
+// > Given an arbitrary event `E` in the room, what cases are there and will it turn up in subsequent `/sync` or `/messages`?
+//  1. If `E` is after `s` then it will come down `/sync`, and we're done.
+//  2. If `E` is before `t` then it will come down `/messages` and we're done.
+//  3. By construction of `t` there cannot be an event that is after `t` but before `s`, as `t` is defined to be a token that returns
+//     all events before `s`. i.e., `E` must be in one of the two cases above.
+//
+// > This is true for the case where we receive `E` and *then* do the the pagination. What about the case where we have already started
+// > paginating from a previous `/sync` request? For non-backfilled events then `E` must by definition of stream ordering happen after `s`,
+// > and so come down `/sync` if there are no gaps. For the gappy sync case the client will have to paginate, but then the same rationale
+// > as above applies.
 func TestNetworkPartitionOrdering(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // 500s trying to /backfill
 	deployment := complement.Deploy(t, 1)
