@@ -10,11 +10,10 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"testing"
 	"time"
-
-	"net/http"
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib"
@@ -22,8 +21,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -242,7 +241,13 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		}))
 	})
 
+	t.Run("A user cannot knock on a room they are already invited to", func(t *testing.T) {
+		reason := "I'm sticking my hand out the window and knocking again!"
+		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{"hs1"}, 403)
+	})
+
 	t.Run("A user cannot knock on a room they are already in", func(t *testing.T) {
+		knockingUser.MustJoinRoom(t, roomID, []string{"hs1"})
 		reason := "I'm sticking my hand out the window and knocking again!"
 		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{"hs1"}, 403)
 	})
