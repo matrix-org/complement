@@ -34,10 +34,10 @@ func TestMainWithCleanup(m *testing.M, namespace string, cleanup func()) {
 		os.Exit(1)
 	}
 	exitCode := m.Run()
-	testPackage.Cleanup()
 	if cleanup != nil {
 		cleanup()
 	}
+	testPackage.Cleanup()
 	os.Exit(exitCode)
 }
 
