@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
-	"testing"
 	"time"
 
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/gomatrixserverlib"
@@ -69,7 +69,7 @@ func (d *Deployment) DestroyAtCleanup() {
 
 // Destroy the entire deployment. Destroys all running containers. If `printServerLogs` is true,
 // will print container logs before killing the container.
-func (d *Deployment) Destroy(t *testing.T) {
+func (d *Deployment) Destroy(t ct.TestLike) {
 	t.Helper()
 	if d.Dirty {
 		if t.Failed() {
@@ -88,10 +88,10 @@ func (d *Deployment) RoundTripper() http.RoundTripper {
 	return &RoundTripper{Deployment: d}
 }
 
-func (d *Deployment) Register(t *testing.T, hsName string, opts helpers.RegistrationOpts) *client.CSAPI {
+func (d *Deployment) Register(t ct.TestLike, hsName string, opts helpers.RegistrationOpts) *client.CSAPI {
 	dep, ok := d.HS[hsName]
 	if !ok {
-		t.Fatalf("Deployment.Register - HS name '%s' not found", hsName)
+		ct.Fatalf(t, "Deployment.Register - HS name '%s' not found", hsName)
 		return nil
 	}
 	client := &client.CSAPI{
@@ -131,16 +131,16 @@ func (d *Deployment) Register(t *testing.T, hsName string, opts helpers.Registra
 	return client
 }
 
-func (d *Deployment) Login(t *testing.T, hsName string, existing *client.CSAPI, opts helpers.LoginOpts) *client.CSAPI {
+func (d *Deployment) Login(t ct.TestLike, hsName string, existing *client.CSAPI, opts helpers.LoginOpts) *client.CSAPI {
 	t.Helper()
 	dep, ok := d.HS[hsName]
 	if !ok {
-		t.Fatalf("Deployment.Login: HS name '%s' not found", hsName)
+		ct.Fatalf(t, "Deployment.Login: HS name '%s' not found", hsName)
 		return nil
 	}
 	localpart, _, err := gomatrixserverlib.SplitID('@', existing.UserID)
 	if err != nil {
-		t.Fatalf("Deployment.Login: existing CSAPI client has invalid user ID '%s', cannot login as this user: %s", existing.UserID, err)
+		ct.Fatalf(t, "Deployment.Login: existing CSAPI client has invalid user ID '%s', cannot login as this user: %s", existing.UserID, err)
 	}
 	c := &client.CSAPI{
 		BaseURL:          dep.BaseURL,
@@ -173,11 +173,11 @@ func (d *Deployment) Network() string {
 	return ""
 }
 
-func (d *Deployment) UnauthenticatedClient(t *testing.T, hsName string) *client.CSAPI {
+func (d *Deployment) UnauthenticatedClient(t ct.TestLike, hsName string) *client.CSAPI {
 	t.Helper()
 	dep, ok := d.HS[hsName]
 	if !ok {
-		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)
+		ct.Fatalf(t, "Deployment.Client - HS name '%s' not found", hsName)
 		return nil
 	}
 	client := &client.CSAPI{
@@ -195,18 +195,18 @@ func (d *Deployment) UnauthenticatedClient(t *testing.T, hsName string) *client.
 
 // AppServiceUser returns a client for the given app service user ID. The HS in question must have an appservice
 // hooked up to it already. TODO: REMOVE
-func (d *Deployment) AppServiceUser(t *testing.T, hsName, appServiceUserID string) *client.CSAPI {
+func (d *Deployment) AppServiceUser(t ct.TestLike, hsName, appServiceUserID string) *client.CSAPI {
 	t.Helper()
 	dep, ok := d.HS[hsName]
 	if !ok {
-		t.Fatalf("Deployment.Client - HS name '%s' not found", hsName)
+		ct.Fatalf(t, "Deployment.Client - HS name '%s' not found", hsName)
 		return nil
 	}
 	dep.accessTokensMutex.RLock()
 	token := dep.AccessTokens[appServiceUserID]
 	dep.accessTokensMutex.RUnlock()
 	if token == "" && appServiceUserID != "" {
-		t.Fatalf("Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, appServiceUserID)
+		ct.Fatalf(t, "Deployment.Client - HS name '%s' - user ID '%s' not found", hsName, appServiceUserID)
 		return nil
 	}
 	deviceID := dep.DeviceIDs[appServiceUserID]
@@ -231,7 +231,7 @@ func (d *Deployment) AppServiceUser(t *testing.T, hsName, appServiceUserID strin
 }
 
 // Restart a deployment.
-func (d *Deployment) Restart(t *testing.T) error {
+func (d *Deployment) Restart(t ct.TestLike) error {
 	t.Helper()
 	for _, hsDep := range d.HS {
 		err := d.Deployer.Restart(hsDep)
@@ -244,50 +244,59 @@ func (d *Deployment) Restart(t *testing.T) error {
 	return nil
 }
 
-func (d *Deployment) StartServer(t *testing.T, hsName string) {
+func (d *Deployment) StartServer(t ct.TestLike, hsName string) {
 	t.Helper()
 	t.Logf("StartServer %s", hsName)
 	hsDep := d.HS[hsName]
 	if hsDep == nil {
-		t.Fatalf("StartServer: %s does not exist in this deployment", hsName)
+		ct.Fatalf(t, "StartServer: %s does not exist in this deployment", hsName)
 	}
 	if err := d.Deployer.StartServer(hsDep); err != nil {
-		t.Fatalf("StartServer: %s", err)
+		ct.Fatalf(t, "StartServer: %s", err)
 	}
 }
 
-func (d *Deployment) StopServer(t *testing.T, hsName string) {
+func (d *Deployment) StopServer(t ct.TestLike, hsName string) {
 	t.Helper()
 	t.Logf("StopServer %s", hsName)
 	hsDep := d.HS[hsName]
 	if hsDep == nil {
-		t.Fatalf("StopServer: %s does not exist in this deployment", hsName)
+		ct.Fatalf(t, "StopServer: %s does not exist in this deployment", hsName)
 	}
 	if err := d.Deployer.StopServer(hsDep); err != nil {
-		t.Fatalf("StopServer: %s", err)
+		ct.Fatalf(t, "StopServer: %s", err)
 	}
 }
 
-func (d *Deployment) PauseServer(t *testing.T, hsName string) {
+func (d *Deployment) PauseServer(t ct.TestLike, hsName string) {
 	t.Helper()
 	t.Logf("PauseServer %s", hsName)
 	hsDep := d.HS[hsName]
 	if hsDep == nil {
-		t.Fatalf("PauseServer: %s does not exist in this deployment", hsName)
+		ct.Fatalf(t, "PauseServer: %s does not exist in this deployment", hsName)
 	}
 	if err := d.Deployer.PauseServer(hsDep); err != nil {
-		t.Fatalf("PauseServer: %s", err)
+		ct.Fatalf(t, "PauseServer: %s", err)
 	}
 }
 
-func (d *Deployment) UnpauseServer(t *testing.T, hsName string) {
+func (d *Deployment) UnpauseServer(t ct.TestLike, hsName string) {
 	t.Helper()
 	t.Logf("UnpauseServer %s", hsName)
 	hsDep := d.HS[hsName]
 	if hsDep == nil {
-		t.Fatalf("UnpauseServer: %s does not exist in this deployment", hsName)
+		ct.Fatalf(t, "UnpauseServer: %s does not exist in this deployment", hsName)
 	}
 	if err := d.Deployer.UnpauseServer(hsDep); err != nil {
-		t.Fatalf("UnpauseServer: %s", err)
+		ct.Fatalf(t, "UnpauseServer: %s", err)
 	}
+}
+
+func (d *Deployment) ContainerID(t ct.TestLike, hsName string) string {
+	t.Helper()
+	hsDep := d.HS[hsName]
+	if hsDep == nil {
+		ct.Fatalf(t, "ContainerID: %s does not exist in this deployment", hsName)
+	}
+	return hsDep.ContainerID
 }

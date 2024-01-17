@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"testing"
 
 	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/ct"
 )
 
 type Event struct {
@@ -172,18 +172,18 @@ func (r *ServerRoom) AuthChainForEvents(events []gomatrixserverlib.PDU) (chain [
 }
 
 // Check that the user currently has the membership provided in this room. Fails the test if not.
-func (r *ServerRoom) MustHaveMembershipForUser(t *testing.T, userID, wantMembership string) {
+func (r *ServerRoom) MustHaveMembershipForUser(t ct.TestLike, userID, wantMembership string) {
 	t.Helper()
 	state := r.CurrentState("m.room.member", userID)
 	if state == nil {
-		t.Fatalf("no membership state for %s", userID)
+		ct.Fatalf(t, "no membership state for %s", userID)
 	}
 	m, err := state.Membership()
 	if err != nil {
-		t.Fatalf("m.room.member event exists for %s but cannot read membership field: %s", userID, err)
+		ct.Fatalf(t, "m.room.member event exists for %s but cannot read membership field: %s", userID, err)
 	}
 	if m != wantMembership {
-		t.Fatalf("incorrect membership state for %s: got %s, want %s", userID, m, wantMembership)
+		ct.Fatalf(t, "incorrect membership state for %s: got %s, want %s", userID, m, wantMembership)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/ct"
 )
 
 var testPackage *TestPackage
@@ -44,10 +45,10 @@ func TestMainWithCleanup(m *testing.M, namespace string, cleanup func()) {
 // It will construct the blueprint if it doesn't already exist in the docker image cache.
 // This function is the main setup function for all tests as it provides a deployment with
 // which tests can interact with.
-func OldDeploy(t *testing.T, blueprint b.Blueprint) Deployment {
+func OldDeploy(t ct.TestLike, blueprint b.Blueprint) Deployment {
 	t.Helper()
 	if testPackage == nil {
-		t.Fatalf("Deploy: testPackage not set, did you forget to call complement.TestMain?")
+		ct.Fatalf(t, "Deploy: testPackage not set, did you forget to call complement.TestMain?")
 	}
 	return testPackage.OldDeploy(t, blueprint)
 }
@@ -55,10 +56,10 @@ func OldDeploy(t *testing.T, blueprint b.Blueprint) Deployment {
 // Deploy will deploy the given number of servers or terminate the test.
 // This function is the main setup function for all tests as it provides a deployment with
 // which tests can interact with.
-func Deploy(t *testing.T, numServers int) Deployment {
+func Deploy(t ct.TestLike, numServers int) Deployment {
 	t.Helper()
 	if testPackage == nil {
-		t.Fatalf("Deploy: testPackage not set, did you forget to call complement.TestMain?")
+		ct.Fatalf(t, "Deploy: testPackage not set, did you forget to call complement.TestMain?")
 	}
 	return testPackage.Deploy(t, numServers)
 }
