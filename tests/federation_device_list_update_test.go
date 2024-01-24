@@ -14,6 +14,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 )
@@ -166,8 +167,15 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 
 // Regression test for https://github.com/matrix-org/synapse/issues/11374
 // In this test, we'll make a room on the Complement server and get a user on the
-// HS to join it. We will ensure that we get sent a device list update EDU.
+// HS to join it. We will ensure that we get sent a device list update EDU. We should
+// be sent this EDU according to the specification:
+//
+//	> Servers must send m.device_list_update EDUs to all the servers who share a room with a given local user,
+//	> and must be sent whenever that user’s device list changes (i.e. for new or deleted devices, when that
+//	> user joins a room which contains servers which are not already receiving updates for that user’s device
+//	> list, or changes in device information such as the device’s human-readable name).
 func TestDeviceListsUpdateOverFederationOnRoomJoin(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite, runtime.Synapse)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
