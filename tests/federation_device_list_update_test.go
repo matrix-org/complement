@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 )
 
@@ -157,4 +160,51 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 			)
 		})
 	}
+}
+
+// Regression test for https://github.com/matrix-org/synapse/issues/11374
+// In this test, we'll make a room on the Complement server and get a user on the
+// HS to join it. We will ensure that we get sent a device list update EDU.
+func TestDeviceListsUpdateOverFederationOnRoomJoin(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "alice",
+		Password:        "this is alices password",
+	})
+
+	waiter := helpers.NewWaiter()
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil,
+			func(e gomatrixserverlib.EDU) {
+				t.Logf("got edu: %+v", e)
+				if e.Type == "m.device_list_update" {
+					content := gjson.ParseBytes(e.Content)
+					if content.Get("user_id").Str == alice.UserID && content.Get("device_id").Str == alice.DeviceID {
+						waiter.Finish()
+					}
+				}
+			},
+		),
+	)
+	srv.UnexpectedRequestsAreErrors = false // we expect to be pushed events
+	cancel := srv.Listen()
+	defer cancel()
+
+	bob := srv.UserID("complement_bob")
+	roomVer := gomatrixserverlib.RoomVersion("10")
+	initalEvents := federation.InitialRoomEvents(roomVer, bob)
+	room := srv.MustMakeRoom(t, roomVer, initalEvents)
+
+	alice.MustJoinRoom(t, room.RoomID, []string{srv.ServerName()})
+	alice.SendEventSynced(t, room.RoomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.body",
+			"body":    "Test",
+		},
+	})
+	waiter.Wait(t, 10*time.Second)
 }
