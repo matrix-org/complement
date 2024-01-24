@@ -12,6 +12,8 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 )
@@ -207,4 +209,74 @@ func TestDeviceListsUpdateOverFederationOnRoomJoin(t *testing.T) {
 		},
 	})
 	waiter.Wait(t, 10*time.Second)
+}
+
+// Related to the previous test TestDeviceListsUpdateOverFederationOnRoomJoin
+// In this test, we make 2 homeservers and join the same room. We ensure that the
+// joinee sees the joiner's user ID in `device_lists.changed` of the /sync response.
+// If this happens, the test then hits `/keys/query` for that user ID  to ensure
+// that the joinee sees the joiner's device ID.
+func TestUserAppearsInChangedDeviceListOnJoinOverFederation(t *testing.T) {
+	deployment := complement.Deploy(t, 2)
+	defer deployment.Destroy(t)
+	joiner := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "joiner",
+	})
+	joinee := deployment.Register(t, "hs2", helpers.RegistrationOpts{
+		LocalpartSuffix: "joinee",
+	})
+
+	// the joiner needs device keys so /keys/query works..
+	joinerDeviceKeys, joinerOTKs := joiner.MustGenerateOneTimeKeys(t, 5)
+	joiner.MustUploadKeys(t, joinerDeviceKeys, joinerOTKs)
+
+	// they must share a room to get device list updates
+	roomID := joinee.MustCreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		// we strictly don't need to make this an encrypted room, but there are some
+		// issues which state that we should only share device list updates for
+		// users in shared encrypted rooms, so let's ensure we do that.
+		// See https://github.com/matrix-org/synapse/issues/7524
+		"initial_state": []map[string]interface{}{
+			{
+				"type":      "m.room.encryption",
+				"state_key": "",
+				"content": map[string]interface{}{
+					"algorithm": "m.megolm.v1.aes-sha2",
+				},
+			},
+		},
+	})
+
+	_, since := joinee.MustSync(t, client.SyncReq{})
+
+	// the joiner now joins the room over federation
+	joiner.MustJoinRoom(t, roomID, []string{"hs2"})
+
+	// we must see the joiner's user ID in device_lists.changed
+	since = joinee.MustSyncUntil(t, client.SyncReq{
+		Since: since,
+	}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		changed := topLevelSyncJSON.Get("device_lists.changed").Array()
+		for _, userID := range changed {
+			if userID.Str == joiner.UserID {
+				return nil
+			}
+		}
+		return fmt.Errorf("did not see joiner's user ID in device_lists.changed: %v", topLevelSyncJSON.Get("device_lists").Raw)
+	})
+
+	// if we got here, we saw the joiner's user ID, so hit /keys/query to get the device ID
+	res := joinee.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, client.WithJSONBody(t, map[string]any{
+		"device_keys": map[string]any{
+			joiner.UserID: []string{}, // all device IDs
+		},
+	}))
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONKeyPresent(fmt.Sprintf(
+				"device_keys.%s.%s", joiner.UserID, joiner.DeviceID,
+			)),
+		},
+	})
 }
