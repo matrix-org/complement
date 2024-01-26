@@ -108,6 +108,7 @@ func (d *Deployment) Register(t ct.TestLike, hsName string, opts helpers.Registr
 	password := opts.Password
 	if password == "" {
 		password = "complement_meets_min_password_req"
+		client.Password = password
 	}
 
 	localpart := fmt.Sprintf("user-%v", d.localpartCounter.Add(1))
