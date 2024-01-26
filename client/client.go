@@ -41,6 +41,7 @@ type CSAPI struct {
 	UserID      string
 	AccessToken string
 	DeviceID    string
+	Password    string // if provided
 	BaseURL     string
 	Client      *http.Client
 	// how long are we willing to wait for MustSyncUntil.... calls

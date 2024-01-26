@@ -99,6 +99,7 @@ func (d *Deployment) Register(t ct.TestLike, hsName string, opts helpers.Registr
 		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
+		Password:         opts.Password,
 	}
 	// Appending a slice is not thread-safe. Protect the write with a mutex.
 	dep.CSAPIClientsMutex.Lock()
@@ -147,6 +148,10 @@ func (d *Deployment) Login(t ct.TestLike, hsName string, existing *client.CSAPI,
 		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
+		Password:         existing.Password,
+	}
+	if opts.Password != "" {
+		c.Password = opts.Password
 	}
 	// Appending a slice is not thread-safe. Protect the write with a mutex.
 	dep.CSAPIClientsMutex.Lock()
