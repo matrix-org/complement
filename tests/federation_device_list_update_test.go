@@ -175,7 +175,7 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 //	> user joins a room which contains servers which are not already receiving updates for that user’s device
 //	> list, or changes in device information such as the device’s human-readable name).
 func TestDeviceListsUpdateOverFederationOnRoomJoin(t *testing.T) {
-	runtime.SkipIf(t, runtime.Dendrite, runtime.Synapse)
+	runtime.SkipIf(t, runtime.Dendrite)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
