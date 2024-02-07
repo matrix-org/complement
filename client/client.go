@@ -374,6 +374,22 @@ func (c *CSAPI) GetDefaultRoomVersion(t ct.TestLike) gomatrixserverlib.RoomVersi
 	return gomatrixserverlib.RoomVersion(defaultVersion.Str)
 }
 
+func (c *CSAPI) MustUploadKeys(t ct.TestLike, deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) (otkCounts map[string]int) {
+	t.Helper()
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, WithJSONBody(t, map[string]interface{}{
+		"device_keys":   deviceKeys,
+		"one_time_keys": oneTimeKeys,
+	}))
+	bodyBytes := ParseJSON(t, res)
+	s := struct {
+		OTKCounts map[string]int `json:"one_time_key_counts"`
+	}{}
+	if err := json.Unmarshal(bodyBytes, &s); err != nil {
+		ct.Fatalf(t, "failed to unmarshal response: %s", err)
+	}
+	return s.OTKCounts
+}
+
 func (c *CSAPI) MustGenerateOneTimeKeys(t ct.TestLike, otkCount uint) (deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) {
 	t.Helper()
 	account := olm.NewAccount()

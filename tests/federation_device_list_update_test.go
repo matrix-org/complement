@@ -8,8 +8,14 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 )
 
@@ -157,4 +163,128 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 			)
 		})
 	}
+}
+
+// Regression test for https://github.com/matrix-org/synapse/issues/11374
+// In this test, we'll make a room on the Complement server and get a user on the
+// HS to join it. We will ensure that we get sent a device list update EDU. We should
+// be sent this EDU according to the specification:
+//
+//	> Servers must send m.device_list_update EDUs to all the servers who share a room with a given local user,
+//	> and must be sent whenever that user’s device list changes (i.e. for new or deleted devices, when that
+//	> user joins a room which contains servers which are not already receiving updates for that user’s device
+//	> list, or changes in device information such as the device’s human-readable name).
+func TestDeviceListsUpdateOverFederationOnRoomJoin(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite, runtime.Synapse) // https://github.com/element-hq/synapse/pull/16875#issuecomment-1923446390
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "alice",
+		Password:        "this is alices password",
+	})
+
+	waiter := helpers.NewWaiter()
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil,
+			func(e gomatrixserverlib.EDU) {
+				t.Logf("got edu: %+v", e)
+				if e.Type == "m.device_list_update" {
+					content := gjson.ParseBytes(e.Content)
+					if content.Get("user_id").Str == alice.UserID && content.Get("device_id").Str == alice.DeviceID {
+						waiter.Finish()
+					}
+				}
+			},
+		),
+	)
+	srv.UnexpectedRequestsAreErrors = false // we expect to be pushed events
+	cancel := srv.Listen()
+	defer cancel()
+
+	bob := srv.UserID("complement_bob")
+	roomVer := gomatrixserverlib.RoomVersion("10")
+	initalEvents := federation.InitialRoomEvents(roomVer, bob)
+	room := srv.MustMakeRoom(t, roomVer, initalEvents)
+
+	alice.MustJoinRoom(t, room.RoomID, []string{srv.ServerName()})
+	alice.SendEventSynced(t, room.RoomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.body",
+			"body":    "Test",
+		},
+	})
+	waiter.Wait(t, 10*time.Second)
+}
+
+// Related to the previous test TestDeviceListsUpdateOverFederationOnRoomJoin
+// In this test, we make 2 homeservers and join the same room. We ensure that the
+// joinee sees the joiner's user ID in `device_lists.changed` of the /sync response.
+// If this happens, the test then hits `/keys/query` for that user ID  to ensure
+// that the joinee sees the joiner's device ID.
+func TestUserAppearsInChangedDeviceListOnJoinOverFederation(t *testing.T) {
+	deployment := complement.Deploy(t, 2)
+	defer deployment.Destroy(t)
+	joiner := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "joiner",
+	})
+	joinee := deployment.Register(t, "hs2", helpers.RegistrationOpts{
+		LocalpartSuffix: "joinee",
+	})
+
+	// the joiner needs device keys so /keys/query works..
+	joinerDeviceKeys, joinerOTKs := joiner.MustGenerateOneTimeKeys(t, 5)
+	joiner.MustUploadKeys(t, joinerDeviceKeys, joinerOTKs)
+
+	// they must share a room to get device list updates
+	roomID := joinee.MustCreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		// we strictly don't need to make this an encrypted room, but there are some
+		// issues which state that we should only share device list updates for
+		// users in shared encrypted rooms, so let's ensure we do that.
+		// See https://github.com/matrix-org/synapse/issues/7524
+		"initial_state": []map[string]interface{}{
+			{
+				"type":      "m.room.encryption",
+				"state_key": "",
+				"content": map[string]interface{}{
+					"algorithm": "m.megolm.v1.aes-sha2",
+				},
+			},
+		},
+	})
+
+	_, since := joinee.MustSync(t, client.SyncReq{})
+
+	// the joiner now joins the room over federation
+	joiner.MustJoinRoom(t, roomID, []string{"hs2"})
+
+	// we must see the joiner's user ID in device_lists.changed
+	since = joinee.MustSyncUntil(t, client.SyncReq{
+		Since: since,
+	}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		changed := topLevelSyncJSON.Get("device_lists.changed").Array()
+		for _, userID := range changed {
+			if userID.Str == joiner.UserID {
+				return nil
+			}
+		}
+		return fmt.Errorf("did not see joiner's user ID in device_lists.changed: %v", topLevelSyncJSON.Get("device_lists").Raw)
+	})
+
+	// if we got here, we saw the joiner's user ID, so hit /keys/query to get the device ID
+	res := joinee.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "query"}, client.WithJSONBody(t, map[string]any{
+		"device_keys": map[string]any{
+			joiner.UserID: []string{}, // all device IDs
+		},
+	}))
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONKeyPresent(fmt.Sprintf(
+				"device_keys.%s.%s", joiner.UserID, joiner.DeviceID,
+			)),
+		},
+	})
 }
