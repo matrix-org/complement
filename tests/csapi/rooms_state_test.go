@@ -31,7 +31,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 		// sytest: Room creation reports m.room.create to myself
 		t.Run("Room creation reports m.room.create to myself", func(t *testing.T) {
 			t.Parallel()
-
+			alice := deployment.Client(t, "hs1", userID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 				if ev.Get("type").Str != "m.room.create" {
 					return false
@@ -45,7 +45,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 		// sytest: Room creation reports m.room.member to myself
 		t.Run("Room creation reports m.room.member to myself", func(t *testing.T) {
 			t.Parallel()
-
+			alice := deployment.Client(t, "hs1", userID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 				if ev.Get("type").Str != "m.room.member" {
 					return false
