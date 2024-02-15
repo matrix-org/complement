@@ -346,18 +346,22 @@ func TestThreadReceiptsInSync(t *testing.T) {
 			var lastErr error
 			if err := syncHasUnthreadedReadReceipt(roomID, alice.UserID, eventB)(clientUserID, topLevelSyncJSON); err == nil {
 				seenUnthreaded = true
+				t.Logf("seen unthreaded read receipt")
 			} else {
 				lastErr = err
 			}
 			if err := syncHasThreadedReadReceipt(roomID, alice.UserID, eventB, eventA)(clientUserID, topLevelSyncJSON); err == nil {
 				seenThreaded = true
+				t.Logf("seen threaded read receipt")
 			} else {
 				lastErr = err
 			}
 			if seenThreaded && seenUnthreaded {
+				t.Logf("seen both read receipts, returning")
 				return nil
 			}
 			return lastErr
 		},
 	)
+
 }
