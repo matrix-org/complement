@@ -301,3 +301,63 @@ func TestThreadedReceipts(t *testing.T) {
 		}),
 	)
 }
+
+// Regression test for https://github.com/matrix-org/matrix-spec/issues/1727
+// Servers need to send 2x EDUs to represent these 2 receipts, but do they?
+func TestThreadReceiptsInSync(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // not supported
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	// Create a room with alice and bob.
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	eventA := alice.SendEventSynced(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Hello world!",
+		},
+	})
+	eventB := alice.SendEventSynced(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Start thread!",
+			"m.relates_to": map[string]interface{}{
+				"event_id": eventA,
+				"rel_type": "m.thread",
+			},
+		},
+	})
+	// now send an unthreaded RR for event B and a threaded RR for event B and ensure we see both receipts
+	// down /sync. Non-compliant servers will typically send the last one only.
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventB}, client.WithJSONBody(t, struct{}{}))
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventB}, client.WithJSONBody(t, map[string]interface{}{"thread_id": eventA}))
+
+	seenThreaded := false
+	seenUnthreaded := false
+
+	alice.MustSyncUntil(
+		t,
+		client.SyncReq{},
+		// we need to allow multiple /sync responses to gradually show us both receipts, hence the weird shape here.
+		func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+			var lastErr error
+			if err := syncHasUnthreadedReadReceipt(roomID, alice.UserID, eventB)(clientUserID, topLevelSyncJSON); err == nil {
+				seenUnthreaded = true
+			} else {
+				lastErr = err
+			}
+			if err := syncHasThreadedReadReceipt(roomID, alice.UserID, eventB, eventA)(clientUserID, topLevelSyncJSON); err == nil {
+				seenThreaded = true
+			} else {
+				lastErr = err
+			}
+			if seenThreaded && seenUnthreaded {
+				return nil
+			}
+			return lastErr
+		},
+	)
+}
