@@ -222,9 +222,9 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				// Make sure both messages are visible
 				must.MatchResponse(t, messagesRes, match.HTTPResponse{
 					JSON: []match.JSON{
-						match.JSONCheckOffAllowUnwanted("chunk", []interface{}{eventA.EventID, eventB.EventID}, func(r gjson.Result) interface{} {
+						match.JSONCheckOff("chunk", []interface{}{eventA.EventID, eventB.EventID}, match.CheckOffMapper(func(r gjson.Result) interface{} {
 							return r.Get("event_id").Str
-						}, nil),
+						}), match.CheckOffAllowUnwanted()),
 					},
 				})
 			})
