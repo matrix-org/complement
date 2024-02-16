@@ -306,12 +306,14 @@ func TestThreadedReceipts(t *testing.T) {
 // Servers should always prefer the unthreaded receipt when there is a clash of receipts
 func TestThreadReceiptsInSyncMSC4102(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // not supported
-	deployment := complement.Deploy(t, 1)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	// Create a room with alice and bob.
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
 	eventA := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
@@ -336,6 +338,14 @@ func TestThreadReceiptsInSyncMSC4102(t *testing.T) {
 	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventB}, client.WithJSONBody(t, map[string]interface{}{"thread_id": eventA}))
 
 	alice.MustSyncUntil(
+		t,
+		client.SyncReq{},
+		syncHasUnthreadedReadReceipt(roomID, alice.UserID, eventB),
+	)
+
+	// bob over federation must also see the same result, to show that the receipt EDUs over
+	// federation are bundled correctly, or are sent as separate EDUs.
+	bob.MustSyncUntil(
 		t,
 		client.SyncReq{},
 		syncHasUnthreadedReadReceipt(roomID, alice.UserID, eventB),
