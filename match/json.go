@@ -113,7 +113,69 @@ func JSONKeyArrayOfSize(wantKey string, wantSize int) JSON {
 	}
 }
 
-func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwantedItems bool, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
+type checkOffOpts struct {
+	allowUnwantedItems bool
+	mapper             func(gjson.Result) interface{}
+	forEach            func(interface{}, gjson.Result) error
+}
+
+// CheckOffAllowUnwanted allows unwanted items, that is items not in `wantItems`,
+// to not fail the check.
+func CheckOffAllowUnwanted() func(*checkOffOpts) {
+	return func(coo *checkOffOpts) {
+		coo.allowUnwantedItems = true
+	}
+}
+
+// CheckOffMapper maps each item /before/ continuing the check off process. This
+// is useful to convert a gjson.Result to something more domain specific such as
+// an event ID. For example, if `r` is a Matrix event, this allows `wantItems` to
+// be a slice of event IDs:
+//
+//	CheckOffMapper(func(r gjson.Result) interface{} {
+//	    return r.Get("event_id").Str
+//	})
+//
+// The `mapper` function should map the item to an interface which will be
+// comparable via JSONDeepEqual with items in `wantItems`.
+func CheckOffMapper(mapper func(gjson.Result) interface{}) func(*checkOffOpts) {
+	return func(coo *checkOffOpts) {
+		coo.mapper = mapper
+	}
+}
+
+// CheckOffForEach does not change the check off logic, but instead passes each item
+// to the provided function. If the function returns an error, the check fails.
+// It is called with 2 args: the item being checked and the element itself
+// (or value if it's an object).
+func CheckOffForEach(forEach func(interface{}, gjson.Result) error) func(*checkOffOpts) {
+	return func(coo *checkOffOpts) {
+		coo.forEach = forEach
+	}
+}
+
+// EXPERIMENTAL
+// JSONCheckOff returns a matcher which will loop over `wantKey` and ensure that the items
+// (which can be array elements or object keys) are present exactly once in `wantItems`.
+// This matcher can be used to check off items in an array/object.
+//
+// This function supports functional options which change the behaviour of the check off
+// logic, see match.CheckOff... functions for more information.
+//
+// Usage: (ensures `events` has these events in any order, with the right event type)
+//
+//	   JSONCheckOff("events", []interface{}{"$foo:bar", "$baz:quuz"}, CheckOffMapper(func(r gjson.Result) interface{} {
+//	       return r.Get("event_id").Str
+//	   }), CheckOffForEach(func(eventID interface{}, eventBody gjson.Result) error {
+//	       if eventBody.Get("type").Str != "m.room.message" {
+//		          return fmt.Errorf("expected event to be 'm.room.message'")
+//	       }
+//	   }))
+func JSONCheckOff(wantKey string, wantItems []interface{}, opts ...func(*checkOffOpts)) JSON {
+	var coo checkOffOpts
+	for _, opt := range opts {
+		opt(&coo)
+	}
 	return func(body gjson.Result) error {
 		res := body.Get(wantKey)
 		if !res.Exists() {
@@ -128,11 +190,14 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 			if res.IsArray() {
 				itemRes = val
 			}
-			// convert it to something we can check off
-			item := mapper(itemRes)
-			if item == nil {
-				err = fmt.Errorf("JSONCheckOff(%s): mapper function mapped %v to nil", wantKey, itemRes.Raw)
-				return false
+			var item interface{} = itemRes
+			if coo.mapper != nil {
+				// convert it to something we can check off
+				item = coo.mapper(itemRes)
+				if item == nil {
+					err = fmt.Errorf("JSONCheckOff(%s): mapper function mapped %v to nil", wantKey, itemRes.Raw)
+					return false
+				}
 			}
 
 			// check off the item
@@ -144,7 +209,7 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 					break
 				}
 			}
-			if !allowUnwantedItems && want == -1 {
+			if !coo.allowUnwantedItems && want == -1 {
 				err = fmt.Errorf("JSONCheckOff(%s): unexpected item %v (mapped value %v)", wantKey, itemRes.Raw, item)
 				return false
 			}
@@ -155,10 +220,10 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 			}
 
 			// do further checks
-			if fn != nil {
-				err = fn(item, val)
+			if coo.forEach != nil {
+				err = coo.forEach(item, val)
 				if err != nil {
-					err = fmt.Errorf("JSONCheckOff(%s): item %v failed checks: %w", wantKey, val, err)
+					err = fmt.Errorf("JSONCheckOff(%s): forEach function returned an error for item %v: %w", wantKey, val, err)
 					return false
 				}
 			}
@@ -175,31 +240,8 @@ func jsonCheckOffInternal(wantKey string, wantItems []interface{}, allowUnwanted
 	}
 }
 
-// EXPERIMENTAL
-// JSONCheckOffAllowUnwanted returns a matcher which will loop over `wantKey` and ensure that the items
-// (which can be array elements or object keys)
-// are present exactly once in any order in `wantItems`. Allows unexpected items or items
-// appear that more than once. This matcher can be used to check off items in
-// an array/object. The `mapper` function should map the item to an interface which will be
-// comparable via JSONDeepEqual with items in `wantItems`. The optional `fn` callback
-// allows more checks to be performed other than checking off the item from the list. It is
-// called with 2 args: the result of the `mapper` function and the element itself (or value if
-// it's an object).
+// DEPRECATED: Prefer JSONCheckOff as this uses functional options which makes params easier to understand.
 //
-// Usage: (ensures `events` has these events in any order, with the right event type)
-//
-//	   JSONCheckOffAllowUnwanted("events", []interface{}{"$foo:bar", "$baz:quuz"}, func(r gjson.Result) interface{} {
-//	       return r.Get("event_id").Str
-//	   }, func(eventID interface{}, eventBody gjson.Result) error {
-//	       if eventBody.Get("type").Str != "m.room.message" {
-//		          return fmt.Errorf("expected event to be 'm.room.message'")
-//	       }
-//	   })
-func JSONCheckOffAllowUnwanted(wantKey string, wantItems []interface{}, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
-	return jsonCheckOffInternal(wantKey, wantItems, true, mapper, fn)
-}
-
-// EXPERIMENTAL
 // JSONCheckOff returns a matcher which will loop over `wantKey` and ensure that the items
 // (which can be array elements or object keys)
 // are present exactly once in any order in `wantItems`. If there are unexpected items or items
@@ -219,8 +261,8 @@ func JSONCheckOffAllowUnwanted(wantKey string, wantItems []interface{}, mapper f
 //		          return fmt.Errorf("expected event to be 'm.room.message'")
 //	       }
 //	   })
-func JSONCheckOff(wantKey string, wantItems []interface{}, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
-	return jsonCheckOffInternal(wantKey, wantItems, false, mapper, fn)
+func JSONCheckOffDeprecated(wantKey string, wantItems []interface{}, mapper func(gjson.Result) interface{}, fn func(interface{}, gjson.Result) error) JSON {
+	return JSONCheckOff(wantKey, wantItems, CheckOffMapper(mapper), CheckOffForEach(fn))
 }
 
 // JSONArrayEach returns a matcher which will check that `wantKey` is an array then loops over each

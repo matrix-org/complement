@@ -383,13 +383,13 @@ func TestPartialStateJoin(t *testing.T) {
 		}
 
 		// check that the state includes both charlie and derek.
-		matcher := match.JSONCheckOffAllowUnwanted("state.events",
+		matcher := match.JSONCheckOff("state.events",
 			[]interface{}{
 				"m.room.member|" + server.UserID("charlie"),
 				"m.room.member|" + server.UserID("derek"),
-			}, func(result gjson.Result) interface{} {
+			}, match.CheckOffMapper(func(result gjson.Result) interface{} {
 				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
-			}, nil,
+			}), match.CheckOffAllowUnwanted(),
 		)
 		if err := matcher(roomRes); err != nil {
 			t.Errorf("Did not find expected state events in /sync response: %s", err)
@@ -799,8 +799,7 @@ func TestPartialStateJoin(t *testing.T) {
 				matcher := match.JSONCheckOff(
 					"device_lists.changed",
 					[]interface{}{derekUserId},
-					func(r gjson.Result) interface{} { return r.Str },
-					nil,
+					match.CheckOffMapper(func(r gjson.Result) interface{} { return r.Str }),
 				)
 				return matcher(res)
 			},
@@ -1203,9 +1202,9 @@ func TestPartialStateJoin(t *testing.T) {
 							"m.room.member|" + alice.UserID,
 							"m.room.member|" + server.UserID("charlie"),
 							"m.room.member|" + server.UserID("derek"),
-						}, func(result gjson.Result) interface{} {
+						}, match.CheckOffMapper(func(result gjson.Result) interface{} {
 							return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
-						}, nil),
+						})),
 				},
 			})
 		}
@@ -1414,16 +1413,16 @@ func TestPartialStateJoin(t *testing.T) {
 
 		timelineMatcher := match.JSONCheckOff("timeline.events",
 			[]interface{}{lastEventID},
-			func(result gjson.Result) interface{} {
+			match.CheckOffMapper(func(result gjson.Result) interface{} {
 				return result.Map()["event_id"].Str
-			}, nil,
+			}),
 		)
-		stateMatcher := match.JSONCheckOffAllowUnwanted("state.events",
+		stateMatcher := match.JSONCheckOff("state.events",
 			[]interface{}{
 				"m.room.member|" + server.UserID("derek"),
-			}, func(result gjson.Result) interface{} {
+			}, match.CheckOffMapper(func(result gjson.Result) interface{} {
 				return strings.Join([]string{result.Map()["type"].Str, result.Map()["state_key"].Str}, "|")
-			}, nil,
+			}), match.CheckOffAllowUnwanted(),
 		)
 		if err := timelineMatcher(roomRes); err != nil {
 			t.Errorf("Unexpected timeline events found in gappy /sync response: %s", err)
@@ -2897,11 +2896,11 @@ func TestPartialStateJoin(t *testing.T) {
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 200,
 				JSON: []match.JSON{
-					match.JSONCheckOffAllowUnwanted(
+					match.JSONCheckOff(
 						section,
 						[]interface{}{expectedUserID},
-						func(r gjson.Result) interface{} { return r.Str },
-						nil,
+						match.CheckOffMapper(func(r gjson.Result) interface{} { return r.Str }),
+						match.CheckOffAllowUnwanted(),
 					),
 				},
 			})
@@ -3488,8 +3487,7 @@ func TestPartialStateJoin(t *testing.T) {
 				match.JSONCheckOff(
 					"servers",
 					[]interface{}{"hs1", server.ServerName()},
-					func(r gjson.Result) interface{} { return r.Str },
-					nil,
+					match.CheckOffMapper(func(r gjson.Result) interface{} { return r.Str }),
 				),
 			},
 		}

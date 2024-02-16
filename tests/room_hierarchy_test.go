@@ -227,7 +227,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONCheckOff("rooms", []interface{}{
+				match.JSONCheckOffDeprecated("rooms", []interface{}{
 					root, r1, r2, r3, r4, ss1, ss2,
 				}, func(r gjson.Result) interface{} {
 					return r.Get("room_id").Str
@@ -248,7 +248,7 @@ func TestClientSpacesSummary(t *testing.T) {
 					return nil
 				}),
 				// Check that the links from Root down to other rooms and spaces exist.
-				match.JSONCheckOff(`rooms.#(room_type=="m.space")#")`, []interface{}{
+				match.JSONCheckOffDeprecated(`rooms.#(room_type=="m.space")#")`, []interface{}{
 					rootToR1 + ";" + rootToSS1 + ";" + rootToR2,
 					ss1ToSS2,
 					ss2ToR3 + ";" + ss2ToR4,
@@ -270,13 +270,13 @@ func TestClientSpacesSummary(t *testing.T) {
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONCheckOff("rooms", []interface{}{
+				match.JSONCheckOffDeprecated("rooms", []interface{}{
 					root, r1, r2, ss1,
 				}, func(r gjson.Result) interface{} {
 					return r.Get("room_id").Str
 				}, nil),
 				// All of the links are still there.
-				match.JSONCheckOff(`rooms.#(room_type=="m.space")#`, []interface{}{
+				match.JSONCheckOffDeprecated(`rooms.#(room_type=="m.space")#`, []interface{}{
 					rootToR1 + ";" + rootToSS1 + ";" + rootToR2, ss1ToSS2,
 				}, roomToChildrenMapper, nil),
 			},
@@ -296,13 +296,13 @@ func TestClientSpacesSummary(t *testing.T) {
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONCheckOff("rooms", []interface{}{
+				match.JSONCheckOffDeprecated("rooms", []interface{}{
 					root, r1, r2,
 				}, func(r gjson.Result) interface{} {
 					return r.Get("room_id").Str
 				}, nil),
 				// All of the links are still there.
-				match.JSONCheckOff(`rooms.#(room_type=="m.space")#`, []interface{}{
+				match.JSONCheckOffDeprecated(`rooms.#(room_type=="m.space")#`, []interface{}{
 					rootToR1 + ";" + rootToR2,
 				}, roomToChildrenMapper, nil),
 			},
@@ -322,7 +322,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		)
 		body := must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONCheckOff("rooms", []interface{}{
+				match.JSONCheckOffDeprecated("rooms", []interface{}{
 					root, r1, ss1, ss2,
 				}, func(r gjson.Result) interface{} {
 					return r.Get("room_id").Str
@@ -341,7 +341,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONCheckOff("rooms", []interface{}{
+				match.JSONCheckOffDeprecated("rooms", []interface{}{
 					r3, r4, r2,
 				}, func(r gjson.Result) interface{} {
 					return r.Get("room_id").Str
@@ -360,12 +360,12 @@ func TestClientSpacesSummary(t *testing.T) {
 		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONCheckOff("rooms", []interface{}{
+				match.JSONCheckOffDeprecated("rooms", []interface{}{
 					root, r1, r2,
 				}, func(r gjson.Result) interface{} {
 					return r.Get("room_id").Str
 				}, nil),
-				match.JSONCheckOff(`rooms.#(room_type=="m.space")#`, []interface{}{
+				match.JSONCheckOffDeprecated(`rooms.#(room_type=="m.space")#`, []interface{}{
 					rootToR1 + ";" + rootToR2,
 				}, roomToChildrenMapper, nil),
 			},
@@ -475,12 +475,12 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
+			match.JSONCheckOffDeprecated("rooms", []interface{}{
 				root,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("room_id").Str
 			}, nil),
-			match.JSONCheckOff(`rooms.#(room_type=="m.space")#`, []interface{}{
+			match.JSONCheckOffDeprecated(`rooms.#(room_type=="m.space")#`, []interface{}{
 				rootToR1 + ";" + rootToSS1,
 			}, roomToChildrenMapper, nil),
 		},
@@ -493,12 +493,12 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
+			match.JSONCheckOffDeprecated("rooms", []interface{}{
 				root, r1,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("room_id").Str
 			}, nil),
-			match.JSONCheckOff(`rooms.#(room_type=="m.space")#`, []interface{}{
+			match.JSONCheckOffDeprecated(`rooms.#(room_type=="m.space")#`, []interface{}{
 				rootToR1 + ";" + rootToSS1,
 			}, roomToChildrenMapper, nil),
 		},
@@ -510,12 +510,12 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 	res = bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
+			match.JSONCheckOffDeprecated("rooms", []interface{}{
 				root, r1, ss1, r2, r3,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("room_id").Str
 			}, nil),
-			match.JSONCheckOff(`rooms.#(room_type=="m.space")#`, []interface{}{
+			match.JSONCheckOffDeprecated(`rooms.#(room_type=="m.space")#`, []interface{}{
 				rootToR1 + ";" + rootToSS1, ss1ToR2 + ";" + ss1ToR3,
 			}, roomToChildrenMapper, nil),
 		},
@@ -641,7 +641,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 	res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", []interface{}{
+			match.JSONCheckOffDeprecated("rooms", []interface{}{
 				root, r1, r2, r3, r4, ss1, ss2,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("room_id").Str
