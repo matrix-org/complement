@@ -74,7 +74,7 @@ func TestRelations(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				threadEventID, dummyEventID, editEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -88,7 +88,7 @@ func TestRelations(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				threadEventID, dummyEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -102,7 +102,7 @@ func TestRelations(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				threadEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -152,7 +152,7 @@ func TestRelationsPagination(t *testing.T) {
 	body := must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				event_ids[9], event_ids[8], event_ids[7],
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -167,7 +167,7 @@ func TestRelationsPagination(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				event_ids[6], event_ids[5], event_ids[4],
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -184,7 +184,7 @@ func TestRelationsPagination(t *testing.T) {
 	body = must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				event_ids[0], event_ids[1], event_ids[2],
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -199,7 +199,7 @@ func TestRelationsPagination(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				event_ids[3], event_ids[4], event_ids[5],
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -279,7 +279,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 	body := must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				event_ids[0], event_ids[1], event_ids[2],
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -294,7 +294,7 @@ func TestRelationsPaginationSync(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				event_ids[3], event_ids[4],
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
