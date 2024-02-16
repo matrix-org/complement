@@ -109,14 +109,14 @@ func TestSyncOmitsStateChangeOnFilteredEvents(t *testing.T) {
 			}
 		}`,
 	})
-	must.MatchGJSON(t, res, match.JSONCheckOffAllowUnwanted(
+	must.MatchGJSON(t, res, match.JSONCheckOff(
 		// look in this array
 		fmt.Sprintf("rooms.join.%s.state.events", client.GjsonEscape(serverRoom.RoomID)),
 		// for these items
 		[]interface{}{s2.EventID()},
 		// and map them first into this format
-		func(r gjson.Result) interface{} {
+		match.CheckOffMapper(func(r gjson.Result) interface{} {
 			return r.Get("event_id").Str
-		}, nil,
+		}), match.CheckOffAllowUnwanted(),
 	))
 }
