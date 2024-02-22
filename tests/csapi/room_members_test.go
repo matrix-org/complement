@@ -292,7 +292,7 @@ func TestGetRoomMembersAtPointWithStateFork(t *testing.T) {
 
 	// now do a sync request with limit=1.
 	// Note we don't need to SyncUntil here as we have all the data in the right places already.
-	res, since := alice.MustSync(t, client.SyncReq{
+	res, nextBatch := alice.MustSync(t, client.SyncReq{
 		Filter: `{
 			"room": {
 				"timeline": {
@@ -314,9 +314,9 @@ func TestGetRoomMembersAtPointWithStateFork(t *testing.T) {
 	if err != nil {
 		t.Logf("did not find charlie's join event in 'state' block: %s", err)
 	}
-	// now hit /members?at=$since and check it has the join
+	// now hit /members?at=$nextBatch and check it has the join
 	httpRes := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "members"}, client.WithQueries(map[string][]string{
-		"at": {since},
+		"at": {nextBatch},
 	}))
 	must.MatchResponse(t, httpRes, match.HTTPResponse{
 		JSON: []match.JSON{
@@ -331,7 +331,7 @@ func TestGetRoomMembersAtPointWithStateFork(t *testing.T) {
 	})
 	// now hit /members?at=$prev_batch and check it has the join
 	prevBatch := res.Get(fmt.Sprintf("rooms.join.%s.timeline.prev_batch", client.GjsonEscape(serverRoom.RoomID))).Str
-	t.Logf("since=%s prev_batch=%s", since, prevBatch)
+	t.Logf("next_batch=%s prev_batch=%s", nextBatch, prevBatch)
 	httpRes = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "members"}, client.WithQueries(map[string][]string{
 		"at": {
 			prevBatch,
