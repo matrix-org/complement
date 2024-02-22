@@ -108,4 +108,7 @@ func TestMSC3967(t *testing.T) {
 		"session":  gjson.ParseBytes(body).Get("session").Str,
 	}
 	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "device_signing", "upload"}, client.WithJSONBody(t, uploadBody))
+
+	// ensure the endpoint remains idempotent with the auth dict
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "device_signing", "upload"}, client.WithJSONBody(t, uploadBody))
 }
