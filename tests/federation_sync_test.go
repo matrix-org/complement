@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 )
 
@@ -25,6 +26,7 @@ import (
 // - Alice sends event E5 merging the forks.
 // - Alice sync with timeline_limit=1 and a filter that skips E5
 func TestSyncOmitsStateChangeOnFilteredEvents(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // S2 is put in the timeline, not state.
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	srv := federation.NewServer(t, deployment,
