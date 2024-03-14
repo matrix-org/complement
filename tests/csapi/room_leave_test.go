@@ -166,13 +166,13 @@ func TestLeftRoomFixture(t *testing.T) {
 					[]interface{}{
 						"m.room.member|" + alice.UserID + "|join",
 						"m.room.member|" + bob.UserID + "|leave",
-					}, func(result gjson.Result) interface{} {
+					}, match.CheckOffMapper(func(result gjson.Result) interface{} {
 						return strings.Join([]string{
 							result.Map()["type"].Str,
 							result.Map()["state_key"].Str,
 							result.Get("content.membership").Str,
 						}, "|")
-					}, nil),
+					})),
 			},
 		})
 	})
@@ -191,13 +191,13 @@ func TestLeftRoomFixture(t *testing.T) {
 					"m.room.message|" + beforeMessageOne + "|",
 					"m.room.message|" + beforeMessageTwo + "|",
 					"m.room.member||" + bob.UserID,
-				}, func(result gjson.Result) interface{} {
+				}, match.CheckOffMapper(func(result gjson.Result) interface{} {
 					return strings.Join([]string{
 						result.Map()["type"].Str,
 						result.Get("content.body").Str,
 						result.Map()["state_key"].Str,
 					}, "|")
-				}, nil),
+				})),
 			},
 		})
 	})

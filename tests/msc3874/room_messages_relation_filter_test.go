@@ -68,7 +68,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				threadEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -86,7 +86,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				referenceEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -104,7 +104,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				threadEventID, referenceEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -122,7 +122,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				rootEventID, referenceEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -140,7 +140,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				rootEventID, threadEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -158,7 +158,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				rootEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str

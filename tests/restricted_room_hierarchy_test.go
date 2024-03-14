@@ -22,7 +22,7 @@ func requestAndAssertSummary(t *testing.T, user *client.CSAPI, space string, exp
 	res := user.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", space, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
 		JSON: []match.JSON{
-			match.JSONCheckOff("rooms", expected_rooms, func(r gjson.Result) interface{} {
+			match.JSONCheckOffDeprecated("rooms", expected_rooms, func(r gjson.Result) interface{} {
 				return r.Get("room_id").Str
 			}, nil),
 		},

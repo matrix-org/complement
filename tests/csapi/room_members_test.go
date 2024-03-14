@@ -52,7 +52,7 @@ func TestGetRoomMembers(t *testing.T) {
 				[]interface{}{
 					"m.room.member|" + alice.UserID,
 					"m.room.member|" + bob.UserID,
-				}, typeToStateKeyMapper, nil),
+				}, match.CheckOffMapper(typeToStateKeyMapper)),
 		},
 		StatusCode: 200,
 	})
@@ -111,7 +111,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 			match.JSONCheckOff("chunk",
 				[]interface{}{
 					"m.room.member|" + alice.UserID,
-				}, typeToStateKeyMapper, nil),
+				}, match.CheckOffMapper(typeToStateKeyMapper)),
 		},
 
 		StatusCode: 200,
@@ -158,7 +158,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 				match.JSONCheckOff("chunk",
 					[]interface{}{
 						"m.room.member|" + alice.UserID,
-					}, typeToStateKeyMapper, nil),
+					}, match.CheckOffMapper(typeToStateKeyMapper)),
 			},
 			StatusCode: 200,
 		})
@@ -183,7 +183,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 				match.JSONCheckOff("chunk",
 					[]interface{}{
 						"m.room.member|" + bob.UserID,
-					}, typeToStateKeyMapper, nil),
+					}, match.CheckOffMapper(typeToStateKeyMapper)),
 			},
 			StatusCode: 200,
 		})
@@ -208,7 +208,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 				match.JSONCheckOff("chunk",
 					[]interface{}{
 						"m.room.member|" + alice.UserID,
-					}, typeToStateKeyMapper, nil),
+					}, match.CheckOffMapper(typeToStateKeyMapper)),
 			},
 			StatusCode: 200,
 		})
