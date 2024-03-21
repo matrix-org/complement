@@ -274,10 +274,10 @@ func JSONArrayEach(wantKey string, fn func(gjson.Result) error) JSON {
 		}
 
 		if !body.Exists() {
-			return fmt.Errorf("missing key '%s'", wantKey)
+			return fmt.Errorf("JSONArrayEach: missing key '%s'", wantKey)
 		}
 		if !body.IsArray() {
-			return fmt.Errorf("key '%s' is not an array", wantKey)
+			return fmt.Errorf("JSONArrayEach: key '%s' is not an array", wantKey)
 		}
 		var err error
 		body.ForEach(func(_, val gjson.Result) bool {
@@ -294,10 +294,10 @@ func JSONMapEach(wantKey string, fn func(k, v gjson.Result) error) JSON {
 	return func(body gjson.Result) error {
 		res := body.Get(wantKey)
 		if !res.Exists() {
-			return fmt.Errorf("missing key '%s'", wantKey)
+			return fmt.Errorf("JSONMapEach: missing key '%s'", wantKey)
 		}
 		if !res.IsObject() {
-			return fmt.Errorf("key '%s' is not an object", wantKey)
+			return fmt.Errorf("JSONMapEach: key '%s' is not an object", wantKey)
 		}
 		var err error
 		res.ForEach(func(key, val gjson.Result) bool {

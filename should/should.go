@@ -147,7 +147,7 @@ func MatchJSONBytes(rawJson []byte, matchers ...match.JSON) error {
 	body := gjson.ParseBytes(rawJson)
 	for _, jm := range matchers {
 		if err := jm(body); err != nil {
-			return fmt.Errorf("MatchJSONBytes %s with input = %v", err, string(rawJson))
+			return fmt.Errorf("MatchJSONBytes %s with input = %v", err, body.Get("@pretty").String())
 		}
 	}
 	return nil
