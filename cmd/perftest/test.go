@@ -73,6 +73,15 @@ func runTest(testName string, builder *docker.Builder, deployer *docker.Deployer
 				Creator: userID,
 				CreateRoom: map[string]interface{}{
 					"preset": "public_chat",
+					"initial_state": []map[string]interface{}{
+						map[string]interface{}{
+							"type": "m.room.history_visibility",
+							"state_key": "",
+							"content": map[string]interface{}{
+								"history_visibility": "world_readable",
+							},
+						},
+					},
 				},
 				Ref: roomRef,
 			}
