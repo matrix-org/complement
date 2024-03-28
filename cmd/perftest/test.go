@@ -81,6 +81,15 @@ func runTest(testName string, builder *docker.Builder, deployer *docker.Deployer
 								"history_visibility": "world_readable",
 							},
 						},
+						map[string]interface{}{
+							"type": "m.room.encryption",
+							"state_key": "",
+							"content": map[string]interface{}{
+								"algorithm": "m.megolm.v1.aes-sha2",
+								"rotation_period_ms": 604800000,
+								"rotation_period_msgs": 100,
+							},
+						},
 					},
 				},
 				Ref: roomRef,
