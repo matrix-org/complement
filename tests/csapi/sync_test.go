@@ -374,6 +374,66 @@ func TestSync(t *testing.T) {
 
 			// that's it - we successfully did a gappy sync.
 		})
+
+		t.Run("Device list tracking", func(t *testing.T) {
+			// syncDeviceListsHas checks that `device_lists.changed` or `device_lists.left` contains a
+			// given user ID.
+			syncDeviceListsHas := func(section string, expectedUserID string) client.SyncCheckOpt {
+				jsonPath := fmt.Sprintf("device_lists.%s", section)
+				return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+					usersWithChangedDeviceListsArray := topLevelSyncJSON.Get(jsonPath).Array()
+					for _, userID := range usersWithChangedDeviceListsArray {
+						if userID.Str == expectedUserID {
+							return nil
+						}
+					}
+					return fmt.Errorf(
+						"syncDeviceListsHas: %s not found in %s",
+						expectedUserID,
+						jsonPath,
+					)
+				}
+			}
+
+			t.Run("User is correctly listed when they leave, even when lazy loading is enabled", func(t *testing.T) {
+				// Alice creates a room, and starts syncing with lazy-loading enabled.
+				// Charlie joins, sends an event, and then leaves, the room.
+				// We check that Charlie appears under the "device_lists" section of the sync.
+				//
+				// Regression test for https://github.com/element-hq/synapse/issues/16948
+
+				charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "charlie"})
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+
+				aliceSyncFilter := `{
+				    "room": {
+					    "timeline": { "lazy_load_members": true },
+					    "state": { "lazy_load_members": true }
+					}
+				}`
+				_, initialSyncToken := alice.MustSync(t, client.SyncReq{Filter: aliceSyncFilter})
+
+				charlie.MustJoinRoom(t, roomID, nil)
+				syncToken := alice.MustSyncUntil(t, client.SyncReq{Filter: aliceSyncFilter, Since: initialSyncToken},
+					syncDeviceListsHas("changed", charlie.UserID),
+				)
+
+				// Charlie sends a message, and leaves
+				sendMessages(t, charlie, roomID, "test", 1)
+				charlie.MustLeaveRoom(t, roomID)
+
+				// Alice sees charlie in the "left" section
+				alice.MustSyncUntil(t, client.SyncReq{Filter: aliceSyncFilter, Since: syncToken},
+					syncDeviceListsHas("left", charlie.UserID),
+				)
+
+				// ... even if she makes the request twice
+				resp, _ := alice.MustSync(t, client.SyncReq{Filter: aliceSyncFilter, Since: syncToken})
+				if err := syncDeviceListsHas("left", charlie.UserID)(alice.UserID, resp); err != nil {
+					t.Error(err)
+				}
+			})
+		})
 	})
 }
 
