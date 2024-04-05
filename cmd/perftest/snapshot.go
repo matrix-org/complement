@@ -31,7 +31,7 @@ type Snapshot struct {
 	Smem             string
 }
 
-func snapshotStats(spanName, desc string, deployment *docker.Deployment, absDuration, duration time.Duration) (snapshots []Snapshot) {
+func snapshotStats(spanName, desc string, deployment *docker.Deployment, startTime, absStartTime time.Time) (snapshot []Snapshot) {
 	for hsName, hsInfo := range deployment.HS {
 		dockerClient := deployment.Deployer.Docker
 
@@ -121,8 +121,8 @@ func snapshotStats(spanName, desc string, deployment *docker.Deployment, absDura
 			HSName:           hsName,
 			Name:             spanName,
 			Description:      desc,
-			Duration:         duration,
-			AbsoluteDuration: absDuration,
+			Duration:         time.Since(startTime),
+			AbsoluteDuration: time.Since(absStartTime),
 			MemoryUsage:      sj.MemoryStats.Usage,
 			CPUUserland:      sj.CPUStats.CPUUsage.UsageInUsermode,
 			CPUKernel:        sj.CPUStats.CPUUsage.UsageInKernelmode,

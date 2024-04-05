@@ -36,10 +36,10 @@ func runTest(testName string, builder *docker.Builder, deployer *docker.Deployer
 	}
 	defer deployment.Deployer.Destroy(deployment, false, testName, false)
 
-	snapshots := snapshotStats("startup", "clean homeserver with no users", deployment, 0, 0)
+	absStartTime := time.Now()
+	snapshots := snapshotStats("startup", "clean homeserver with no users", deployment, time.Now(), absStartTime)
 	runner := instruction.NewRunner(testName, false, true)
 
-	absStartTime := time.Now()
 	numUsers := 10
 
 	snapshots, err = withSpan("create_users", fmt.Sprintf("creates %d users concurrently", numUsers), snapshots, absStartTime, deployment, func() error {
