@@ -114,7 +114,7 @@ func TestGappedSyncLeaveSection(t *testing.T) {
 }
 
 // sytest: Archived rooms only contain history from before the user left
-//  ... plus later additions
+// ... plus later additions
 func TestArchivedRoomsHistory(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
 
@@ -190,6 +190,8 @@ func TestArchivedRoomsHistory(t *testing.T) {
 		},
 	})
 
+	// Test the scenario where the /sync request returns events in the timeline.
+	// (Since Alice sent a pair of events before Bob left, this is the normal case.)
 	t.Run("timeline has events", func(t *testing.T) {
 		exhaustiveResCheck := func(t *testing.T, result gjson.Result, origin string) {
 			roomRes := result.Get("rooms.leave." + client.GjsonEscape(roomID))
@@ -232,6 +234,9 @@ func TestArchivedRoomsHistory(t *testing.T) {
 		})
 	})
 
+	// Test the scenario where the /sync request returns an *empty* timeline.
+	// We arrange for this by setting `limit: 0` on the /sync request.
+	// This is a regression test for a bug that was fixed in https://github.com/element-hq/synapse/pull/16932.
 	t.Run("timeline is empty", func(t *testing.T) {
 		check := func(t *testing.T, result gjson.Result) {
 			roomRes := result.Get("rooms.leave." + client.GjsonEscape(roomID))
