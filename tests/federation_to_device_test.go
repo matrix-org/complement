@@ -2,7 +2,6 @@ package tests
 
 import (
 	"reflect"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -101,29 +100,10 @@ func TestToDeviceMessagesOverFederation(t *testing.T) {
 
 			tc.makeReachable(t)
 
-			// servers may need to be poked with another to-device msg. This isn't great.
-			// See https://github.com/matrix-org/synapse/issues/16680
-			// bob has a sync timeout of 30s set, so if the test has not yet passed, we are kicking the server
-			// after 10s to ensure the server processes the previous sent to-device message.
-			var completed atomic.Bool
-			go func() {
-				time.Sleep(10 * time.Second)
-				if completed.Load() {
-					return
-				}
-				// maybe kicking the server will make things work if we're still waiting after 10s
-				alice.MustSendToDeviceMessages(t, "kick.type", map[string]map[string]map[string]interface{}{
-					bob.UserID: {
-						bob.DeviceID: content,
-					},
-				})
-			}()
-
 			bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 				t.Logf("%s", topLevelSyncJSON.Raw)
 				return client.SyncToDeviceHas(alice.UserID, checkEvent)(clientUserID, topLevelSyncJSON)
 			})
-			completed.Store(true)
 		})
 	}
 }
