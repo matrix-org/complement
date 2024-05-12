@@ -8,9 +8,10 @@ import (
 )
 
 const (
-	Dendrite = "dendrite"
-	Synapse  = "synapse"
-	Conduit  = "conduit"
+	Dendrite  = "dendrite"
+	Synapse   = "synapse"
+	Conduit   = "conduit"
+	Conduwuit = "conduwuit"
 )
 
 var Homeserver string
