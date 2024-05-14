@@ -14,12 +14,28 @@ import (
 
 func withSpan(spanName, desc string, snapshots []Snapshot, absStartTime time.Time, deployment *docker.Deployment, fn func() error) ([]Snapshot, error) {
 	startTime := time.Now()
+
+	// Start capturing stat snapshots of the container.
+	// This allows us to get a sense of the state of the container *during* a test run.
+	snapshotChan, stopChan := startMonitoringStats(deployment, 500*time.Millisecond, spanName, desc, startTime, absStartTime)
+
+	// Run the test.
 	if err := fn(); err != nil {
 		return nil, fmt.Errorf("withSpan %s: %s", spanName, err)
 	}
-	duration := time.Since(startTime)
-	absDuration := time.Since(absStartTime)
-	snapshots = append(snapshots, snapshotStats(spanName, desc, deployment, absDuration, duration)...)
+
+	// Stop monitoring the test container and close snapshotChan.
+	stopChan <- struct{}{}
+
+	// Append all of the snapshots captured during the test run.
+	// The range loop will end once we hit the end of snapshotChan.
+	for snapshot := range snapshotChan {
+		snapshots = append(snapshots, snapshot)
+	}
+
+	// Take one final snapshot post-test.
+	snapshots = append(snapshots, snapshotStats(spanName, desc+" final", deployment, startTime, absStartTime)...)
+
 	return snapshots, nil
 }
 
@@ -62,7 +78,7 @@ func runTest(testName string, builder *docker.Builder, deployer *docker.Deployer
 
 	var userRoomJoins [][2]string // list of [user_id, roomRef] of joined users who can send messages
 	numRooms := 50
-	snapshots, err = withSpan("create_rooms", fmt.Sprintf("creates %d public rooms with different users", numRooms), snapshots, absStartTime, deployment, func() error {
+	snapshots, err = withSpan("create_rooms", fmt.Sprintf("creates %d public, encrypted rooms with different users", numRooms), snapshots, absStartTime, deployment, func() error {
 		// make M rooms
 		rooms := make([]b.Room, numRooms)
 		for i := 0; i < numRooms; i++ {
@@ -74,19 +90,19 @@ func runTest(testName string, builder *docker.Builder, deployer *docker.Deployer
 				CreateRoom: map[string]interface{}{
 					"preset": "public_chat",
 					"initial_state": []map[string]interface{}{
-						map[string]interface{}{
-							"type": "m.room.history_visibility",
+						{
+							"type":      "m.room.history_visibility",
 							"state_key": "",
 							"content": map[string]interface{}{
 								"history_visibility": "world_readable",
 							},
 						},
-						map[string]interface{}{
-							"type": "m.room.encryption",
+						{
+							"type":      "m.room.encryption",
 							"state_key": "",
 							"content": map[string]interface{}{
-								"algorithm": "m.megolm.v1.aes-sha2",
-								"rotation_period_ms": 604800000,
+								"algorithm":            "m.megolm.v1.aes-sha2",
+								"rotation_period_ms":   604800000,
 								"rotation_period_msgs": 100,
 							},
 						},

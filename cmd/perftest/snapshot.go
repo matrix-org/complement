@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/matrix-org/complement/internal/docker"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/matrix-org/complement/internal/docker"
 )
 
 type Snapshot struct {
@@ -31,7 +31,47 @@ type Snapshot struct {
 	Smem             string
 }
 
-func snapshotStats(spanName, desc string, deployment *docker.Deployment, startTime, absStartTime time.Time) (snapshot []Snapshot) {
+// startMonitoringStats takes a snapshot of a container's stats per given
+// `interval` and returns a channel from which the snapshots can be streamed
+// from.
+//
+// `stopChan` is used to send a stop signal to cease capturing stats.
+// `snapshotChan` will be closed automatically by this function when `stopChan`
+// receives a stop signal.
+func startMonitoringStats(
+	deployment *docker.Deployment, interval time.Duration, spanName, desc string, startTime, absStartTime time.Time,
+) (<-chan Snapshot, chan<- struct{}) {
+	// Make snapshotChan a buffered channel, so that writing to it does not block.
+	snapshotChan := make(chan Snapshot, 10000)
+	stopChan := make(chan struct{})
+
+    go func() {
+        defer close(snapshotChan)
+        ticker := time.NewTicker(interval)
+        defer ticker.Stop()
+
+		tickCount := 0
+
+        for {
+            select {
+            case <-ticker.C:
+				// So if this runs, then the app hangs.
+                snapshots := snapshotStats(spanName, desc + " iteration " + fmt.Sprint(tickCount), deployment, startTime, absStartTime)
+				for _, snapshot := range snapshots {
+					snapshotChan <- snapshot
+				}
+            case <-stopChan:
+                return
+            }
+
+			tickCount += 1
+        }
+    }()
+
+    return snapshotChan, stopChan
+}
+
+func snapshotStats(spanName, desc string, deployment *docker.Deployment, startTime, absStartTime time.Time) (snapshots []Snapshot) {
 	for hsName, hsInfo := range deployment.HS {
 		dockerClient := deployment.Deployer.Docker
 
