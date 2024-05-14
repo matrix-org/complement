@@ -63,6 +63,12 @@ To do so you should:
 - `systemctl --user start podman.service` to start the rootless API daemon (can also be enabled).
 - `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock BUILDAH_FORMAT=docker COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT=host.containers.internal ...`
 
+If all the networking tests don't seem to pass, it might be because the default rootless network command `pasta` doesn't work in recent versions of Podman (see [this issue](https://github.com/containers/podman/issues/22653)). If that happens to you, consider changing it in Podman's configuration file located at `/etc/containers/containers.conf`:
+
+```
+default_rootless_network_cmd = "slirp4netns"
+```
+
 Docker image format is needed because OCI format doesn't support the HEALTHCHECK directive unfortunately.
 
 ### Running against Dendrite
