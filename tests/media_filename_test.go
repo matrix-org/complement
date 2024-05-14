@@ -121,11 +121,11 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve safe media types as inline", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Synapse {
+				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
 					// We need to check that this security behaviour is being correctly run in
-					// Synapse, but since this is not part of the Matrix spec we do not assume
+					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
 					// other homeservers are doing so.
-					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse homeserver")
+					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
 				}
 				t.Parallel()
 
@@ -139,11 +139,11 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve safe media types with parameters as inline", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Synapse {
+				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
 					// We need to check that this security behaviour is being correctly run in
-					// Synapse, but since this is not part of the Matrix spec we do not assume
+					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
 					// other homeservers are doing so.
-					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse homeserver")
+					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
 				}
 				t.Parallel()
 
@@ -158,11 +158,11 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve unsafe media types as attachments", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Synapse {
+				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
 					// We need to check that this security behaviour is being correctly run in
-					// Synapse, but since this is not part of the Matrix spec we do not assume
+					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
 					// other homeservers are doing so.
-					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse homeserver")
+					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
 				}
 				t.Parallel()
 
