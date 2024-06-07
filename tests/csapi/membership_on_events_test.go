@@ -1,4 +1,4 @@
-package tests
+package csapi_tests
 
 import (
 	"github.com/matrix-org/complement/b"
@@ -10,11 +10,11 @@ import (
 	"github.com/matrix-org/complement/helpers"
 )
 
-// MSC4115: membership information on events
+// Membership information on events served to clients, as specified in MSC4115.
 //
-// Alice sends one message before bob joins, then one after. Bob reads both messages, and checks the membership state
+// Alice sends one message before Vob joins, then one after. Bob reads both messages, and checks the membership state
 // on each.
-func TestMSC4115(t *testing.T) {
+func TestMembershipOnEvents(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // not yet implemented
 
 	deployment := complement.Deploy(t, 1)
