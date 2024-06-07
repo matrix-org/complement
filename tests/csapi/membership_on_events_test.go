@@ -52,7 +52,7 @@ func TestMembershipOnEvents(t *testing.T) {
 		if ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == bob.UserID {
 			haveSeenJoin = true
 		}
-		membership := ev.Get("unsigned." + client.GjsonEscape("io.element.msc4115.membership")).Str
+		membership := ev.Get("unsigned.membership").Str
 		expectedMembership := "leave"
 		if haveSeenJoin {
 			expectedMembership = "join"
