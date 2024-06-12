@@ -12,7 +12,7 @@ import (
 
 // Membership information on events served to clients, as specified in MSC4115.
 //
-// Alice sends one message before Vob joins, then one after. Bob reads both messages, and checks the membership state
+// Alice sends one message before Bob joins, then one after. Bob reads both messages, and checks the membership state
 // on each.
 func TestMembershipOnEvents(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // not yet implemented
