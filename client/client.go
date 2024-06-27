@@ -101,6 +101,19 @@ func (c *CSAPI) DownloadContent(t ct.TestLike, mxcUri string) ([]byte, string) {
 	return b, contentType
 }
 
+// DownloadContentV2 downloads media from _matrix/client/v1/media resource, returning the raw bytes and the Content-Type. Fails the test on error.
+func (c *CSAPI) DownloadContentV2(t ct.TestLike, mxcUri string) ([]byte, string) {
+	t.Helper()
+	origin, mediaId := SplitMxc(mxcUri)
+	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v1", "media", "download", origin, mediaId})
+	contentType := res.Header.Get("Content-Type")
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		ct.Errorf(t, err.Error())
+	}
+	return b, contentType
+}
+
 // MustCreateRoom creates a room with an optional HTTP request body. Fails the test on error. Returns the room ID.
 func (c *CSAPI) MustCreateRoom(t ct.TestLike, reqBody map[string]interface{}) string {
 	t.Helper()

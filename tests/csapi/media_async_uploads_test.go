@@ -70,4 +70,14 @@ func TestAsyncUpload(t *testing.T) {
 			t.Fatalf("expected contentType to be %s, got %s", wantContentType, contentType)
 		}
 	})
+
+	t.Run("Download media over _matrix/client/v1/media/download", func(t *testing.T) {
+		content, contentType := alice.DownloadContentV2(t, mxcURI)
+		if !bytes.Equal(data.MatrixPng, content) {
+			t.Fatalf("uploaded and downloaded content doesn't match: want %v\ngot\n%v", data.MatrixPng, content)
+		}
+		if contentType != wantContentType {
+			t.Fatalf("expected contentType to be %s, got %s", wantContentType, contentType)
+		}
+	})
 }
