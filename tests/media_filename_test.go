@@ -298,7 +298,7 @@ func TestMediaFilenames(t *testing.T) {
 }
 
 // Returns content disposition information like (filename, isAttachment)
-func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName string, newPath bool) (filename string, isAttachment bool) {
+func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName string, authenticatedEndpoint bool) (filename string, isAttachment bool) {
 	t.Helper()
 
 	origin, mediaId := client.SplitMxc(mxcUri)
@@ -306,16 +306,16 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 	var path []string
 
 	if diffName != "" {
-		if newPath {
+		path = []string{"_matrix", "media", "v3", "download", origin, mediaId, diffName}
+
+		if authenticatedEndpoint {
 			path = []string{"_matrix", "client", "v1", "media", "download", origin, mediaId, diffName}
-		} else {
-			path = []string{"_matrix", "media", "v3", "download", origin, mediaId, diffName}
 		}
 	} else {
-		if newPath {
+		path = []string{"_matrix", "media", "v3", "download", origin, mediaId}
+
+		if authenticatedEndpoint {
 			path = []string{"_matrix", "client", "v1", "media", "download", origin, mediaId}
-		} else {
-			path = []string{"_matrix", "media", "v3", "download", origin, mediaId}
 		}
 	}
 

@@ -124,7 +124,7 @@ func TestMediaWithoutFileNameCSMediaV1(t *testing.T) {
 			must.NotEqual(t, mxc, "", "did not return an MXC URI")
 			must.StartWithStr(t, mxc, "mxc://", "returned invalid MXC URI")
 
-			b, ct := hs1.DownloadContentV2(t, mxc)
+			b, ct := hs1.DownloadContentAuthenticated(t, mxc)
 
 			// Check the Content-Type response header.
 			// NOTSPEC: There is ambiguity over whether the homeserver is allowed to change the
@@ -150,7 +150,7 @@ func TestMediaWithoutFileNameCSMediaV1(t *testing.T) {
 			must.NotEqual(t, mxc, "", "did not return an MXC URI")
 			must.StartWithStr(t, mxc, "mxc://", "returned invalid MXC URI")
 
-			b, ct := hs2.DownloadContentV2(t, mxc)
+			b, ct := hs2.DownloadContentAuthenticated(t, mxc)
 
 			// Check the Content-Type response header.
 			// NOTSPEC: There is ambiguity over whether the homeserver is allowed to change the

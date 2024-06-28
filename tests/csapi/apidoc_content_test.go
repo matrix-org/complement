@@ -39,7 +39,7 @@ func TestContentCSAPIMediaV1(t *testing.T) {
 	wantContentType := "img/png"
 	mxcUri := hs1.UploadContent(t, data.MatrixPng, "test.png", wantContentType)
 
-	content, contentType := hs2.DownloadContentV2(t, mxcUri)
+	content, contentType := hs2.DownloadContentAuthenticated(t, mxcUri)
 	if !bytes.Equal(data.MatrixPng, content) {
 		t.Fatalf("uploaded and downloaded content doesn't match: want %v\ngot\n%v", data.MatrixPng, content)
 	}
