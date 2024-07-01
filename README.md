@@ -5,6 +5,8 @@
 
 Complement is a black box integration testing framework for Matrix homeservers.
 
+See also [Complement Crypto](https://github.com/matrix-org/complement-crypto) for E2EE specific testing.
+
 ## Running
 
 You need to have Go and Docker >= 20.10 installed, as well as `libolm3` and `libolm-dev`. Then:
