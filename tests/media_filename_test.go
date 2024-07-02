@@ -45,7 +45,20 @@ func TestMediaFilenames(t *testing.T) {
 
 					mxcUri := alice.UploadContent(t, data.MatrixPng, filename, "image/png")
 
-					name, _ := downloadForFilename(t, alice, mxcUri, "")
+					name, _ := downloadForFilename(t, alice, mxcUri, "", false)
+
+					// filename is not required, but if it's an attachment then check it matches
+					if name != filename {
+						t.Fatalf("Incorrect filename '%s', expected '%s'", name, filename)
+					}
+				})
+
+				t.Run(fmt.Sprintf("Can download file '%s' over /_matrix/client/v1/media/download", filename), func(t *testing.T) {
+					t.Parallel()
+
+					mxcUri := alice.UploadContent(t, data.MatrixPng, filename, "image/png")
+
+					name, _ := downloadForFilename(t, alice, mxcUri, "", true)
 
 					// filename is not required, but if it's an attachment then check it matches
 					if name != filename {
@@ -61,12 +74,25 @@ func TestMediaFilenames(t *testing.T) {
 				mxcUri := alice.UploadContent(t, data.MatrixPng, asciiFileName, "image/png")
 
 				const altName = "file.png"
-				filename, _ := downloadForFilename(t, alice, mxcUri, altName)
+				filename, _ := downloadForFilename(t, alice, mxcUri, altName, false)
 
 				if filename != altName {
 					t.Fatalf("filename did not match, expected '%s', got '%s'", altName, filename)
 				}
 			})
+			t.Run("Can download specifying a different ASCII file name over _matrix/client/v1/media/download", func(t *testing.T) {
+				t.Parallel()
+
+				mxcUri := alice.UploadContent(t, data.MatrixPng, asciiFileName, "image/png")
+
+				const altName = "file.png"
+				filename, _ := downloadForFilename(t, alice, mxcUri, altName, true)
+
+				if filename != altName {
+					t.Fatalf("filename did not match, expected '%s', got '%s'", altName, filename)
+				}
+			})
+
 		})
 
 		t.Run("Unicode", func(t *testing.T) {
@@ -87,7 +113,21 @@ func TestMediaFilenames(t *testing.T) {
 
 				const diffUnicodeFilename = "\u2615" // coffee emoji
 
-				filename, _ := downloadForFilename(t, alice, mxcUri, diffUnicodeFilename)
+				filename, _ := downloadForFilename(t, alice, mxcUri, diffUnicodeFilename, false)
+
+				if filename != diffUnicodeFilename {
+					t.Fatalf("filename did not match, expected '%s', got '%s'", diffUnicodeFilename, filename)
+				}
+			})
+
+			t.Run("Can download specifying a different Unicode file name over _matrix/client/v1/media/download", func(t *testing.T) {
+				t.Parallel()
+
+				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
+
+				const diffUnicodeFilename = "\u2615" // coffee emoji
+
+				filename, _ := downloadForFilename(t, alice, mxcUri, diffUnicodeFilename, true)
 
 				if filename != diffUnicodeFilename {
 					t.Fatalf("filename did not match, expected '%s', got '%s'", diffUnicodeFilename, filename)
@@ -100,7 +140,19 @@ func TestMediaFilenames(t *testing.T) {
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
 
-				filename, _ := downloadForFilename(t, alice, mxcUri, "")
+				filename, _ := downloadForFilename(t, alice, mxcUri, "", false)
+
+				if filename != unicodeFileName {
+					t.Fatalf("filename did not match, expected '%s', got '%s'", unicodeFileName, filename)
+				}
+			})
+
+			t.Run("Can download with Unicode file name locally over _matrix/client/v1/media/download", func(t *testing.T) {
+				t.Parallel()
+
+				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
+
+				filename, _ := downloadForFilename(t, alice, mxcUri, "", true)
 
 				if filename != unicodeFileName {
 					t.Fatalf("filename did not match, expected '%s', got '%s'", unicodeFileName, filename)
@@ -113,7 +165,19 @@ func TestMediaFilenames(t *testing.T) {
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
 
-				filename, _ := downloadForFilename(t, bob, mxcUri, "")
+				filename, _ := downloadForFilename(t, bob, mxcUri, "", false)
+
+				if filename != unicodeFileName {
+					t.Fatalf("filename did not match, expected '%s', got '%s'", unicodeFileName, filename)
+				}
+			})
+
+			t.Run("Can download with Unicode file name over federation via _matrix/client/v1/media/download", func(t *testing.T) {
+				t.Parallel()
+
+				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
+
+				filename, _ := downloadForFilename(t, bob, mxcUri, "", true)
 
 				if filename != unicodeFileName {
 					t.Fatalf("filename did not match, expected '%s', got '%s'", unicodeFileName, filename)
@@ -131,7 +195,25 @@ func TestMediaFilenames(t *testing.T) {
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, "", "image/png")
 
-				_, isAttachment := downloadForFilename(t, bob, mxcUri, "")
+				_, isAttachment := downloadForFilename(t, bob, mxcUri, "", false)
+
+				if isAttachment {
+					t.Fatal("Expected file to be served as inline")
+				}
+			})
+
+			t.Run("Will serve safe media types as inline via _matrix/client/v1/media/download", func(t *testing.T) {
+				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
+					// We need to check that this security behaviour is being correctly run in
+					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
+					// other homeservers are doing so.
+					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
+				}
+				t.Parallel()
+
+				mxcUri := alice.UploadContent(t, data.MatrixPng, "", "image/png")
+
+				_, isAttachment := downloadForFilename(t, bob, mxcUri, "", true)
 
 				if isAttachment {
 					t.Fatal("Expected file to be served as inline")
@@ -150,7 +232,26 @@ func TestMediaFilenames(t *testing.T) {
 				// Add parameters and upper-case, which should be parsed as text/plain.
 				mxcUri := alice.UploadContent(t, data.MatrixPng, "", "Text/Plain; charset=utf-8")
 
-				_, isAttachment := downloadForFilename(t, bob, mxcUri, "")
+				_, isAttachment := downloadForFilename(t, bob, mxcUri, "", false)
+
+				if isAttachment {
+					t.Fatal("Expected file to be served as inline")
+				}
+			})
+
+			t.Run("Will serve safe media types with parameters as inline via _matrix/client/v1/media/download", func(t *testing.T) {
+				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
+					// We need to check that this security behaviour is being correctly run in
+					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
+					// other homeservers are doing so.
+					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
+				}
+				t.Parallel()
+
+				// Add parameters and upper-case, which should be parsed as text/plain.
+				mxcUri := alice.UploadContent(t, data.MatrixPng, "", "Text/Plain; charset=utf-8")
+
+				_, isAttachment := downloadForFilename(t, bob, mxcUri, "", true)
 
 				if isAttachment {
 					t.Fatal("Expected file to be served as inline")
@@ -168,7 +269,25 @@ func TestMediaFilenames(t *testing.T) {
 
 				mxcUri := alice.UploadContent(t, data.MatrixSvg, "", "image/svg")
 
-				_, isAttachment := downloadForFilename(t, bob, mxcUri, "")
+				_, isAttachment := downloadForFilename(t, bob, mxcUri, "", false)
+
+				if !isAttachment {
+					t.Fatal("Expected file to be served as an attachment")
+				}
+			})
+
+			t.Run("Will serve unsafe media types as attachments via _matrix/client/v1/media/download", func(t *testing.T) {
+				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
+					// We need to check that this security behaviour is being correctly run in
+					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
+					// other homeservers are doing so.
+					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
+				}
+				t.Parallel()
+
+				mxcUri := alice.UploadContent(t, data.MatrixSvg, "", "image/svg")
+
+				_, isAttachment := downloadForFilename(t, bob, mxcUri, "", true)
 
 				if !isAttachment {
 					t.Fatal("Expected file to be served as an attachment")
@@ -179,7 +298,7 @@ func TestMediaFilenames(t *testing.T) {
 }
 
 // Returns content disposition information like (filename, isAttachment)
-func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName string) (filename string, isAttachment bool) {
+func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName string, authenticatedEndpoint bool) (filename string, isAttachment bool) {
 	t.Helper()
 
 	origin, mediaId := client.SplitMxc(mxcUri)
@@ -188,8 +307,16 @@ func downloadForFilename(t *testing.T, c *client.CSAPI, mxcUri string, diffName 
 
 	if diffName != "" {
 		path = []string{"_matrix", "media", "v3", "download", origin, mediaId, diffName}
+
+		if authenticatedEndpoint {
+			path = []string{"_matrix", "client", "v1", "media", "download", origin, mediaId, diffName}
+		}
 	} else {
 		path = []string{"_matrix", "media", "v3", "download", origin, mediaId}
+
+		if authenticatedEndpoint {
+			path = []string{"_matrix", "client", "v1", "media", "download", origin, mediaId}
+		}
 	}
 
 	res := c.MustDo(t, "GET", path)
