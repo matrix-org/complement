@@ -31,8 +31,9 @@ func TestLocalPngThumbnail(t *testing.T) {
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
 	fetchAndValidateThumbnail(t, alice, uri, false)
-	// test the new /_matrix/client/v1/media endpoint
-	fetchAndValidateThumbnail(t, alice, uri, true)
+	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
+		fetchAndValidateThumbnail(t, alice, uri, true)
+	})
 
 }
 
@@ -50,8 +51,10 @@ func TestRemotePngThumbnail(t *testing.T) {
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
 	fetchAndValidateThumbnail(t, bob, uri, false)
-	// test the new /_matrix/client/v1/media endpoint
-	fetchAndValidateThumbnail(t, bob, uri, true)
+
+	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
+		fetchAndValidateThumbnail(t, bob, uri, true)
+	})
 
 	// Remove the AccessToken and try again, this should now return a 401.
 	alice.AccessToken = ""
