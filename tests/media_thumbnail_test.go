@@ -2,9 +2,11 @@ package tests
 
 import (
 	"bytes"
+	"github.com/matrix-org/complement/runtime"
 	"image/jpeg"
 	"image/png"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -29,7 +31,12 @@ func TestLocalPngThumbnail(t *testing.T) {
 
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
-	fetchAndValidateThumbnail(t, alice, uri)
+	fetchAndValidateThumbnail(t, alice, uri, false)
+	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
+		runtime.SkipIf(t, runtime.Dendrite)
+		fetchAndValidateThumbnail(t, alice, uri, true)
+	})
+
 }
 
 // sytest: Remote media can be thumbnailed
@@ -45,15 +52,36 @@ func TestRemotePngThumbnail(t *testing.T) {
 
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
-	fetchAndValidateThumbnail(t, bob, uri)
+	fetchAndValidateThumbnail(t, bob, uri, false)
+
+	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
+		runtime.SkipIf(t, runtime.Dendrite)
+		fetchAndValidateThumbnail(t, bob, uri, true)
+	})
+
+	// Remove the AccessToken and try again, this should now return a 401.
+	alice.AccessToken = ""
+	origin, mediaId := client.SplitMxc(uri)
+	res := alice.Do(t, "GET", []string{"_matrix", "client", "v1", "media", "thumbnail", origin, mediaId})
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected HTTP status: %d, got %d", http.StatusUnauthorized, res.StatusCode)
+	}
 }
 
-func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string) {
+func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string, authenticated bool) {
 	t.Helper()
 
 	origin, mediaId := client.SplitMxc(mxcUri)
 
-	res := c.MustDo(t, "GET", []string{"_matrix", "media", "v3", "thumbnail", origin, mediaId}, client.WithQueries(url.Values{
+	var path []string
+
+	if authenticated {
+		path = []string{"_matrix", "client", "v1", "media", "thumbnail", origin, mediaId}
+	} else {
+		path = []string{"_matrix", "media", "v3", "thumbnail", origin, mediaId}
+	}
+
+	res := c.MustDo(t, "GET", path, client.WithQueries(url.Values{
 		"width":  []string{"32"},
 		"height": []string{"32"},
 		"method": []string{"scale"},
