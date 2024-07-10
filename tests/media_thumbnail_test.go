@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"github.com/matrix-org/complement/runtime"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -32,6 +33,7 @@ func TestLocalPngThumbnail(t *testing.T) {
 
 	fetchAndValidateThumbnail(t, alice, uri, false)
 	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
+		runtime.SkipIf(t, runtime.Dendrite)
 		fetchAndValidateThumbnail(t, alice, uri, true)
 	})
 
@@ -53,6 +55,7 @@ func TestRemotePngThumbnail(t *testing.T) {
 	fetchAndValidateThumbnail(t, bob, uri, false)
 
 	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
+		runtime.SkipIf(t, runtime.Dendrite)
 		fetchAndValidateThumbnail(t, bob, uri, true)
 	})
 
