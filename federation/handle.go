@@ -471,6 +471,7 @@ func HandleKeyRequests() func(*Server) {
 func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*Server) {
 	return func(srv *Server) {
 		mediamux := srv.mux.PathPrefix("/_matrix/media").Subrouter()
+		mediamuxAuthenticated := srv.mux.PathPrefix("/_matrix/federation/v1/media").Subrouter()
 
 		downloadFn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			vars := mux.Vars(req)
@@ -497,6 +498,9 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 		mediamux.Handle("/r0/download/{origin}/{mediaId}", downloadFn).Methods("GET")
 		mediamux.Handle("/v1/download/{origin}/{mediaId}", downloadFn).Methods("GET")
 		mediamux.Handle("/v3/download/{origin}/{mediaId}", downloadFn).Methods("GET")
+
+		// Also handle authenticated media requests
+		mediamuxAuthenticated.Handle("/download/{mediaId}", downloadFn).Methods("GET")
 	}
 }
 
