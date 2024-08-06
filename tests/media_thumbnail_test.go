@@ -2,19 +2,23 @@ package tests
 
 import (
 	"bytes"
+	"context"
+	"github.com/matrix-org/complement"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"image/jpeg"
 	"image/png"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
-	"github.com/matrix-org/complement/internal/data"
 )
 
 // TODO: add JPEG testing
@@ -66,6 +70,60 @@ func TestRemotePngThumbnail(t *testing.T) {
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected HTTP status: %d, got %d", http.StatusUnauthorized, res.StatusCode)
 	}
+}
+
+func TestFederationThumbnail(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite)
+
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+	origin := spec.ServerName(srv.ServerName())
+
+	fileName := "test.png"
+	contentType := "image/png"
+
+	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
+	_, mediaId := client.SplitMxc(uri)
+
+	fedReq := fclient.NewFederationRequest(
+		"GET",
+		origin,
+		"hs1",
+		"/_matrix/federation/v1/media/thumbnail/"+mediaId+"?method=crop&width=14&height=14&animated=false",
+	)
+
+	resp, err := srv.DoFederationRequest(context.Background(), t, deployment, fedReq)
+	if err != nil {
+		t.Fatalf("thumbnail request for uploaded file failed: %s", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("thumbnail request for uploaded file failed with status code: %v", resp.StatusCode)
+	}
+
+	resType := resp.Header.Get("Content-Type")
+	mimeType := strings.Split(resType, ";")[0]
+
+	if mimeType != "multipart/mixed" {
+		t.Fatalf("thumbnail request did not return multipart/mixed response, returned %s instead", mimeType)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	length := len(body)
+
+	contentLength, err := strconv.Atoi(resp.Header.Get("Content-Length"))
+
+	if contentLength != length {
+		t.Fatalf("Content-Length and actual length are different: %d, %d", contentLength, length)
+	}
+
 }
 
 func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string, authenticated bool) {
