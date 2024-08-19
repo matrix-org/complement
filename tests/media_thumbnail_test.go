@@ -14,9 +14,10 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -91,39 +92,67 @@ func TestFederationThumbnail(t *testing.T) {
 	contentType := "image/png"
 
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
-	_, mediaId := client.SplitMxc(uri)
+	mediaOrigin, mediaId := client.SplitMxc(uri)
+
+	path := []string{"_matrix", "media", "v3", "thumbnail", mediaOrigin, mediaId}
+	res := alice.MustDo(t, "GET", path, client.WithQueries(url.Values{
+		"width":  []string{"32"},
+		"height": []string{"32"},
+		"method": []string{"scale"},
+	}))
+
+	if res.StatusCode != 200 {
+		t.Fatalf("thumbnail request for uploaded file failed")
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("thumbnail request for uploaded file failed: %s", err)
+	}
 
 	fedReq := fclient.NewFederationRequest(
 		"GET",
 		origin,
 		"hs1",
-		"/_matrix/federation/v1/media/thumbnail/"+mediaId+"?method=crop&width=14&height=14&animated=false",
+		"/_matrix/federation/v1/media/thumbnail/"+mediaId+"?method=scale&width=32&height=32",
 	)
 
 	resp, err := srv.DoFederationRequest(context.Background(), t, deployment, fedReq)
 	if err != nil {
-		t.Fatalf("thumbnail request for uploaded file failed: %s", err)
+		t.Fatalf("federation thumbnail request for uploaded file failed: %s", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("thumbnail request for uploaded file failed with status code: %v", resp.StatusCode)
+		t.Fatalf("federation thumbnail request for uploaded file failed with status code: %v", resp.StatusCode)
 	}
 
-	resType := resp.Header.Get("Content-Type")
-	mimeType := strings.Split(resType, ";")[0]
+	resContentType := resp.Header.Get("Content-Type")
+	_, params, err := mime.ParseMediaType(resContentType)
 
-	if mimeType != "multipart/mixed" {
-		t.Fatalf("thumbnail request did not return multipart/mixed response, returned %s instead", mimeType)
+	if err != nil {
+		t.Fatalf("failed to parse multipart response: %s", err)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	length := len(body)
+	reader := multipart.NewReader(resp.Body, params["boundary"])
+	for {
+		p, err := reader.NextPart()
+		if err == io.EOF { // End of the multipart content
+			break
+		}
+		if err != nil {
+			t.Fatalf("failed to read multipart response: %s", err)
+		}
 
-	contentLength, err := strconv.Atoi(resp.Header.Get("Content-Length"))
-
-	if contentLength != length {
-		t.Fatalf("Content-Length and actual length are different: %d, %d", contentLength, length)
+		partContentType := p.Header.Get("Content-Type")
+		if partContentType == contentType {
+			imageBody, err := io.ReadAll(p)
+			if err != nil {
+				t.Fatalf("failed to read multipart part %s: %s", partContentType, err)
+			}
+			if !bytes.Equal(imageBody, body) {
+				t.Fatalf("body does not match uploaded file")
+			}
+		}
 	}
-
 }
 
 func fetchAndValidateThumbnail(t *testing.T, c *client.CSAPI, mxcUri string, authenticated bool) {
