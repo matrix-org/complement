@@ -132,6 +132,7 @@ func TestFederationThumbnail(t *testing.T) {
 		t.Fatalf("failed to parse multipart response: %s", err)
 	}
 
+	foundImage := false
 	reader := multipart.NewReader(resp.Body, params["boundary"])
 	for {
 		p, err := reader.NextPart()
@@ -151,7 +152,11 @@ func TestFederationThumbnail(t *testing.T) {
 			if !bytes.Equal(imageBody, body) {
 				t.Fatalf("body does not match uploaded file")
 			}
+			foundImage = true
 		}
+	}
+	if !foundImage {
+		t.Fatalf("No image was found in response.")
 	}
 }
 
