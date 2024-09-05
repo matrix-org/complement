@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	"net/http"
 	"testing"
 
@@ -12,9 +11,58 @@ import (
 	"github.com/matrix-org/complement/must"
 )
 
-const stateEventType = "org.matrix.msc3757.test"
+const stateEventTestType = "com.example.test"
 
-func TestStateKeyProtection(t *testing.T) {
+// To stress-test parsing, include separator & sigil characters
+const stateKeySuffix = "_state_key_suffix:!@#$123"
+
+func TestWithoutOwnedState(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	admin := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	user := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	roomID := admin.MustCreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		"power_level_content_override": map[string]interface{}{
+			"events": map[string]int{
+				stateEventTestType: 0,
+			},
+		},
+	})
+	user.MustJoinRoom(t, roomID, nil)
+
+	t.Run("parallel", func(t *testing.T) {
+		t.Run("user can set state with their own user ID as state key", func(t *testing.T) {
+			t.Parallel()
+			res := sendState(t, roomID, user, user.UserID)
+			must.MatchSuccess(t, res)
+		})
+		t.Run("admin cannot set state with their own suffixed user ID as state key", func(t *testing.T) {
+			t.Parallel()
+			res := sendState(t, roomID, admin, admin.UserID+stateKeySuffix)
+			mustMatchForbidden(t, res)
+		})
+		t.Run("admin cannot set state with another user ID as state key", func(t *testing.T) {
+			t.Parallel()
+			res := sendState(t, roomID, admin, user.UserID)
+			mustMatchForbidden(t, res)
+		})
+		t.Run("admin cannot set state with another suffixed user ID as state key", func(t *testing.T) {
+			t.Parallel()
+			res := sendState(t, roomID, admin, user.UserID+stateKeySuffix)
+			mustMatchForbidden(t, res)
+		})
+		t.Run("admin cannot set state with malformed user ID as state key", func(t *testing.T) {
+			t.Parallel()
+			res := sendState(t, roomID, admin, "@oops")
+			mustMatchForbidden(t, res)
+		})
+	})
+}
+
+func TestMSC3757OwnedState(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
@@ -27,69 +75,60 @@ func TestStateKeyProtection(t *testing.T) {
 		"preset":       "public_chat",
 		"power_level_content_override": map[string]interface{}{
 			"events": map[string]int{
-				stateEventType: 0,
+				stateEventTestType: 0,
 			},
 		},
 	})
 	user1.MustJoinRoom(t, roomID, nil)
 	user2.MustJoinRoom(t, roomID, nil)
 
-	sendState := func(t *testing.T, user *client.CSAPI, stateKey string, body string) *http.Response {
-		t.Helper()
-		return user.Do(
-			t,
-			"PUT",
-			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", stateEventType, stateKey},
-			client.WithJSONBody(t, map[string]interface{}{
-				"body": body,
-			}),
-		)
-	}
-
-	testProtectedStateKey := func(t *testing.T, getStateKeyForUser func(*client.CSAPI) string) {
-		t.Helper()
-		t.Run("user can set state with a key under their control", func(t *testing.T) {
+	t.Run("parallel", func(t *testing.T) {
+		t.Run("user can set state with their own suffixed user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, user1, getStateKeyForUser(user1), "own state")
+			res := sendState(t, roomID, user1, user1.UserID+stateKeySuffix)
 			must.MatchSuccess(t, res)
 		})
-		t.Run("admin can set state with a key under a non-admin's control", func(t *testing.T) {
+		t.Run("admin can set state with another user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, admin, getStateKeyForUser(admin), "admin's state")
+			res := sendState(t, roomID, admin, user1.UserID)
 			must.MatchSuccess(t, res)
 		})
-		t.Run("user cannot set state with a key under another user's control", func(t *testing.T) {
+		t.Run("admin can set state with another suffixed user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, user1, getStateKeyForUser(user2), "another's state")
+			res := sendState(t, roomID, admin, user1.UserID+stateKeySuffix)
+			must.MatchSuccess(t, res)
+		})
+		t.Run("user cannot set state with another user ID as state key", func(t *testing.T) {
+			t.Parallel()
+			res := sendState(t, roomID, user1, user2.UserID)
 			mustMatchForbidden(t, res)
 		})
-	}
-
-	t.Run("parallel", func(t *testing.T) {
-		t.Run("with state key as user ID", func(t *testing.T) {
+		t.Run("user cannot set state with another suffixed user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			testProtectedStateKey(t, func(user *client.CSAPI) string {
-				return user.UserID
-			})
+			res := sendState(t, roomID, user1, user2.UserID+stateKeySuffix)
+			mustMatchForbidden(t, res)
 		})
-		t.Run("with state key as user ID + device ID", func(t *testing.T) {
+		t.Run("admin cannot set state with malformed user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			testProtectedStateKey(t, func(user *client.CSAPI) string {
-				return fmt.Sprintf("%s_%s", user.UserID, user.DeviceID)
-			})
+			res := sendState(t, roomID, admin, "@oops")
+			mustMatchInvalid(t, res)
 		})
-		t.Run("with state key as user ID + multi-underscore string", func(t *testing.T) {
+		t.Run("admin cannot set state with improperly suffixed state key", func(t *testing.T) {
 			t.Parallel()
-			testProtectedStateKey(t, func(user *client.CSAPI) string {
-				return fmt.Sprintf("%s_multi_underscore_suffix", user.UserID)
-			})
-		})
-		t.Run("with state key as @-prefixed string that is not a user ID", func(t *testing.T) {
-			t.Parallel()
-			res := sendState(t, admin, "@oops", "")
+			res := sendState(t, roomID, admin, admin.UserID+"@"+stateKeySuffix[1:])
 			mustMatchInvalid(t, res)
 		})
 	})
+}
+
+func sendState(t *testing.T, roomID string, user *client.CSAPI, stateKey string) *http.Response {
+	t.Helper()
+	return user.Do(
+		t,
+		"PUT",
+		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", stateEventTestType, stateKey},
+		client.WithJSONBody(t, map[string]interface{}{}),
+	)
 }
 
 func mustMatchForbidden(t *testing.T, res *http.Response) {
