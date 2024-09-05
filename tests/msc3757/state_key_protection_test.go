@@ -26,7 +26,9 @@ func TestStateKeyProtection(t *testing.T) {
 		"room_version": "org.matrix.msc3757.10",
 		"preset":       "public_chat",
 		"power_level_content_override": map[string]interface{}{
-			"state_default": 0,
+			"events": map[string]int{
+				stateEventType: 0,
+			},
 		},
 	})
 	user1.MustJoinRoom(t, roomID, nil)
