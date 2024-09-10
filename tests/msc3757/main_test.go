@@ -7,5 +7,5 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	complement.TestMain(m, "state_key_protection")
+	complement.TestMain(m, "msc3757")
 }
