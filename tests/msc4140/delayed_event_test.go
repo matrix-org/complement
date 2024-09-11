@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
@@ -35,21 +36,36 @@ func TestDelayedEvents(t *testing.T) {
 			client.WithJSONBody(t, map[string]interface{}{
 				"setter": "on_timeout",
 			}),
-			getDelayQueryParam("1000"),
+			getDelayQueryParam("900"),
 		)
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 1),
+			},
+		})
 
+		setterExpected := "manual"
 		user.MustDo(
 			t,
 			"PUT",
 			getPathForState(roomID, eventType, stateKey),
 			client.WithJSONBody(t, map[string]interface{}{
-				"setter": "manual",
+				"setter": setterExpected,
 			}),
 		)
 		res = getDelayedEvents(t, user)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyArrayOfSize("delayed_events", 0),
+			},
+		})
+
+		time.Sleep(1 * time.Second)
+		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("setter", setterExpected),
 			},
 		})
 	})
