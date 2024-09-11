@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/must"
 )
 
+const hsName = "hs1"
 const stateEventTestType = "com.example.test"
 
 // To stress-test parsing, include separator & sigil characters
@@ -20,8 +21,8 @@ func TestWithoutOwnedState(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	admin := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	user := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	admin := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	user := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 
 	roomID := admin.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -66,9 +67,9 @@ func TestMSC3757OwnedState(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	admin := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	user1 := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	user2 := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	admin := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	user1 := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	user2 := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 
 	roomID := admin.MustCreateRoom(t, map[string]interface{}{
 		"room_version": "org.matrix.msc3757.10",
