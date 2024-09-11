@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/tidwall/gjson"
 )
 
 func TestDelayedEvents(t *testing.T) {
@@ -21,6 +23,54 @@ func TestDelayedEvents(t *testing.T) {
 
 	roomID := user.MustCreateRoom(t, map[string]interface{}{
 		"preset": "trusted_private_chat",
+	})
+
+	t.Run("delayed state events are sent on timeout", func(t *testing.T) {
+		var res *http.Response
+
+		eventType := "com.example.test"
+		stateKey := "to_send_on_timeout"
+
+		setterExpected := "on_timeout"
+		user.MustDo(
+			t,
+			"PUT",
+			getPathForState(roomID, eventType, stateKey),
+			client.WithJSONBody(t, map[string]interface{}{
+				"setter": setterExpected,
+			}),
+			getDelayQueryParam("900"),
+		)
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 1),
+				match.JSONArrayEach("delayed_events", func(val gjson.Result) error {
+					if setterActual := val.Get("content").Get("setter").Str; setterActual != setterExpected {
+						return fmt.Errorf("wrong setter in delayed event content: expected %v, got %v", setterExpected, setterActual)
+					}
+					return nil
+				}),
+			},
+		})
+		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 404,
+		})
+
+		time.Sleep(1 * time.Second)
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 0),
+			},
+		})
+		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("setter", setterExpected),
+			},
+		})
 	})
 
 	t.Run("delayed state events are cancelled by a more recent state event", func(t *testing.T) {
