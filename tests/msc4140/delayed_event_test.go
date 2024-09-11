@@ -120,6 +120,55 @@ func TestDelayedEvents(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("delayed state events are kept on server restart", func(t *testing.T) {
+		var res *http.Response
+
+		stateKey1 := "1"
+		stateKey2 := "2"
+
+		user.MustDo(
+			t,
+			"PUT",
+			getPathForState(roomID, eventType, stateKey1),
+			client.WithJSONBody(t, map[string]interface{}{}),
+			getDelayQueryParam("900"),
+		)
+		user.MustDo(
+			t,
+			"PUT",
+			getPathForState(roomID, eventType, stateKey2),
+			client.WithJSONBody(t, map[string]interface{}{}),
+			getDelayQueryParam("9900"),
+		)
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 2),
+			},
+		})
+
+		deployment.StopServer(t, hsName)
+		time.Sleep(1 * time.Second)
+		deployment.StartServer(t, hsName)
+
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 1),
+			},
+		})
+		user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey1))
+
+		time.Sleep(9 * time.Second)
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 0),
+			},
+		})
+		user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey2))
+	})
 }
 
 func getPathForSend(roomID string, eventType string) []string {
