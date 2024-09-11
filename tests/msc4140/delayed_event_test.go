@@ -15,11 +15,14 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+const hsName = "hs1"
+const eventType = "com.example.test"
+
 func TestDelayedEvents(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	user := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	user := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 
 	roomID := user.MustCreateRoom(t, map[string]interface{}{
 		"preset": "trusted_private_chat",
@@ -28,7 +31,6 @@ func TestDelayedEvents(t *testing.T) {
 	t.Run("delayed state events are sent on timeout", func(t *testing.T) {
 		var res *http.Response
 
-		eventType := "com.example.test"
 		stateKey := "to_send_on_timeout"
 
 		setterExpected := "on_timeout"
@@ -76,7 +78,6 @@ func TestDelayedEvents(t *testing.T) {
 	t.Run("delayed state events are cancelled by a more recent state event", func(t *testing.T) {
 		var res *http.Response
 
-		eventType := "com.example.test"
 		stateKey := "to_be_cancelled"
 
 		user.MustDo(
