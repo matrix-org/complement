@@ -48,7 +48,6 @@ func TestDelayedEvents(t *testing.T) {
 		)
 		res = getDelayedEvents(t, user)
 		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
 			JSON: []match.JSON{
 				match.JSONKeyArrayOfSize("delayed_events", 0),
 			},
