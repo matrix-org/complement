@@ -28,6 +28,15 @@ func TestDelayedEvents(t *testing.T) {
 		"preset": "trusted_private_chat",
 	})
 
+	t.Run("delayed events are empty on startup", func(t *testing.T) {
+		res := getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 0),
+			},
+		})
+	})
+
 	t.Run("delayed state events are sent on timeout", func(t *testing.T) {
 		var res *http.Response
 
