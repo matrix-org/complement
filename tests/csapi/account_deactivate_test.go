@@ -95,10 +95,7 @@ func TestDeactivateAccount(t *testing.T) {
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"identifier": map[string]interface{}{
 				"type": "m.id.user",
-				"identifier": map[string]interface{}{
-					"type": "m.id.user",
-					"user": authedClient.UserID,
-				},
+				"user": authedClient.UserID,
 			},
 			"type":     "m.login.password",
 			"password": password,
