@@ -118,7 +118,7 @@ func TestRoomCreate(t *testing.T) {
 
 			res := alice.CreateRoom(t, map[string]interface{}{
 				"visibility":   "private",
-				"room_version": "1",
+				"room_version": 1,
 				"preset":       "public_chat",
 			})
 			must.MatchResponse(t, res, match.HTTPResponse{
