@@ -42,13 +42,14 @@ func TestDelayedEvents(t *testing.T) {
 
 		stateKey := "to_send_on_timeout"
 
+		setterKey := "setter"
 		setterExpected := "on_timeout"
 		user.MustDo(
 			t,
 			"PUT",
 			getPathForState(roomID, eventType, stateKey),
 			client.WithJSONBody(t, map[string]interface{}{
-				"setter": setterExpected,
+				setterKey: setterExpected,
 			}),
 			getDelayQueryParam("900"),
 		)
@@ -79,7 +80,7 @@ func TestDelayedEvents(t *testing.T) {
 		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONKeyEqual("setter", setterExpected),
+				match.JSONKeyEqual(setterKey, setterExpected),
 			},
 		})
 	})
@@ -89,12 +90,13 @@ func TestDelayedEvents(t *testing.T) {
 
 		stateKey := "to_be_cancelled"
 
+		setterKey := "setter"
 		user.MustDo(
 			t,
 			"PUT",
 			getPathForState(roomID, eventType, stateKey),
 			client.WithJSONBody(t, map[string]interface{}{
-				"setter": "on_timeout",
+				setterKey: "on_timeout",
 			}),
 			getDelayQueryParam("900"),
 		)
@@ -111,7 +113,7 @@ func TestDelayedEvents(t *testing.T) {
 			"PUT",
 			getPathForState(roomID, eventType, stateKey),
 			client.WithJSONBody(t, map[string]interface{}{
-				"setter": setterExpected,
+				setterKey: setterExpected,
 			}),
 		)
 		res = getDelayedEvents(t, user)
@@ -125,7 +127,7 @@ func TestDelayedEvents(t *testing.T) {
 		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONKeyEqual("setter", setterExpected),
+				match.JSONKeyEqual(setterKey, setterExpected),
 			},
 		})
 	})
