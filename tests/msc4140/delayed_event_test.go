@@ -186,10 +186,6 @@ func TestDelayedEvents(t *testing.T) {
 	})
 }
 
-func getPathForSend(roomID string, eventType string) []string {
-	return []string{"_matrix", "client", "v3", "rooms", roomID, "send", eventType}
-}
-
 func getPathForState(roomID string, eventType string, stateKey string) []string {
 	return []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, stateKey}
 }
