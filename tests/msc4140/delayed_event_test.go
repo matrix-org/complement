@@ -58,7 +58,11 @@ func TestDelayedEvents(t *testing.T) {
 			JSON: []match.JSON{
 				match.JSONKeyArrayOfSize("delayed_events", 1),
 				match.JSONArrayEach("delayed_events", func(val gjson.Result) error {
-					if setterActual := val.Get("content").Get("setter").Str; setterActual != setterExpected {
+					content := val.Get("content").Map()
+					if l := len(content); l != 1 {
+						return fmt.Errorf("wrong number of content fields: expected 1, got %d", l)
+					}
+					if setterActual := content[setterKey].Str; setterActual != setterExpected {
 						return fmt.Errorf("wrong setter in delayed event content: expected %v, got %v", setterExpected, setterActual)
 					}
 					return nil
