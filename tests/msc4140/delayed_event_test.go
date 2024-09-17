@@ -45,6 +45,81 @@ func TestDelayedEvents(t *testing.T) {
 		})
 	})
 
+	t.Run("delayed message events are sent on timeout", func(t *testing.T) {
+		var res *http.Response
+		var countExpected uint64
+
+		_, token := user.MustSync(t, client.SyncReq{})
+
+		txnIdBase := "txn-delayed-msg-timeout-%d"
+
+		countKey := "count"
+		numEvents := 3
+		for i, delayStr := range []string{"700", "800", "900"} {
+			res = user.MustDo(
+				t,
+				"PUT",
+				getPathForSend(roomID, eventType, fmt.Sprintf(txnIdBase, i)),
+				client.WithJSONBody(t, map[string]interface{}{
+					countKey: i + 1,
+				}),
+				getDelayQueryParam(delayStr),
+			)
+			delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
+			// Requesting the same path with the same txnID should have the same response
+			res = user.MustDo(
+				t,
+				"PUT",
+				getPathForSend(roomID, eventType, fmt.Sprintf(txnIdBase, i)),
+				getDelayQueryParam(delayStr),
+			)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyEqual("delay_id", delayID),
+				},
+			})
+		}
+
+		checkContent := func(val gjson.Result) error {
+			content := val.Get("content").Map()
+			if l := len(content); l != 1 {
+				return fmt.Errorf("wrong number of content fields: expected 1, got %d", l)
+			}
+			countExpected++
+			if countActual := content[countKey].Uint(); countActual != countExpected {
+				return fmt.Errorf("wrong count in delayed event content: expected %v, got %v", countExpected, countActual)
+			}
+			return nil
+		}
+
+		res = getDelayedEvents(t, user)
+		countExpected = 0
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", numEvents),
+				match.JSONArrayEach("delayed_events", checkContent),
+			},
+		})
+
+		time.Sleep(1 * time.Second)
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 0),
+			},
+		})
+		queryParams := url.Values{}
+		queryParams.Set("dir", "f")
+		queryParams.Set("from", token)
+		res = user.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(queryParams))
+		countExpected = 0
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONArrayEach("chunk", checkContent),
+			},
+		})
+	})
+
 	t.Run("delayed state events are sent on timeout", func(t *testing.T) {
 		var res *http.Response
 
@@ -484,6 +559,10 @@ func TestDelayedEvents(t *testing.T) {
 
 func getPathForUpdateDelayedEvents() []string {
 	return []string{"_matrix", "client", "unstable", "org.matrix.msc4140", "delayed_events"}
+}
+
+func getPathForSend(roomID string, eventType string, txnId string) []string {
+	return []string{"_matrix", "client", "v3", "rooms", roomID, "send", eventType, txnId}
 }
 
 func getPathForState(roomID string, eventType string, stateKey string) []string {
