@@ -23,10 +23,17 @@ func TestDelayedEvents(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	user := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	user2 := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 
 	roomID := user.MustCreateRoom(t, map[string]interface{}{
-		"preset": "trusted_private_chat",
+		"preset": "public_chat",
+		"power_level_content_override": map[string]interface{}{
+			"events": map[string]int{
+				eventType: 0,
+			},
+		},
 	})
+	user2.MustJoinRoom(t, roomID, nil)
 
 	t.Run("delayed events are empty on startup", func(t *testing.T) {
 		res := getDelayedEvents(t, user)
@@ -327,10 +334,10 @@ func TestDelayedEvents(t *testing.T) {
 		})
 	})
 
-	t.Run("delayed state events are cancelled by a more recent state event", func(t *testing.T) {
+	t.Run("delayed state events are cancelled by a more recent state event from the same user", func(t *testing.T) {
 		var res *http.Response
 
-		stateKey := "to_be_cancelled"
+		stateKey := "to_be_cancelled_by_same_user"
 
 		setterKey := "setter"
 		user.MustDo(
@@ -351,6 +358,53 @@ func TestDelayedEvents(t *testing.T) {
 
 		setterExpected := "manual"
 		user.MustDo(
+			t,
+			"PUT",
+			getPathForState(roomID, eventType, stateKey),
+			client.WithJSONBody(t, map[string]interface{}{
+				setterKey: setterExpected,
+			}),
+		)
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 0),
+			},
+		})
+
+		time.Sleep(1 * time.Second)
+		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual(setterKey, setterExpected),
+			},
+		})
+	})
+
+	t.Run("delayed state events are cancelled by a more recent state event from another user", func(t *testing.T) {
+		var res *http.Response
+
+		stateKey := "to_be_cancelled_by_other_user"
+
+		setterKey := "setter"
+		user.MustDo(
+			t,
+			"PUT",
+			getPathForState(roomID, eventType, stateKey),
+			client.WithJSONBody(t, map[string]interface{}{
+				setterKey: "on_timeout",
+			}),
+			getDelayQueryParam("900"),
+		)
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyArrayOfSize("delayed_events", 1),
+			},
+		})
+
+		setterExpected := "manual"
+		user2.MustDo(
 			t,
 			"PUT",
 			getPathForState(roomID, eventType, stateKey),
