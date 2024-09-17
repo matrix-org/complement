@@ -66,17 +66,19 @@ func TestDelayedEvents(t *testing.T) {
 				getDelayQueryParam(delayStr),
 			)
 			delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
-			// Requesting the same path with the same txnID should have the same response
-			res = user.MustDo(
-				t,
-				"PUT",
-				getPathForSend(roomID, eventType, fmt.Sprintf(txnIdBase, i)),
-				getDelayQueryParam(delayStr),
-			)
-			must.MatchResponse(t, res, match.HTTPResponse{
-				JSON: []match.JSON{
-					match.JSONKeyEqual("delay_id", delayID),
-				},
+
+			t.Run("rerequesting delayed event path with the same txnID should have the same response", func(t *testing.T) {
+				res := user.MustDo(
+					t,
+					"PUT",
+					getPathForSend(roomID, eventType, fmt.Sprintf(txnIdBase, i)),
+					getDelayQueryParam(delayStr),
+				)
+				must.MatchResponse(t, res, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONKeyEqual("delay_id", delayID),
+					},
+				})
 			})
 		}
 
