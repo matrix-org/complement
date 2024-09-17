@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 )
 
@@ -429,6 +430,9 @@ func TestDelayedEvents(t *testing.T) {
 	})
 
 	t.Run("delayed state events are kept on server restart", func(t *testing.T) {
+		// Spec cannot enforce server restart behaviour
+		runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit, runtime.Conduwuit)
+
 		var res *http.Response
 
 		stateKey1 := "1"
