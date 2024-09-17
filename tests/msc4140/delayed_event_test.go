@@ -103,6 +103,15 @@ func TestDelayedEvents(t *testing.T) {
 			},
 		})
 
+		t.Run("cannot get delayed events of another user", func(t *testing.T) {
+			res := getDelayedEvents(t, user2)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				JSON: []match.JSON{
+					match.JSONKeyArrayOfSize("delayed_events", 0),
+				},
+			})
+		})
+
 		time.Sleep(1 * time.Second)
 		res = getDelayedEvents(t, user)
 		must.MatchResponse(t, res, match.HTTPResponse{
