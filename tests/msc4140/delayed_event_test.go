@@ -19,6 +19,9 @@ import (
 const hsName = "hs1"
 const eventType = "com.example.test"
 
+// TODO: Test pagination of `GET /_matrix/client/v1/delayed_events` once
+// it is implemented in a homeserver.
+
 func TestDelayedEvents(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
