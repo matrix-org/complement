@@ -54,6 +54,8 @@ func TestDelayedEvents(t *testing.T) {
 
 		_, token := user.MustSync(t, client.SyncReq{})
 
+		defer cleanupDelayedEvents(t, user)
+
 		txnIdBase := "txn-delayed-msg-timeout-%d"
 
 		countKey := "count"
@@ -85,24 +87,11 @@ func TestDelayedEvents(t *testing.T) {
 			})
 		}
 
-		checkContent := func(val gjson.Result) error {
-			content := val.Get("content").Map()
-			if l := len(content); l != 1 {
-				return fmt.Errorf("wrong number of content fields: expected 1, got %d", l)
-			}
-			countExpected++
-			if countActual := content[countKey].Uint(); countActual != countExpected {
-				return fmt.Errorf("wrong count in delayed event content: expected %v, got %v", countExpected, countActual)
-			}
-			return nil
-		}
-
 		res = getDelayedEvents(t, user)
 		countExpected = 0
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyArrayOfSize("delayed_events", numEvents),
-				match.JSONArrayEach("delayed_events", checkContent),
 			},
 		})
 
@@ -129,13 +118,25 @@ func TestDelayedEvents(t *testing.T) {
 		countExpected = 0
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONArrayEach("chunk", checkContent),
+				match.JSONArrayEach("chunk", func(val gjson.Result) error {
+					content := val.Get("content").Map()
+					if l := len(content); l != 1 {
+						return fmt.Errorf("wrong number of content fields: expected 1, got %d", l)
+					}
+					countExpected++
+					if countActual := content[countKey].Uint(); countActual != countExpected {
+						return fmt.Errorf("wrong count in delayed event content: expected %v, got %v", countExpected, countActual)
+					}
+					return nil
+				}),
 			},
 		})
 	})
 
 	t.Run("delayed state events are sent on timeout", func(t *testing.T) {
 		var res *http.Response
+
+		defer cleanupDelayedEvents(t, user)
 
 		stateKey := "to_send_on_timeout"
 
@@ -309,6 +310,8 @@ func TestDelayedEvents(t *testing.T) {
 	t.Run("delayed state events can be sent on request", func(t *testing.T) {
 		var res *http.Response
 
+		defer cleanupDelayedEvents(t, user)
+
 		stateKey := "to_send_on_request"
 
 		setterKey := "setter"
@@ -362,6 +365,8 @@ func TestDelayedEvents(t *testing.T) {
 		var res *http.Response
 
 		stateKey := "to_send_on_restarted_timeout"
+
+		defer cleanupDelayedEvents(t, user)
 
 		setterKey := "setter"
 		setterExpected := "on_timeout"
@@ -429,6 +434,8 @@ func TestDelayedEvents(t *testing.T) {
 
 		stateKey := "to_be_cancelled_by_same_user"
 
+		defer cleanupDelayedEvents(t, user)
+
 		setterKey := "setter"
 		user.MustDo(
 			t,
@@ -475,6 +482,9 @@ func TestDelayedEvents(t *testing.T) {
 		var res *http.Response
 
 		stateKey := "to_be_cancelled_by_other_user"
+
+		defer cleanupDelayedEvents(t, user)
+		defer cleanupDelayedEvents(t, user2)
 
 		setterKey := "setter"
 		user.MustDo(
@@ -523,6 +533,8 @@ func TestDelayedEvents(t *testing.T) {
 		runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit, runtime.Conduwuit)
 
 		var res *http.Response
+
+		defer cleanupDelayedEvents(t, user)
 
 		stateKey1 := "1"
 		stateKey2 := "2"
@@ -592,4 +604,28 @@ func getDelayQueryParam(delayStr string) client.RequestOpt {
 func getDelayedEvents(t *testing.T, user *client.CSAPI) *http.Response {
 	t.Helper()
 	return user.MustDo(t, "GET", getPathForUpdateDelayedEvents())
+}
+
+func cleanupDelayedEvents(t *testing.T, user *client.CSAPI) {
+	t.Helper()
+	res := getDelayedEvents(t, user)
+	defer res.Body.Close()
+	body := must.ParseJSON(t, res.Body)
+	for _, delayedEvent := range body.Get("delayed_events").Array() {
+		delayID := delayedEvent.Get("delay_id").String()
+		user.MustDo(
+			t,
+			"POST",
+			append(getPathForUpdateDelayedEvents(), delayID),
+			client.WithJSONBody(t, map[string]interface{}{
+				"action": "cancel",
+			}),
+		)
+	}
+
+	must.MatchResponse(t, getDelayedEvents(t, user), match.HTTPResponse{
+		JSON: []match.JSON{
+			match.JSONKeyArrayOfSize("delayed_events", 0),
+		},
+	})
 }
