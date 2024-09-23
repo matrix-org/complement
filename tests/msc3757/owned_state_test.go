@@ -110,6 +110,11 @@ func TestMSC3757OwnedState(t *testing.T) {
 			res := sendState(t, roomID, user1, user2.UserID+stateKeySuffix)
 			mustMatchForbidden(t, res)
 		})
+		t.Run("user cannot set state with unseparated suffix in state key", func(t *testing.T) {
+			t.Parallel()
+			res := sendState(t, roomID, user1, user1.UserID+stateKeySuffix[1:])
+			mustMatchForbidden(t, res)
+		})
 		t.Run("admin cannot set state with malformed user ID as state key", func(t *testing.T) {
 			t.Parallel()
 			res := sendState(t, roomID, admin, "@oops")
