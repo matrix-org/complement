@@ -25,7 +25,8 @@ func TestWithoutOwnedState(t *testing.T) {
 	user := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 
 	roomID := admin.MustCreateRoom(t, map[string]interface{}{
-		"preset": "public_chat",
+		"room_version": "10",
+		"preset":       "public_chat",
 		"power_level_content_override": map[string]interface{}{
 			"events": map[string]int{
 				stateEventTestType: 0,
