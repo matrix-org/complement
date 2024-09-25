@@ -18,9 +18,6 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
-      - name: "Install Complement Dependencies"
-        run: |
-          sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
       - name: "Run internal Complement tests"
         run: |
           go test ./internal/...
@@ -69,7 +66,6 @@ jobs:
       # servers which listen on random high numbered ports.
       - name: "Install Complement Dependencies"
         run: |
-          sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
           go install -v github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
           mkdir .gotestfmt/github -p
           cp .ci/complement_package.gotpl .gotestfmt/github/package.gotpl

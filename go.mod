@@ -16,7 +16,6 @@ require (
 	github.com/tidwall/sjson v1.2.5
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	gonum.org/v1/plot v0.11.0
-	maunium.net/go/mautrix v0.11.0
 )
 
 require (
