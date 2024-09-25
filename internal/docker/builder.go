@@ -22,6 +22,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -100,7 +101,7 @@ func (d *Builder) removeNetworks() error {
 
 // removeImages removes all images with `complementLabel`.
 func (d *Builder) removeImages() error {
-	images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
+	images, err := d.Docker.ImageList(context.Background(), image.ListOptions{
 		Filters: label(
 			complementLabel,
 			"complement_pkg="+d.Config.PackageNamespace,
@@ -136,7 +137,7 @@ func (d *Builder) removeImages() error {
 			d.log("Keeping image created from blueprint %s", bprintName)
 			continue
 		}
-		_, err = d.Docker.ImageRemove(context.Background(), img.ID, types.ImageRemoveOptions{
+		_, err = d.Docker.ImageRemove(context.Background(), img.ID, image.RemoveOptions{
 			Force: true,
 		})
 		if err != nil {
@@ -149,7 +150,7 @@ func (d *Builder) removeImages() error {
 
 // removeContainers removes all containers with `complementLabel`.
 func (d *Builder) removeContainers() error {
-	containers, err := d.Docker.ContainerList(context.Background(), types.ContainerListOptions{
+	containers, err := d.Docker.ContainerList(context.Background(), container.ListOptions{
 		All: true,
 		Filters: label(
 			complementLabel,
@@ -160,7 +161,7 @@ func (d *Builder) removeContainers() error {
 		return err
 	}
 	for _, c := range containers {
-		err = d.Docker.ContainerRemove(context.Background(), c.ID, types.ContainerRemoveOptions{
+		err = d.Docker.ContainerRemove(context.Background(), c.ID, container.RemoveOptions{
 			Force: true,
 		})
 		if err != nil {
@@ -171,7 +172,7 @@ func (d *Builder) removeContainers() error {
 }
 
 func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
-	images, err := d.Docker.ImageList(context.Background(), types.ImageListOptions{
+	images, err := d.Docker.ImageList(context.Background(), image.ListOptions{
 		Filters: label(
 			"complement_blueprint="+bprint.Name,
 			"complement_pkg="+d.Config.PackageNamespace,
@@ -200,12 +201,12 @@ func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
 
 	// wait a bit for images/containers to show up in 'image ls'
 	foundImages := false
-	var images []types.ImageSummary
+	var images []image.Summary
 	var err error
 	waitTime := 5 * time.Second
 	startTime := time.Now()
 	for time.Since(startTime) < waitTime {
-		images, err = d.Docker.ImageList(context.Background(), types.ImageListOptions{
+		images, err = d.Docker.ImageList(context.Background(), image.ListOptions{
 			Filters: label(
 				complementLabel,
 				"complement_blueprint="+bprint.Name,
@@ -255,7 +256,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 				// something went wrong, but we have a container which may have interesting logs
 				printLogs(d.Docker, res.containerID, res.contextStr)
 			}
-			if delErr := d.Docker.ContainerRemove(context.Background(), res.containerID, types.ContainerRemoveOptions{
+			if delErr := d.Docker.ContainerRemove(context.Background(), res.containerID, container.RemoveOptions{
 				Force: true,
 			}); delErr != nil {
 				d.log("%s: failed to remove container which failed to deploy: %s", res.contextStr, delErr)
@@ -334,7 +335,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		d.log("%s: Stopped container: %s", res.contextStr, res.containerID)
 
 		// commit the container
-		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, types.ContainerCommitOptions{
+		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, container.CommitOptions{
 			Author:    "Complement",
 			Pause:     true,
 			Reference: "localhost/complement:" + res.contextStr,
@@ -475,7 +476,7 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 }
 
 func printLogs(docker *client.Client, containerID, contextStr string) {
-	reader, err := docker.ContainerLogs(context.Background(), containerID, types.ContainerLogsOptions{
+	reader, err := docker.ContainerLogs(context.Background(), containerID, container.LogsOptions{
 		ShowStderr: true,
 		ShowStdout: true,
 		Follow:     false,
