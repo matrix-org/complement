@@ -56,6 +56,11 @@ func TestWithoutOwnedState(t *testing.T) {
 			res := sendState(t, roomID, creator, user.UserID+stateKeySuffix)
 			mustMatchForbidden(t, res)
 		})
+		t.Run("room creator cannot set state with a non-member user ID as state key", func(t *testing.T) {
+			t.Parallel()
+			res := sendState(t, roomID, creator, "@notinroom:hs2")
+			mustMatchForbidden(t, res)
+		})
 		t.Run("room creator cannot set state with malformed user ID as state key", func(t *testing.T) {
 			t.Parallel()
 			res := sendState(t, roomID, creator, "@oops")
@@ -120,6 +125,11 @@ func TestMSC3757OwnedState(t *testing.T) {
 			// Still put @ at start of state key, because without it, there is no write protection at all
 			res := sendState(t, roomID, user1, "@prefix_"+user1.UserID+stateKeySuffix)
 			mustMatchForbidden(t, res)
+		})
+		t.Run("room creator can set state with a non-member user ID as state key", func(t *testing.T) {
+			t.Parallel()
+			res := sendState(t, roomID, creator, "@notinroom:hs2")
+			must.MatchSuccess(t, res)
 		})
 		t.Run("room creator cannot set state with malformed user ID as state key", func(t *testing.T) {
 			t.Parallel()
