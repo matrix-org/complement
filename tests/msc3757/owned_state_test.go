@@ -21,10 +21,10 @@ func TestWithoutOwnedState(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	admin := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	creator := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 	user := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 
-	roomID := admin.MustCreateRoom(t, map[string]interface{}{
+	roomID := creator.MustCreateRoom(t, map[string]interface{}{
 		"room_version": "10",
 		"preset":       "public_chat",
 		"power_level_content_override": map[string]interface{}{
@@ -41,24 +41,24 @@ func TestWithoutOwnedState(t *testing.T) {
 			res := sendState(t, roomID, user, user.UserID)
 			must.MatchSuccess(t, res)
 		})
-		t.Run("admin cannot set state with their own suffixed user ID as state key", func(t *testing.T) {
+		t.Run("room creator cannot set state with their own suffixed user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, roomID, admin, admin.UserID+stateKeySuffix)
+			res := sendState(t, roomID, creator, creator.UserID+stateKeySuffix)
 			mustMatchForbidden(t, res)
 		})
-		t.Run("admin cannot set state with another user ID as state key", func(t *testing.T) {
+		t.Run("room creator cannot set state with another user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, roomID, admin, user.UserID)
+			res := sendState(t, roomID, creator, user.UserID)
 			mustMatchForbidden(t, res)
 		})
-		t.Run("admin cannot set state with another suffixed user ID as state key", func(t *testing.T) {
+		t.Run("room creator cannot set state with another suffixed user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, roomID, admin, user.UserID+stateKeySuffix)
+			res := sendState(t, roomID, creator, user.UserID+stateKeySuffix)
 			mustMatchForbidden(t, res)
 		})
-		t.Run("admin cannot set state with malformed user ID as state key", func(t *testing.T) {
+		t.Run("room creator cannot set state with malformed user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, roomID, admin, "@oops")
+			res := sendState(t, roomID, creator, "@oops")
 			mustMatchForbidden(t, res)
 		})
 	})
@@ -68,11 +68,11 @@ func TestMSC3757OwnedState(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	admin := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	creator := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 	user1 := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 	user2 := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 
-	roomID := admin.MustCreateRoom(t, map[string]interface{}{
+	roomID := creator.MustCreateRoom(t, map[string]interface{}{
 		"room_version": "org.matrix.msc3757.10",
 		"preset":       "public_chat",
 		"power_level_content_override": map[string]interface{}{
@@ -90,14 +90,14 @@ func TestMSC3757OwnedState(t *testing.T) {
 			res := sendState(t, roomID, user1, user1.UserID+stateKeySuffix)
 			must.MatchSuccess(t, res)
 		})
-		t.Run("admin can set state with another user ID as state key", func(t *testing.T) {
+		t.Run("room creator can set state with another user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, roomID, admin, user1.UserID)
+			res := sendState(t, roomID, creator, user1.UserID)
 			must.MatchSuccess(t, res)
 		})
-		t.Run("admin can set state with another suffixed user ID as state key", func(t *testing.T) {
+		t.Run("room creator can set state with another suffixed user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, roomID, admin, user1.UserID+stateKeySuffix)
+			res := sendState(t, roomID, creator, user1.UserID+stateKeySuffix)
 			must.MatchSuccess(t, res)
 		})
 		t.Run("user cannot set state with another user ID as state key", func(t *testing.T) {
@@ -121,14 +121,14 @@ func TestMSC3757OwnedState(t *testing.T) {
 			res := sendState(t, roomID, user1, "@prefix_"+user1.UserID+stateKeySuffix)
 			mustMatchForbidden(t, res)
 		})
-		t.Run("admin cannot set state with malformed user ID as state key", func(t *testing.T) {
+		t.Run("room creator cannot set state with malformed user ID as state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, roomID, admin, "@oops")
+			res := sendState(t, roomID, creator, "@oops")
 			mustMatchInvalid(t, res)
 		})
-		t.Run("admin cannot set state with improperly suffixed state key", func(t *testing.T) {
+		t.Run("room creator cannot set state with improperly suffixed state key", func(t *testing.T) {
 			t.Parallel()
-			res := sendState(t, roomID, admin, admin.UserID+"@"+stateKeySuffix[1:])
+			res := sendState(t, roomID, creator, creator.UserID+"@"+stateKeySuffix[1:])
 			mustMatchInvalid(t, res)
 		})
 	})
