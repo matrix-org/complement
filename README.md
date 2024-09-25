@@ -9,7 +9,7 @@ See also [Complement Crypto](https://github.com/matrix-org/complement-crypto) fo
 
 ## Running
 
-You need to have Go and Docker >= 20.10 installed, as well as `libolm3` and `libolm-dev`. Then:
+You need to have Go and Docker >= 20.10 installed. Then:
 
 ```
 $ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl go test -v ./tests/...
@@ -23,23 +23,6 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(
 If you need to pass environment variables to the image under test, you can:
 1. define a pass-through prefix with e.g. `COMPLEMENT_SHARE_ENV_PREFIX=PASS_`; then
 2. prefix the desired environment variables with that prefix; e.g. `PASS_SYNAPSE_COMPLEMENT_USE_WORKERS=true`.
-
-### Dependencies
-
-Complement supports encryption via `libolm`. You can install `libolm3` on Debian using something like:
-```
-echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/complement.list && apt-get update && apt-get install -y libolm3 libolm-dev/buster-backports
-```
-or on Mac:
-```
-brew install libolm
-```
-If you are on an Apple Silicon Mac then you'll need to set these environment variables too so Go can find `libolm`:
-```
-export LIBRARY_PATH=/opt/homebrew/lib
-export CPATH=/opt/homebrew/include
-export PATH=/opt/homebrew/bin:$PATH
-```
 
 ### Potential conflict with firewall software
 
