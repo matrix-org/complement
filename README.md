@@ -9,7 +9,7 @@ See also [Complement Crypto](https://github.com/matrix-org/complement-crypto) fo
 
 ## Running
 
-You need to have Go and Docker >= 20.10 installed. Then:
+You need to have Go and Docker installed. Complement uses Docker API version 1.45, so your `docker version` must support that. Then:
 
 ```
 $ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl go test -v ./tests/...
