@@ -3,9 +3,12 @@ package client
 import (
 	"bytes"
 	"context" // nolint:gosec
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -16,7 +19,7 @@ import (
 
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
-	"maunium.net/go/mautrix/crypto/olm"
+	"golang.org/x/crypto/curve25519"
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/ct"
@@ -26,6 +29,12 @@ type ctxKey string
 
 const (
 	CtxKeyWithRetryUntil ctxKey = "complement_retry_until" // contains *retryUntilParams
+)
+
+var (
+	// use a deterministic seed but globally so we don't generate the same numbers for each client.
+	// This could be non-deterministic if used concurrently.
+	prng = rand.New(rand.NewSource(42))
 )
 
 type retryUntilParams struct {
@@ -403,10 +412,21 @@ func (c *CSAPI) MustUploadKeys(t ct.TestLike, deviceKeys map[string]interface{},
 	return s.OTKCounts
 }
 
+// Generate realistic looking device keys and OTKs. They are not guaranteed to be 100% valid, but should
+// pass most server-side checks. Critically, these keys are generated using a Pseudo-Random Number Generator (PRNG)
+// for determinism and hence ARE NOT SECURE. DO NOT USE THIS OUTSIDE OF TESTS.
 func (c *CSAPI) MustGenerateOneTimeKeys(t ct.TestLike, otkCount uint) (deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) {
 	t.Helper()
-	account := olm.NewAccount()
-	ed25519Key, curveKey := account.IdentityKeys()
+	ed25519PubKey, ed25519PrivKey, err := ed25519.GenerateKey(prng)
+	if err != nil {
+		ct.Fatalf(t, "failed to generate ed25519 key: %s", err)
+	}
+
+	curveKey := make([]byte, 32)
+	_, err = prng.Read(curveKey)
+	if err != nil {
+		ct.Fatalf(t, "failed to read from prng: %s", err)
+	}
 
 	ed25519KeyID := fmt.Sprintf("ed25519:%s", c.DeviceID)
 	curveKeyID := fmt.Sprintf("curve25519:%s", c.DeviceID)
@@ -416,38 +436,59 @@ func (c *CSAPI) MustGenerateOneTimeKeys(t ct.TestLike, otkCount uint) (deviceKey
 		"device_id":  c.DeviceID,
 		"algorithms": []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
 		"keys": map[string]interface{}{
-			ed25519KeyID: ed25519Key.String(),
-			curveKeyID:   curveKey.String(),
+			ed25519KeyID: base64.RawStdEncoding.EncodeToString(ed25519PubKey),
+			curveKeyID:   base64.RawStdEncoding.EncodeToString(curveKey),
 		},
 	}
 
-	signature, _ := account.SignJSON(deviceKeys)
+	signJSON := func(input any) []byte {
+		inputJSON, err := json.Marshal(input)
+		if err != nil {
+			ct.Fatalf(t, "failed to marshal struct: %s", err)
+		}
+		inputJSON, err = gomatrixserverlib.CanonicalJSON(inputJSON)
+		if err != nil {
+			ct.Fatalf(t, "failed to canonical json: %s", err)
+		}
+		signature := ed25519.Sign(ed25519PrivKey, inputJSON)
+		if err != nil {
+			ct.Fatalf(t, "failed to sign json: %s", err)
+		}
+		return signature
+	}
 
 	deviceKeys["signatures"] = map[string]interface{}{
 		c.UserID: map[string]interface{}{
-			ed25519KeyID: signature,
+			ed25519KeyID: base64.RawStdEncoding.EncodeToString(signJSON(deviceKeys)),
 		},
 	}
-
-	account.GenOneTimeKeys(otkCount)
 	oneTimeKeys = map[string]interface{}{}
 
-	for kid, key := range account.OneTimeKeys() {
+	for i := uint(0); i < otkCount; i++ {
+		privateKeyBytes := make([]byte, 32)
+		_, err = prng.Read(privateKeyBytes)
+		if err != nil {
+			ct.Fatalf(t, "failed to read from prng", err)
+		}
+		key, err := curve25519.X25519(privateKeyBytes, curve25519.Basepoint)
+		if err != nil {
+			ct.Fatalf(t, "failed to generate curve pubkey: %s", err)
+		}
+		kid := fmt.Sprintf("%d", i)
 		keyID := fmt.Sprintf("signed_curve25519:%s", kid)
 		keyMap := map[string]interface{}{
-			"key": key.String(),
+			"key": base64.RawStdEncoding.EncodeToString(key),
 		}
-
-		signature, _ = account.SignJSON(keyMap)
 
 		keyMap["signatures"] = map[string]interface{}{
 			c.UserID: map[string]interface{}{
-				ed25519KeyID: signature,
+				ed25519KeyID: base64.RawStdEncoding.EncodeToString(signJSON(keyMap)),
 			},
 		}
 
 		oneTimeKeys[keyID] = keyMap
 	}
+
 	return deviceKeys, oneTimeKeys
 }
 

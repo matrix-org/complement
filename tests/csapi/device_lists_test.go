@@ -1,8 +1,11 @@
 package csapi_tests
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
+
+	"math/rand"
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
@@ -10,7 +13,6 @@ import (
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
-	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/tidwall/gjson"
 )
@@ -19,16 +21,22 @@ import (
 //  1. `/sync`'s `device_lists.changed/left` contain the correct user IDs.
 //  2. `/keys/query` returns the correct information after device list updates.
 func TestDeviceListUpdates(t *testing.T) {
+	prng := rand.New(rand.NewSource(42))
 	// uploadNewKeys uploads a new set of keys for a given client.
 	// Returns a check function that can be passed to mustQueryKeys.
 	uploadNewKeys := func(t *testing.T, user *client.CSAPI) []match.JSON {
 		t.Helper()
-
-		account := olm.NewAccount()
-		ed25519Key, curve25519Key := account.IdentityKeys()
-
 		ed25519KeyID := fmt.Sprintf("ed25519:%s", user.DeviceID)
 		curve25519KeyID := fmt.Sprintf("curve25519:%s", user.DeviceID)
+		// generate key-like looking values
+		ed25519KeyBytes := make([]byte, 32)
+		_, err := prng.Read(ed25519KeyBytes)
+		must.NotError(t, "failed to read from prng", err)
+		ed25519Key := base64.RawStdEncoding.EncodeToString(ed25519KeyBytes)
+		curve25519KeyBytes := make([]byte, 32)
+		_, err = prng.Read(curve25519KeyBytes)
+		must.NotError(t, "failed to read from prng", err)
+		curve25519Key := base64.RawStdEncoding.EncodeToString(curve25519KeyBytes)
 
 		user.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"},
 			client.WithJSONBody(t, map[string]interface{}{
@@ -37,8 +45,8 @@ func TestDeviceListUpdates(t *testing.T) {
 					"device_id":  user.DeviceID,
 					"algorithms": []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
 					"keys": map[string]interface{}{
-						ed25519KeyID:    ed25519Key.String(),
-						curve25519KeyID: curve25519Key.String(),
+						ed25519KeyID:    ed25519Key,
+						curve25519KeyID: curve25519Key,
 					},
 				},
 			}),
@@ -49,8 +57,8 @@ func TestDeviceListUpdates(t *testing.T) {
 		curve25519Path := fmt.Sprintf("device_keys.%s.%s.keys.%s", user.UserID, user.DeviceID, curve25519KeyID)
 		return []match.JSON{
 			match.JSONKeyEqual(algorithmsPath, []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"}),
-			match.JSONKeyEqual(ed25519Path, ed25519Key.String()),
-			match.JSONKeyEqual(curve25519Path, curve25519Key.String()),
+			match.JSONKeyEqual(ed25519Path, ed25519Key),
+			match.JSONKeyEqual(curve25519Path, curve25519Key),
 		}
 	}
 
