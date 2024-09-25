@@ -36,6 +36,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 
@@ -131,7 +132,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		HS:            make(map[string]*HomeserverDeployment),
 		Config:        d.config,
 	}
-	images, err := d.Docker.ImageList(ctx, types.ImageListOptions{
+	images, err := d.Docker.ImageList(ctx, image.ListOptions{
 		Filters: label(
 			"complement_pkg="+d.config.PackageNamespace,
 			"complement_blueprint="+blueprintName,
@@ -152,7 +153,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	var mu sync.Mutex // protects mutable values like the counter and errors
 	var wg sync.WaitGroup
 	wg.Add(len(images)) // ensure we wait until all images have deployed
-	deployImg := func(img types.ImageSummary) error {
+	deployImg := func(img image.Summary) error {
 		defer wg.Done()
 		mu.Lock()
 		d.Counter++
@@ -183,7 +184,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 
 	var lastErr error
 	for _, img := range images {
-		go func(i types.ImageSummary) {
+		go func(i image.Summary) {
 			err := deployImg(i)
 			if err != nil {
 				mu.Lock()
@@ -232,7 +233,7 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName strin
 			log.Printf("Post test script result: %s", string(result))
 		}
 
-		err = d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, types.ContainerRemoveOptions{
+		err = d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, container.RemoveOptions{
 			Force: true,
 		})
 		if err != nil {
@@ -293,7 +294,7 @@ func (d *Deployer) Restart(hsDep *HomeserverDeployment) error {
 
 func (d *Deployer) StartServer(hsDep *HomeserverDeployment) error {
 	ctx := context.Background()
-	err := d.Docker.ContainerStart(ctx, hsDep.ContainerID, types.ContainerStartOptions{})
+	err := d.Docker.ContainerStart(ctx, hsDep.ContainerID, container.StartOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to start container %s: %s", hsDep.ContainerID, err)
 	}
@@ -431,7 +432,7 @@ func deployImage(
 		return stubDeployment, fmt.Errorf("failed to copy CA key to container: %s", err)
 	}
 
-	err = docker.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
+	err = docker.ContainerStart(ctx, containerID, container.StartOptions{})
 	if err != nil {
 		return stubDeployment, err
 	}
