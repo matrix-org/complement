@@ -83,8 +83,11 @@ func TestChangePassword(t *testing.T) {
 		_, sessionOptional := createSession(t, deployment, passwordClient.UserID, password2)
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"auth": map[string]interface{}{
-				"type":     "m.login.password",
-				"user":     passwordClient.UserID,
+				"type": "m.login.password",
+				"identifier": map[string]interface{}{
+					"type": "m.id.user",
+					"user": passwordClient.UserID,
+				},
 				"password": password2,
 			},
 			"new_password":   "new_optional_password",
@@ -108,8 +111,11 @@ func changePassword(t *testing.T, passwordClient *client.CSAPI, oldPassword stri
 	t.Helper()
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"auth": map[string]interface{}{
-			"type":     "m.login.password",
-			"user":     passwordClient.UserID,
+			"type": "m.login.password",
+			"identifier": map[string]interface{}{
+				"type": "m.id.user",
+				"user": passwordClient.UserID,
+			},
 			"password": oldPassword,
 		},
 		"new_password": newPassword,

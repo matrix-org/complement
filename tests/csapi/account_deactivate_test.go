@@ -111,8 +111,11 @@ func deactivateAccount(t *testing.T, authedClient *client.CSAPI, password string
 	t.Helper()
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"auth": map[string]interface{}{
-			"type":     "m.login.password",
-			"user":     authedClient.UserID,
+			"type": "m.login.password",
+			"identifier": map[string]interface{}{
+				"type": "m.id.user",
+				"user": authedClient.UserID,
+			},
 			"password": password,
 		},
 	})
