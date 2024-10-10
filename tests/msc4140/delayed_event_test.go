@@ -429,20 +429,21 @@ func TestDelayedEvents(t *testing.T) {
 		})
 	})
 
-	t.Run("delayed state events are cancelled by a more recent state event from the same user", func(t *testing.T) {
+	t.Run("delayed state is not cancelled by new state from the same user", func(t *testing.T) {
 		var res *http.Response
 
-		stateKey := "to_be_cancelled_by_same_user"
+		stateKey := "to_not_be_cancelled_by_same_user"
 
 		defer cleanupDelayedEvents(t, user)
 
 		setterKey := "setter"
+		setterExpected := "on_timeout"
 		user.MustDo(
 			t,
 			"PUT",
 			getPathForState(roomID, eventType, stateKey),
 			client.WithJSONBody(t, map[string]interface{}{
-				setterKey: "on_timeout",
+				setterKey: setterExpected,
 			}),
 			getDelayQueryParam("900"),
 		)
@@ -453,19 +454,18 @@ func TestDelayedEvents(t *testing.T) {
 			},
 		})
 
-		setterExpected := "manual"
 		user.MustDo(
 			t,
 			"PUT",
 			getPathForState(roomID, eventType, stateKey),
 			client.WithJSONBody(t, map[string]interface{}{
-				setterKey: setterExpected,
+				setterKey: "manual",
 			}),
 		)
 		res = getDelayedEvents(t, user)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONKeyArrayOfSize("delayed_events", 0),
+				match.JSONKeyArrayOfSize("delayed_events", 1),
 			},
 		})
 
@@ -478,7 +478,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 	})
 
-	t.Run("delayed state events are cancelled by a more recent state event from another user", func(t *testing.T) {
+	t.Run("delayed state is cancelled by new state from another user", func(t *testing.T) {
 		var res *http.Response
 
 		stateKey := "to_be_cancelled_by_other_user"
