@@ -61,7 +61,7 @@ Docker image format is needed because OCI format doesn't support the HEALTHCHECK
 For instance, for Dendrite:
 ```
 # build a docker image for Dendrite...
-$ git clone https://github.com/matrix-org/dendrite
+$ git clone https://github.com/element-hq/dendrite
 $ (cd dendrite && docker build -t complement-dendrite -f build/scripts/Complement.Dockerfile .)
 # ...and test it
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests/...
@@ -114,7 +114,7 @@ from the host to the container. This is set via `COMPLEMENT_HOST_MOUNTS`, on the
 For example, for Dendrite on Linux with the default location of `$GOPATH`, do a one-time setup:
 
 ```shellsession
-$ git clone https://github.com/matrix-org/dendrite ../dendrite
+$ git clone https://github.com/element-hq/dendrite ../dendrite
 $ (cd ../dendrite && docker build -t complement-dendrite-local -f build/scripts/ComplementLocal.Dockerfile .)
 $ mkdir -p ../complement-go-build-cache
 $ export COMPLEMENT_BASE_IMAGE=complement-dendrite-local
