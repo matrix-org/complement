@@ -8,9 +8,13 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/data"
+	"github.com/matrix-org/complement/runtime"
 )
 
 func TestContent(t *testing.T) {
+	// Synapse no longer allows downloads over the unauthenticated media endpoints by default
+	runtime.SkipIf(t, runtime.Synapse)
+
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
