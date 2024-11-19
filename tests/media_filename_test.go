@@ -41,6 +41,7 @@ func TestMediaFilenames(t *testing.T) {
 				var filename = filename
 
 				t.Run(fmt.Sprintf("Can download file '%s'", filename), func(t *testing.T) {
+					runtime.SkipIf(t, runtime.Synapse)
 					t.Parallel()
 
 					mxcUri := alice.UploadContent(t, data.MatrixPng, filename, "image/png")
@@ -69,6 +70,7 @@ func TestMediaFilenames(t *testing.T) {
 
 			// sytest: Can download specifying a different ASCII file name
 			t.Run("Can download specifying a different ASCII file name", func(t *testing.T) {
+				runtime.SkipIf(t, runtime.Synapse)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, asciiFileName, "image/png")
@@ -107,6 +109,7 @@ func TestMediaFilenames(t *testing.T) {
 
 			// sytest: Can download specifying a different Unicode file name
 			t.Run("Can download specifying a different Unicode file name", func(t *testing.T) {
+				runtime.SkipIf(t, runtime.Synapse)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
@@ -136,6 +139,7 @@ func TestMediaFilenames(t *testing.T) {
 
 			// sytest: Can download with Unicode file name locally
 			t.Run("Can download with Unicode file name locally", func(t *testing.T) {
+				runtime.SkipIf(t, runtime.Synapse)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
@@ -161,6 +165,7 @@ func TestMediaFilenames(t *testing.T) {
 
 			// sytest: Can download with Unicode file name over federation
 			t.Run("Can download with Unicode file name over federation", func(t *testing.T) {
+				runtime.SkipIf(t, runtime.Synapse)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
@@ -185,11 +190,11 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve safe media types as inline", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
+				if runtime.Homeserver != runtime.Conduwuit {
 					// We need to check that this security behaviour is being correctly run in
-					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
+					// conduwuit, but since this is not part of the Matrix spec we do not assume
 					// other homeservers are doing so.
-					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
+					t.Skip("Skipping test of Content-Disposition header requirements on non-conduwuit homeserver")
 				}
 				t.Parallel()
 
@@ -221,11 +226,11 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve safe media types with parameters as inline", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
+				if runtime.Homeserver != runtime.Conduwuit {
 					// We need to check that this security behaviour is being correctly run in
-					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
+					// conduwuit, but since this is not part of the Matrix spec we do not assume
 					// other homeservers are doing so.
-					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
+					t.Skip("Skipping test of Content-Disposition header requirements on non-conduwuit homeserver")
 				}
 				t.Parallel()
 
@@ -259,11 +264,11 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve unsafe media types as attachments", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
+				if runtime.Homeserver != runtime.Conduwuit {
 					// We need to check that this security behaviour is being correctly run in
-					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
+					// conduwuit, but since this is not part of the Matrix spec we do not assume
 					// other homeservers are doing so.
-					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
+					t.Skip("Skipping test of Content-Disposition header requirements on non-conduwuit homeserver")
 				}
 				t.Parallel()
 
