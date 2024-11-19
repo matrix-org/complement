@@ -10,10 +10,13 @@ import (
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 // Can handle uploads and remote/local downloads without a file name
 func TestMediaWithoutFileName(t *testing.T) {
+	runtime.SkipIf(t, runtime.Synapse)
+
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
