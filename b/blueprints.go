@@ -79,12 +79,14 @@ type Room struct {
 }
 
 type ApplicationService struct {
-	ID              string
-	HSToken         string
-	ASToken         string
-	URL             string
-	SenderLocalpart string
-	RateLimited     bool
+	ID               string
+	HSToken          string
+	ASToken          string
+	URL              string
+	SenderLocalpart  string
+	RateLimited      bool
+	SendEphemeral    bool
+	EnableEncryption bool
 }
 
 type Event struct {
