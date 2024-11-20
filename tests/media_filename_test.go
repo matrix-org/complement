@@ -41,6 +41,7 @@ func TestMediaFilenames(t *testing.T) {
 				var filename = filename
 
 				t.Run(fmt.Sprintf("Can download file '%s'", filename), func(t *testing.T) {
+					// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 					runtime.SkipIf(t, runtime.Synapse)
 					t.Parallel()
 
@@ -70,6 +71,7 @@ func TestMediaFilenames(t *testing.T) {
 
 			// sytest: Can download specifying a different ASCII file name
 			t.Run("Can download specifying a different ASCII file name", func(t *testing.T) {
+				// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 				runtime.SkipIf(t, runtime.Synapse)
 				t.Parallel()
 
@@ -109,6 +111,7 @@ func TestMediaFilenames(t *testing.T) {
 
 			// sytest: Can download specifying a different Unicode file name
 			t.Run("Can download specifying a different Unicode file name", func(t *testing.T) {
+				// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 				runtime.SkipIf(t, runtime.Synapse)
 				t.Parallel()
 
@@ -139,6 +142,7 @@ func TestMediaFilenames(t *testing.T) {
 
 			// sytest: Can download with Unicode file name locally
 			t.Run("Can download with Unicode file name locally", func(t *testing.T) {
+				// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 				runtime.SkipIf(t, runtime.Synapse)
 				t.Parallel()
 
@@ -165,6 +169,7 @@ func TestMediaFilenames(t *testing.T) {
 
 			// sytest: Can download with Unicode file name over federation
 			t.Run("Can download with Unicode file name over federation", func(t *testing.T) {
+				// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 				runtime.SkipIf(t, runtime.Synapse)
 				t.Parallel()
 
@@ -194,6 +199,7 @@ func TestMediaFilenames(t *testing.T) {
 					// We need to check that this security behaviour is being correctly run in
 					// conduwuit, but since this is not part of the Matrix spec we do not assume
 					// other homeservers are doing so.
+					// Skip Synapse because it no longer allows downloads over the unauthenticated media endpoints by default
 					t.Skip("Skipping test of Content-Disposition header requirements on non-conduwuit homeserver")
 				}
 				t.Parallel()
@@ -230,6 +236,7 @@ func TestMediaFilenames(t *testing.T) {
 					// We need to check that this security behaviour is being correctly run in
 					// conduwuit, but since this is not part of the Matrix spec we do not assume
 					// other homeservers are doing so.
+					// Skip Synapse because it no longer allows downloads over the unauthenticated media endpoints by default
 					t.Skip("Skipping test of Content-Disposition header requirements on non-conduwuit homeserver")
 				}
 				t.Parallel()
@@ -268,6 +275,7 @@ func TestMediaFilenames(t *testing.T) {
 					// We need to check that this security behaviour is being correctly run in
 					// conduwuit, but since this is not part of the Matrix spec we do not assume
 					// other homeservers are doing so.
+					// Skip Synapse because it no longer allows downloads over the unauthenticated media endpoints by default
 					t.Skip("Skipping test of Content-Disposition header requirements on non-conduwuit homeserver")
 				}
 				t.Parallel()

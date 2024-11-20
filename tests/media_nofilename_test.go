@@ -15,6 +15,7 @@ import (
 
 // Can handle uploads and remote/local downloads without a file name
 func TestMediaWithoutFileName(t *testing.T) {
+	// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 	runtime.SkipIf(t, runtime.Synapse)
 
 	deployment := complement.Deploy(t, 1)
