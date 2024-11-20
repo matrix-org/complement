@@ -10,10 +10,14 @@ import (
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 // Can handle uploads and remote/local downloads without a file name
 func TestMediaWithoutFileName(t *testing.T) {
+	// Synapse no longer allows downloads over the unauthenticated media endpoints by default
+	runtime.SkipIf(t, runtime.Synapse)
+
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
