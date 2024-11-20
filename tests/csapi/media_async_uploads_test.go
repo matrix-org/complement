@@ -62,7 +62,7 @@ func TestAsyncUpload(t *testing.T) {
 	})
 
 	t.Run("Download media", func(t *testing.T) {
-		content, contentType := alice.DownloadContent(t, mxcURI)
+		content, contentType := alice.DownloadContentAuthenticated(t, mxcURI)
 		if !bytes.Equal(data.MatrixPng, content) {
 			t.Fatalf("uploaded and downloaded content doesn't match: want %v\ngot\n%v", data.MatrixPng, content)
 		}
