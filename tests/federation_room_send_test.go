@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -9,11 +10,14 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"golang.org/x/exp/slices"
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -248,4 +252,71 @@ func TestNetworkPartitionOrdering(t *testing.T) {
 			}),
 		},
 	})
+}
+
+func TestAllowInvalidTransactionPDU(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+	)
+
+	cancel := srv.Listen()
+	defer cancel()
+
+	nexy := srv.UserID("nexy")
+
+	room := alice.MustCreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+	})
+	server_room := srv.MustJoinRoom(t, deployment, "hs1", room, nexy)
+
+
+	event := srv.MustCreateEvent(t, server_room, federation.Event{
+		Sender: nexy,
+		Type: "m.room.message",
+		Content: map[string]interface{}{"body": "hello i am nexy and i somehow broke the room into a v1 room"},
+	})
+	//event.EventID()
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Log("invalid json bwuh", err)
+		t.FailNow()
+	}
+	data, err = sjson.SetBytes(data, "event_id", event.EventID())
+
+	client := srv.FederationClient(deployment)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	resp, err := client.SendTransaction(ctx, gomatrixserverlib.Transaction{
+		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("complement-%d", time.Now().Nanosecond())),
+		Origin: spec.ServerName(srv.ServerName()),
+		Destination: "hs1",
+		PDUs: []json.RawMessage{data},
+		EDUs: nil,
+	})
+
+	if err != nil {
+		ct.Fatalf(t, "Invalid PDU in transaction made the request fail")
+	}
+
+	for eventID, e := range resp.PDUs {
+		if eventID != "$meow" && eventID != event.EventID() {
+			ct.Fatalf(t, "Server responded with bogus event ID %s", eventID)
+		} else if e.Error == "" {
+			ct.Fatalf(t, "Server accepted event sent into a V10 room using V1 format")
+		} else {
+			t.Logf("Correctly returned a 200 response including rejected event %s with error %s", eventID, e)
+		}
+	}
+
+	if len(resp.PDUs) == 0 {
+		t.Logf("INFO: Server didn't indicate an error when sending an invalid event id")
+	}
+
 }
