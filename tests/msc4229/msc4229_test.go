@@ -57,7 +57,7 @@ func TestUnsignedDeviceDataIsReturned(t *testing.T) {
 			)),
 			match.JSONKeyEqual(fmt.Sprintf(
 				"device_keys.%s.%s.unsigned", hs1user.UserID, hs1user.DeviceID,
-			), map[string]interface{}{"a": "b", "display_name": "complement"}),
+			), map[string]interface{}{"a": "b", "device_display_name": "complement"}),
 		},
 	})
 }
