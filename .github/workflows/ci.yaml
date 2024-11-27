@@ -42,9 +42,9 @@ jobs:
           - homeserver: Synapse
             repo: element-hq/synapse
             tags: synapse_blacklist
-            packages: |-
-              ./tests/msc3874
-              ./tests/msc3902
+            packages: \
+              ./tests/msc3874 \
+              ./tests/msc3902 \
               ./tests/msc4229
             env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1 COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
             timeout: 20m
