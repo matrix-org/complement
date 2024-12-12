@@ -310,7 +310,7 @@ func TestAllowInvalidTransactionPDU(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	resp, err := client.SendTransaction(ctx, gomatrixserverlib.Transaction{
-		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("complement-%d", time.Now().Nanosecond())),
+		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("complement-invalid-transaction-%d", time.Now().Nanosecond())),
 		Origin: spec.ServerName(srv.ServerName()),
 		Destination: "hs1",
 		PDUs: []json.RawMessage{data},
