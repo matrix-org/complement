@@ -273,6 +273,7 @@ func TestAllowInvalidTransactionPDU(t *testing.T) {
 
 	room := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
+		"room_version": "10",
 	})
 	server_room := srv.MustJoinRoom(t, deployment, "hs1", room, nexy)
 
@@ -282,13 +283,28 @@ func TestAllowInvalidTransactionPDU(t *testing.T) {
 		Type: "m.room.message",
 		Content: map[string]interface{}{"body": "hello i am nexy and i somehow broke the room into a v1 room"},
 	})
-	//event.EventID()
 	data, err := json.Marshal(event)
 	if err != nil {
 		t.Log("invalid json bwuh", err)
 		t.FailNow()
 	}
 	data, err = sjson.SetBytes(data, "event_id", event.EventID())
+	if err != nil {
+		t.Log("failed to add event id to json dict")
+		t.FailNow()
+	}
+
+	prev := event.PrevEventIDs()[0]
+	v1_prev_events := [][]interface{}{
+		{
+			prev,
+			map[string]interface{}{
+				"sha256": "abase64encodedsha256hashshouldbe43byteslong",
+			},
+		},
+	}
+
+	data, err = sjson.SetBytes(data, "prev_events", v1_prev_events)
 
 	client := srv.FederationClient(deployment)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -306,7 +322,7 @@ func TestAllowInvalidTransactionPDU(t *testing.T) {
 	}
 
 	for eventID, e := range resp.PDUs {
-		if eventID != "$meow" && eventID != event.EventID() {
+		if eventID != event.EventID() && eventID != event.EventID() {
 			ct.Fatalf(t, "Server responded with bogus event ID %s", eventID)
 		} else if e.Error == "" {
 			ct.Fatalf(t, "Server accepted event sent into a V10 room using V1 format")
