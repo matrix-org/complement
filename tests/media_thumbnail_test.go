@@ -36,7 +36,12 @@ func TestLocalPngThumbnail(t *testing.T) {
 
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
-	fetchAndValidateThumbnail(t, alice, uri, false)
+    t.Run("test /_matrix/media/v3 endpoint", func(t *testing.T) {
+		// Synapse no longer allows downloads over the unauthenticated media endpoints by default
+    	runtime.SkipIf(t, runtime.Synapse)
+		fetchAndValidateThumbnail(t, alice, uri, false)
+    })
+
 	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
 		runtime.SkipIf(t, runtime.Dendrite)
 		fetchAndValidateThumbnail(t, alice, uri, true)
@@ -57,7 +62,11 @@ func TestRemotePngThumbnail(t *testing.T) {
 
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
-	fetchAndValidateThumbnail(t, bob, uri, false)
+    t.Run("test /_matrix/media/v3 endpoint", func(t *testing.T) {
+		// Synapse no longer allows downloads over the unauthenticated media endpoints by default
+    	runtime.SkipIf(t, runtime.Synapse)
+		fetchAndValidateThumbnail(t, bob, uri, false)
+    })
 
 	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
 		runtime.SkipIf(t, runtime.Dendrite)
@@ -94,7 +103,7 @@ func TestFederationThumbnail(t *testing.T) {
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 	mediaOrigin, mediaId := client.SplitMxc(uri)
 
-	path := []string{"_matrix", "media", "v3", "thumbnail", mediaOrigin, mediaId}
+	path := []string{"_matrix", "client", "v1", "media", "thumbnail", mediaOrigin, mediaId}
 	res := alice.MustDo(t, "GET", path, client.WithQueries(url.Values{
 		"width":  []string{"32"},
 		"height": []string{"32"},

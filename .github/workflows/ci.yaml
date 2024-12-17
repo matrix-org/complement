@@ -47,7 +47,7 @@ jobs:
             timeout: 20m
 
           - homeserver: Dendrite
-            repo: matrix-org/dendrite
+            repo: element-hq/dendrite
             tags: dendrite_blacklist
             packages: ""
             env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1"

@@ -423,6 +423,9 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 		fmt.Sprintf("url: '%s'\\n", as.URL) +
 		fmt.Sprintf("sender_localpart: %s\\n", as.SenderLocalpart) +
 		fmt.Sprintf("rate_limited: %v\\n", as.RateLimited) +
+		fmt.Sprintf("de.sorunome.msc2409.push_ephemeral: %v\\n", as.SendEphemeral) +
+		fmt.Sprintf("push_ephemeral: %v\\n", as.SendEphemeral) +
+		fmt.Sprintf("org.matrix.msc3202: %v\\n", as.EnableEncryption) +
 		"namespaces:\\n" +
 		"  users:\\n" +
 		"    - exclusive: false\\n" +
