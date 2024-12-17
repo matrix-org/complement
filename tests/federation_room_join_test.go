@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,8 +24,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -604,4 +606,116 @@ func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
 		// Join the AS bridge user to the remote federated room (without a profile set)
 		as.MustJoinRoom(t, roomID, []string{"hs2"})
 	})
+}
+
+// Regression test for https://github.com/matrix-org/sliding-sync/issues/367
+// This test won't always be able to reproduce the precise conditions for the bug to surface,
+// so it may appear flakey.
+func TestSeesCreateEvent(t *testing.T) {
+	deployment := complement.Deploy(t, 2)
+	defer deployment.Destroy(t)
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
+		"preset": "trusted_private_chat",
+	})
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+
+	// bob is actively syncing prior to the invite
+	_, bobSince := bob.MustSync(t, client.SyncReq{
+		TimeoutMillis: "1",
+	})
+	var start *time.Time
+	var stopSendingMsgs atomic.Bool
+	var mu sync.Mutex
+	liveSync := func() {
+		seenRoom := false
+		for {
+			mu.Lock()
+			if start != nil && time.Since(*start) > time.Second {
+				break
+			}
+			mu.Unlock()
+
+			var bobSyncResponse gjson.Result
+			t.Logf("since=%s", bobSince)
+			bobSyncResponse, bobSince = bob.MustSync(t, client.SyncReq{
+				Since: bobSince,
+			})
+			room := bobSyncResponse.Get("rooms.join." + client.GjsonEscape(roomID))
+			if !room.Exists() {
+				continue
+			}
+			seenRoom = true
+			// make sure that either:
+			// 1: the create event is in `state`
+			// 2: the create event is in `timeline[0]` with nothing in `state`.
+			firstTimelineEvent := room.Get("timeline.events[0]")
+			createInStateBlock := false
+			hasStateBlock := false
+			for _, ev := range room.Get("state.events").Array() {
+				hasStateBlock = true
+				if ev.Get("type").Str == "m.room.create" {
+					createInStateBlock = true
+					break
+				}
+			}
+			// 1: the create event is in `state`
+			if createInStateBlock {
+				break
+			}
+			// 2: the create event is in `timeline[0]` with nothing in `state`.
+			if firstTimelineEvent.Get("type").Str == "m.room.create" && !hasStateBlock {
+				break
+			}
+
+			raw := json.RawMessage(bobSyncResponse.Raw)
+			var v interface{}
+			must.NotError(t, "Unmarshal", json.Unmarshal(raw, &v))
+
+			out, err := json.MarshalIndent(v, "", "    ")
+			must.NotError(t, "MarshalIndent", err)
+			t.Errorf("m.room.create event is in an invalid position in the response => %v", string(out))
+			break
+		}
+		if !seenRoom {
+			t.Errorf("failed to see room %s", roomID)
+		}
+		wg.Done()
+	}
+
+	// alice invites bob and he sees it
+	alice.InviteRoom(t, roomID, bob.UserID)
+	go liveSync()
+	go func() {
+		for i := 0; i < 20; i++ {
+			if stopSendingMsgs.Load() {
+				break
+			}
+			alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    fmt.Sprintf("Hello %d", i),
+				},
+			})
+			time.Sleep(time.Millisecond * 50)
+		}
+	}()
+	// bob accepts the invite: he should see the create event in state
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+
+	stopSendingMsgs.Store(true)
+
+	// poll for 1s longer after scrollback
+	mu.Lock()
+	now := time.Now()
+	start = &now
+	mu.Unlock()
+
+	wg.Wait()
 }
