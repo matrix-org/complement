@@ -187,6 +187,7 @@ func TestKeyClaimOrdering(t *testing.T) {
 	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"},
 		client.WithJSONBody(t, map[string]interface{}{"one_time_keys": otk1}))
 
+    // Ensure that there is a difference in timestamp between the two upload requests.
 	time.Sleep(1 * time.Second)
 
 	otk0 := map[string]interface{}{"signed_curve25519:0": oneTimeKeys["signed_curve25519:0"]}
