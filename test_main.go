@@ -16,7 +16,7 @@ var (
 
 type complementOpts struct {
 	cleanup          func()
-	customDeplyoment func(numServers int) Deployment
+	customDeployment func(numServers int) Deployment
 }
 type opt func(*complementOpts)
 
@@ -33,7 +33,7 @@ func WithCleanup(fn func()) opt {
 // WithDeployment adds a custom mechanism to deploy homeservers.
 func WithDeployment(fn func(numServers int) Deployment) opt {
 	return func(co *complementOpts) {
-		co.customDeplyoment = fn
+		co.customDeployment = fn
 	}
 }
 
@@ -52,8 +52,8 @@ func TestMain(m *testing.M, namespace string, customOpts ...opt) {
 	for _, o := range customOpts {
 		o(opts)
 	}
-	if opts.customDeplyoment != nil {
-		customDeployer = opts.customDeplyoment
+	if opts.customDeployment != nil {
+		customDeployer = opts.customDeployment
 	}
 
 	var err error
