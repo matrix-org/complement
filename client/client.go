@@ -572,10 +572,11 @@ func (c *CSAPI) MustDo(t ct.TestLike, method string, paths []string, opts ...Req
 //	})
 func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
+	escapedPaths := make([]string, len(paths))
 	for i := range paths {
-		paths[i] = url.PathEscape(paths[i])
+		escapedPaths[i] = url.PathEscape(paths[i])
 	}
-	reqURL := c.BaseURL + "/" + strings.Join(paths, "/")
+	reqURL := c.BaseURL + "/" + strings.Join(escapedPaths, "/")
 	req, err := http.NewRequest(method, reqURL, nil)
 	if err != nil {
 		ct.Fatalf(t, "CSAPI.Do failed to create http.NewRequest: %s", err)
