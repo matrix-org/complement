@@ -396,12 +396,18 @@ func (c *CSAPI) GetDefaultRoomVersion(t ct.TestLike) gomatrixserverlib.RoomVersi
 	return gomatrixserverlib.RoomVersion(defaultVersion.Str)
 }
 
+// MustUploadKeys uploads device and/or one time keys to the server, returning the current OTK counts.
+// Both device keys and one time keys are optional. Fails the test if the upload fails.
 func (c *CSAPI) MustUploadKeys(t ct.TestLike, deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) (otkCounts map[string]int) {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, WithJSONBody(t, map[string]interface{}{
-		"device_keys":   deviceKeys,
-		"one_time_keys": oneTimeKeys,
-	}))
+	reqBody := make(map[string]interface{})
+	if deviceKeys != nil {
+		reqBody["device_keys"] = deviceKeys
+	}
+	if oneTimeKeys != nil {
+		reqBody["one_time_keys"] = oneTimeKeys
+	}
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, WithJSONBody(t, reqBody))
 	bodyBytes := ParseJSON(t, res)
 	s := struct {
 		OTKCounts map[string]int `json:"one_time_key_counts"`
