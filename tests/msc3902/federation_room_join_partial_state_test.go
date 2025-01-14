@@ -3597,13 +3597,7 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 		defer removePDUHandler()
 
-		alice.MustDo(t,
-			"PUT",
-			[]string{"_matrix", "client", "v3", "profile", alice.UserID, "displayname"},
-			client.WithJSONBody(t, map[string]interface{}{
-				"displayname": "alice 2",
-			}),
-		)
+		alice.MustSetDisplayName(t, "alice 2")
 		t.Logf("Alice changed display name")
 
 		select {

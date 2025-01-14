@@ -492,6 +492,20 @@ func (c *CSAPI) MustGenerateOneTimeKeys(t ct.TestLike, otkCount uint) (deviceKey
 	return deviceKeys, oneTimeKeys
 }
 
+// MustSetDisplayName sets the global display name for this account or fails the test.
+func (c *CSAPI) MustSetDisplayName(t ct.TestLike, displayname string) {
+	c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "profile", c.UserID, "displayname"}, WithJSONBody(t, map[string]any{
+		"displayname": displayname,
+	}))
+}
+
+// MustGetDisplayName returns the global display name for this user or fails the test.
+func (c *CSAPI) MustGetDisplayName(t ct.TestLike, userID string) string {
+	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "profile", userID, "displayname"})
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "displayname")
+}
+
 // WithRawBody sets the HTTP request body to `body`
 func WithRawBody(body []byte) RequestOpt {
 	return func(req *http.Request) {
