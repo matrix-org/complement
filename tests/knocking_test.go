@@ -117,11 +117,11 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("Knocking on a room with join rule 'knock' should succeed", func(t *testing.T) {
-		MustKnockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []string{"hs1"})
+		mustKnockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []string{"hs1"})
 	})
 
 	t.Run("A user that has already knocked is allowed to knock again on the same room", func(t *testing.T) {
-		MustKnockOnRoomSynced(t, knockingUser, roomID, "I really like knock knock jokes", []string{"hs1"})
+		mustKnockOnRoomSynced(t, knockingUser, roomID, "I really like knock knock jokes", []string{"hs1"})
 	})
 
 	t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
@@ -183,7 +183,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			})
 
 			// Knock again to return us to the knocked state
-			MustKnockOnRoomSynced(t, knockingUser, roomID, "Let me in... again?", []string{"hs1"})
+			mustKnockOnRoomSynced(t, knockingUser, roomID, "Let me in... again?", []string{"hs1"})
 		})
 	}
 
@@ -211,7 +211,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		}))
 
 		// Knock again
-		MustKnockOnRoomSynced(t, knockingUser, roomID, "Pleeease let me in?", []string{"hs1"})
+		mustKnockOnRoomSynced(t, knockingUser, roomID, "Pleeease let me in?", []string{"hs1"})
 	})
 
 	t.Run("A user can knock on a room without a reason", func(t *testing.T) {
@@ -227,7 +227,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		)
 
 		// Knock again, this time without a reason
-		MustKnockOnRoomSynced(t, knockingUser, roomID, "", []string{"hs1"})
+		mustKnockOnRoomSynced(t, knockingUser, roomID, "", []string{"hs1"})
 	})
 
 	t.Run("A user in the room can accept a knock", func(t *testing.T) {
@@ -279,7 +279,7 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 }
 
-func SyncKnockedOn(userID, roomID string) client.SyncCheckOpt {
+func syncKnockedOn(userID, roomID string) client.SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		// two forms which depend on what the client user is:
 		// - passively viewing a membership for a room you're joined in
@@ -301,14 +301,14 @@ func SyncKnockedOn(userID, roomID string) client.SyncCheckOpt {
 	}
 }
 
-// MustKnockOnRoomSynced will knock on a given room on the behalf of a user, and block until the knock has persisted.
+// mustKnockOnRoomSynced will knock on a given room on the behalf of a user, and block until the knock has persisted.
 // serverNames should be populated if knocking on a room that the user's homeserver isn't currently a part of.
 // Fails the test if the knock response does not return a 200 status code.
-func MustKnockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []string) {
+func mustKnockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []string) {
 	knockOnRoomWithStatus(t, c, roomID, reason, serverNames, 200)
 
 	// The knock should have succeeded. Block until we see the knock appear down sync
-	c.MustSyncUntil(t, client.SyncReq{}, SyncKnockedOn(c.UserID, roomID))
+	c.MustSyncUntil(t, client.SyncReq{}, syncKnockedOn(c.UserID, roomID))
 }
 
 // knockOnRoomWithStatus will knock on a given room on the behalf of a user.
