@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,8 +18,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -465,4 +466,135 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			}
 		})
 	}
+}
+
+// This test verifies that an event with a too large state_key can be used as a prev_event
+// it is returned by a call to /get_missing_events and should pass event size checks.
+// TODO: Do the same checks for type, user_id and sender
+func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		// Handle any transactions that the homeserver may send when connecting to another homeserver (such as presence)
+		federation.HandleTransactionRequests(nil, nil),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+
+	// register a handler for /get_missing_events, via a shim so that we can
+	// behave differently as the test progresses.
+	var onGetMissingEvents func(w http.ResponseWriter, req *http.Request)
+	srv.Mux().HandleFunc("/_matrix/federation/v1/get_missing_events/{roomID}", func(w http.ResponseWriter, req *http.Request) {
+		onGetMissingEvents(w, req)
+	}).Methods("POST")
+
+	ver := alice.GetDefaultRoomVersion(t)
+	charlie := srv.UserID("charlie")
+	room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
+	roomAlias := srv.MakeAliasMapping("flibble", room.RoomID)
+	// join the room
+	alice.JoinRoom(t, roomAlias, nil)
+
+	latestEvent := room.Timeline[len(room.Timeline)-1]
+
+	// Sign this bad event which has a too large stateKey
+	// Synapse always enforced 255 codepoints, but accepts events > 255 bytes.
+	// Dendrite would fail to parse this event because it enforced 255 bytes, breaking older rooms.
+	stateKey := strings.Repeat("💥", 70) // 280 bytes, 70 codepoints
+	badEvent := b.Event{
+		Type:     "my.room.breaker",
+		StateKey: &stateKey,
+		Sender:   charlie,
+		Content:  map[string]interface{}{},
+	}
+	content, err := json.Marshal(badEvent.Content)
+	if err != nil {
+		t.Fatalf("failed to marshal badEvent content %+v", badEvent.Content)
+	}
+	roomVersion := gomatrixserverlib.MustGetRoomVersion(ver)
+	pe := &gomatrixserverlib.ProtoEvent{
+		SenderID:   badEvent.Sender,
+		Depth:      int64(room.Depth + 1), // depth starts at 1
+		Type:       badEvent.Type,
+		StateKey:   badEvent.StateKey,
+		Content:    content,
+		RoomID:     room.RoomID,
+		PrevEvents: room.ForwardExtremities,
+	}
+	eb := roomVersion.NewEventBuilderFromProtoEvent(pe)
+	stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(pe)
+	if err != nil {
+		t.Fatalf("failed to work out auth_events : %s", err)
+	}
+	eb.AuthEvents = room.AuthEvents(stateNeeded)
+
+	signedBadEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
+	switch e := err.(type) {
+	case nil:
+	case gomatrixserverlib.EventValidationError:
+		// ignore for now
+		t.Logf("EventValidationError: %v", e)
+	default:
+		t.Fatalf("failed to sign event: %s: %s", err, signedBadEvent.JSON())
+	}
+	room.AddEvent(signedBadEvent)
+
+	// send the first "good" event, referencing the broken event as a prev_event
+	sentEvent := srv.MustCreateEvent(t, room, federation.Event{
+		Type:   "m.room.message",
+		Sender: charlie,
+		Content: map[string]interface{}{
+			"body": "Message 2",
+		},
+	})
+	room.AddEvent(sentEvent)
+
+	waiter := helpers.NewWaiter()
+	onGetMissingEvents = func(w http.ResponseWriter, req *http.Request) {
+		defer waiter.Finish()
+		must.MatchRequest(t, req, match.HTTPRequest{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("earliest_events", []interface{}{latestEvent.EventID()}),
+				match.JSONKeyEqual("latest_events", []interface{}{sentEvent.EventID()}),
+			},
+		})
+		// return the bad event, which should result in the transaction failing.
+		w.WriteHeader(200)
+		res := struct {
+			Events []json.RawMessage `json:"events"`
+		}{
+			Events: []json.RawMessage{signedBadEvent.JSON()},
+		}
+		var responseBytes []byte
+		responseBytes, err = json.Marshal(&res)
+		must.NotError(t, "failed to marshal response", err)
+		w.Write(responseBytes)
+	}
+
+	fedClient := srv.FederationClient(deployment)
+	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
+		TransactionID: "wut",
+		Origin:        spec.ServerName(srv.ServerName()),
+		Destination:   spec.ServerName("hs1"),
+		PDUs: []json.RawMessage{
+			sentEvent.JSON(),
+		},
+	})
+	waiter.Wait(t, 5*time.Second)
+	must.NotError(t, "SendTransaction errored", err)
+	if len(resp.PDUs) != 1 {
+		t.Fatalf("got %d errors, want 1", len(resp.PDUs))
+	}
+	_, ok := resp.PDUs[sentEvent.EventID()]
+	if !ok {
+		t.Fatalf("wrong PDU returned from send transaction, got %v want %s", resp.PDUs, sentEvent.EventID())
+	}
+
+	// Alice should receive the sent event, even though the "bad" event has a too large state key
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(room.RoomID, sentEvent.EventID()))
 }
