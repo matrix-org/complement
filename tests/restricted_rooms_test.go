@@ -64,7 +64,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 
 	t.Run("Join should succeed when joined to allowed room", func(t *testing.T) {
 		// Join the allowed room.
-		bob.JoinRoom(t, allowed_room, []string{"hs1"})
+		bob.MustJoinRoom(t, allowed_room, []string{"hs1"})
 
 		// Confirm that we joined the allowed room by changing displayname and
 		// waiting for confirmation in the /sync response. (This is an attempt
@@ -86,7 +86,7 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 		)
 
 		// We should now be able to join the restricted room.
-		bob.JoinRoom(t, room, []string{"hs1"})
+		bob.MustJoinRoom(t, room, []string{"hs1"})
 
 		// Joining the same room again should work fine (e.g. to change your display name).
 		bob.SendEventSynced(
@@ -99,8 +99,8 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 				Content: map[string]interface{}{
 					"membership":  "join",
 					"displayname": "Bobby",
-					// This should be ignored since this is a join -> join transition.
-					"join_authorised_via_users_server": "unused",
+					// This should be ignored by the server since this is a join -> join transition
+					"join_authorised_via_users_server": "@unused:unused.local",
 				},
 			},
 		)
@@ -114,6 +114,15 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 		// Wait until Alice sees Bob leave the allowed room. This ensures that Alice's HS
 		// has processed the leave before Bob tries rejoining, so that it rejects his
 		// attempt to join the room.
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
+			room, func(ev gjson.Result) bool {
+				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
+					return false
+				}
+
+				return ev.Get("content").Get("membership").Str == "leave"
+			}))
+
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 			allowed_room, func(ev gjson.Result) bool {
 				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
@@ -130,11 +139,11 @@ func checkRestrictedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI, a
 	t.Run("Join should succeed when invited", func(t *testing.T) {
 		// Invite the user and joining should work.
 		alice.MustInviteRoom(t, room, bob.UserID)
-		bob.JoinRoom(t, room, []string{"hs1"})
+		bob.MustJoinRoom(t, room, []string{"hs1"})
 
 		// Leave the room again, and join the allowed room.
 		bob.MustLeaveRoom(t, room)
-		bob.JoinRoom(t, allowed_room, []string{"hs1"})
+		bob.MustJoinRoom(t, allowed_room, []string{"hs1"})
 	})
 
 	t.Run("Join should fail with mangled join rules", func(t *testing.T) {
