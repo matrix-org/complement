@@ -18,8 +18,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -472,10 +472,10 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 // it is returned by a call to /get_missing_events and should pass event size checks.
 // TODO: Do the same checks for type, user_id and sender
 func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
@@ -516,8 +516,9 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal badEvent content %+v", badEvent.Content)
 	}
-	eb := gomatrixserverlib.EventBuilder{
-		Sender:     badEvent.Sender,
+	roomVersion := gomatrixserverlib.MustGetRoomVersion(ver)
+	pe := &gomatrixserverlib.ProtoEvent{
+		SenderID:   badEvent.Sender,
 		Depth:      int64(room.Depth + 1), // depth starts at 1
 		Type:       badEvent.Type,
 		StateKey:   badEvent.StateKey,
@@ -525,13 +526,14 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 		RoomID:     room.RoomID,
 		PrevEvents: room.ForwardExtremities,
 	}
-	stateNeeded, err := gomatrixserverlib.StateNeededForEventBuilder(&eb)
+	eb := roomVersion.NewEventBuilderFromProtoEvent(pe)
+	stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(pe)
 	if err != nil {
 		t.Fatalf("failed to work out auth_events : %s", err)
 	}
 	eb.AuthEvents = room.AuthEvents(stateNeeded)
 
-	signedBadEvent, err := eb.Build(time.Now(), gomatrixserverlib.ServerName(srv.ServerName()), srv.KeyID, srv.Priv, ver)
+	signedBadEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
 	switch e := err.(type) {
 	case nil:
 	case gomatrixserverlib.EventValidationError:
@@ -543,7 +545,7 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 	room.AddEvent(signedBadEvent)
 
 	// send the first "good" event, referencing the broken event as a prev_event
-	sentEvent := srv.MustCreateEvent(t, room, b.Event{
+	sentEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
 		Sender: charlie,
 		Content: map[string]interface{}{
@@ -552,7 +554,7 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 	})
 	room.AddEvent(sentEvent)
 
-	waiter := NewWaiter()
+	waiter := helpers.NewWaiter()
 	onGetMissingEvents = func(w http.ResponseWriter, req *http.Request) {
 		defer waiter.Finish()
 		must.MatchRequest(t, req, match.HTTPRequest{
@@ -564,9 +566,9 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 		// return the bad event, which should result in the transaction failing.
 		w.WriteHeader(200)
 		res := struct {
-			Events []*gomatrixserverlib.Event `json:"events"`
+			Events []json.RawMessage `json:"events"`
 		}{
-			Events: []*gomatrixserverlib.Event{signedBadEvent},
+			Events: []json.RawMessage{signedBadEvent.JSON()},
 		}
 		var responseBytes []byte
 		responseBytes, err = json.Marshal(&res)
@@ -577,8 +579,8 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 	fedClient := srv.FederationClient(deployment)
 	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "wut",
-		Origin:        gomatrixserverlib.ServerName(srv.ServerName()),
-		Destination:   gomatrixserverlib.ServerName("hs1"),
+		Origin:        spec.ServerName(srv.ServerName()),
+		Destination:   spec.ServerName("hs1"),
 		PDUs: []json.RawMessage{
 			sentEvent.JSON(),
 		},
