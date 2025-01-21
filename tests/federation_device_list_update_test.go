@@ -142,10 +142,7 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 				Password: "this is alices password",
 			})
 			deviceKeys, oneTimeKeys := alice2.MustGenerateOneTimeKeys(t, 1)
-			alice2.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, client.WithJSONBody(t, map[string]interface{}{
-				"device_keys":   deviceKeys,
-				"one_time_keys": oneTimeKeys,
-			}))
+			alice2.MustUploadKeys(t, deviceKeys, oneTimeKeys)
 
 			// now federation comes back online
 			tc.makeReachable(t)

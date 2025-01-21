@@ -61,14 +61,7 @@ func setupUsers(t *testing.T) (*client.CSAPI, *client.CSAPI, *client.CSAPI, func
 	// Alice sets her profile displayname. This ensures that her
 	// public name, private name and userid localpart are all
 	// distinguishable, even case-insensitively.
-	alice.MustDo(
-		t,
-		"PUT",
-		[]string{"_matrix", "client", "v3", "profile", alice.UserID, "displayname"},
-		client.WithJSONBody(t, map[string]interface{}{
-			"displayname": alicePublicName,
-		}),
-	)
+	alice.MustSetDisplayName(t, alicePublicName)
 
 	// Alice creates a public room (so when Eve searches, she can see that Alice exists)
 	alice.MustCreateRoom(t, map[string]interface{}{"visibility": "public"})

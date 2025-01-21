@@ -10,9 +10,8 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 
-	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -61,12 +60,8 @@ func TestOutboundFederationProfile(t *testing.T) {
 
 		// query the display name which should do an outbound federation hit
 		unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
-		res := unauthedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "profile", remoteUserID, "displayname"})
-		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONKeyEqual("displayname", remoteDisplayName),
-			},
-		})
+		gotDisplayName := unauthedClient.MustGetDisplayName(t, remoteUserID)
+		must.Equal(t, gotDisplayName, remoteDisplayName, "display name mismatch")
 	})
 }
 
@@ -107,14 +102,7 @@ func TestInboundFederationProfile(t *testing.T) {
 	t.Run("Inbound federation can query profile data", func(t *testing.T) {
 		const alicePublicName = "Alice Cooper"
 
-		alice.MustDo(
-			t,
-			"PUT",
-			[]string{"_matrix", "client", "v3", "profile", alice.UserID, "displayname"},
-			client.WithJSONBody(t, map[string]interface{}{
-				"displayname": alicePublicName,
-			}),
-		)
+		alice.MustSetDisplayName(t, alicePublicName)
 
 		fedReq := fclient.NewFederationRequest(
 			"GET",

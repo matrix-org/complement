@@ -184,15 +184,12 @@ func TestKeyClaimOrdering(t *testing.T) {
 
 	// first upload key 1, sleep a bit, then upload key 0.
 	otk1 := map[string]interface{}{"signed_curve25519:1": oneTimeKeys["signed_curve25519:1"]}
-	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"},
-		client.WithJSONBody(t, map[string]interface{}{"one_time_keys": otk1}))
-
-    // Ensure that there is a difference in timestamp between the two upload requests.
+	alice.MustUploadKeys(t, nil, otk1)
+	// Ensure that there is a difference in timestamp between the two upload requests.
 	time.Sleep(1 * time.Second)
 
 	otk0 := map[string]interface{}{"signed_curve25519:0": oneTimeKeys["signed_curve25519:0"]}
-	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"},
-		client.WithJSONBody(t, map[string]interface{}{"one_time_keys": otk0}))
+	alice.MustUploadKeys(t, nil, otk0)
 
 	// Now claim the keys, and check they come back in the right order
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
