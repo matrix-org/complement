@@ -1,6 +1,3 @@
-//go:build msc3391
-// +build msc3391
-
 // This file contains tests for deleting account data as
 // defined by MSC3391, which you can read here:
 // https://github.com/matrix-org/matrix-doc/pull/3391
@@ -11,8 +8,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 
@@ -24,12 +22,11 @@ const testAccountDataType = "org.example.test"
 var testAccountDataContent = map[string]interface{}{"test_data": 1}
 
 func TestRemovingAccountData(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	// Create a user to manipulate the account data of
-	aliceUserID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", aliceUserID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// And create a room with that user where we can store some room account data
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})

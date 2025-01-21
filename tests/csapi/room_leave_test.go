@@ -7,19 +7,24 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestLeftRoomFixture(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.RegisterUser(t, "hs1", "charlie", "sufficiently_long_password_charlie", false)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "charlie",
+		Password:        "sufficiently_long_password_charlie",
+	})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"initial_state": []map[string]interface{}{
@@ -161,13 +166,13 @@ func TestLeftRoomFixture(t *testing.T) {
 					[]interface{}{
 						"m.room.member|" + alice.UserID + "|join",
 						"m.room.member|" + bob.UserID + "|leave",
-					}, func(result gjson.Result) interface{} {
+					}, match.CheckOffMapper(func(result gjson.Result) interface{} {
 						return strings.Join([]string{
 							result.Map()["type"].Str,
 							result.Map()["state_key"].Str,
 							result.Get("content.membership").Str,
 						}, "|")
-					}, nil),
+					})),
 			},
 		})
 	})
@@ -186,13 +191,13 @@ func TestLeftRoomFixture(t *testing.T) {
 					"m.room.message|" + beforeMessageOne + "|",
 					"m.room.message|" + beforeMessageTwo + "|",
 					"m.room.member||" + bob.UserID,
-				}, func(result gjson.Result) interface{} {
+				}, match.CheckOffMapper(func(result gjson.Result) interface{} {
 					return strings.Join([]string{
 						result.Map()["type"].Str,
 						result.Get("content.body").Str,
 						result.Map()["state_key"].Str,
 					}, "|")
-				}, nil),
+				})),
 			},
 		})
 	})

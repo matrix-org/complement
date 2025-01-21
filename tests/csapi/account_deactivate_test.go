@@ -6,18 +6,21 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestDeactivateAccount(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	password := "superuser"
-	authedClient := deployment.RegisterUser(t, "hs1", "test_deactivate_user", password, false)
-	unauthedClient := deployment.Client(t, "hs1", "")
+	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Password: password,
+	})
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 
 	// Ensure that the first step, in which the client queries the server's user-interactive auth flows, returns
 	// at least one auth flow involving a password.
@@ -108,8 +111,11 @@ func deactivateAccount(t *testing.T, authedClient *client.CSAPI, password string
 	t.Helper()
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"auth": map[string]interface{}{
-			"type":     "m.login.password",
-			"user":     authedClient.UserID,
+			"type": "m.login.password",
+			"identifier": map[string]interface{}{
+				"type": "m.id.user",
+				"user": authedClient.UserID,
+			},
 			"password": password,
 		},
 	})

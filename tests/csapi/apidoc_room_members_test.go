@@ -5,17 +5,19 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestRoomMembers(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: POST /rooms/:room_id/join can join a room
 		t.Run("POST /rooms/:room_id/join can join a room", func(t *testing.T) {

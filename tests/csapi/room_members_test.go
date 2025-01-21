@@ -7,8 +7,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -20,11 +22,11 @@ func typeToStateKeyMapper(result gjson.Result) interface{} {
 
 // sytest: Can get rooms/{roomId}/members
 func TestGetRoomMembers(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -50,7 +52,7 @@ func TestGetRoomMembers(t *testing.T) {
 				[]interface{}{
 					"m.room.member|" + alice.UserID,
 					"m.room.member|" + bob.UserID,
-				}, typeToStateKeyMapper, nil),
+				}, match.CheckOffMapper(typeToStateKeyMapper)),
 		},
 		StatusCode: 200,
 	})
@@ -59,11 +61,11 @@ func TestGetRoomMembers(t *testing.T) {
 // Utilize ?at= to get room members at a point in sync.
 // sytest: Can get rooms/{roomId}/members at a given point
 func TestGetRoomMembersAtPoint(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -109,7 +111,7 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 			match.JSONCheckOff("chunk",
 				[]interface{}{
 					"m.room.member|" + alice.UserID,
-				}, typeToStateKeyMapper, nil),
+				}, match.CheckOffMapper(typeToStateKeyMapper)),
 		},
 
 		StatusCode: 200,
@@ -119,11 +121,11 @@ func TestGetRoomMembersAtPoint(t *testing.T) {
 // sytest: Can filter rooms/{roomId}/members
 func TestGetFilteredRoomMembers(t *testing.T) {
 
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -156,7 +158,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 				match.JSONCheckOff("chunk",
 					[]interface{}{
 						"m.room.member|" + alice.UserID,
-					}, typeToStateKeyMapper, nil),
+					}, match.CheckOffMapper(typeToStateKeyMapper)),
 			},
 			StatusCode: 200,
 		})
@@ -181,7 +183,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 				match.JSONCheckOff("chunk",
 					[]interface{}{
 						"m.room.member|" + bob.UserID,
-					}, typeToStateKeyMapper, nil),
+					}, match.CheckOffMapper(typeToStateKeyMapper)),
 			},
 			StatusCode: 200,
 		})
@@ -206,7 +208,7 @@ func TestGetFilteredRoomMembers(t *testing.T) {
 				match.JSONCheckOff("chunk",
 					[]interface{}{
 						"m.room.member|" + alice.UserID,
-					}, typeToStateKeyMapper, nil),
+					}, match.CheckOffMapper(typeToStateKeyMapper)),
 			},
 			StatusCode: 200,
 		})

@@ -12,8 +12,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
-	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/docker"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -27,12 +26,12 @@ import (
 // https://matrix.org/docs/spec/server_server/latest#get-matrix-key-v2-server-keyid
 // sytest: Federation key API allows unsigned requests for keys
 func TestInboundFederationKeys(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	fedClient := &http.Client{
 		Timeout:   10 * time.Second,
-		Transport: &docker.RoundTripper{Deployment: deployment},
+		Transport: deployment.RoundTripper(),
 	}
 
 	res, err := fedClient.Get("https://hs1/_matrix/key/v2/server")

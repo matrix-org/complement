@@ -6,8 +6,9 @@ package csapi_tests
 import (
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 
@@ -15,11 +16,13 @@ import (
 )
 
 func TestChangePasswordPushers(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	password1 := "superuser"
 	password2 := "my_new_password"
-	passwordClient := deployment.RegisterUser(t, "hs1", "test_change_password_pusher_user", password1, false)
+	passwordClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Password: password1,
+	})
 
 	// sytest: Pushers created with a different access token are deleted on password change
 	t.Run("Pushers created with a different access token are deleted on password change", func(t *testing.T) {

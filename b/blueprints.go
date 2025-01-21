@@ -32,7 +32,6 @@ var KnownBlueprints = map[string]*Blueprint{
 	BlueprintOneToOneRoom.Name:                &BlueprintOneToOneRoom,
 	BlueprintPerfManyMessages.Name:            &BlueprintPerfManyMessages,
 	BlueprintPerfManyRooms.Name:               &BlueprintPerfManyRooms,
-	BlueprintPerfE2EERoom.Name:                &BlueprintPerfE2EERoom,
 }
 
 // Blueprint represents an entire deployment to make.
@@ -64,10 +63,6 @@ type User struct {
 	AvatarURL   string
 	AccountData []AccountData
 	DeviceID    *string
-	// Enable end-to end encryption for this user and upload the given
-	// amount of one-time keys. This requires the DeviceId to be set as
-	// well.
-	OneTimeKeys uint
 }
 
 type AccountData struct {
@@ -84,12 +79,14 @@ type Room struct {
 }
 
 type ApplicationService struct {
-	ID              string
-	HSToken         string
-	ASToken         string
-	URL             string
-	SenderLocalpart string
-	RateLimited     bool
+	ID               string
+	HSToken          string
+	ASToken          string
+	URL              string
+	SenderLocalpart  string
+	RateLimited      bool
+	SendEphemeral    bool
+	EnableEncryption bool
 }
 
 type Event struct {

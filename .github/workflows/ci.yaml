@@ -16,9 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3 # Checkout complement
       - uses: actions/setup-go@v4
-      - name: "Install Complement Dependencies"
-        run: |
-          sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
+        with:
+          go-version-file: go.mod
       - name: "Run internal Complement tests"
         run: |
           go test ./internal/...
@@ -41,26 +40,32 @@ jobs:
       matrix:
         include:
           - homeserver: Synapse
-            tags: synapse_blacklist msc3083 msc3787 msc3874 faster_joins
-            env: "COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
+            repo: element-hq/synapse
+            tags: synapse_blacklist
+            packages: ./tests/msc3874 ./tests/msc3902
+            env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1 COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
             timeout: 20m
 
           - homeserver: Dendrite
+            repo: element-hq/dendrite
             tags: dendrite_blacklist
-            env: ""
+            packages: ""
+            env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1"
             timeout: 10m
 
     steps:
       - uses: actions/checkout@v3 # Checkout complement
 
       - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+
       # Similar steps as dockerfiles/ComplementCIBuildkite.Dockerfile but on the host. We need
       # to do this so we can _be_ the host when running Complement so we can snaffle all the ports. If
       # we run Complement _in_ Docker then we can't -p all high numbered ports which then breaks federation
       # servers which listen on random high numbered ports.
       - name: "Install Complement Dependencies"
         run: |
-          sudo apt-get update && sudo apt-get install -y libolm3 libolm-dev
           go install -v github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
           mkdir .gotestfmt/github -p
           cp .ci/complement_package.gotpl .gotestfmt/github/package.gotpl
@@ -88,7 +93,7 @@ jobs:
                 continue
                 ;;
             esac
-            (wget -O - "https://github.com/matrix-org/${{ matrix.homeserver }}/archive/$BRANCH_NAME.tar.gz" | tar -xz --strip-components=1 -C homeserver) && break
+            (wget -O - "https://github.com/${{ matrix.repo }}/archive/$BRANCH_NAME.tar.gz" | tar -xz --strip-components=1 -C homeserver) && break
           done
 
       # Build homeserver image
@@ -113,7 +118,7 @@ jobs:
 
       - run: |
           set -o pipefail &&
-          ${{ matrix.env }} go test -v -json -tags "${{ matrix.tags }}" -timeout "${{ matrix.timeout }}" ./tests/... | .ci/scripts/gotestfmt
+          ${{ matrix.env }} go test -v -json -tags "${{ matrix.tags }}" -timeout "${{ matrix.timeout }}" ./tests ./tests/csapi ${{ matrix.packages }} | .ci/scripts/gotestfmt
         shell: bash # required for pipefail to be A Thing. pipefail is required to stop gotestfmt swallowing non-zero exit codes
         name: Run Complement Tests
         env:

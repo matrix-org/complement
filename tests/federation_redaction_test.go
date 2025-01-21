@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/helpers"
-	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
@@ -16,10 +16,10 @@ import (
 func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
 
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	waiter := helpers.NewWaiter()
 	wantEventType := "m.room.redaction"

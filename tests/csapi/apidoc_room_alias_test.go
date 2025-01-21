@@ -7,8 +7,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/should"
@@ -59,10 +61,10 @@ func mustSetCanonicalAlias(t *testing.T, c *client.CSAPI, roomID string, roomAli
 }
 
 func TestRoomAlias(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: PUT /directory/room/:room_alias creates alias
@@ -185,10 +187,10 @@ func TestRoomAlias(t *testing.T) {
 }
 
 func TestRoomDeleteAlias(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: Alias creators can delete alias with no ops
@@ -456,9 +458,9 @@ func TestRoomDeleteAlias(t *testing.T) {
 }
 
 func TestRoomCanonicalAlias(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	t.Run("Parallel", func(t *testing.T) {
 

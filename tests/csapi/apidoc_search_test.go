@@ -8,8 +8,10 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -17,10 +19,10 @@ import (
 // Note: In contrast to Sytest, we define a filter.rooms on each search request, this is to mimic
 // creating a new user and new room per test. This also allows us to run in parallel.
 func TestSearch(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Can search for an event by body
@@ -254,9 +256,9 @@ func TestSearch(t *testing.T) {
 					match.JSONKeyArrayOfSize(sce+".results", 2),
 
 					// the results can be in either order: check that both are there and that the content is as expected
-					match.JSONCheckOff(sce+".results", []interface{}{eventBeforeUpgrade, eventAfterUpgrade}, func(res gjson.Result) interface{} {
+					match.JSONCheckOff(sce+".results", []interface{}{eventBeforeUpgrade, eventAfterUpgrade}, match.CheckOffMapper(func(res gjson.Result) interface{} {
 						return res.Get("result.event_id").Str
-					}, func(eventID interface{}, result gjson.Result) error {
+					}), match.CheckOffForEach(func(eventID interface{}, result gjson.Result) error {
 						matchers := []match.JSON{
 							match.JSONKeyEqual("result.type", "m.room.message"),
 							match.JSONKeyEqual("result.content.body", expectedEvents[eventID.(string)]),
@@ -267,7 +269,7 @@ func TestSearch(t *testing.T) {
 							}
 						}
 						return nil
-					}),
+					})),
 				},
 			})
 		})

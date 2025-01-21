@@ -13,10 +13,12 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib"
 )
 
 // TODO:
@@ -34,9 +36,9 @@ import (
 // Can register using an email address
 
 func TestRegistration(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	unauthedClient := deployment.Client(t, "hs1", "")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: GET /register yields a set of flows
 		// The name in Sytest is different, the test is actually doing a POST request.
@@ -180,7 +182,10 @@ func TestRegistration(t *testing.T) {
 			for x := range testChars {
 				localpart := fmt.Sprintf("chrtestuser%s", string(testChars[x]))
 				t.Run(string(testChars[x]), func(t *testing.T) {
-					deployment.RegisterUser(t, "hs1", localpart, "sUp3rs3kr1t", false)
+					deployment.Register(t, "hs1", helpers.RegistrationOpts{
+						LocalpartSuffix: localpart,
+						Password:        "sUp3rs3kr1t",
+					})
 				})
 			}
 		})
@@ -274,9 +279,11 @@ func TestRegistration(t *testing.T) {
 			t.Parallel()
 			testUserName := "username_not_available"
 			// Don't need the return value here, just need a user to be registered to test against
-			_ = deployment.NewUser(t, testUserName, "hs1")
+			inUseClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: testUserName})
+			localpart, _, err := gomatrixserverlib.SplitID('@', inUseClient.UserID)
+			must.NotError(t, "failed to get localpart from user ID", err)
 			res := unauthedClient.Do(t, "GET", []string{"_matrix", "client", "v3", "register", "available"}, client.WithQueries(url.Values{
-				"username": []string{testUserName},
+				"username": []string{localpart},
 			}))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,

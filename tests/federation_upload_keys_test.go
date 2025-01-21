@@ -8,21 +8,28 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestFederationKeyUploadQuery(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+
+	// for device lists to be shared between alice and bob they must share a room
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
 
 	// Do an initial sync so that we can see the changes come down sync.
-	_, nextBatchBeforeKeyUpload := bob.MustSync(t, client.SyncReq{})
+	// We wait until we see the newly joined room as that can cause alice to appear in device_lists
+	// which we want to ignore for now.
+	nextBatchBeforeKeyUpload := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	deviceKeys, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 1)
 	// Upload keys

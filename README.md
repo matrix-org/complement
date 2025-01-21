@@ -5,9 +5,11 @@
 
 Complement is a black box integration testing framework for Matrix homeservers.
 
+See also [Complement Crypto](https://github.com/matrix-org/complement-crypto) for E2EE specific testing.
+
 ## Running
 
-You need to have Go and Docker >= 20.10 installed, as well as `libolm3` and `libolm-dev`. Then:
+You need to have Go and Docker installed. Complement uses Docker API version 1.45, so your `docker version` must support that. Then:
 
 ```
 $ COMPLEMENT_BASE_IMAGE=some-matrix/homeserver-impl go test -v ./tests/...
@@ -21,23 +23,6 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -timeout 30s -run '^(
 If you need to pass environment variables to the image under test, you can:
 1. define a pass-through prefix with e.g. `COMPLEMENT_SHARE_ENV_PREFIX=PASS_`; then
 2. prefix the desired environment variables with that prefix; e.g. `PASS_SYNAPSE_COMPLEMENT_USE_WORKERS=true`.
-
-### Dependencies
-
-Complement supports encryption via `libolm`. You can install `libolm3` on Debian using something like:
-```
-echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/complement.list && apt-get update && apt-get install -y libolm3 libolm-dev/buster-backports
-```
-or on Mac:
-```
-brew install libolm
-```
-If you are on an Apple Silicon Mac then you'll need to set these environment variables too so Go can find `libolm`:
-```
-export LIBRARY_PATH=/opt/homebrew/lib
-export CPATH=/opt/homebrew/include
-export PATH=/opt/homebrew/bin:$PATH
-```
 
 ### Potential conflict with firewall software
 
@@ -63,6 +48,12 @@ To do so you should:
 - `systemctl --user start podman.service` to start the rootless API daemon (can also be enabled).
 - `DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock BUILDAH_FORMAT=docker COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT=host.containers.internal ...`
 
+If all the networking tests don't seem to pass, it might be because the default rootless network command `pasta` doesn't work in recent versions of Podman (see [this issue](https://github.com/containers/podman/issues/22653)). If that happens to you, consider changing it in Podman's configuration file located at `/etc/containers/containers.conf`:
+
+```
+default_rootless_network_cmd = "slirp4netns"
+```
+
 Docker image format is needed because OCI format doesn't support the HEALTHCHECK directive unfortunately.
 
 ### Running against Dendrite
@@ -70,7 +61,7 @@ Docker image format is needed because OCI format doesn't support the HEALTHCHECK
 For instance, for Dendrite:
 ```
 # build a docker image for Dendrite...
-$ git clone https://github.com/matrix-org/dendrite
+$ git clone https://github.com/element-hq/dendrite
 $ (cd dendrite && docker build -t complement-dendrite -f build/scripts/Complement.Dockerfile .)
 # ...and test it
 $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests/...
@@ -78,11 +69,11 @@ $ COMPLEMENT_BASE_IMAGE=complement-dendrite:latest go test -v ./tests/...
 
 ### Running against Synapse
 
-If you're looking to run Complement against a local dev instance of Synapse, see [`matrix-org/synapse` -> `scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh).
+If you're looking to run Complement against a local dev instance of Synapse, see [`element-hq/synapse` -> `scripts-dev/complement.sh`](https://github.com/element-hq/synapse/blob/develop/scripts-dev/complement.sh).
 
 If you want to develop Complement tests while working on a local dev instance
 of Synapse, use the
-[`scripts-dev/complement.sh`](https://github.com/matrix-org/synapse/blob/develop/scripts-dev/complement.sh)
+[`scripts-dev/complement.sh`](https://github.com/element-hq/synapse/blob/develop/scripts-dev/complement.sh)
 script and set the `COMPLEMENT_DIR` environment variable to the filepath of
 your local Complement checkout. Arguments to `go test` can be supplied as an argument to the script, e.g.:
 
@@ -123,7 +114,7 @@ from the host to the container. This is set via `COMPLEMENT_HOST_MOUNTS`, on the
 For example, for Dendrite on Linux with the default location of `$GOPATH`, do a one-time setup:
 
 ```shellsession
-$ git clone https://github.com/matrix-org/dendrite ../dendrite
+$ git clone https://github.com/element-hq/dendrite ../dendrite
 $ (cd ../dendrite && docker build -t complement-dendrite-local -f build/scripts/ComplementLocal.Dockerfile .)
 $ mkdir -p ../complement-go-build-cache
 $ export COMPLEMENT_BASE_IMAGE=complement-dendrite-local

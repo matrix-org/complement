@@ -5,22 +5,24 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 )
 
 func TestUploadKey(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	deviceKeys, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 1)
 
@@ -171,4 +173,141 @@ func TestUploadKey(t *testing.T) {
 			})
 		})
 	})
+}
+
+// Per MSC4225, keys must be issued in the same order they are uploaded
+func TestKeyClaimOrdering(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	_, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 2)
+
+	// first upload key 1, sleep a bit, then upload key 0.
+	otk1 := map[string]interface{}{"signed_curve25519:1": oneTimeKeys["signed_curve25519:1"]}
+	alice.MustUploadKeys(t, nil, otk1)
+	// Ensure that there is a difference in timestamp between the two upload requests.
+	time.Sleep(1 * time.Second)
+
+	otk0 := map[string]interface{}{"signed_curve25519:0": oneTimeKeys["signed_curve25519:0"]}
+	alice.MustUploadKeys(t, nil, otk0)
+
+	// Now claim the keys, and check they come back in the right order
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"one_time_keys": map[string]interface{}{
+			alice.UserID: map[string]string{
+				alice.DeviceID: "signed_curve25519",
+			},
+		},
+	})
+	otksField := "one_time_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
+	resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+	must.MatchResponse(t, resp, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON:       []match.JSON{match.JSONKeyEqual(otksField, otk1)},
+	})
+	resp = alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+	must.MatchResponse(t, resp, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON:       []match.JSON{match.JSONKeyEqual(otksField, otk0)},
+	})
+}
+
+// Tests idempotency of the /keys/upload endpoint.
+// Tests that if you upload 4 OTKs then upload the same 4, no error is returned.
+func TestUploadKeyIdempotency(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	deviceKeys, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 4)
+	requests := []client.RequestOpt{
+		client.WithJSONBody(t, map[string]interface{}{
+			"device_keys":   deviceKeys,
+			"one_time_keys": oneTimeKeys,
+		}),
+		client.WithJSONBody(t, map[string]interface{}{
+			"one_time_keys": oneTimeKeys,
+		}),
+		client.WithJSONBody(t, map[string]interface{}{
+			"one_time_keys": oneTimeKeys,
+		}),
+	}
+	for _, reqBody := range requests {
+		resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+		must.MatchResponse(t, resp, match.HTTPResponse{
+			StatusCode: http.StatusOK,
+			JSON: []match.JSON{
+				match.JSONMapEach("one_time_key_counts", func(k, v gjson.Result) error {
+					keyCount := 0
+					for key := range oneTimeKeys {
+						// check that the returned algorithms -> key count matches those we uploaded
+						if strings.HasPrefix(key, k.Str) {
+							keyCount++
+						}
+					}
+					if int(v.Float()) != keyCount {
+						return fmt.Errorf("expected %d one time keys, got %d", keyCount, int(v.Float()))
+					}
+					return nil
+				}),
+			},
+		})
+	}
+}
+
+// Tests idempotency of the /keys/upload endpoint.
+// Tests that if you upload OTKs A,B,C then upload OTKs B,C,D, no error is returned and the OTK count says 4 (A,B,C,D).
+func TestUploadKeyIdempotencyOverlap(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	deviceKeys, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 4)
+	i := 0
+	keysABC := map[string]interface{}{}
+	keysBCD := map[string]interface{}{}
+	for keyID, otk := range oneTimeKeys {
+		i++
+		if i == 1 {
+			keysABC[keyID] = otk
+			continue
+		}
+		if i == 4 {
+			keysBCD[keyID] = otk
+			continue
+		}
+		keysABC[keyID] = otk
+		keysBCD[keyID] = otk
+	}
+	t.Logf("OTKs ABC %v", keysABC)
+	t.Logf("OTKs BCD %v", keysBCD)
+	requests := []client.RequestOpt{
+		client.WithJSONBody(t, map[string]interface{}{
+			"device_keys": deviceKeys,
+		}),
+		client.WithJSONBody(t, map[string]interface{}{
+			"one_time_keys": keysABC,
+		}),
+		client.WithJSONBody(t, map[string]interface{}{
+			"one_time_keys": keysBCD,
+		}),
+	}
+	for i, reqBody := range requests {
+		expectedOTKCount := 0
+		if i == 1 {
+			expectedOTKCount = 3
+		} else if i == 2 {
+			expectedOTKCount = 4
+		}
+		resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+		must.MatchResponse(t, resp, match.HTTPResponse{
+			StatusCode: http.StatusOK,
+			JSON: []match.JSON{
+				match.JSONMapEach("one_time_key_counts", func(k, v gjson.Result) error {
+					if int(v.Float()) != expectedOTKCount {
+						return fmt.Errorf("expected %d one time keys, got %d", expectedOTKCount, int(v.Float()))
+					}
+					return nil
+				}),
+			},
+		})
+	}
 }

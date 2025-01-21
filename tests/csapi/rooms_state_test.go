@@ -9,18 +9,22 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestRoomCreationReportsEventsToMyself(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	userID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", userID)
-	bob := deployment.RegisterUser(t, "hs1", "bob", "bobpassword", false)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "bob",
+		Password:        "bobpassword",
+	})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	t.Run("parallel", func(t *testing.T) {
@@ -32,8 +36,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if ev.Get("type").Str != "m.room.create" {
 					return false
 				}
-				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.Equal(t, ev.Get("content").Get("creator").Str, userID, "wrong content.creator")
+				must.Equal(t, ev.Get("sender").Str, alice.UserID, "wrong sender")
+				must.Equal(t, ev.Get("content").Get("creator").Str, alice.UserID, "wrong content.creator")
 				return true
 			}))
 		})
@@ -46,8 +50,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if ev.Get("type").Str != "m.room.member" {
 					return false
 				}
-				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
-				must.Equal(t, ev.Get("state_key").Str, userID, "wrong state_key")
+				must.Equal(t, ev.Get("sender").Str, alice.UserID, "wrong sender")
+				must.Equal(t, ev.Get("state_key").Str, alice.UserID, "wrong state_key")
 				must.Equal(t, ev.Get("content").Get("membership").Str, "join", "wrong content.membership")
 				return true
 			}))
@@ -74,7 +78,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				if !ev.Get("state_key").Exists() {
 					return false
 				}
-				must.Equal(t, ev.Get("sender").Str, userID, "wrong sender")
+				must.Equal(t, ev.Get("sender").Str, alice.UserID, "wrong sender")
 				must.Equal(t, ev.Get("content").Get("topic").Str, roomTopic, "wrong content.topic")
 				return true
 			}))

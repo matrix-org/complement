@@ -2,15 +2,16 @@ package runtime
 
 import (
 	"context"
-	"testing"
 
 	"github.com/docker/docker/client"
+	"github.com/matrix-org/complement/ct"
 )
 
 const (
-	Dendrite = "dendrite"
-	Synapse  = "synapse"
-	Conduit  = "conduit"
+	Dendrite  = "dendrite"
+	Synapse   = "synapse"
+	Conduit   = "conduit"
+	Conduwuit = "conduwuit"
 )
 
 var Homeserver string
@@ -32,7 +33,7 @@ var ContainerKillFunc = func(client *client.Client, containerID string) error {
 // implementation is added, a respective `hs_$name.go` needs to be created in this directory. This
 // file pairs together the tag name with a string constant declared in this package
 // e.g. dendrite_blacklist == runtime.Dendrite
-func SkipIf(t *testing.T, hses ...string) {
+func SkipIf(t ct.TestLike, hses ...string) {
 	t.Helper()
 	for _, hs := range hses {
 		if Homeserver == hs {

@@ -3,19 +3,20 @@ package tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 )
 
 // Regression test for https://github.com/matrix-org/synapse/issues/1563
 // Create a federation room. Bob bans Alice. Bob unbans Alice. Bob invites Alice (unbanning her). Ensure the invite is
 // received and can be accepted.
 func TestUnbanViaInvite(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	roomID := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",

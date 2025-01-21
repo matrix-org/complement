@@ -6,16 +6,17 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestSyncFilter(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	authedClient := deployment.Client(t, "hs1", "@alice:hs1")
+	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	// sytest: Can create filter
 	t.Run("Can create filter", func(t *testing.T) {
 		createFilter(t, authedClient, map[string]interface{}{
@@ -35,7 +36,7 @@ func TestSyncFilter(t *testing.T) {
 				},
 			},
 		})
-		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "user", "@alice:hs1", "filter", filterID})
+		res := authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "user", authedClient.UserID, "filter", filterID})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyPresent("room"),

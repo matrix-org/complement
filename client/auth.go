@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 
+	"github.com/matrix-org/complement/ct"
 	"github.com/tidwall/gjson"
 )
 
@@ -22,7 +23,7 @@ func WithDeviceID(deviceID string) LoginOpt {
 }
 
 // LoginUser will log in to a homeserver and create a new device on an existing user.
-func (c *CSAPI) LoginUser(t TestLike, localpart, password string, opts ...LoginOpt) (userID, accessToken, deviceID string) {
+func (c *CSAPI) LoginUser(t ct.TestLike, localpart, password string, opts ...LoginOpt) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"identifier": map[string]interface{}{
@@ -41,7 +42,7 @@ func (c *CSAPI) LoginUser(t TestLike, localpart, password string, opts ...LoginO
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
+		ct.Fatalf(t, "unable to read response body: %v", err)
 	}
 
 	userID = GetJSONFieldStr(t, body, "user_id")
@@ -52,7 +53,7 @@ func (c *CSAPI) LoginUser(t TestLike, localpart, password string, opts ...LoginO
 
 // LoginUserWithRefreshToken will log in to a homeserver, with refresh token enabled,
 // and create a new device on an existing user.
-func (c *CSAPI) LoginUserWithRefreshToken(t TestLike, localpart, password string) (userID, accessToken, refreshToken, deviceID string, expiresInMs int64) {
+func (c *CSAPI) LoginUserWithRefreshToken(t ct.TestLike, localpart, password string) (userID, accessToken, refreshToken, deviceID string, expiresInMs int64) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"identifier": map[string]interface{}{
@@ -67,7 +68,7 @@ func (c *CSAPI) LoginUserWithRefreshToken(t TestLike, localpart, password string
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
+		ct.Fatalf(t, "unable to read response body: %v", err)
 	}
 
 	userID = GetJSONFieldStr(t, body, "user_id")
@@ -79,7 +80,7 @@ func (c *CSAPI) LoginUserWithRefreshToken(t TestLike, localpart, password string
 }
 
 // RefreshToken will consume a refresh token and return a new access token and refresh token.
-func (c *CSAPI) ConsumeRefreshToken(t TestLike, refreshToken string) (newAccessToken, newRefreshToken string, expiresInMs int64) {
+func (c *CSAPI) ConsumeRefreshToken(t ct.TestLike, refreshToken string) (newAccessToken, newRefreshToken string, expiresInMs int64) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"refresh_token": refreshToken,
@@ -88,7 +89,7 @@ func (c *CSAPI) ConsumeRefreshToken(t TestLike, refreshToken string) (newAccessT
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
+		ct.Fatalf(t, "unable to read response body: %v", err)
 	}
 
 	newAccessToken = GetJSONFieldStr(t, body, "access_token")
@@ -99,7 +100,7 @@ func (c *CSAPI) ConsumeRefreshToken(t TestLike, refreshToken string) (newAccessT
 
 // RegisterUser will register the user with given parameters and
 // return user ID, access token and device ID. It fails the test on network error.
-func (c *CSAPI) RegisterUser(t TestLike, localpart, password string) (userID, accessToken, deviceID string) {
+func (c *CSAPI) RegisterUser(t ct.TestLike, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
 	reqBody := map[string]interface{}{
 		"auth": map[string]string{
@@ -112,7 +113,7 @@ func (c *CSAPI) RegisterUser(t TestLike, localpart, password string) (userID, ac
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatalf("unable to read response body: %v", err)
+		ct.Fatalf(t, "unable to read response body: %v", err)
 	}
 
 	userID = GetJSONFieldStr(t, body, "user_id")
@@ -123,7 +124,7 @@ func (c *CSAPI) RegisterUser(t TestLike, localpart, password string) (userID, ac
 
 // RegisterSharedSecret registers a new account with a shared secret via HMAC
 // See https://github.com/matrix-org/synapse/blob/e550ab17adc8dd3c48daf7fedcd09418a73f524b/synapse/_scripts/register_new_matrix_user.py#L40
-func (c *CSAPI) RegisterSharedSecret(t TestLike, user, pass string, isAdmin bool) (userID, accessToken, deviceID string) {
+func (c *CSAPI) RegisterSharedSecret(t ct.TestLike, user, pass string, isAdmin bool) (userID, accessToken, deviceID string) {
 	resp := c.Do(t, "GET", []string{"_synapse", "admin", "v1", "register"})
 	if resp.StatusCode != 200 {
 		t.Skipf("Homeserver image does not support shared secret registration, /_synapse/admin/v1/register returned HTTP %d", resp.StatusCode)
@@ -132,7 +133,7 @@ func (c *CSAPI) RegisterSharedSecret(t TestLike, user, pass string, isAdmin bool
 	body := ParseJSON(t, resp)
 	nonce := gjson.GetBytes(body, "nonce")
 	if !nonce.Exists() {
-		t.Fatalf("Malformed shared secret GET response: %s", string(body))
+		ct.Fatalf(t, "Malformed shared secret GET response: %s", string(body))
 	}
 	mac := hmac.New(sha1.New, []byte(SharedSecret))
 	mac.Write([]byte(nonce.Str))

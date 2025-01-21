@@ -7,8 +7,9 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -16,20 +17,24 @@ import (
 // Check if this homeserver supports Synapse-style admin registration.
 // Not all images support this currently.
 func TestCanRegisterAdmin(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	deployment.RegisterUser(t, "hs1", "admin", "adminpassword", true)
+	deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		IsAdmin: true,
+	})
 }
 
 // Test if the implemented /_synapse/admin/v1/send_server_notice behaves as expected
 func TestServerNotices(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	admin := deployment.RegisterUser(t, "hs1", "admin", "adminpassword", true)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	admin := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		IsAdmin: true,
+	})
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
-		"user_id": "@alice:hs1",
+		"user_id": alice.UserID,
 		"content": map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "hello from server notices!",

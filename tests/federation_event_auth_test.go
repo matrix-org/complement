@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/helpers"
-	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 
@@ -28,10 +29,10 @@ import (
 //   - /event_auth for the latest join event returns the complete auth chain for Charlie (all the
 //     joins and leaves are included), without any extraneous events.
 func TestEventAuth(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// create a remote homeserver which will make the /event_auth request
 	var joinRuleEvent gomatrixserverlib.PDU

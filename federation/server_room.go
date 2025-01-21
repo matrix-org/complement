@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"testing"
 
 	"github.com/matrix-org/gomatrixserverlib"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/ct"
+	"github.com/matrix-org/complement/helpers"
 )
 
 type Event struct {
@@ -29,6 +30,7 @@ type Event struct {
 	Redacts string
 }
 
+// EXPERIMENTAL
 // ServerRoom represents a room on this test federation server
 type ServerRoom struct {
 	Version            gomatrixserverlib.RoomVersion
@@ -39,6 +41,8 @@ type ServerRoom struct {
 	TimelineMutex      sync.RWMutex
 	ForwardExtremities []string
 	Depth              int64
+	waiters            map[string][]*helpers.Waiter // room ID -> []Waiter
+	waitersMu          *sync.Mutex
 }
 
 // newRoom creates an empty room structure with no events
@@ -48,6 +52,8 @@ func newRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *ServerRoom {
 		Version:            roomVer,
 		State:              make(map[string]gomatrixserverlib.PDU),
 		ForwardExtremities: make([]string, 0),
+		waiters:            make(map[string][]*helpers.Waiter),
+		waitersMu:          &sync.Mutex{},
 	}
 }
 
@@ -65,6 +71,41 @@ func (r *ServerRoom) AddEvent(ev gomatrixserverlib.PDU) {
 		r.Depth = ev.Depth()
 	}
 	r.ForwardExtremities = []string{ev.EventID()}
+
+	// inform waiters
+	r.waitersMu.Lock()
+	defer r.waitersMu.Unlock()
+	for _, w := range r.waiters[ev.EventID()] {
+		w.Finish()
+	}
+	delete(r.waiters, ev.EventID()) // clear the waiters
+}
+
+// WaiterForEvent creates a Waiter which waits until the given event ID is added to the room.
+// This can be used as a synchronisation point to wait until the server under test has sent
+// a given PDU in a /send transaction to the Complement server. This is the equivalent to listening
+// for the PDU in the /send transaction and then unblocking the Waiter. Note that calling
+// this function doesn't actually block. Call .Wait(time.Duration) on the waiter to block.
+//
+// Note: you must still add HandleTransactionRequests(nil,nil) to your server for the server to
+// automatically add events to the room.
+func (r *ServerRoom) WaiterForEvent(eventID string) *helpers.Waiter {
+	// we need to lock the timeline so we can check the timeline without racing. We need to check
+	// the timeline so we can immediately finish the waiter if the event ID is already in the timeline.
+	r.TimelineMutex.Lock()
+	defer r.TimelineMutex.Unlock()
+	w := helpers.NewWaiter()
+	r.waitersMu.Lock()
+	r.waiters[eventID] = append(r.waiters[eventID], w)
+	r.waitersMu.Unlock()
+	// check if the event is already there and if so immediately end the wait
+	for _, ev := range r.Timeline {
+		if ev.EventID() == eventID {
+			w.Finish()
+			break
+		}
+	}
+	return w
 }
 
 // AuthEvents returns the state event IDs of the auth events which authenticate this event
@@ -171,18 +212,18 @@ func (r *ServerRoom) AuthChainForEvents(events []gomatrixserverlib.PDU) (chain [
 }
 
 // Check that the user currently has the membership provided in this room. Fails the test if not.
-func (r *ServerRoom) MustHaveMembershipForUser(t *testing.T, userID, wantMembership string) {
+func (r *ServerRoom) MustHaveMembershipForUser(t ct.TestLike, userID, wantMembership string) {
 	t.Helper()
 	state := r.CurrentState("m.room.member", userID)
 	if state == nil {
-		t.Fatalf("no membership state for %s", userID)
+		ct.Fatalf(t, "no membership state for %s", userID)
 	}
 	m, err := state.Membership()
 	if err != nil {
-		t.Fatalf("m.room.member event exists for %s but cannot read membership field: %s", userID, err)
+		ct.Fatalf(t, "m.room.member event exists for %s but cannot read membership field: %s", userID, err)
 	}
 	if m != wantMembership {
-		t.Fatalf("incorrect membership state for %s: got %s, want %s", userID, m, wantMembership)
+		ct.Fatalf(t, "incorrect membership state for %s: got %s, want %s", userID, m, wantMembership)
 	}
 }
 
@@ -213,6 +254,20 @@ func (r *ServerRoom) ServersInRoom() (servers []string) {
 	}
 
 	return
+}
+
+// Fetches the event with given event ID from the room timeline.
+func (r *ServerRoom) GetEventInTimeline(eventID string) (gomatrixserverlib.PDU, bool) {
+	r.TimelineMutex.Lock()
+	defer r.TimelineMutex.Unlock()
+
+	for _, ev := range r.Timeline {
+		if ev.EventID() == eventID {
+			return ev, true
+		}
+	}
+
+	return nil, false
 }
 
 func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLevelContent) {

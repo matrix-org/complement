@@ -5,16 +5,16 @@ import (
 
 	"encoding/json"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
 func TestRequestEncodingFails(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	unauthedClient := deployment.Client(t, "hs1", "")
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 	testString := `{ "test":"a` + "\x81" + `" }`
 	// sytest: POST rejects invalid utf-8 in JSON
 	t.Run("POST rejects invalid utf-8 in JSON", func(t *testing.T) {

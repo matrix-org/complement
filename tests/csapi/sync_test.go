@@ -8,19 +8,24 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/util"
 )
 
 // Observes "first bug" from https://github.com/matrix-org/dendrite/pull/1394#issuecomment-687056673
 func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -54,11 +59,11 @@ func TestCumulativeJoinLeaveJoinSync(t *testing.T) {
 
 // Observes "second bug" from https://github.com/matrix-org/dendrite/pull/1394#issuecomment-687056673
 func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -104,10 +109,10 @@ func TestTentativeEventualJoiningAfterRejecting(t *testing.T) {
 func TestSync(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
 	// sytest: Can sync
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	filterID := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -369,18 +374,265 @@ func TestSync(t *testing.T) {
 
 			// that's it - we successfully did a gappy sync.
 		})
+
+		t.Run("Device list tracking", func(t *testing.T) {
+			// syncDeviceListsHas checks that `device_lists.changed` or `device_lists.left` contains a
+			// given user ID.
+			syncDeviceListsHas := func(section string, expectedUserID string) client.SyncCheckOpt {
+				jsonPath := fmt.Sprintf("device_lists.%s", section)
+				return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+					usersWithChangedDeviceListsArray := topLevelSyncJSON.Get(jsonPath).Array()
+					for _, userID := range usersWithChangedDeviceListsArray {
+						if userID.Str == expectedUserID {
+							return nil
+						}
+					}
+					return fmt.Errorf(
+						"syncDeviceListsHas: %s not found in %s",
+						expectedUserID,
+						jsonPath,
+					)
+				}
+			}
+
+			t.Run("User is correctly listed when they leave, even when lazy loading is enabled", func(t *testing.T) {
+				// Alice creates a room, and starts syncing with lazy-loading enabled.
+				// Charlie joins, sends an event, and then leaves, the room.
+				// We check that Charlie appears under the "device_lists" section of the sync.
+				//
+				// Regression test for https://github.com/element-hq/synapse/issues/16948
+
+				charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "charlie"})
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+
+				aliceSyncFilter := `{
+				    "room": {
+					    "timeline": { "lazy_load_members": true },
+					    "state": { "lazy_load_members": true }
+					}
+				}`
+				_, initialSyncToken := alice.MustSync(t, client.SyncReq{Filter: aliceSyncFilter})
+
+				charlie.MustJoinRoom(t, roomID, nil)
+				syncToken := alice.MustSyncUntil(t, client.SyncReq{Filter: aliceSyncFilter, Since: initialSyncToken},
+					syncDeviceListsHas("changed", charlie.UserID),
+				)
+
+				// Charlie sends a message, and leaves
+				sendMessages(t, charlie, roomID, "test", 1)
+				charlie.MustLeaveRoom(t, roomID)
+
+				// Alice sees charlie in the "left" section
+				alice.MustSyncUntil(t, client.SyncReq{Filter: aliceSyncFilter, Since: syncToken},
+					syncDeviceListsHas("left", charlie.UserID),
+				)
+
+				// ... even if she makes the request twice
+				resp, _ := alice.MustSync(t, client.SyncReq{Filter: aliceSyncFilter, Since: syncToken})
+				if err := syncDeviceListsHas("left", charlie.UserID)(alice.UserID, resp); err != nil {
+					t.Error(err)
+				}
+			})
+		})
 	})
+}
+
+// This is a regression test for
+// https://github.com/matrix-org/synapse/issues/16463
+//
+// We test this by having a local user (alice) and remote user (charlie) in a
+// room. Charlie sends 50+ messages into the room without sending to Alice's
+// server. Charlie then sends one more which get sent to Alice.
+//
+// Alice should observe that she receives some (though not all) of charlie's
+// events, with the `limited` flag set.
+func TestSyncTimelineGap(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite)
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+
+	charlie := srv.UserID("charlie")
+
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+
+	filterID := createFilter(t, alice, map[string]interface{}{
+		"room": map[string]interface{}{
+			"timeline": map[string]interface{}{
+				"limit": 20,
+			},
+		},
+	})
+	_, nextBatch := alice.MustSync(t, client.SyncReq{Filter: filterID})
+	t.Logf("Next batch %s", nextBatch)
+
+	alice.SendEventSynced(t, roomID, b.Event{
+		Type:   "m.room.message",
+		Sender: alice.UserID,
+		Content: map[string]interface{}{
+			"body":    "Hi from Alice!",
+			"msgtype": "m.text",
+		},
+	})
+
+	// Create 50 messages, but don't send them to Alice
+	var missingEvents []gomatrixserverlib.PDU
+	for i := 0; i < 50; i++ {
+		event := srv.MustCreateEvent(t, room, federation.Event{
+			Type:   "m.room.message",
+			Sender: charlie,
+			Content: map[string]interface{}{
+				"body":    "Remote message",
+				"msgtype": "m.text",
+			},
+		})
+		room.AddEvent(event)
+		missingEvents = append(missingEvents, event)
+	}
+
+	// Create one more event that we will send to Alice, which references the
+	// previous 50.
+	lastEvent := srv.MustCreateEvent(t, room, federation.Event{
+		Type:   "m.room.message",
+		Sender: charlie,
+		Content: map[string]interface{}{
+			"body":    "End",
+			"msgtype": "m.text",
+		},
+	})
+	room.AddEvent(lastEvent)
+
+	// Alice's HS will try and fill in the gap, so we need to respond to those
+	// requests.
+	respondToGetMissingEventsEndpoints(t, srv, room, missingEvents)
+
+	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{lastEvent.JSON()}, nil)
+
+	// We now test two different modes of /sync work. The first is when we are
+	// syncing when the server receives the `lastEvent` (and so, at least
+	// Synapse, will start sending down some events immediately). In this mode
+	// we may see alice's message, but charlie's messages should set the limited
+	// flag.
+	//
+	// The second mode is when we incremental sync *after* all the events have
+	// finished being persisted, and so we get only charlie's messages.
+	t.Run("incremental", func(t *testing.T) {
+		timelineSequence := make([]gjson.Result, 0)
+
+		t.Logf("Doing incremental syncs from %s", nextBatch)
+
+		// This just reads all timeline batches into `timelineSequence` until we see `lastEvent` come down
+		alice.MustSyncUntil(t, client.SyncReq{Since: nextBatch, Filter: filterID}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+			t.Logf("next batch %s", topLevelSyncJSON.Get("next_batch").Str)
+
+			roomResult := topLevelSyncJSON.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline")
+			if !roomResult.Exists() {
+				return fmt.Errorf("No entry for room (%s)", roomID)
+			}
+
+			timelineSequence = append(timelineSequence, roomResult)
+
+			events := roomResult.Get("events")
+			if !events.Exists() || !events.IsArray() {
+				return fmt.Errorf("Invalid events entry (%s)", roomResult.Raw)
+			}
+
+			foundLastEvent := false
+			for _, ev := range events.Array() {
+				if ev.Get("event_id").Str == lastEvent.EventID() {
+					foundLastEvent = true
+				}
+			}
+
+			if !foundLastEvent {
+				return fmt.Errorf("Did not find lastEvent (%s) in timeline batch: (%s)", lastEvent.EventID(), roomResult.Raw)
+			}
+
+			return nil
+		})
+
+		t.Logf("Got timeline sequence: %s", timelineSequence)
+
+		// Check that we only see Alice's message from before the gap *before*
+		// we seen any limited batches, and vice versa for Charlie's messages.
+		limited := false
+		for _, section := range timelineSequence {
+			limited = limited || section.Get("limited").Bool()
+			events := section.Get("events").Array()
+			for _, ev := range events {
+				if limited {
+					if ev.Get("sender").Str == alice.UserID {
+						t.Fatalf("Got message from alice after limited flag")
+					}
+				} else {
+					if ev.Get("sender").Str == charlie {
+						t.Fatalf("Got message from remote without limited flag being set")
+					}
+				}
+			}
+		}
+
+		if !limited {
+			t.Fatalf("No timeline batch for the room was limited")
+		}
+	})
+
+	t.Run("full", func(t *testing.T) {
+		// Wait until we see `lastEvent` come down sync implying that all events have been persisted
+		// by alice's homeserver.
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, lastEvent.EventID()))
+
+		// Now an incremental sync from before should return a limited batch for
+		// the room, with just Charlie's messages.
+		topLevelSyncJSON, _ := alice.MustSync(t, client.SyncReq{Since: nextBatch, Filter: filterID})
+		roomResult := topLevelSyncJSON.Get("rooms.join." + client.GjsonEscape(roomID))
+		if !roomResult.Exists() {
+			t.Fatalf("No entry for room (%s)", roomID)
+		}
+
+		eventsJson := roomResult.Get("timeline.events")
+		if !eventsJson.Exists() || !eventsJson.IsArray() {
+			t.Fatalf("Invalid events entry (%s)", roomResult.Raw)
+		}
+
+		eventsArray := eventsJson.Array()
+
+		if eventsArray[len(eventsArray)-1].Get("event_id").Str != lastEvent.EventID() {
+			t.Fatalf("Did not find lastEvent (%s) in timeline batch: (%s)", lastEvent.EventID(), roomResult.Raw)
+		}
+
+		if roomResult.Get("timeline.limited").Bool() == false {
+			t.Fatalf("Timeline batch was not limited (%s)", roomResult.Raw)
+		}
+
+		for _, ev := range eventsArray {
+			if ev.Get("sender").Str == alice.UserID {
+				t.Fatalf("Found an event from alice in batch (%s)", roomResult.Raw)
+			}
+		}
+	})
+
 }
 
 // Test presence from people in 2 different rooms in incremental sync
 func TestPresenceSyncDifferentRooms(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
-	charlie := deployment.NewUser(t, "charlie", "hs1")
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "charlie",
+	})
 
 	// Alice creates two rooms: one with her and Bob, and a second with her and Charlie.
 	bobRoomID := alice.MustCreateRoom(t, map[string]interface{}{})
@@ -402,8 +654,8 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"presence": "online",
 	})
-	bob.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@bob:hs1", "status"}, reqBody)
-	charlie.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", "@charlie:hs1", "status"}, reqBody)
+	bob.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", bob.UserID, "status"}, reqBody)
+	charlie.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", charlie.UserID, "status"}, reqBody)
 
 	// Alice should see that Bob and Charlie are online. She may see this happen
 	// simultaneously in one /sync response, or separately in two /sync
@@ -435,10 +687,10 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 
 func TestRoomSummary(t *testing.T) {
 	runtime.SkipIf(t, runtime.Synapse) // Currently more of a Dendrite test, so skip on Synapse
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
@@ -556,4 +808,106 @@ func usersInPresenceEvents(t *testing.T, presence gjson.Result, users []string) 
 	if len(users) != foundCounter {
 		t.Fatalf("expected %d presence events, got %d: %+v", len(users), foundCounter, presenceEvents)
 	}
+}
+
+func eventIDsFromEvents(he []gomatrixserverlib.PDU) []string {
+	eventIDs := make([]string, len(he))
+	for i := range he {
+		eventIDs[i] = he[i].EventID()
+	}
+	return eventIDs
+}
+
+// Helper method to respond to federation APIs associated with trying to get missing events.
+func respondToGetMissingEventsEndpoints(t *testing.T, srv *federation.Server, room *federation.ServerRoom, missingEvents []gomatrixserverlib.PDU) {
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/state_ids/{roomID}",
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			t.Logf("Got /state_ids for %s", pathParams["roomID"])
+			if pathParams["roomID"] != room.RoomID {
+				t.Errorf("Received /state_ids for the wrong room: %s", room.RoomID)
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "wrong room",
+				}
+			}
+
+			roomState := room.AllCurrentState()
+			return util.JSONResponse{
+				Code: 200,
+				JSON: map[string]interface{}{
+					"pdu_ids":        eventIDsFromEvents(roomState),
+					"auth_chain_ids": eventIDsFromEvents(room.AuthChainForEvents(roomState)),
+				},
+			}
+		})).Methods("GET")
+
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/state/{roomID}",
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			t.Logf("Got /state for %s", pathParams["roomID"])
+			if pathParams["roomID"] != room.RoomID {
+				t.Errorf("Received /state_ids for the wrong room: %s", room.RoomID)
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "wrong room",
+				}
+			}
+
+			roomState := room.AllCurrentState()
+			return util.JSONResponse{
+				Code: 200,
+				JSON: map[string]interface{}{
+					"pdus":       roomState,
+					"auth_chain": room.AuthChainForEvents(roomState),
+				},
+			}
+		})).Methods("GET")
+
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/event/{eventID}",
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			t.Logf("Got /event for %s", pathParams["eventID"])
+
+			for _, ev := range missingEvents {
+				if ev.EventID() == pathParams["eventID"] {
+					t.Logf("Returning event %s", pathParams["eventID"])
+					return util.JSONResponse{
+						Code: 200,
+						JSON: map[string]interface{}{
+							"origin":           srv.ServerName(),
+							"origin_server_ts": 0,
+							"pdus":             []json.RawMessage{ev.JSON()},
+						},
+					}
+				}
+			}
+
+			t.Logf("No event found")
+			return util.JSONResponse{
+				Code: 404,
+				JSON: map[string]interface{}{},
+			}
+		})).Methods("GET")
+
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/get_missing_events/{roomID}",
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			t.Logf("Got /get_missing_events for %s", pathParams["roomID"])
+			if pathParams["roomID"] != room.RoomID {
+				t.Errorf("Received /get_missing_events for the wrong room: %s", room.RoomID)
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "wrong room",
+				}
+			}
+
+			return util.JSONResponse{
+				Code: 200,
+				JSON: map[string]interface{}{
+					"events": missingEvents[len(missingEvents)-10:],
+				},
+			}
+		}),
+	).Methods("POST")
 }

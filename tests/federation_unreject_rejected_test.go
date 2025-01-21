@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/federation"
+	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/federation"
 )
 
 // TestUnrejectRejectedEvents creates two events: A and B.
@@ -17,9 +18,9 @@ import (
 // event B is unrejected on the second pass and will appear in
 // the /sync response AFTER event A.
 func TestUnrejectRejectedEvents(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),

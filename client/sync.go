@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/matrix-org/complement/ct"
 	"github.com/tidwall/gjson"
 )
 
@@ -88,7 +89,7 @@ type SyncReq struct {
 //
 // Will time out after CSAPI.SyncUntilTimeout. Returns the `next_batch` token from the final
 // response.
-func (c *CSAPI) MustSyncUntil(t TestLike, syncReq SyncReq, checks ...SyncCheckOpt) string {
+func (c *CSAPI) MustSyncUntil(t ct.TestLike, syncReq SyncReq, checks ...SyncCheckOpt) string {
 	t.Helper()
 	start := time.Now()
 	numResponsesReturned := 0
@@ -111,7 +112,7 @@ func (c *CSAPI) MustSyncUntil(t TestLike, syncReq SyncReq, checks ...SyncCheckOp
 	}
 	for {
 		if time.Since(start) > c.SyncUntilTimeout {
-			t.Fatalf("%s MustSyncUntil: timed out after %v. Seen %d /sync responses. %s", c.UserID, time.Since(start), numResponsesReturned, printErrors())
+			ct.Fatalf(t, "%s MustSyncUntil: timed out after %v. Seen %d /sync responses. %s", c.UserID, time.Since(start), numResponsesReturned, printErrors())
 		}
 		response, nextBatch := c.MustSync(t, syncReq)
 		syncReq.Since = nextBatch
@@ -141,7 +142,7 @@ func (c *CSAPI) MustSyncUntil(t TestLike, syncReq SyncReq, checks ...SyncCheckOp
 //
 // Fails the test if the /sync request does not return 200 OK.
 // Returns the top-level parsed /sync response JSON as well as the next_batch token from the response.
-func (c *CSAPI) MustSync(t TestLike, syncReq SyncReq) (gjson.Result, string) {
+func (c *CSAPI) MustSync(t ct.TestLike, syncReq SyncReq) (gjson.Result, string) {
 	t.Helper()
 	jsonBody, res := c.Sync(t, syncReq)
 	mustRespond2xx(t, res)
@@ -153,7 +154,7 @@ func (c *CSAPI) MustSync(t TestLike, syncReq SyncReq) (gjson.Result, string) {
 //
 // Always returns the HTTP response, even on non-2xx.
 // Returns the top-level parsed /sync response JSON on 2xx.
-func (c *CSAPI) Sync(t TestLike, syncReq SyncReq) (gjson.Result, *http.Response) {
+func (c *CSAPI) Sync(t ct.TestLike, syncReq SyncReq) (gjson.Result, *http.Response) {
 	t.Helper()
 	query := url.Values{
 		"timeout": []string{"1000"},

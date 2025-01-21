@@ -3,15 +3,16 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/docker"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/tidwall/gjson"
 )
 
 // tests/10apidoc/37room-receipts.pl
 
-func createRoomForReadReceipts(t *testing.T, c *client.CSAPI, deployment *docker.Deployment) (string, string) {
+func createRoomForReadReceipts(t *testing.T, c *client.CSAPI, deployment complement.Deployment) (string, string) {
 	roomID := c.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 	c.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(c.UserID, roomID))
@@ -36,9 +37,9 @@ func syncHasReadReceipt(roomID, userID, eventID string) client.SyncCheckOpt {
 
 // sytest: POST /rooms/:room_id/receipt can create receipts
 func TestRoomReceipts(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
 
 	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
@@ -49,9 +50,9 @@ func TestRoomReceipts(t *testing.T) {
 
 // sytest: POST /rooms/:room_id/read_markers can create read marker
 func TestRoomReadMarkers(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
 
 	reqBody := client.WithJSONBody(t, map[string]interface{}{

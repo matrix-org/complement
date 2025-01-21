@@ -3,21 +3,26 @@ package csapi_tests
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib"
 )
 
 func TestLogin(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	unauthedClient := deployment.Client(t, "hs1", "")
-	_ = deployment.RegisterUser(t, "hs1", "test_login_user", "superuser", false)
+	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
+	testClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		Password: "superuser",
+	})
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: GET /login yields a set of flows
 		t.Run("GET /login yields a set of flows", func(t *testing.T) {
@@ -43,14 +48,14 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login can log in as a user
 		t.Run("POST /login can login as user", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
 				"type": "m.login.password",
-				"identifier": {
+				"identifier": map[string]interface{}{
 					"type": "m.id.user",
-					"user": "@test_login_user:hs1"
+					"user": testClient.UserID,
 				},
-				"password": "superuser"
-			}`)))
+				"password": "superuser",
+			}))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -62,15 +67,15 @@ func TestLogin(t *testing.T) {
 		t.Run("POST /login returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
 			deviceID := "test_device_id"
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
 				"type": "m.login.password",
-				"identifier": {
+				"identifier": map[string]interface{}{
 					"type": "m.id.user",
-					"user": "@test_login_user:hs1"
+					"user": testClient.UserID,
 				},
-				"password": "superuser",
-				"device_id": "`+deviceID+`"
-			}`)))
+				"password":  "superuser",
+				"device_id": deviceID,
+			}))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -82,15 +87,16 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login can log in as a user with just the local part of the id
 		t.Run("POST /login can log in as a user with just the local part of the id", func(t *testing.T) {
 			t.Parallel()
-
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			localpart, _, err := gomatrixserverlib.SplitID('@', testClient.UserID)
+			must.NotError(t, "failed to get localpart from user ID", err)
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
 				"type": "m.login.password",
-				"identifier": {
+				"identifier": map[string]interface{}{
 					"type": "m.id.user",
-					"user": "test_login_user"
+					"user": localpart,
 				},
-				"password": "superuser"
-			}`)))
+				"password": "superuser",
+			}))
 
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
@@ -101,14 +107,14 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login as non-existing user is rejected
 		t.Run("POST /login as non-existing user is rejected", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
 				"type": "m.login.password",
-				"identifier": {
+				"identifier": map[string]interface{}{
 					"type": "m.id.user",
-					"user": "i-dont-exist"
+					"user": "i-dont-exist",
 				},
-				"password": "superuser"
-			}`)))
+				"password": "superuser",
+			}))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 403,
 			})
@@ -116,14 +122,14 @@ func TestLogin(t *testing.T) {
 		// sytest: POST /login wrong password is rejected
 		t.Run("POST /login wrong password is rejected", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
 				"type": "m.login.password",
-				"identifier": {
+				"identifier": map[string]interface{}{
 					"type": "m.id.user",
-					"user": "@test_login_user:hs1"
+					"user": testClient.UserID,
 				},
-				"password": "wrong_password"
-			}`)))
+				"password": "wrong_password",
+			}))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 403,
 				JSON: []match.JSON{
@@ -136,14 +142,17 @@ func TestLogin(t *testing.T) {
 		t.Run("Login with uppercase username works and GET /whoami afterwards also", func(t *testing.T) {
 			t.Parallel()
 			// login should be possible with uppercase username
-			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithRawBody(json.RawMessage(`{
+			localpart, domain, err := gomatrixserverlib.SplitID('@', testClient.UserID)
+			must.NotError(t, "failed to get localpart from user ID", err)
+
+			res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, client.WithJSONBody(t, map[string]interface{}{
 				"type": "m.login.password",
-				"identifier": {
+				"identifier": map[string]interface{}{
 					"type": "m.id.user",
-					"user": "@Test_login_user:hs1"
+					"user": fmt.Sprintf("@%s:%s", strings.ToUpper(localpart), domain),
 				},
-				"password": "superuser"
-			}`)))
+				"password": "superuser",
+			}))
 			// extract access_token
 			js := must.ParseJSON(t, res.Body)
 			defer res.Body.Close()

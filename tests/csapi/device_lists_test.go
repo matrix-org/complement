@@ -1,17 +1,18 @@
 package csapi_tests
 
 import (
+	"encoding/base64"
 	"fmt"
-	"sync/atomic"
 	"testing"
 
+	"math/rand"
+
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/docker"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
-	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/tidwall/gjson"
 )
@@ -20,23 +21,22 @@ import (
 //  1. `/sync`'s `device_lists.changed/left` contain the correct user IDs.
 //  2. `/keys/query` returns the correct information after device list updates.
 func TestDeviceListUpdates(t *testing.T) {
-	var localpartIndex int64 = 0
-	// generateLocalpart generates a unique localpart based on the given name.
-	generateLocalpart := func(localpart string) string {
-		index := atomic.AddInt64(&localpartIndex, 1)
-		return fmt.Sprintf("%s%d", localpart, index)
-	}
-
+	prng := rand.New(rand.NewSource(42))
 	// uploadNewKeys uploads a new set of keys for a given client.
 	// Returns a check function that can be passed to mustQueryKeys.
 	uploadNewKeys := func(t *testing.T, user *client.CSAPI) []match.JSON {
 		t.Helper()
-
-		account := olm.NewAccount()
-		ed25519Key, curve25519Key := account.IdentityKeys()
-
 		ed25519KeyID := fmt.Sprintf("ed25519:%s", user.DeviceID)
 		curve25519KeyID := fmt.Sprintf("curve25519:%s", user.DeviceID)
+		// generate key-like looking values
+		ed25519KeyBytes := make([]byte, 32)
+		_, err := prng.Read(ed25519KeyBytes)
+		must.NotError(t, "failed to read from prng", err)
+		ed25519Key := base64.RawStdEncoding.EncodeToString(ed25519KeyBytes)
+		curve25519KeyBytes := make([]byte, 32)
+		_, err = prng.Read(curve25519KeyBytes)
+		must.NotError(t, "failed to read from prng", err)
+		curve25519Key := base64.RawStdEncoding.EncodeToString(curve25519KeyBytes)
 
 		user.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"},
 			client.WithJSONBody(t, map[string]interface{}{
@@ -45,8 +45,8 @@ func TestDeviceListUpdates(t *testing.T) {
 					"device_id":  user.DeviceID,
 					"algorithms": []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
 					"keys": map[string]interface{}{
-						ed25519KeyID:    ed25519Key.String(),
-						curve25519KeyID: curve25519Key.String(),
+						ed25519KeyID:    ed25519Key,
+						curve25519KeyID: curve25519Key,
 					},
 				},
 			}),
@@ -57,8 +57,8 @@ func TestDeviceListUpdates(t *testing.T) {
 		curve25519Path := fmt.Sprintf("device_keys.%s.%s.keys.%s", user.UserID, user.DeviceID, curve25519KeyID)
 		return []match.JSON{
 			match.JSONKeyEqual(algorithmsPath, []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"}),
-			match.JSONKeyEqual(ed25519Path, ed25519Key.String()),
-			match.JSONKeyEqual(curve25519Path, curve25519Key.String()),
+			match.JSONKeyEqual(ed25519Path, ed25519Key),
+			match.JSONKeyEqual(curve25519Path, curve25519Key),
 		}
 	}
 
@@ -111,13 +111,16 @@ func TestDeviceListUpdates(t *testing.T) {
 	// updates and queries before the barrier do not appear in `/sync` responses after the barrier.
 	makeBarrier := func(
 		t *testing.T,
-		deployment *docker.Deployment,
+		deployment complement.Deployment,
 		observingUser *client.CSAPI,
 		otherHSName string,
 	) func(t *testing.T, nextBatch string) string {
 		t.Helper()
 
-		barry := deployment.RegisterUser(t, otherHSName, generateLocalpart("barry"), "password", false)
+		barry := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
+			LocalpartSuffix: "barry",
+			Password:        "password",
+		})
 
 		// The observing user must share a room with the dummy barrier user.
 		roomID := barry.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
@@ -141,9 +144,15 @@ func TestDeviceListUpdates(t *testing.T) {
 	// We only care about what Alice sees.
 
 	// testOtherUserJoin tests another user joining a room Alice is already in.
-	testOtherUserJoin := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
-		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
-		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+	testOtherUserJoin := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
+		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
+			LocalpartSuffix: "alice",
+			Password:        "password",
+		})
+		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
+			LocalpartSuffix: "bob",
+			Password:        "password",
+		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
@@ -187,10 +196,16 @@ func TestDeviceListUpdates(t *testing.T) {
 
 	// testJoin tests Alice joining a room another user is already in.
 	testJoin := func(
-		t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string,
+		t *testing.T, deployment complement.Deployment, hsName string, otherHSName string,
 	) {
-		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
-		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
+			LocalpartSuffix: "alice",
+			Password:        "password",
+		})
+		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
+			LocalpartSuffix: "bob",
+			Password:        "password",
+		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
@@ -233,9 +248,15 @@ func TestDeviceListUpdates(t *testing.T) {
 	}
 
 	// testOtherUserLeave tests another user leaving a room Alice is in.
-	testOtherUserLeave := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
-		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
-		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+	testOtherUserLeave := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
+		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
+			LocalpartSuffix: "alice",
+			Password:        "password",
+		})
+		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
+			LocalpartSuffix: "bob",
+			Password:        "password",
+		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
@@ -284,9 +305,15 @@ func TestDeviceListUpdates(t *testing.T) {
 	}
 
 	// testLeave tests Alice leaving a room another user is in.
-	testLeave := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
-		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
-		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+	testLeave := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
+		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
+			LocalpartSuffix: "alice",
+			Password:        "password",
+		})
+		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
+			LocalpartSuffix: "bob",
+			Password:        "password",
+		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
@@ -335,9 +362,15 @@ func TestDeviceListUpdates(t *testing.T) {
 	}
 
 	// testOtherUserRejoin tests another user leaving and rejoining a room Alice is in.
-	testOtherUserRejoin := func(t *testing.T, deployment *docker.Deployment, hsName string, otherHSName string) {
-		alice := deployment.RegisterUser(t, hsName, generateLocalpart("alice"), "password", false)
-		bob := deployment.RegisterUser(t, otherHSName, generateLocalpart("bob"), "password", false)
+	testOtherUserRejoin := func(t *testing.T, deployment complement.Deployment, hsName string, otherHSName string) {
+		alice := deployment.Register(t, hsName, helpers.RegistrationOpts{
+			LocalpartSuffix: "alice",
+			Password:        "password",
+		})
+		bob := deployment.Register(t, otherHSName, helpers.RegistrationOpts{
+			LocalpartSuffix: "bob",
+			Password:        "password",
+		})
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
@@ -396,7 +429,7 @@ func TestDeviceListUpdates(t *testing.T) {
 	// Create two homeservers
 	// The users and rooms in the blueprint won't be used.
 	// Each test creates their own Alice and Bob users.
-	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	t.Run("when local user joins a room", func(t *testing.T) { testOtherUserJoin(t, deployment, "hs1", "hs1") })

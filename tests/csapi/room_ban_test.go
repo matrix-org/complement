@@ -3,8 +3,10 @@ package csapi_tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -13,33 +15,12 @@ import (
 // but this will actually validate against a present user in the room.
 // sytest: Non-present room members cannot ban others
 func TestNotPresentUserCannotBanOthers(t *testing.T) {
-	deployment := Deploy(t, b.MustValidate(b.Blueprint{
-		Name: "abc",
-		Homeservers: []b.Homeserver{
-			{
-				Name: "hs1",
-				Users: []b.User{
-					{
-						Localpart:   "@alice",
-						DisplayName: "Alice",
-					},
-					{
-						Localpart:   "@bob",
-						DisplayName: "Bob",
-					},
-					{
-						Localpart:   "@charlie",
-						DisplayName: "Charlie",
-					},
-				},
-			},
-		},
-	}))
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.Client(t, "hs1", "@charlie:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",

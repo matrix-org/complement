@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/tidwall/gjson"
-	"maunium.net/go/mautrix/crypto/olm"
 
 	"github.com/matrix-org/complement/b"
 )
@@ -418,9 +417,6 @@ func calculateUserInstructionSets(r *Runner, hs b.Homeserver) [][]instruction {
 		}
 		createdUsers[user.Localpart] = true
 
-		if user.OneTimeKeys > 0 {
-			instrs = append(instrs, instructionOneTimeKeyUpload(hs, user))
-		}
 		sets[i] = instrs
 	}
 	return sets
@@ -632,65 +628,6 @@ func instructionLogin(hs b.Homeserver, user b.User) instruction {
 		storeResponse: map[string]string{
 			"user_@" + user.Localpart + ":" + hs.Name:   ".access_token",
 			"device_@" + user.Localpart + ":" + hs.Name: ".device_id",
-		},
-	}
-}
-
-func instructionOneTimeKeyUpload(hs b.Homeserver, user b.User) instruction {
-	account := olm.NewAccount()
-	ed25519Key, curveKey := account.IdentityKeys()
-
-	userID := fmt.Sprintf("@%s:%s", user.Localpart, hs.Name)
-	deviceID := *user.DeviceID
-
-	ed25519KeyID := fmt.Sprintf("ed25519:%s", deviceID)
-	curveKeyID := fmt.Sprintf("curve25519:%s", deviceID)
-
-	deviceKeys := map[string]interface{}{
-		"user_id":    userID,
-		"device_id":  deviceID,
-		"algorithms": []string{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
-		"keys": map[string]string{
-			ed25519KeyID: ed25519Key.String(),
-			curveKeyID:   curveKey.String(),
-		},
-	}
-
-	signature, _ := account.SignJSON(deviceKeys)
-
-	deviceKeys["signatures"] = map[string]map[string]string{
-		userID: {
-			ed25519KeyID: signature,
-		},
-	}
-
-	account.GenOneTimeKeys(user.OneTimeKeys)
-
-	oneTimeKeys := map[string]interface{}{}
-
-	for kid, key := range account.OneTimeKeys() {
-		keyID := fmt.Sprintf("signed_curve25519:%s", kid)
-		keyMap := map[string]interface{}{
-			"key": key.String(),
-		}
-
-		signature, _ = account.SignJSON(keyMap)
-
-		keyMap["signatures"] = map[string]interface{}{
-			userID: map[string]string{
-				ed25519KeyID: signature,
-			},
-		}
-
-		oneTimeKeys[keyID] = keyMap
-	}
-	return instruction{
-		method:      "POST",
-		path:        "/_matrix/client/v3/keys/upload",
-		accessToken: fmt.Sprintf("user_@%s:%s", user.Localpart, hs.Name),
-		body: map[string]interface{}{
-			"device_keys":   deviceKeys,
-			"one_time_keys": oneTimeKeys,
 		},
 	}
 }

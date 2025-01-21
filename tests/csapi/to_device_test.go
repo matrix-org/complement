@@ -6,20 +6,24 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 )
 
 // sytest: Can send a message directly to a device using PUT /sendToDevice
 // sytest: Can recv a device message using /sync
 // sytest: Can send a to-device message to two users which both receive it using /sync
 func TestToDeviceMessages(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
-	charlie := deployment.RegisterUser(t, "hs1", "charlie", "charliepassword", false)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "charlie",
+		Password:        "charliepassword",
+	})
 
 	_, bobSince := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 	_, charlieSince := charlie.MustSync(t, client.SyncReq{TimeoutMillis: "0"})

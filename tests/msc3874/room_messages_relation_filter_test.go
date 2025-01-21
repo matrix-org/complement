@@ -1,7 +1,4 @@
-//go:build msc3874
-// +build msc3874
-
-package csapi_tests
+package tests
 
 import (
 	"net/http"
@@ -10,8 +7,9 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -19,10 +17,10 @@ import (
 
 func TestFilterMessagesByRelType(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // flakey
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
@@ -70,7 +68,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				threadEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -88,7 +86,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				referenceEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -106,7 +104,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				threadEventID, referenceEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -124,7 +122,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				rootEventID, referenceEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -142,7 +140,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				rootEventID, threadEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str
@@ -160,7 +158,7 @@ func TestFilterMessagesByRelType(t *testing.T) {
 	must.MatchResponse(t, res, match.HTTPResponse{
 		StatusCode: http.StatusOK,
 		JSON: []match.JSON{
-			match.JSONCheckOff("chunk", []interface{}{
+			match.JSONCheckOffDeprecated("chunk", []interface{}{
 				rootEventID,
 			}, func(r gjson.Result) interface{} {
 				return r.Get("event_id").Str

@@ -3,8 +3,9 @@ package helpers
 import (
 	"fmt"
 	"sync"
-	"testing"
 	"time"
+
+	"github.com/matrix-org/complement/ct"
 )
 
 // Waiter is a simple primitive to wait for a signal asynchronously. It is preferred
@@ -28,21 +29,21 @@ func NewWaiter() *Waiter {
 
 // Wait blocks until Finish() is called or until the timeout is reached.
 // If the timeout is reached, the test is failed.
-func (w *Waiter) Wait(t *testing.T, timeout time.Duration) {
+func (w *Waiter) Wait(t ct.TestLike, timeout time.Duration) {
 	t.Helper()
 	w.Waitf(t, timeout, "Wait")
 }
 
 // Waitf blocks until Finish() is called or until the timeout is reached.
 // If the timeout is reached, the test is failed with the given error message.
-func (w *Waiter) Waitf(t *testing.T, timeout time.Duration, errFormat string, args ...interface{}) {
+func (w *Waiter) Waitf(t ct.TestLike, timeout time.Duration, errFormat string, args ...interface{}) {
 	t.Helper()
 	select {
 	case <-w.ch:
 		return
 	case <-time.After(timeout):
 		errmsg := fmt.Sprintf(errFormat, args...)
-		t.Fatalf("%s: timed out after %f seconds.", errmsg, timeout.Seconds())
+		ct.Fatalf(t, "%s: timed out after %f seconds.", errmsg, timeout.Seconds())
 	}
 }
 

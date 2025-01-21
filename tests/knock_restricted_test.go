@@ -11,7 +11,8 @@ package tests
 import (
 	"testing"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
+	"github.com/matrix-org/complement/helpers"
 )
 
 var (
@@ -41,14 +42,14 @@ func TestCannotSendKnockViaSendKnockInMSC3787Room(t *testing.T) {
 
 // See TestRestrictedRoomsLocalJoin
 func TestRestrictedRoomsLocalJoinInMSC3787Room(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.
 	alice, allowed_room, room := setupRestrictedRoom(t, deployment, roomVersion, joinRule)
 
 	// Create a second user on the same homeserver.
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Execute the checks.
 	checkRestrictedRoom(t, alice, bob, allowed_room, room, joinRule)
@@ -56,14 +57,14 @@ func TestRestrictedRoomsLocalJoinInMSC3787Room(t *testing.T) {
 
 // See TestRestrictedRoomsRemoteJoin
 func TestRestrictedRoomsRemoteJoinInMSC3787Room(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintFederationOneToOneRoom)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	// Setup the user, allowed room, and restricted room.
 	alice, allowed_room, room := setupRestrictedRoom(t, deployment, roomVersion, joinRule)
 
 	// Create a second user on a different homeserver.
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// Execute the checks.
 	checkRestrictedRoom(t, alice, bob, allowed_room, room, joinRule)

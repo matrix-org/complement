@@ -3,8 +3,10 @@ package tests
 import (
 	"testing"
 
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -15,43 +17,12 @@ import (
 func TestACLs(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // needs https://github.com/matrix-org/dendrite/pull/3008
 	// 1. Prepare 3 or more servers. 1st will be room host, 2nd will be blocked with m.room.server_acl and 3rd server will be affected by this issue. 1st and 2nd servers don't have to be powered by dendrite.
-	deployment := Deploy(t, b.Blueprint{
-		Name: "federation_three_homeservers",
-		Homeservers: []b.Homeserver{
-			{
-				Name: "hs1",
-				Users: []b.User{
-					{
-						Localpart:   "alice",
-						DisplayName: "Alice",
-					},
-				},
-			},
-			{
-				Name: "hs2",
-				Users: []b.User{
-					{
-						Localpart:   "bob",
-						DisplayName: "Bob",
-					},
-				},
-			},
-			{
-				Name: "hs3",
-				Users: []b.User{
-					{
-						Localpart:   "charlie",
-						DisplayName: "Charlie",
-					},
-				},
-			},
-		},
-	})
+	deployment := complement.Deploy(t, 3)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs2", "@bob:hs2")
-	charlie := deployment.Client(t, "hs3", "@charlie:hs3")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs3", helpers.RegistrationOpts{})
 
 	// 2. Create room on 1st server
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})

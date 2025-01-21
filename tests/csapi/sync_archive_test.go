@@ -1,12 +1,13 @@
 package csapi_tests
 
 import (
+	"github.com/tidwall/gjson"
 	"testing"
 
-	"github.com/tidwall/gjson"
-
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/runtime"
 )
 
@@ -14,10 +15,10 @@ import (
 func TestSyncLeaveSection(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
 
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	includeLeaveFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -75,10 +76,10 @@ func TestSyncLeaveSection(t *testing.T) {
 func TestGappedSyncLeaveSection(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
 
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	gappyFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -113,14 +114,15 @@ func TestGappedSyncLeaveSection(t *testing.T) {
 }
 
 // sytest: Archived rooms only contain history from before the user left
+// ... plus later additions
 func TestArchivedRoomsHistory(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
 
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	const madeUpTestStateType = "a.madeup.test.state"
 
@@ -188,43 +190,111 @@ func TestArchivedRoomsHistory(t *testing.T) {
 		},
 	})
 
-	exhaustiveResCheck := func(result gjson.Result, origin string) {
-		roomRes := result.Get("rooms.leave." + client.GjsonEscape(roomID))
+	// Test the scenario where the /sync request returns events in the timeline.
+	// (Since Alice sent a pair of events before Bob left, this is the normal case.)
+	t.Run("timeline has events", func(t *testing.T) {
+		exhaustiveResCheck := func(t *testing.T, result gjson.Result, origin string) {
+			roomRes := result.Get("rooms.leave." + client.GjsonEscape(roomID))
 
-		stateEvents := roomRes.Get("state.events")
-		if stateEvents.Exists() {
+			stateEvents := roomRes.Get("state.events")
+			if stateEvents.Exists() {
+				if !stateEvents.IsArray() {
+					t.Fatalf("state.events is not an array")
+				}
+				if len(stateEvents.Array()) != 0 {
+					t.Fatalf("expected no state events in %s", origin)
+				}
+			}
+
+			timelineEvents := roomRes.Get("timeline.events")
+			if !timelineEvents.Exists() {
+				t.Fatalf("timeline.events does not exist in %s", origin)
+			}
+			if !timelineEvents.IsArray() {
+				t.Fatalf("timeline.events is not an array")
+			}
+			if len(timelineEvents.Array()) != 2 {
+				t.Fatalf("Expected two timeline events in %s", origin)
+			}
+
+			timelineEvent := timelineEvents.Array()[0]
+			if timelineEvent.Get("content.body").Str != "before" {
+				t.Fatalf("Expected only events from before leaving in %s", origin)
+			}
+		}
+
+		t.Run("initial sync", func(t *testing.T) {
+			syncRes, _ := bob.MustSync(t, client.SyncReq{Filter: bobFilter})
+			exhaustiveResCheck(t, syncRes, "syncRes")
+		})
+
+		t.Run("incremental sync", func(t *testing.T) {
+			sinceSyncRes, _ := bob.MustSync(t, client.SyncReq{Filter: bobFilter, Since: bobSince})
+			exhaustiveResCheck(t, sinceSyncRes, "sinceSyncRes")
+		})
+	})
+
+	// Test the scenario where the /sync request returns an *empty* timeline.
+	// We arrange for this by setting `limit: 0` on the /sync request.
+	// This is a regression test for a bug that was fixed in https://github.com/element-hq/synapse/pull/16932.
+	t.Run("timeline is empty", func(t *testing.T) {
+		check := func(t *testing.T, result gjson.Result) {
+			roomRes := result.Get("rooms.leave." + client.GjsonEscape(roomID))
+			t.Logf("Sync result: %s", roomRes)
+
+			// Double-check that the timeline is, indeed, empty.
+			timelineEvents := roomRes.Get("timeline.events")
+			if !timelineEvents.IsArray() {
+				t.Fatalf("timeline.events is not an array")
+			}
+			if len(timelineEvents.Array()) != 0 {
+				t.Fatalf("Expected no timeline events")
+			}
+
+			// `state` should contain the leave event and the madeup test state from *before* the leave.
+			stateEvents := roomRes.Get("state.events")
 			if !stateEvents.IsArray() {
 				t.Fatalf("state.events is not an array")
 			}
-			if len(stateEvents.Array()) != 0 {
-				t.Fatalf("expected no state events in %s", origin)
+			foundLeave := false
+			for _, event := range stateEvents.Array() {
+				if event.Get("type").Str == madeUpTestStateType {
+					if event.Get("content.my_key").Str != "before" {
+						t.Errorf("state should not include state from after the user left.")
+					}
+				}
+
+				if event.Get("type").Str == "m.room.member" && event.Get("state_key").Str == bob.UserID {
+					membership := event.Get("content.membership").Str
+					if membership == "leave" {
+						foundLeave = true
+					} else {
+						t.Errorf("Expected Bob's leave event; got %s", membership)
+					}
+				}
+			}
+
+			if !foundLeave {
+				t.Errorf("Didn't see Bob's leave event")
 			}
 		}
 
-		timelineEvents := roomRes.Get("timeline.events")
-		if !timelineEvents.Exists() {
-			t.Fatalf("timeline.events does not exist in %s", origin)
-		}
-		if !timelineEvents.IsArray() {
-			t.Fatalf("timeline.events is not an array")
-		}
-		if len(timelineEvents.Array()) != 2 {
-			t.Fatalf("Expected two timeline events in %s", origin)
-		}
+		// Construct a timeline filter which will cause the timeline to be empty
+		filter := `{ "room": {
+              "timeline": { "limit": 0 },
+              "include_leave": true
+        }}`
+		t.Run("initial sync", func(t *testing.T) {
+			syncRes, _ := bob.MustSync(t, client.SyncReq{Filter: filter})
+			check(t, syncRes)
+		})
 
-		timelineEvent := timelineEvents.Array()[0]
-		if timelineEvent.Get("content.body").Str != "before" {
-			t.Fatalf("Expected only events from before leaving in %s", origin)
-		}
-	}
-
-	syncRes, _ := bob.MustSync(t, client.SyncReq{Filter: bobFilter})
-
-	exhaustiveResCheck(syncRes, "syncRes")
-
-	sinceSyncRes, _ := bob.MustSync(t, client.SyncReq{Filter: bobFilter, Since: bobSince})
-
-	exhaustiveResCheck(sinceSyncRes, "sinceSyncRes")
+		t.Run("incremental sync", func(t *testing.T) {
+			t.Skip("Synapse doesn't return the room at all!")
+			sinceSyncRes, _ := bob.MustSync(t, client.SyncReq{Filter: filter, Since: bobSince})
+			check(t, sinceSyncRes)
+		})
+	})
 }
 
 // This tests if rooms in the leave section get removed after a sync.
@@ -233,11 +303,11 @@ func TestArchivedRoomsHistory(t *testing.T) {
 func TestOlderLeftRoomsNotInLeaveSection(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
 
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	aliceFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -315,11 +385,11 @@ func TestLeaveEventVisibility(t *testing.T) {
 	//  this user is only meant to keep the room alive,
 	//  as a room with no users may be purged by the server,
 	//  creating side effects that this test is not looking for.
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	aliceFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -398,11 +468,11 @@ func TestLeaveEventVisibility(t *testing.T) {
 func TestLeaveEventInviteRejection(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1323
 
-	deployment := Deploy(t, b.BlueprintOneToOneRoom)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
-	bob := deployment.Client(t, "hs1", "@bob:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	aliceFilter := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{

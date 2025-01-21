@@ -10,19 +10,19 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"testing"
 	"time"
 
-	"net/http"
-
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
-	"github.com/matrix-org/complement/internal/federation"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -39,20 +39,17 @@ func TestKnocking(t *testing.T) {
 }
 
 func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
-	deployment := Deploy(t, b.BlueprintFederationTwoLocalOneRemote)
+	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
 	// Create a client for one local user
-	aliceUserID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", aliceUserID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Create a client for another local user
-	bobUserID := "@bob:hs1"
-	bob := deployment.Client(t, "hs1", bobUserID)
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Create a client for a remote user
-	charlieUserID := "@charlie:hs2"
-	charlie := deployment.Client(t, "hs2", charlieUserID)
+	charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// Create a server to observe
 	inviteWaiter := helpers.NewWaiter()
@@ -244,7 +241,13 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		}))
 	})
 
+	t.Run("A user cannot knock on a room they are already invited to", func(t *testing.T) {
+		reason := "I'm sticking my hand out the window and knocking again!"
+		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{"hs1"}, 403)
+	})
+
 	t.Run("A user cannot knock on a room they are already in", func(t *testing.T) {
+		knockingUser.MustJoinRoom(t, roomID, []string{"hs1"})
 		reason := "I'm sticking my hand out the window and knocking again!"
 		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{"hs1"}, 403)
 	})
@@ -341,12 +344,11 @@ func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
 }
 
 func doTestKnockRoomsInPublicRoomsDirectory(t *testing.T, roomVersion string, joinRule string) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	// Create a client for a local user
-	aliceUserID := "@alice:hs1"
-	alice := deployment.Client(t, "hs1", aliceUserID)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Create an invite-only room with the knock room version
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{

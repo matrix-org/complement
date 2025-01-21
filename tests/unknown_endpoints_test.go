@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -37,10 +38,10 @@ func queryUnknownMethod(t *testing.T, user *client.CSAPI, method string, paths [
 // Homeservers should return a 404 for unknown endpoints and 405 for incorrect
 // methods to known endpoints.
 func TestUnknownEndpoints(t *testing.T) {
-	deployment := Deploy(t, b.BlueprintAlice)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Client(t, "hs1", "@alice:hs1")
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// A completely unknown prefix to the matrix project.
 	t.Run("Unknown prefix", func(t *testing.T) {

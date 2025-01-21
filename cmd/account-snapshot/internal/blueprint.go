@@ -40,10 +40,6 @@ func ConvertToBlueprint(s *Snapshot, serverName string) (*b.Blueprint, error) {
 				DisplayName: local,
 				DeviceID:    &devices[i],
 			}
-			// set up OTKs if this user+device sends E2E messages
-			if devices[i] != NoEncryptedDevice {
-				user.OneTimeKeys = 100
-			}
 			// set DM list if this is the syncing user
 			if userID == s.UserID {
 				user.AccountData = append(user.AccountData, b.AccountData{
