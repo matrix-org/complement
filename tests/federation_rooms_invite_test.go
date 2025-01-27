@@ -1,6 +1,11 @@
+// These tests currently fail on Dendrite, due to Dendrite bugs.
+//go:build !dendrite_blacklist
+// +build !dendrite_blacklist
+
 package tests
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/matrix-org/complement"
@@ -17,8 +22,17 @@ func TestFederationRoomsInvite(t *testing.T) {
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
-	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "bob"})
+	bob2 := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "bob2"})
+
+	includeLeaveSyncFilterBytes, err := json.Marshal(map[string]interface{}{
+		"room": map[string]interface{}{
+			"include_leave": true,
+		},
+	})
+	must.NotError(t, "failed to marshal include_leave filter", err)
+	includeLeaveSyncFilter := string(includeLeaveSyncFilterBytes)
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: Invited user can reject invite over federation
@@ -30,7 +44,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			})
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			bob.MustLeaveRoom(t, roomID)
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+			alice.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
 
 		// sytest: Invited user can reject invite over federation several times
@@ -43,7 +57,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 				alice.MustInviteRoom(t, roomID, bob.UserID)
 				bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 				bob.MustLeaveRoom(t, roomID)
-				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+				alice.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob.UserID, roomID))
 			}
 		})
 
@@ -57,9 +71,9 @@ func TestFederationRoomsInvite(t *testing.T) {
 			aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			alice.MustLeaveRoom(t, roomID)
-			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(alice.UserID, roomID))
+			alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince, Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(alice.UserID, roomID))
 			bob.MustLeaveRoom(t, roomID)
-			bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncLeftFrom(bob.UserID, roomID))
+			bob.MustSyncUntil(t, client.SyncReq{Since: bobSince, Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
 
 		// sytest: Remote invited user can see room metadata
@@ -83,6 +97,50 @@ func TestFederationRoomsInvite(t *testing.T) {
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			res, _ := bob.MustSync(t, client.SyncReq{})
 			verifyState(t, res, wantFields, wantValues, roomID, alice)
+		})
+
+		t.Run("Remote invited user can join the room when homeserver is already participating in the room", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
+				"preset": "private_chat",
+			})
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+
+			// bob1 is invited and can join the room (hs2 is now participating of the room)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			bob.MustJoinRoom(t, roomID, []string{"hs1"})
+			// Make sure alice can see bob in the room
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+			// bob2 is invited and can also join the room
+			alice.MustInviteRoom(t, roomID, bob2.UserID)
+			bob2.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob2.UserID, roomID))
+			bob2.MustJoinRoom(t, roomID, []string{"hs1"})
+			// Make sure alice can see bob2 in the room
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob2.UserID, roomID))
+		})
+
+		t.Run("Remote invited user can reject invite when homeserver is already participating in the room", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
+				"preset": "private_chat",
+			})
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+
+			// bob1 is invited and can join the room (hs2 is now participating of the room)
+			alice.MustInviteRoom(t, roomID, bob.UserID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			bob.MustJoinRoom(t, roomID, []string{"hs1"})
+			// Make sure alice can see bob in the room
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+			// bob2 is invited and can reject the invite (leave the room)
+			alice.MustInviteRoom(t, roomID, bob2.UserID)
+			bob2.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob2.UserID, roomID))
+			bob2.MustLeaveRoom(t, roomID)
+			// Make sure alice can see bob2 left the room
+			alice.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob2.UserID, roomID))
 		})
 
 		t.Run("Invited user has 'is_direct' flag in prev_content after joining", func(t *testing.T) {
