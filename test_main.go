@@ -9,7 +9,33 @@ import (
 	"github.com/matrix-org/complement/ct"
 )
 
-var testPackage *TestPackage
+var (
+	testPackage    *TestPackage
+	customDeployer func(numServers int) Deployment
+)
+
+type complementOpts struct {
+	cleanup          func()
+	customDeployment func(numServers int) Deployment
+}
+type opt func(*complementOpts)
+
+// WithCleanup adds a cleanup function which is called prior to terminating the test suite.
+// It is called BEFORE Complement containers are destroyed.
+// This function should be used for per-suite cleanup operations e.g tearing down containers, killing
+// child processes, etc.
+func WithCleanup(fn func()) opt {
+	return func(co *complementOpts) {
+		co.cleanup = fn
+	}
+}
+
+// WithDeployment adds a custom mechanism to deploy homeservers.
+func WithDeployment(fn func(numServers int) Deployment) opt {
+	return func(co *complementOpts) {
+		co.customDeployment = fn
+	}
+}
 
 // TestMain is the main entry point for Complement.
 //
@@ -19,14 +45,17 @@ var testPackage *TestPackage
 // The 'namespace' should be unique for this test package, among all test packages which may run in parallel, to avoid
 // docker containers stepping on each other. For MSCs, use the MSC name. For versioned releases, use the version number
 // along with any sub-directory name.
-func TestMain(m *testing.M, namespace string) {
-	TestMainWithCleanup(m, namespace, nil)
-}
+//
+// Functional options can be used to control how Complement processes deployments.
+func TestMain(m *testing.M, namespace string, customOpts ...opt) {
+	opts := &complementOpts{}
+	for _, o := range customOpts {
+		o(opts)
+	}
+	if opts.customDeployment != nil {
+		customDeployer = opts.customDeployment
+	}
 
-// TestMainWithCleanup is TestMain but with a cleanup function prior to terminating the test suite.
-// This function should be used for per-suite cleanup operations e.g tearing down containers, killing
-// child processes, etc.
-func TestMainWithCleanup(m *testing.M, namespace string, cleanup func()) {
 	var err error
 	testPackage, err = NewTestPackage(namespace)
 	if err != nil {
@@ -34,8 +63,8 @@ func TestMainWithCleanup(m *testing.M, namespace string, cleanup func()) {
 		os.Exit(1)
 	}
 	exitCode := m.Run()
-	if cleanup != nil {
-		cleanup()
+	if opts.cleanup != nil {
+		opts.cleanup()
 	}
 	testPackage.Cleanup()
 	os.Exit(exitCode)
@@ -60,6 +89,9 @@ func Deploy(t ct.TestLike, numServers int) Deployment {
 	t.Helper()
 	if testPackage == nil {
 		ct.Fatalf(t, "Deploy: testPackage not set, did you forget to call complement.TestMain?")
+	}
+	if customDeployer != nil {
+		return customDeployer(numServers)
 	}
 	return testPackage.Deploy(t, numServers)
 }
