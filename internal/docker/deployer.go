@@ -91,8 +91,9 @@ func (d *Deployer) CreateDirtyServer(hsName string) (*HomeserverDeployment, erro
 		baseImageURI = uri
 	}
 
+	containerName := fmt.Sprintf("complement_%s_dirty_%s", d.config.PackageNamespace, hsName)
 	hsDeployment, err := deployImage(
-		d.Docker, baseImageURI, fmt.Sprintf("complement_%s_dirty_%s", d.config.PackageNamespace, hsName),
+		d.Docker, baseImageURI, containerName,
 		d.config.PackageNamespace, "", hsName, nil, "dirty",
 		networkName, d.config,
 	)
@@ -101,6 +102,11 @@ func (d *Deployer) CreateDirtyServer(hsName string) (*HomeserverDeployment, erro
 			// print logs to help debug
 			printLogs(d.Docker, hsDeployment.ContainerID, "dirty")
 		}
+
+		// Give some context for what the port bindings look like the time of the failure.
+		// This gives better context for when `bind: address already in use` errors happen.
+		printPortBindingsOfAllComplementContainers(d.Docker, "While dirty deploying "+containerName)
+
 		return nil, fmt.Errorf("CreateDirtyServer: Failed to deploy image %v : %w", baseImageURI, err)
 	}
 	return hsDeployment, nil
@@ -164,8 +170,9 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		asIDToRegistrationMap := asIDToRegistrationFromLabels(img.Labels)
 
 		// TODO: Make CSAPI port configurable
+		containerName := fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter)
 		deployment, err := deployImage(
-			d.Docker, img.ID, fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter),
+			d.Docker, img.ID, containerName,
 			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkName, d.config,
 		)
 		if err != nil {
@@ -173,6 +180,11 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 				// print logs to help debug
 				printLogs(d.Docker, deployment.ContainerID, contextStr)
 			}
+
+			// Give some context for what the port bindings look like the time of the failure.
+			// This gives better context for when `bind: address already in use` errors happen.
+			printPortBindingsOfAllComplementContainers(d.Docker, "While deploying "+containerName)
+
 			return fmt.Errorf("Deploy: Failed to deploy image %+v : %w", img, err)
 		}
 		mu.Lock()
