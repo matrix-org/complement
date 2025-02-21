@@ -49,7 +49,7 @@ func TestThreadsEndpoint(t *testing.T) {
 
 	res = alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", "txn-2"}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
-		"body":    "Thraed 2 Root",
+		"body":    "Thread 2 Root",
 	}))
 	threadID2 := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "event_id")
 
