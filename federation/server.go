@@ -357,6 +357,57 @@ func (s *Server) MustCreateEvent(t ct.TestLike, room *ServerRoom, ev Event) goma
 	return signedEvent
 }
 
+// Invite someone a room.
+func (s *Server) MustInviteRoom(
+	t ct.TestLike,
+	deployment FederationDeployment,
+	remoteServer spec.ServerName,
+	roomID string,
+	inviterUserID string,
+	inviteeUserID string,
+) {
+	t.Helper()
+	fedClient := s.FederationClient(deployment)
+
+	room := s.rooms[roomID]
+	if room == nil {
+		ct.Fatalf(t, "MustInviteRoom: room %s not found", roomID)
+	}
+	roomVersionImplementation, err := gomatrixserverlib.GetRoomVersion(room.Version)
+
+	rawInviteEvent := s.MustCreateEvent(t, room, Event{
+		Type:     "m.room.member",
+		StateKey: &inviterUserID,
+		Sender:   inviteeUserID,
+		Content: map[string]interface{}{
+			"membership": "invite",
+		},
+	})
+	inviteReq, err := fclient.NewInviteV2Request(rawInviteEvent, []gomatrixserverlib.InviteStrippedState{})
+	if err != nil {
+		t.Fatalf("failed to make invite request: %s", err)
+	}
+	sendInviteResp, err := fedClient.SendInviteV2(
+		context.Background(),
+		spec.ServerName(s.ServerName()),
+		remoteServer,
+		inviteReq,
+	)
+	if err != nil {
+		t.Fatalf("MustInviteRoom: failed to send invite v2: %s", err)
+	}
+
+	inviteEvent, err := roomVersionImplementation.NewEventFromUntrustedJSON(sendInviteResp.Event)
+	if err != nil {
+		t.Fatalf("MustInviteRoom: failed to decode event response: %w", err)
+	}
+
+	room.AddEvent(inviteEvent)
+	s.rooms[roomID] = room
+
+	t.Logf("Server.MustInviteRoom %s invited %s to room ID %s", inviterUserID, inviteeUserID, roomID)
+}
+
 // MustJoinRoom will make the server send a make_join and a send_join to join a room
 // It returns the resultant room.
 func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string, partialState ...bool) *ServerRoom {

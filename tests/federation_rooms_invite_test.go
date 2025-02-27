@@ -13,6 +13,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
@@ -99,7 +100,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			verifyState(t, res, wantFields, wantValues, roomID, alice)
 		})
 
-		t.Run("Remote invited user can join the room when homeserver is already participating in the room", func(t *testing.T) {
+		t.Run("Remote invited user can join the room when homeserver is already participating in the room (e2e)", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
@@ -121,7 +122,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob2.UserID, roomID))
 		})
 
-		t.Run("Remote invited user can reject invite when homeserver is already participating in the room", func(t *testing.T) {
+		t.Run("Remote invited user can reject invite when homeserver is already participating in the room (e2e)", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
@@ -141,6 +142,44 @@ func TestFederationRoomsInvite(t *testing.T) {
 			bob2.MustLeaveRoom(t, roomID)
 			// Make sure alice can see bob2 left the room
 			alice.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob2.UserID, roomID))
+		})
+
+		// Engineered condition where we only send `/invite` requests over federation and do
+		// not send the event in a `/send` transaction. Regression tests for
+		// https://github.com/element-hq/synapse/pull/18075
+		t.Run("Remote invited user can join the room when homeserver is already participating in the room (engineered)", func(t *testing.T) {
+			t.Parallel()
+
+			srv := federation.NewServer(t, deployment,
+				federation.HandleKeyRequests(),
+				// bob1 will use this to join the remote room
+				federation.HandleMakeSendJoinRequests(),
+			)
+			cancel := srv.Listen()
+			defer cancel()
+
+			engineeredAliceUserId := srv.UserID("alice")
+
+			roomVersion := alice.GetDefaultRoomVersion(t)
+			initalEvents := federation.InitialRoomEvents(roomVersion, engineeredAliceUserId)
+			serverRoom := srv.MustMakeRoom(t, roomVersion, initalEvents)
+			roomID := serverRoom.RoomID
+
+			// bob1 is invited and can join the room (hs2 is now participating of the room)
+			//
+			// alice.MustInviteRoom(t, roomID, bob.UserID)
+			srv.MustInviteRoom(t, deployment, "hs1", roomID, engineeredAliceUserId, bob.UserID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			bob.MustJoinRoom(t, roomID, []string{srv.ServerName()})
+			// Make sure alice can see bob in the room
+			// alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+			// bob2 is invited and can also join the room
+			// alice.MustInviteRoom(t, roomID, bob2.UserID)
+			// bob2.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob2.UserID, roomID))
+			// bob2.MustJoinRoom(t, roomID, []string{srv.ServerName()})
+			// // Make sure alice can see bob2 in the room
+			// alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob2.UserID, roomID))
 		})
 
 		t.Run("Invited user has 'is_direct' flag in prev_content after joining", func(t *testing.T) {
