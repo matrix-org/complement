@@ -66,7 +66,7 @@ func TestUploadKey(t *testing.T) {
 				},
 				"one_time_keys": oneTimeKeys,
 			})
-			resp := bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+			resp := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusBadRequest,
 				JSON: []match.JSON{
