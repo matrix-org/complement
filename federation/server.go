@@ -183,7 +183,7 @@ func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersi
 	//  * prevents homeservers from getting confused when multiple test cases re-use the same homeserver deployment.
 	roomID := fmt.Sprintf("!%d-%s:%s", len(s.rooms), util.RandomString(18), s.serverName)
 	t.Logf("Creating room %s with version %s", roomID, roomVer)
-	room := newRoom(roomVer, roomID)
+	room := NewServerRoom(roomVer, roomID)
 
 	// sign all these events
 	for _, ev := range events {
@@ -425,9 +425,9 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 		ct.Fatalf(t, "MustJoinRoom: send_join failed: %v", err)
 	}
 	stateEvents := sendJoinResp.StateEvents.UntrustedEvents(roomVer)
-	room := newRoom(roomVer, roomID)
+	room := NewServerRoom(roomVer, roomID)
 	for _, ev := range stateEvents {
-		room.replaceCurrentState(ev)
+		room.ReplaceCurrentState(ev)
 	}
 	room.AddEvent(joinEvent)
 	s.rooms[roomID] = room
