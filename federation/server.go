@@ -480,6 +480,11 @@ func (s *Server) MustLeaveRoom(t ct.TestLike, deployment FederationDeployment, r
 	t.Logf("Server.MustLeaveRoom left room ID %s", roomID)
 }
 
+// AddRoom is a low-level function to add a custom room to the server. Useful to mix custom logic with helper functions.
+func (s *Server) AddRoom(room *ServerRoom) {
+	s.rooms[room.RoomID] = room
+}
+
 // ValidFederationRequest is a wrapper around http.HandlerFunc which automatically validates the incoming
 // federation request and supports sending back JSON. Fails the test if the request is not valid.
 func (s *Server) ValidFederationRequest(t ct.TestLike, handler func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse) http.HandlerFunc {
