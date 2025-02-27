@@ -45,8 +45,8 @@ type ServerRoom struct {
 	waitersMu          *sync.Mutex
 }
 
-// newRoom creates an empty room structure with no events
-func newRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *ServerRoom {
+// NewServerRoom creates an empty room structure with no events
+func NewServerRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *ServerRoom {
 	return &ServerRoom{
 		RoomID:             roomId,
 		Version:            roomVer,
@@ -61,7 +61,7 @@ func newRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *ServerRoom {
 // Updates depth and forward extremities.
 func (r *ServerRoom) AddEvent(ev gomatrixserverlib.PDU) {
 	if ev.StateKey() != nil {
-		r.replaceCurrentState(ev)
+		r.ReplaceCurrentState(ev)
 	}
 	r.TimelineMutex.Lock()
 	r.Timeline = append(r.Timeline, ev)
@@ -135,9 +135,9 @@ func (r *ServerRoom) AuthEvents(sn gomatrixserverlib.StateNeeded) (eventIDs []st
 	return
 }
 
-// replaceCurrentState inserts a new state event for this room or replaces current state depending
-// on the (type, state_key) provided.
-func (r *ServerRoom) replaceCurrentState(ev gomatrixserverlib.PDU) {
+// ReplaceCurrentState inserts a new state event for this room or replaces current state depending
+// on the (type, state_key) provided. The event provided must be a state event.
+func (r *ServerRoom) ReplaceCurrentState(ev gomatrixserverlib.PDU) {
 	tuple := fmt.Sprintf("%s\x1f%s", ev.Type(), *ev.StateKey())
 	r.StateMutex.Lock()
 	r.State[tuple] = ev

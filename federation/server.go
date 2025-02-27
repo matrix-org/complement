@@ -183,7 +183,7 @@ func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersi
 	//  * prevents homeservers from getting confused when multiple test cases re-use the same homeserver deployment.
 	roomID := fmt.Sprintf("!%d-%s:%s", len(s.rooms), util.RandomString(18), s.serverName)
 	t.Logf("Creating room %s with version %s", roomID, roomVer)
-	room := newRoom(roomVer, roomID)
+	room := NewServerRoom(roomVer, roomID)
 
 	// sign all these events
 	for _, ev := range events {
@@ -425,9 +425,9 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 		ct.Fatalf(t, "MustJoinRoom: send_join failed: %v", err)
 	}
 	stateEvents := sendJoinResp.StateEvents.UntrustedEvents(roomVer)
-	room := newRoom(roomVer, roomID)
+	room := NewServerRoom(roomVer, roomID)
 	for _, ev := range stateEvents {
-		room.replaceCurrentState(ev)
+		room.ReplaceCurrentState(ev)
 	}
 	room.AddEvent(joinEvent)
 	s.rooms[roomID] = room
@@ -478,6 +478,11 @@ func (s *Server) MustLeaveRoom(t ct.TestLike, deployment FederationDeployment, r
 	s.rooms[roomID] = room
 
 	t.Logf("Server.MustLeaveRoom left room ID %s", roomID)
+}
+
+// AddRoom is a low-level function to add a custom room to the server. Useful to mix custom logic with helper functions.
+func (s *Server) AddRoom(room *ServerRoom) {
+	s.rooms[room.RoomID] = room
 }
 
 // ValidFederationRequest is a wrapper around http.HandlerFunc which automatically validates the incoming
