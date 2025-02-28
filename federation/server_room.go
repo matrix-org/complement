@@ -358,6 +358,43 @@ type ServerRoomImpl interface {
 	GenerateSendJoinResponse(s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin
 }
 
+type ServerRoomImplCustom struct {
+	ServerRoomImplDefault
+	ProtoEventCreatorFn            func(def ServerRoomImpl, ev Event) (*gomatrixserverlib.ProtoEvent, error)
+	EventCreatorFn                 func(def ServerRoomImpl, s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error)
+	PopulateFromSendJoinResponseFn func(def ServerRoomImpl, joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin)
+	GenerateSendJoinResponseFn     func(def ServerRoomImpl, s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin
+}
+
+func (i *ServerRoomImplCustom) ProtoEventCreator(ev Event) (*gomatrixserverlib.ProtoEvent, error) {
+	if i.ProtoEventCreatorFn != nil {
+		return i.ProtoEventCreatorFn(&i.ServerRoomImplDefault, ev)
+	}
+	return i.ServerRoomImplDefault.ProtoEventCreator(ev)
+}
+
+func (i *ServerRoomImplCustom) EventCreator(s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error) {
+	if i.EventCreatorFn != nil {
+		return i.EventCreatorFn(&i.ServerRoomImplDefault, s, proto)
+	}
+	return i.ServerRoomImplDefault.EventCreator(s, proto)
+}
+
+func (i *ServerRoomImplCustom) PopulateFromSendJoinResponse(joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin) {
+	if i.PopulateFromSendJoinResponseFn != nil {
+		i.PopulateFromSendJoinResponseFn(&i.ServerRoomImplDefault, joinEvent, resp)
+		return
+	}
+	i.ServerRoomImplDefault.PopulateFromSendJoinResponse(joinEvent, resp)
+}
+
+func (i *ServerRoomImplCustom) GenerateSendJoinResponse(s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin {
+	if i.GenerateSendJoinResponseFn != nil {
+		return i.GenerateSendJoinResponseFn(&i.ServerRoomImplDefault, s, joinEvent, expectPartialState, omitServersInRoom)
+	}
+	return i.ServerRoomImplDefault.GenerateSendJoinResponse(s, joinEvent, expectPartialState, omitServersInRoom)
+}
+
 type ServerRoomImplDefault struct {
 	Room *ServerRoom
 }
