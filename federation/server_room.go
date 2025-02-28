@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/ct"
@@ -41,8 +43,17 @@ type ServerRoom struct {
 	TimelineMutex      sync.RWMutex
 	ForwardExtremities []string
 	Depth              int64
-	waiters            map[string][]*helpers.Waiter // room ID -> []Waiter
-	waitersMu          *sync.Mutex
+	// functions to map Complement events into actual PDUs.
+	// Most tests don't care about this and can use the default creator function,
+	// but if your MSC or tests fiddle with the raw JSON in some way then this
+	// function needs to be replaced. By replacing this function, helper functions
+	// which indirectly create events (e.g joins and leaves) will automatically use
+	// this and will hence work with your custom code. Modifying ProtoEventCreator
+	// will also impact the proto events returned via /make_xxx calls.
+	ProtoEventCreator func(r *ServerRoom, ev Event) (*gomatrixserverlib.ProtoEvent, error)
+	EventCreator      func(s *Server, r *ServerRoom, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error)
+	waiters           map[string][]*helpers.Waiter // room ID -> []Waiter
+	waitersMu         *sync.Mutex
 }
 
 // NewServerRoom creates an empty room structure with no events
@@ -52,6 +63,8 @@ func NewServerRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *Server
 		Version:            roomVer,
 		State:              make(map[string]gomatrixserverlib.PDU),
 		ForwardExtremities: make([]string, 0),
+		EventCreator:       EventCreator,
+		ProtoEventCreator:  ProtoEventCreator,
 		waiters:            make(map[string][]*helpers.Waiter),
 		waitersMu:          &sync.Mutex{},
 	}
@@ -334,4 +347,55 @@ func (r *ServerRoom) EventIDsOrReferences(events []gomatrixserverlib.PDU) (refs 
 		refs[i] = ev.EventID()
 	}
 	return
+}
+
+func ProtoEventCreator(room *ServerRoom, ev Event) (*gomatrixserverlib.ProtoEvent, error) {
+	var prevEvents interface{}
+	if ev.PrevEvents != nil {
+		// We deliberately want to set the prev events.
+		prevEvents = ev.PrevEvents
+	} else {
+		// No other prev events were supplied so we'll just
+		// use the forward extremities of the room, which is
+		// the usual behaviour.
+		prevEvents = room.ForwardExtremities
+	}
+	proto := gomatrixserverlib.ProtoEvent{
+		SenderID:   ev.Sender,
+		Depth:      int64(room.Depth + 1), // depth starts at 1
+		Type:       ev.Type,
+		StateKey:   ev.StateKey,
+		RoomID:     room.RoomID,
+		PrevEvents: prevEvents,
+		AuthEvents: ev.AuthEvents,
+		Redacts:    ev.Redacts,
+	}
+	if err := proto.SetContent(ev.Content); err != nil {
+		return nil, fmt.Errorf("EventCreator: failed to marshal event content: %s - %+v", err, ev.Content)
+	}
+	if err := proto.SetUnsigned(ev.Content); err != nil {
+		return nil, fmt.Errorf("EventCreator: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
+	}
+	if proto.AuthEvents == nil {
+		var stateNeeded gomatrixserverlib.StateNeeded
+		stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(&proto)
+		if err != nil {
+			return nil, fmt.Errorf("EventCreator: failed to work out auth_events : %s", err)
+		}
+		proto.AuthEvents = room.AuthEvents(stateNeeded)
+	}
+	return &proto, nil
+}
+
+func EventCreator(s *Server, room *ServerRoom, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error) {
+	verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+	if err != nil {
+		return nil, fmt.Errorf("EventCreator: invalid room version: %s", err)
+	}
+	eb := verImpl.NewEventBuilderFromProtoEvent(proto)
+	signedEvent, err := eb.Build(time.Now(), spec.ServerName(s.serverName), s.KeyID, s.Priv)
+	if err != nil {
+		return nil, fmt.Errorf("EventCreator: failed to sign event: %s", err)
+	}
+	return signedEvent, nil
 }

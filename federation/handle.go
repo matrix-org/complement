@@ -59,29 +59,22 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 // or dealing with HTTP responses itself.
 func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp fclient.RespMakeJoin, err error) {
 	// Generate a join event
-	proto := gomatrixserverlib.ProtoEvent{
-		SenderID:   userID,
-		RoomID:     room.RoomID,
-		Type:       "m.room.member",
-		StateKey:   &userID,
-		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
-		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
-	}
-	err = proto.SetContent(map[string]interface{}{"membership": spec.Join})
+	proto, err := room.ProtoEventCreator(room, Event{
+		Type:     "m.room.member",
+		StateKey: &userID,
+		Content: map[string]interface{}{
+			"membership": spec.Join,
+		},
+		Sender: userID,
+	})
 	if err != nil {
-		err = fmt.Errorf("make_join cannot set membership content: %w", err)
+		err = fmt.Errorf("make_join cannot set create proto event: %w", err)
 		return
 	}
-	stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(&proto)
-	if err != nil {
-		err = fmt.Errorf("make_join cannot calculate auth_events: %w", err)
-		return
-	}
-	proto.AuthEvents = room.AuthEvents(stateNeeded)
 
 	resp = fclient.RespMakeJoin{
 		RoomVersion: room.Version,
-		JoinEvent:   proto,
+		JoinEvent:   *proto,
 	}
 	return
 }
@@ -91,29 +84,22 @@ func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp fclient.
 // or dealing with HTTP responses itself.
 func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp fclient.RespMakeKnock, err error) {
 	// Generate a knock event
-	proto := gomatrixserverlib.ProtoEvent{
-		SenderID:   userID,
-		RoomID:     room.RoomID,
-		Type:       "m.room.member",
-		StateKey:   &userID,
-		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
-		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
-	}
-	err = proto.SetContent(map[string]interface{}{"membership": spec.Join})
+	proto, err := room.ProtoEventCreator(room, Event{
+		Type:     "m.room.member",
+		StateKey: &userID,
+		Content: map[string]interface{}{
+			"membership": spec.Join, // XXX this feels wrong?
+		},
+		Sender: userID,
+	})
 	if err != nil {
-		err = fmt.Errorf("make_knock cannot set membership content: %w", err)
+		err = fmt.Errorf("make_knock cannot set create proto event: %w", err)
 		return
 	}
-	stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(&proto)
-	if err != nil {
-		err = fmt.Errorf("make_knock cannot calculate auth_events: %w", err)
-		return
-	}
-	proto.AuthEvents = room.AuthEvents(stateNeeded)
 
 	resp = fclient.RespMakeKnock{
 		RoomVersion: room.Version,
-		KnockEvent:  proto,
+		KnockEvent:  *proto,
 	}
 	return
 }
