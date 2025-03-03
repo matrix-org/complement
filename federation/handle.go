@@ -59,29 +59,22 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 // or dealing with HTTP responses itself.
 func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp fclient.RespMakeJoin, err error) {
 	// Generate a join event
-	proto := gomatrixserverlib.ProtoEvent{
-		SenderID:   userID,
-		RoomID:     room.RoomID,
-		Type:       "m.room.member",
-		StateKey:   &userID,
-		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
-		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
-	}
-	err = proto.SetContent(map[string]interface{}{"membership": spec.Join})
+	proto, err := room.ProtoEventCreator(Event{
+		Type:     "m.room.member",
+		StateKey: &userID,
+		Content: map[string]interface{}{
+			"membership": spec.Join,
+		},
+		Sender: userID,
+	})
 	if err != nil {
-		err = fmt.Errorf("make_join cannot set membership content: %w", err)
+		err = fmt.Errorf("make_join cannot set create proto event: %w", err)
 		return
 	}
-	stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(&proto)
-	if err != nil {
-		err = fmt.Errorf("make_join cannot calculate auth_events: %w", err)
-		return
-	}
-	proto.AuthEvents = room.AuthEvents(stateNeeded)
 
 	resp = fclient.RespMakeJoin{
 		RoomVersion: room.Version,
-		JoinEvent:   proto,
+		JoinEvent:   *proto,
 	}
 	return
 }
@@ -91,29 +84,22 @@ func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp fclient.
 // or dealing with HTTP responses itself.
 func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp fclient.RespMakeKnock, err error) {
 	// Generate a knock event
-	proto := gomatrixserverlib.ProtoEvent{
-		SenderID:   userID,
-		RoomID:     room.RoomID,
-		Type:       "m.room.member",
-		StateKey:   &userID,
-		PrevEvents: []string{room.Timeline[len(room.Timeline)-1].EventID()},
-		Depth:      room.Timeline[len(room.Timeline)-1].Depth() + 1,
-	}
-	err = proto.SetContent(map[string]interface{}{"membership": spec.Join})
+	proto, err := room.ProtoEventCreator(Event{
+		Type:     "m.room.member",
+		StateKey: &userID,
+		Content: map[string]interface{}{
+			"membership": spec.Join, // XXX this feels wrong?
+		},
+		Sender: userID,
+	})
 	if err != nil {
-		err = fmt.Errorf("make_knock cannot set membership content: %w", err)
+		err = fmt.Errorf("make_knock cannot set create proto event: %w", err)
 		return
 	}
-	stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(&proto)
-	if err != nil {
-		err = fmt.Errorf("make_knock cannot calculate auth_events: %w", err)
-		return
-	}
-	proto.AuthEvents = room.AuthEvents(stateNeeded)
 
 	resp = fclient.RespMakeKnock{
 		RoomVersion: room.Version,
-		KnockEvent:  proto,
+		KnockEvent:  *proto,
 	}
 	return
 }
@@ -173,40 +159,8 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// build the state list *before* we insert the new event
-	var stateEvents []gomatrixserverlib.PDU
-	room.StateMutex.RLock()
-	for _, ev := range room.State {
-		// filter out non-critical memberships if this is a partial-state join
-		if expectPartialState {
-			if ev.Type() == "m.room.member" && ev.StateKey() != event.StateKey() {
-				continue
-			}
-		}
-		stateEvents = append(stateEvents, ev)
-	}
-	room.StateMutex.RUnlock()
-
-	authEvents := room.AuthChainForEvents(stateEvents)
-
-	// get servers in room *before* the join event
-	serversInRoom := []string{s.serverName}
-	if !omitServersInRoom {
-		serversInRoom = room.ServersInRoom()
-	}
-
-	// insert the join event into the room state
-	room.AddEvent(event)
-	log.Printf("Received send-join of event %s", event.EventID())
-
-	// return state and auth chain
-	b, err := json.Marshal(fclient.RespSendJoin{
-		Origin:         spec.ServerName(s.serverName),
-		AuthEvents:     gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
-		StateEvents:    gomatrixserverlib.NewEventJSONsFromEvents(stateEvents),
-		MembersOmitted: expectPartialState,
-		ServersInRoom:  serversInRoom,
-	})
+	resp := room.GenerateSendJoinResponse(s, event, expectPartialState, omitServersInRoom)
+	b, err := json.Marshal(resp)
 	if err != nil {
 		w.WriteHeader(500)
 		w.Write([]byte("complement: HandleMakeSendJoinRequests send_join cannot marshal RespSendJoin: " + err.Error()))
@@ -410,7 +364,7 @@ func HandleEventAuthRequests() func(*Server) {
 
 			authEvents := room.AuthChainForEvents([]gomatrixserverlib.PDU{event})
 			resp := fclient.RespEventAuth{
-				gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
+				AuthEvents: gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
 			}
 			respJSON, err := json.Marshal(resp)
 			if err != nil {
@@ -590,8 +544,8 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.PDU), eduCallb
 				verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
 				if err != nil {
 					log.Printf(
-						"complement: Transaction '%s': Failed to get room version '%s': %s",
-						transaction.TransactionID, event.EventID(), err.Error(),
+						"complement: Transaction '%s': Failed to get room version: %s",
+						transaction.TransactionID, err.Error(),
 					)
 					continue
 				}
