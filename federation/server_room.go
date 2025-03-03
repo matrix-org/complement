@@ -351,9 +351,16 @@ func (r *ServerRoom) EventIDsOrReferences(events []gomatrixserverlib.PDU) (refs 
 }
 
 type ServerRoomImpl interface {
+	// ProtoEventCreator converts a Complement Event into a gomatrixserverlib proto event, ready to be signed.
+	// This function is used in /make_x endpoints to create proto events to return to other servers.
+	// This function is one of two used when creating events, the other being EventCreator.
 	ProtoEventCreator(ev Event) (*gomatrixserverlib.ProtoEvent, error)
+	// EventCreator converts a proto event into a signed PDU.
 	EventCreator(s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error)
+	// PopulateFromSendJoinResponse should replace the state of this ServerRoom with the information contained
+	// in RespSendJoin and the join event.
 	PopulateFromSendJoinResponse(joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin)
+	// GenerateSendJoinResponse generates a /send_join response to send back to a server.
 	GenerateSendJoinResponse(s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin
 }
 
