@@ -37,13 +37,12 @@ type Event struct {
 // EXPERIMENTAL
 // ServerRoom represents a room on this test federation server
 type ServerRoom struct {
-	// functions to map Complement events into actual PDUs.
-	// Most tests don't care about this and can use the default creator function,
-	// but if your MSC or tests fiddle with the raw JSON in some way then this
-	// function needs to be replaced. By replacing this function, helper functions
+	// Functions to map Complement events into actual PDUs.
+	// Most tests don't care about this and can use the default functions,
+	// but if your MSC or tests fiddle with the raw JSON in some way then these
+	// function need to be replaced. By replacing these functions, helper functions
 	// which indirectly create events (e.g joins and leaves) will automatically use
-	// this and will hence work with your custom code. Modifying ProtoEventCreator
-	// will also impact the proto events returned via /make_xxx calls.
+	// them and will hence work with your custom code.
 	ServerRoomImpl
 
 	Version            gomatrixserverlib.RoomVersion
