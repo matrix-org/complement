@@ -193,7 +193,7 @@ func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersi
 		signedEvent := s.MustCreateEvent(t, room, ev)
 		room.AddEvent(signedEvent)
 	}
-	s.rooms[roomID] = room
+	s.rooms[room.RoomID] = room
 	return room
 }
 
@@ -393,9 +393,9 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 		opt(room)
 	}
 	room.PopulateFromSendJoinResponse(room, joinEvent, sendJoinResp)
-	s.rooms[roomID] = room
+	s.rooms[room.RoomID] = room
 
-	t.Logf("Server.MustJoinRoom joined room ID %s", roomID)
+	t.Logf("Server.MustJoinRoom joined room ID %s", room.RoomID)
 
 	return room
 }
