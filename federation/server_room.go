@@ -34,6 +34,24 @@ type Event struct {
 	Redacts string
 }
 
+// ServerRoomOpt are options that can configure ServerRooms
+type ServerRoomOpt func(r *ServerRoom)
+
+// WithRoomID configures the room to have the given room ID
+func WithRoomID(roomID string) ServerRoomOpt {
+	return func(r *ServerRoom) {
+		r.RoomID = roomID
+	}
+}
+
+// WithImpl configures the room to have the given ServerRoomImpl.
+// Useful for custom rooms.
+func WithImpl(impl ServerRoomImpl) ServerRoomOpt {
+	return func(r *ServerRoom) {
+		r.ServerRoomImpl = impl
+	}
+}
+
 // EXPERIMENTAL
 // ServerRoom represents a room on this test federation server
 type ServerRoom struct {
