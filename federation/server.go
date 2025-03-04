@@ -306,11 +306,11 @@ func (s *Server) DoFederationRequest(
 // It does not insert this event into the room however. See ServerRoom.AddEvent for that.
 func (s *Server) MustCreateEvent(t ct.TestLike, room *ServerRoom, ev Event) gomatrixserverlib.PDU {
 	t.Helper()
-	proto, err := room.ProtoEventCreator(ev)
+	proto, err := room.ProtoEventCreator(room, ev)
 	if err != nil {
 		ct.Fatalf(t, "MustCreateEvent: failed to create proto event: %v", err)
 	}
-	pdu, err := room.EventCreator(s, proto)
+	pdu, err := room.EventCreator(room, s, proto)
 	if err != nil {
 		ct.Fatalf(t, "MustCreateEvent: failed to create PDU: %v", err)
 	}
@@ -392,7 +392,7 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 	for _, opt := range jr.roomOpts {
 		opt(room)
 	}
-	room.PopulateFromSendJoinResponse(joinEvent, sendJoinResp)
+	room.PopulateFromSendJoinResponse(room, joinEvent, sendJoinResp)
 	s.rooms[roomID] = room
 
 	t.Logf("Server.MustJoinRoom joined room ID %s", roomID)

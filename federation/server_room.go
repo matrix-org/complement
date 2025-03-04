@@ -85,7 +85,7 @@ func NewServerRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *Server
 		waiters:            make(map[string][]*helpers.Waiter),
 		waitersMu:          &sync.Mutex{},
 	}
-	room.ServerRoomImpl = &ServerRoomImplDefault{Room: room}
+	room.ServerRoomImpl = &ServerRoomImplDefault{}
 	return room
 }
 
@@ -372,58 +372,56 @@ type ServerRoomImpl interface {
 	// ProtoEventCreator converts a Complement Event into a gomatrixserverlib proto event, ready to be signed.
 	// This function is used in /make_x endpoints to create proto events to return to other servers.
 	// This function is one of two used when creating events, the other being EventCreator.
-	ProtoEventCreator(ev Event) (*gomatrixserverlib.ProtoEvent, error)
+	ProtoEventCreator(room *ServerRoom, ev Event) (*gomatrixserverlib.ProtoEvent, error)
 	// EventCreator converts a proto event into a signed PDU.
-	EventCreator(s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error)
+	EventCreator(room *ServerRoom, s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error)
 	// PopulateFromSendJoinResponse should replace the state of this ServerRoom with the information contained
 	// in RespSendJoin and the join event.
-	PopulateFromSendJoinResponse(joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin)
+	PopulateFromSendJoinResponse(room *ServerRoom, joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin)
 	// GenerateSendJoinResponse generates a /send_join response to send back to a server.
-	GenerateSendJoinResponse(s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin
+	GenerateSendJoinResponse(room *ServerRoom, s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin
 }
 
 type ServerRoomImplCustom struct {
 	ServerRoomImplDefault
-	ProtoEventCreatorFn            func(def ServerRoomImpl, ev Event) (*gomatrixserverlib.ProtoEvent, error)
-	EventCreatorFn                 func(def ServerRoomImpl, s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error)
-	PopulateFromSendJoinResponseFn func(def ServerRoomImpl, joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin)
-	GenerateSendJoinResponseFn     func(def ServerRoomImpl, s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin
+	ProtoEventCreatorFn            func(def ServerRoomImpl, room *ServerRoom, ev Event) (*gomatrixserverlib.ProtoEvent, error)
+	EventCreatorFn                 func(def ServerRoomImpl, room *ServerRoom, s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error)
+	PopulateFromSendJoinResponseFn func(def ServerRoomImpl, room *ServerRoom, joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin)
+	GenerateSendJoinResponseFn     func(def ServerRoomImpl, room *ServerRoom, s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin
 }
 
-func (i *ServerRoomImplCustom) ProtoEventCreator(ev Event) (*gomatrixserverlib.ProtoEvent, error) {
+func (i *ServerRoomImplCustom) ProtoEventCreator(room *ServerRoom, ev Event) (*gomatrixserverlib.ProtoEvent, error) {
 	if i.ProtoEventCreatorFn != nil {
-		return i.ProtoEventCreatorFn(&i.ServerRoomImplDefault, ev)
+		return i.ProtoEventCreatorFn(&i.ServerRoomImplDefault, room, ev)
 	}
-	return i.ServerRoomImplDefault.ProtoEventCreator(ev)
+	return i.ServerRoomImplDefault.ProtoEventCreator(room, ev)
 }
 
-func (i *ServerRoomImplCustom) EventCreator(s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error) {
+func (i *ServerRoomImplCustom) EventCreator(room *ServerRoom, s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error) {
 	if i.EventCreatorFn != nil {
-		return i.EventCreatorFn(&i.ServerRoomImplDefault, s, proto)
+		return i.EventCreatorFn(&i.ServerRoomImplDefault, room, s, proto)
 	}
-	return i.ServerRoomImplDefault.EventCreator(s, proto)
+	return i.ServerRoomImplDefault.EventCreator(room, s, proto)
 }
 
-func (i *ServerRoomImplCustom) PopulateFromSendJoinResponse(joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin) {
+func (i *ServerRoomImplCustom) PopulateFromSendJoinResponse(room *ServerRoom, joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin) {
 	if i.PopulateFromSendJoinResponseFn != nil {
-		i.PopulateFromSendJoinResponseFn(&i.ServerRoomImplDefault, joinEvent, resp)
+		i.PopulateFromSendJoinResponseFn(&i.ServerRoomImplDefault, room, joinEvent, resp)
 		return
 	}
-	i.ServerRoomImplDefault.PopulateFromSendJoinResponse(joinEvent, resp)
+	i.ServerRoomImplDefault.PopulateFromSendJoinResponse(room, joinEvent, resp)
 }
 
-func (i *ServerRoomImplCustom) GenerateSendJoinResponse(s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin {
+func (i *ServerRoomImplCustom) GenerateSendJoinResponse(room *ServerRoom, s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin {
 	if i.GenerateSendJoinResponseFn != nil {
-		return i.GenerateSendJoinResponseFn(&i.ServerRoomImplDefault, s, joinEvent, expectPartialState, omitServersInRoom)
+		return i.GenerateSendJoinResponseFn(&i.ServerRoomImplDefault, room, s, joinEvent, expectPartialState, omitServersInRoom)
 	}
-	return i.ServerRoomImplDefault.GenerateSendJoinResponse(s, joinEvent, expectPartialState, omitServersInRoom)
+	return i.ServerRoomImplDefault.GenerateSendJoinResponse(room, s, joinEvent, expectPartialState, omitServersInRoom)
 }
 
-type ServerRoomImplDefault struct {
-	Room *ServerRoom
-}
+type ServerRoomImplDefault struct{}
 
-func (i *ServerRoomImplDefault) ProtoEventCreator(ev Event) (*gomatrixserverlib.ProtoEvent, error) {
+func (i *ServerRoomImplDefault) ProtoEventCreator(room *ServerRoom, ev Event) (*gomatrixserverlib.ProtoEvent, error) {
 	var prevEvents interface{}
 	if ev.PrevEvents != nil {
 		// We deliberately want to set the prev events.
@@ -432,14 +430,14 @@ func (i *ServerRoomImplDefault) ProtoEventCreator(ev Event) (*gomatrixserverlib.
 		// No other prev events were supplied so we'll just
 		// use the forward extremities of the room, which is
 		// the usual behaviour.
-		prevEvents = i.Room.ForwardExtremities
+		prevEvents = room.ForwardExtremities
 	}
 	proto := gomatrixserverlib.ProtoEvent{
 		SenderID:   ev.Sender,
-		Depth:      int64(i.Room.Depth + 1), // depth starts at 1
+		Depth:      int64(room.Depth + 1), // depth starts at 1
 		Type:       ev.Type,
 		StateKey:   ev.StateKey,
-		RoomID:     i.Room.RoomID,
+		RoomID:     room.RoomID,
 		PrevEvents: prevEvents,
 		AuthEvents: ev.AuthEvents,
 		Redacts:    ev.Redacts,
@@ -456,13 +454,13 @@ func (i *ServerRoomImplDefault) ProtoEventCreator(ev Event) (*gomatrixserverlib.
 		if err != nil {
 			return nil, fmt.Errorf("EventCreator: failed to work out auth_events : %s", err)
 		}
-		proto.AuthEvents = i.Room.AuthEvents(stateNeeded)
+		proto.AuthEvents = room.AuthEvents(stateNeeded)
 	}
 	return &proto, nil
 }
 
-func (i *ServerRoomImplDefault) EventCreator(s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error) {
-	verImpl, err := gomatrixserverlib.GetRoomVersion(i.Room.Version)
+func (i *ServerRoomImplDefault) EventCreator(room *ServerRoom, s *Server, proto *gomatrixserverlib.ProtoEvent) (gomatrixserverlib.PDU, error) {
+	verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
 	if err != nil {
 		return nil, fmt.Errorf("EventCreator: invalid room version: %s", err)
 	}
@@ -474,19 +472,19 @@ func (i *ServerRoomImplDefault) EventCreator(s *Server, proto *gomatrixserverlib
 	return signedEvent, nil
 }
 
-func (i *ServerRoomImplDefault) PopulateFromSendJoinResponse(joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin) {
-	stateEvents := resp.StateEvents.UntrustedEvents(i.Room.Version)
+func (i *ServerRoomImplDefault) PopulateFromSendJoinResponse(room *ServerRoom, joinEvent gomatrixserverlib.PDU, resp fclient.RespSendJoin) {
+	stateEvents := resp.StateEvents.UntrustedEvents(room.Version)
 	for _, ev := range stateEvents {
-		i.Room.ReplaceCurrentState(ev)
+		room.ReplaceCurrentState(ev)
 	}
-	i.Room.AddEvent(joinEvent)
+	room.AddEvent(joinEvent)
 }
 
-func (i *ServerRoomImplDefault) GenerateSendJoinResponse(s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin {
+func (i *ServerRoomImplDefault) GenerateSendJoinResponse(room *ServerRoom, s *Server, joinEvent gomatrixserverlib.PDU, expectPartialState, omitServersInRoom bool) fclient.RespSendJoin {
 	// build the state list *before* we insert the new event
 	var stateEvents []gomatrixserverlib.PDU
-	i.Room.StateMutex.RLock()
-	for _, ev := range i.Room.State {
+	room.StateMutex.RLock()
+	for _, ev := range room.State {
 		// filter out non-critical memberships if this is a partial-state join
 		if expectPartialState {
 			if ev.Type() == "m.room.member" && ev.StateKey() != joinEvent.StateKey() {
@@ -495,18 +493,18 @@ func (i *ServerRoomImplDefault) GenerateSendJoinResponse(s *Server, joinEvent go
 		}
 		stateEvents = append(stateEvents, ev)
 	}
-	i.Room.StateMutex.RUnlock()
+	room.StateMutex.RUnlock()
 
-	authEvents := i.Room.AuthChainForEvents(stateEvents)
+	authEvents := room.AuthChainForEvents(stateEvents)
 
 	// get servers in room *before* the join event
 	serversInRoom := []string{s.serverName}
 	if !omitServersInRoom {
-		serversInRoom = i.Room.ServersInRoom()
+		serversInRoom = room.ServersInRoom()
 	}
 
 	// insert the join event into the room state
-	i.Room.AddEvent(joinEvent)
+	room.AddEvent(joinEvent)
 	log.Printf("Received send-join of event %s", joinEvent.EventID())
 
 	// return state and auth chain
