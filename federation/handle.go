@@ -59,7 +59,7 @@ func MakeJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 // or dealing with HTTP responses itself.
 func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp fclient.RespMakeJoin, err error) {
 	// Generate a join event
-	proto, err := room.ProtoEventCreator(Event{
+	proto, err := room.ProtoEventCreator(room, Event{
 		Type:     "m.room.member",
 		StateKey: &userID,
 		Content: map[string]interface{}{
@@ -84,7 +84,7 @@ func MakeRespMakeJoin(s *Server, room *ServerRoom, userID string) (resp fclient.
 // or dealing with HTTP responses itself.
 func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp fclient.RespMakeKnock, err error) {
 	// Generate a knock event
-	proto, err := room.ProtoEventCreator(Event{
+	proto, err := room.ProtoEventCreator(room, Event{
 		Type:     "m.room.member",
 		StateKey: &userID,
 		Content: map[string]interface{}{
@@ -159,7 +159,7 @@ func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	resp := room.GenerateSendJoinResponse(s, event, expectPartialState, omitServersInRoom)
+	resp := room.GenerateSendJoinResponse(room, s, event, expectPartialState, omitServersInRoom)
 	b, err := json.Marshal(resp)
 	if err != nil {
 		w.WriteHeader(500)
