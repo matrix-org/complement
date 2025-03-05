@@ -172,7 +172,7 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 
 // MustMakeRoom will add a room to this server so it is accessible to other servers when prompted via federation.
 // The `events` will be added to this room. Returns the created room.
-func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersion, events []Event) *ServerRoom {
+func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersion, events []Event, opts ...ServerRoomOpt) *ServerRoom {
 	if !s.listening {
 		ct.Fatalf(s.t, "MustMakeRoom() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room ID. Ensure you Listen() first!")
 	}
@@ -184,13 +184,16 @@ func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersi
 	roomID := fmt.Sprintf("!%d-%s:%s", len(s.rooms), util.RandomString(18), s.serverName)
 	t.Logf("Creating room %s with version %s", roomID, roomVer)
 	room := NewServerRoom(roomVer, roomID)
+	for _, opt := range opts {
+		opt(room)
+	}
 
 	// sign all these events
 	for _, ev := range events {
 		signedEvent := s.MustCreateEvent(t, room, ev)
 		room.AddEvent(signedEvent)
 	}
-	s.rooms[roomID] = room
+	s.rooms[room.RoomID] = room
 	return room
 }
 
@@ -303,11 +306,11 @@ func (s *Server) DoFederationRequest(
 // It does not insert this event into the room however. See ServerRoom.AddEvent for that.
 func (s *Server) MustCreateEvent(t ct.TestLike, room *ServerRoom, ev Event) gomatrixserverlib.PDU {
 	t.Helper()
-	proto, err := room.ProtoEventCreator(ev)
+	proto, err := room.ProtoEventCreator(room, ev)
 	if err != nil {
 		ct.Fatalf(t, "MustCreateEvent: failed to create proto event: %v", err)
 	}
-	pdu, err := room.EventCreator(s, proto)
+	pdu, err := room.EventCreator(room, s, proto)
 	if err != nil {
 		ct.Fatalf(t, "MustCreateEvent: failed to create PDU: %v", err)
 	}
@@ -316,8 +319,12 @@ func (s *Server) MustCreateEvent(t ct.TestLike, room *ServerRoom, ev Event) goma
 
 // MustJoinRoom will make the server send a make_join and a send_join to join a room
 // It returns the resultant room.
-func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string, partialState ...bool) *ServerRoom {
+func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string, opts ...JoinRoomOpt) *ServerRoom {
 	t.Helper()
+	var jr joinRoom
+	for _, opt := range opts {
+		opt(&jr)
+	}
 	origin := spec.ServerName(s.serverName)
 	fedClient := s.FederationClient(deployment)
 	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, remoteServer, roomID, userID)
@@ -372,7 +379,7 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 		ct.Fatalf(t, "MustJoinRoom: failed to sign event: %v", err)
 	}
 	var sendJoinResp fclient.RespSendJoin
-	if len(partialState) == 0 || !partialState[0] {
+	if !jr.partialState {
 		// Default to doing a regular join.
 		sendJoinResp, err = fedClient.SendJoin(context.Background(), origOrigin, remoteServer, joinEvent)
 	} else {
@@ -382,10 +389,13 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 		ct.Fatalf(t, "MustJoinRoom: send_join failed: %v", err)
 	}
 	room := NewServerRoom(roomVer, roomID)
-	room.PopulateFromSendJoinResponse(joinEvent, sendJoinResp)
-	s.rooms[roomID] = room
+	for _, opt := range jr.roomOpts {
+		opt(room)
+	}
+	room.PopulateFromSendJoinResponse(room, joinEvent, sendJoinResp)
+	s.rooms[room.RoomID] = room
 
-	t.Logf("Server.MustJoinRoom joined room ID %s", roomID)
+	t.Logf("Server.MustJoinRoom joined room ID %s", room.RoomID)
 
 	return room
 }
@@ -431,11 +441,6 @@ func (s *Server) MustLeaveRoom(t ct.TestLike, deployment FederationDeployment, r
 	s.rooms[roomID] = room
 
 	t.Logf("Server.MustLeaveRoom left room ID %s", roomID)
-}
-
-// AddRoom is a low-level function to add a custom room to the server. Useful to mix custom logic with helper functions.
-func (s *Server) AddRoom(room *ServerRoom) {
-	s.rooms[room.RoomID] = room
 }
 
 // ValidFederationRequest is a wrapper around http.HandlerFunc which automatically validates the incoming
@@ -510,6 +515,28 @@ func (s *Server) Listen() (cancel func()) {
 			ct.Fatalf(s.t, "ListenFederationServer: failed to shutdown server: %s", err)
 		}
 		wg.Wait() // wait for the server to shutdown
+	}
+}
+
+type joinRoom struct {
+	partialState bool
+	roomOpts     []ServerRoomOpt
+}
+
+// JoinRoomOpt is an option for configuring how the server should join the room
+type JoinRoomOpt func(jr *joinRoom)
+
+// WithPartialState tells the server to join the room with partial state
+func WithPartialState() JoinRoomOpt {
+	return func(jr *joinRoom) {
+		jr.partialState = true
+	}
+}
+
+// WithRoomOpts controls how the newly joined room is created
+func WithRoomOpts(opts ...ServerRoomOpt) JoinRoomOpt {
+	return func(jr *joinRoom) {
+		jr.roomOpts = opts
 	}
 }
 
