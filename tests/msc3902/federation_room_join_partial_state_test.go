@@ -2244,7 +2244,7 @@ func TestPartialStateJoin(t *testing.T) {
 				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
-				true,
+				federation.WithPartialState(),
 			)
 
 			// @t23alice:hs1 joins the room.
@@ -2292,7 +2292,7 @@ func TestPartialStateJoin(t *testing.T) {
 				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
-				true,
+				federation.WithPartialState(),
 			)
 			// NB: We register the `psjResult.Destroy()` cleanup twice. This is alright because it
 			//     is idempotent. Here we wait for server 2 to observe the leave too.
@@ -2334,7 +2334,7 @@ func TestPartialStateJoin(t *testing.T) {
 				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
-				true,
+				federation.WithPartialState(),
 			)
 
 			// @t25alice:hs1 joins the room.
@@ -2408,7 +2408,7 @@ func TestPartialStateJoin(t *testing.T) {
 				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				elsie,
-				true,
+				federation.WithPartialState(),
 			)
 			joinEvent := room.CurrentState("m.room.member", elsie)
 			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
@@ -2590,7 +2590,7 @@ func TestPartialStateJoin(t *testing.T) {
 				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
-				true,
+				federation.WithPartialState(),
 			)
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
 			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
@@ -2621,7 +2621,7 @@ func TestPartialStateJoin(t *testing.T) {
 				spec.ServerName(server1.ServerName()),
 				room.RoomID,
 				server2.UserID("elsie"),
-				true,
+				federation.WithPartialState(),
 			)
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
 			defer psjResult.Destroy(t)
@@ -3597,13 +3597,7 @@ func TestPartialStateJoin(t *testing.T) {
 		)
 		defer removePDUHandler()
 
-		alice.MustDo(t,
-			"PUT",
-			[]string{"_matrix", "client", "v3", "profile", alice.UserID, "displayname"},
-			client.WithJSONBody(t, map[string]interface{}{
-				"displayname": "alice 2",
-			}),
-		)
+		alice.MustSetDisplayName(t, "alice 2")
 		t.Logf("Alice changed display name")
 
 		select {

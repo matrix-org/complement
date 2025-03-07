@@ -172,7 +172,7 @@ func (s *Server) MakeAliasMapping(aliasLocalpart, roomID string) string {
 
 // MustMakeRoom will add a room to this server so it is accessible to other servers when prompted via federation.
 // The `events` will be added to this room. Returns the created room.
-func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersion, events []Event) *ServerRoom {
+func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersion, events []Event, opts ...ServerRoomOpt) *ServerRoom {
 	if !s.listening {
 		ct.Fatalf(s.t, "MustMakeRoom() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room ID. Ensure you Listen() first!")
 	}
@@ -183,14 +183,17 @@ func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersi
 	//  * prevents homeservers from getting confused when multiple test cases re-use the same homeserver deployment.
 	roomID := fmt.Sprintf("!%d-%s:%s", len(s.rooms), util.RandomString(18), s.serverName)
 	t.Logf("Creating room %s with version %s", roomID, roomVer)
-	room := newRoom(roomVer, roomID)
+	room := NewServerRoom(roomVer, roomID)
+	for _, opt := range opts {
+		opt(room)
+	}
 
 	// sign all these events
 	for _, ev := range events {
 		signedEvent := s.MustCreateEvent(t, room, ev)
 		room.AddEvent(signedEvent)
 	}
-	s.rooms[roomID] = room
+	s.rooms[room.RoomID] = room
 	return room
 }
 
@@ -303,64 +306,25 @@ func (s *Server) DoFederationRequest(
 // It does not insert this event into the room however. See ServerRoom.AddEvent for that.
 func (s *Server) MustCreateEvent(t ct.TestLike, room *ServerRoom, ev Event) gomatrixserverlib.PDU {
 	t.Helper()
-	content, err := json.Marshal(ev.Content)
+	proto, err := room.ProtoEventCreator(room, ev)
 	if err != nil {
-		ct.Fatalf(t, "MustCreateEvent: failed to marshal event content %s - %+v", err, ev.Content)
+		ct.Fatalf(t, "MustCreateEvent: failed to create proto event: %v", err)
 	}
-	var unsigned []byte
-	if ev.Unsigned != nil {
-		unsigned, err = json.Marshal(ev.Unsigned)
-		if err != nil {
-			ct.Fatalf(t, "MustCreateEvent: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
-		}
-	}
-
-	var prevEvents interface{}
-	if ev.PrevEvents != nil {
-		// We deliberately want to set the prev events.
-		prevEvents = ev.PrevEvents
-	} else {
-		// No other prev events were supplied so we'll just
-		// use the forward extremities of the room, which is
-		// the usual behaviour.
-		prevEvents = room.ForwardExtremities
-	}
-	proto := gomatrixserverlib.ProtoEvent{
-		SenderID:   ev.Sender,
-		Depth:      int64(room.Depth + 1), // depth starts at 1
-		Type:       ev.Type,
-		StateKey:   ev.StateKey,
-		Content:    content,
-		RoomID:     room.RoomID,
-		PrevEvents: prevEvents,
-		Unsigned:   unsigned,
-		AuthEvents: ev.AuthEvents,
-		Redacts:    ev.Redacts,
-	}
-	if proto.AuthEvents == nil {
-		var stateNeeded gomatrixserverlib.StateNeeded
-		stateNeeded, err = gomatrixserverlib.StateNeededForProtoEvent(&proto)
-		if err != nil {
-			ct.Fatalf(t, "MustCreateEvent: failed to work out auth_events : %s", err)
-		}
-		proto.AuthEvents = room.AuthEvents(stateNeeded)
-	}
-	verImpl, err := gomatrixserverlib.GetRoomVersion(room.Version)
+	pdu, err := room.EventCreator(room, s, proto)
 	if err != nil {
-		ct.Fatalf(t, "MustCreateEvent: invalid room version: %s", err)
+		ct.Fatalf(t, "MustCreateEvent: failed to create PDU: %v", err)
 	}
-	eb := verImpl.NewEventBuilderFromProtoEvent(&proto)
-	signedEvent, err := eb.Build(time.Now(), spec.ServerName(s.serverName), s.KeyID, s.Priv)
-	if err != nil {
-		ct.Fatalf(t, "MustCreateEvent: failed to sign event: %s", err)
-	}
-	return signedEvent
+	return pdu
 }
 
 // MustJoinRoom will make the server send a make_join and a send_join to join a room
 // It returns the resultant room.
-func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string, partialState ...bool) *ServerRoom {
+func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string, opts ...JoinRoomOpt) *ServerRoom {
 	t.Helper()
+	var jr joinRoom
+	for _, opt := range opts {
+		opt(&jr)
+	}
 	origin := spec.ServerName(s.serverName)
 	fedClient := s.FederationClient(deployment)
 	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, remoteServer, roomID, userID)
@@ -415,7 +379,7 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 		ct.Fatalf(t, "MustJoinRoom: failed to sign event: %v", err)
 	}
 	var sendJoinResp fclient.RespSendJoin
-	if len(partialState) == 0 || !partialState[0] {
+	if !jr.partialState {
 		// Default to doing a regular join.
 		sendJoinResp, err = fedClient.SendJoin(context.Background(), origOrigin, remoteServer, joinEvent)
 	} else {
@@ -424,15 +388,14 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 	if err != nil {
 		ct.Fatalf(t, "MustJoinRoom: send_join failed: %v", err)
 	}
-	stateEvents := sendJoinResp.StateEvents.UntrustedEvents(roomVer)
-	room := newRoom(roomVer, roomID)
-	for _, ev := range stateEvents {
-		room.replaceCurrentState(ev)
+	room := NewServerRoom(roomVer, roomID)
+	for _, opt := range jr.roomOpts {
+		opt(room)
 	}
-	room.AddEvent(joinEvent)
-	s.rooms[roomID] = room
+	room.PopulateFromSendJoinResponse(room, joinEvent, sendJoinResp)
+	s.rooms[room.RoomID] = room
 
-	t.Logf("Server.MustJoinRoom joined room ID %s", roomID)
+	t.Logf("Server.MustJoinRoom joined room ID %s", room.RoomID)
 
 	return room
 }
@@ -552,6 +515,28 @@ func (s *Server) Listen() (cancel func()) {
 			ct.Fatalf(s.t, "ListenFederationServer: failed to shutdown server: %s", err)
 		}
 		wg.Wait() // wait for the server to shutdown
+	}
+}
+
+type joinRoom struct {
+	partialState bool
+	roomOpts     []ServerRoomOpt
+}
+
+// JoinRoomOpt is an option for configuring how the server should join the room
+type JoinRoomOpt func(jr *joinRoom)
+
+// WithPartialState tells the server to join the room with partial state
+func WithPartialState() JoinRoomOpt {
+	return func(jr *joinRoom) {
+		jr.partialState = true
+	}
+}
+
+// WithRoomOpts controls how the newly joined room is created
+func WithRoomOpts(opts ...ServerRoomOpt) JoinRoomOpt {
+	return func(jr *joinRoom) {
+		jr.roomOpts = opts
 	}
 }
 

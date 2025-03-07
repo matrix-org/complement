@@ -9,12 +9,12 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/gorilla/mux v1.8.0
 	github.com/matrix-org/gomatrix v0.0.0-20220926102614-ceba4d9f7530
-	github.com/matrix-org/gomatrixserverlib v0.0.0-20230921171121-0466775328c7
+	github.com/matrix-org/gomatrixserverlib v0.0.0-20250119093516-0a1b2bafb5cf
 	github.com/matrix-org/util v0.0.0-20221111132719-399730281e66
 	github.com/sirupsen/logrus v1.9.3
-	github.com/tidwall/gjson v1.16.0
+	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
-	golang.org/x/crypto v0.27.0
+	golang.org/x/crypto v0.32.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	gonum.org/v1/plot v0.11.0
 )
@@ -50,9 +50,9 @@ require (
 	go.opentelemetry.io/otel/sdk v1.30.0 // indirect
 	go.opentelemetry.io/otel/trace v1.30.0 // indirect
 	golang.org/x/image v0.18.0 // indirect
-	golang.org/x/net v0.29.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
 	gotest.tools/v3 v3.0.3 // indirect
 )

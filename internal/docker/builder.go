@@ -423,6 +423,9 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 		fmt.Sprintf("url: '%s'\\n", as.URL) +
 		fmt.Sprintf("sender_localpart: %s\\n", as.SenderLocalpart) +
 		fmt.Sprintf("rate_limited: %v\\n", as.RateLimited) +
+		fmt.Sprintf("de.sorunome.msc2409.push_ephemeral: %v\\n", as.SendEphemeral) +
+		fmt.Sprintf("push_ephemeral: %v\\n", as.SendEphemeral) +
+		fmt.Sprintf("org.matrix.msc3202: %v\\n", as.EnableEncryption) +
 		"namespaces:\\n" +
 		"  users:\\n" +
 		"    - exclusive: false\\n" +
@@ -489,6 +492,48 @@ func printLogs(docker *client.Client, containerID, contextStr string) {
 	log.Printf("%s : Server logs:\n", contextStr)
 	stdcopy.StdCopy(log.Writer(), log.Writer(), reader)
 	log.Printf("============== %s : END LOGS ==============\n\n\n", contextStr)
+}
+
+func printPortBindingsOfAllComplementContainers(docker *client.Client, contextStr string) {
+	ctx := context.Background()
+
+	containers, err := docker.ContainerList(ctx, container.ListOptions{
+		All: true,
+		Filters: label(
+			complementLabel,
+		),
+	})
+	if err != nil {
+		log.Printf("%s : Failed to list containers while trying to `printPortBindingsOfAllComplementContainers`: %s\n", contextStr, err)
+		return
+	}
+
+	log.Printf("============== %s : START ALL COMPLEMENT DOCKER PORT BINDINGS ==============\n", contextStr)
+
+	for _, container := range containers {
+		log.Printf("Container: %s: %s", container.ID, container.Names)
+
+		inspectRes, err := docker.ContainerInspect(ctx, container.ID)
+		if err != nil {
+			log.Printf("%s : Failed to inspect container (%s) while trying to `printPortBindingsOfAllComplementContainers`: %s\n", contextStr, container.ID, err)
+			return
+		}
+
+		// Print an example so it's easier to understand the output
+		log.Printf("    (host) -> (container)\n")
+		// Then print the actual port bindings
+		for containerPort, portBindings := range inspectRes.NetworkSettings.Ports {
+			hostPortBindingStrings := make([]string, len(portBindings))
+			for portBindingIndex, portBinding := range portBindings {
+				hostPortBindingStrings[portBindingIndex] = fmt.Sprintf("%s:%s", portBinding.HostIP, portBinding.HostPort)
+			}
+
+			log.Printf("    %s -> %s\n", strings.Join(hostPortBindingStrings, ", "), containerPort)
+		}
+
+	}
+
+	log.Printf("=============== %s : END ALL COMPLEMENT DOCKER PORT BINDINGS ===============\n\n\n", contextStr)
 }
 
 func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {

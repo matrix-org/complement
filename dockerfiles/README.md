@@ -5,7 +5,7 @@ However, this doesn't work nicely when running Complement with local checkouts, 
 end up copying the Dockerfiles in this directory to their own repository. In an effort to reduce
 duplication, we now point to dockerfiles in respective repositories rather than have them directly here.
 
-- Dendrite: https://github.com/matrix-org/dendrite/blob/v0.8.2/build/scripts/Complement.Dockerfile
+- Dendrite: https://github.com/element-hq/dendrite/blob/11b48749bf96fb1f7761df6d7a21cf1cd8484e20/build/scripts/Complement.Dockerfile
 - Synapse: https://github.com/matrix-org/synapse/blob/develop/docker/complement/Dockerfile
 - Conduit: https://gitlab.com/famedly/conduit/-/blob/next/tests/Complement.Dockerfile
 - conduwuit: https://conduwuit.puppyirl.gay/development/testing.html

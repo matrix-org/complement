@@ -396,12 +396,18 @@ func (c *CSAPI) GetDefaultRoomVersion(t ct.TestLike) gomatrixserverlib.RoomVersi
 	return gomatrixserverlib.RoomVersion(defaultVersion.Str)
 }
 
+// MustUploadKeys uploads device and/or one time keys to the server, returning the current OTK counts.
+// Both device keys and one time keys are optional. Fails the test if the upload fails.
 func (c *CSAPI) MustUploadKeys(t ct.TestLike, deviceKeys map[string]interface{}, oneTimeKeys map[string]interface{}) (otkCounts map[string]int) {
 	t.Helper()
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, WithJSONBody(t, map[string]interface{}{
-		"device_keys":   deviceKeys,
-		"one_time_keys": oneTimeKeys,
-	}))
+	reqBody := make(map[string]interface{})
+	if deviceKeys != nil {
+		reqBody["device_keys"] = deviceKeys
+	}
+	if oneTimeKeys != nil {
+		reqBody["one_time_keys"] = oneTimeKeys
+	}
+	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, WithJSONBody(t, reqBody))
 	bodyBytes := ParseJSON(t, res)
 	s := struct {
 		OTKCounts map[string]int `json:"one_time_key_counts"`
@@ -492,6 +498,20 @@ func (c *CSAPI) MustGenerateOneTimeKeys(t ct.TestLike, otkCount uint) (deviceKey
 	return deviceKeys, oneTimeKeys
 }
 
+// MustSetDisplayName sets the global display name for this account or fails the test.
+func (c *CSAPI) MustSetDisplayName(t ct.TestLike, displayname string) {
+	c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "profile", c.UserID, "displayname"}, WithJSONBody(t, map[string]any{
+		"displayname": displayname,
+	}))
+}
+
+// MustGetDisplayName returns the global display name for this user or fails the test.
+func (c *CSAPI) MustGetDisplayName(t ct.TestLike, userID string) string {
+	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "profile", userID, "displayname"})
+	body := ParseJSON(t, res)
+	return GetJSONFieldStr(t, body, "displayname")
+}
+
 // WithRawBody sets the HTTP request body to `body`
 func WithRawBody(body []byte) RequestOpt {
 	return func(req *http.Request) {
@@ -572,10 +592,11 @@ func (c *CSAPI) MustDo(t ct.TestLike, method string, paths []string, opts ...Req
 //	})
 func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
+	escapedPaths := make([]string, len(paths))
 	for i := range paths {
-		paths[i] = url.PathEscape(paths[i])
+		escapedPaths[i] = url.PathEscape(paths[i])
 	}
-	reqURL := c.BaseURL + "/" + strings.Join(paths, "/")
+	reqURL := c.BaseURL + "/" + strings.Join(escapedPaths, "/")
 	req, err := http.NewRequest(method, reqURL, nil)
 	if err != nil {
 		ct.Fatalf(t, "CSAPI.Do failed to create http.NewRequest: %s", err)

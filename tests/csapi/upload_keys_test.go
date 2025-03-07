@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -65,7 +66,7 @@ func TestUploadKey(t *testing.T) {
 				},
 				"one_time_keys": oneTimeKeys,
 			})
-			resp := bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
+			resp := bob.Do(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
 			must.MatchResponse(t, resp, match.HTTPResponse{
 				StatusCode: http.StatusBadRequest,
 				JSON: []match.JSON{
@@ -171,6 +172,43 @@ func TestUploadKey(t *testing.T) {
 				},
 			})
 		})
+	})
+}
+
+// Per MSC4225, keys must be issued in the same order they are uploaded
+func TestKeyClaimOrdering(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	_, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 2)
+
+	// first upload key 1, sleep a bit, then upload key 0.
+	otk1 := map[string]interface{}{"signed_curve25519:1": oneTimeKeys["signed_curve25519:1"]}
+	alice.MustUploadKeys(t, nil, otk1)
+	// Ensure that there is a difference in timestamp between the two upload requests.
+	time.Sleep(1 * time.Second)
+
+	otk0 := map[string]interface{}{"signed_curve25519:0": oneTimeKeys["signed_curve25519:0"]}
+	alice.MustUploadKeys(t, nil, otk0)
+
+	// Now claim the keys, and check they come back in the right order
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"one_time_keys": map[string]interface{}{
+			alice.UserID: map[string]string{
+				alice.DeviceID: "signed_curve25519",
+			},
+		},
+	})
+	otksField := "one_time_keys." + client.GjsonEscape(alice.UserID) + "." + client.GjsonEscape(alice.DeviceID)
+	resp := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+	must.MatchResponse(t, resp, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON:       []match.JSON{match.JSONKeyEqual(otksField, otk1)},
+	})
+	resp = alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "claim"}, reqBody)
+	must.MatchResponse(t, resp, match.HTTPResponse{
+		StatusCode: http.StatusOK,
+		JSON:       []match.JSON{match.JSONKeyEqual(otksField, otk0)},
 	})
 }
 

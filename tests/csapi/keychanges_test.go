@@ -28,7 +28,8 @@ func TestKeyChangesLocal(t *testing.T) {
 	unauthedClient := deployment.UnauthenticatedClient(t, "hs1")
 
 	t.Run("New login should create a device_lists.changed entry", func(t *testing.T) {
-		mustUploadKeys(t, bob)
+		bobDeviceKeys, bobOTKs := bob.MustGenerateOneTimeKeys(t, 1)
+		bob.MustUploadKeys(t, bobDeviceKeys, bobOTKs)
 
 		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 		bob.MustJoinRoom(t, roomID, []string{})
@@ -48,7 +49,8 @@ func TestKeyChangesLocal(t *testing.T) {
 		unauthedClient.AccessToken = must.GetJSONFieldStr(t, loginResp, "access_token")
 		unauthedClient.DeviceID = must.GetJSONFieldStr(t, loginResp, "device_id")
 		unauthedClient.UserID = must.GetJSONFieldStr(t, loginResp, "user_id")
-		mustUploadKeys(t, unauthedClient)
+		unauthedKeys, unauthedOTKs := unauthedClient.MustGenerateOneTimeKeys(t, 1)
+		unauthedClient.MustUploadKeys(t, unauthedKeys, unauthedOTKs)
 
 		// Alice should now see a device list changed entry for Bob
 		nextBatch := alice.MustSyncUntil(t, client.SyncReq{Since: nextBatch1}, func(userID string, syncResp gjson.Result) error {
@@ -97,14 +99,4 @@ func TestKeyChangesLocal(t *testing.T) {
 			t.Fatalf("unexpected key count: got %d, want %d", keyCount, wantKeyCount)
 		}
 	})
-}
-
-func mustUploadKeys(t *testing.T, user *client.CSAPI) {
-	t.Helper()
-	deviceKeys, oneTimeKeys := user.MustGenerateOneTimeKeys(t, 5)
-	reqBody := client.WithJSONBody(t, map[string]interface{}{
-		"device_keys":   deviceKeys,
-		"one_time_keys": oneTimeKeys,
-	})
-	user.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"}, reqBody)
 }
