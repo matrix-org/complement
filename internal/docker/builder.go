@@ -28,7 +28,7 @@ import (
 	"github.com/docker/go-connections/nat"
 
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/internal/config"
+	"github.com/matrix-org/complement/config"
 	"github.com/matrix-org/complement/internal/instruction"
 )
 

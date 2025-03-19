@@ -40,7 +40,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 
-	"github.com/matrix-org/complement/internal/config"
+	"github.com/matrix-org/complement/config"
 )
 
 const (

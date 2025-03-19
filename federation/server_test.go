@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/matrix-org/complement/internal/config"
+	"github.com/matrix-org/complement/config"
 )
 
 type fedDeploy struct {

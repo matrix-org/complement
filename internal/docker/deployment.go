@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/config"
 	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/helpers"
-	"github.com/matrix-org/complement/internal/config"
 	"github.com/matrix-org/gomatrixserverlib"
 )
 
