@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/matrix-org/complement/internal/config"
+	"github.com/matrix-org/complement/config"
 	"github.com/matrix-org/complement/internal/docker"
 )
 

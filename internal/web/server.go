@@ -8,7 +8,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/matrix-org/complement/internal/config"
+	"github.com/matrix-org/complement/config"
 )
 
 type Server struct {

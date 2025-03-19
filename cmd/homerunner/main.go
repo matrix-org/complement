@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/matrix-org/complement/internal/config"
+	"github.com/matrix-org/complement/config"
 	"github.com/matrix-org/complement/internal/docker"
 	"github.com/sirupsen/logrus"
 )
@@ -36,7 +36,7 @@ func (c *Config) DeriveComplementConfig(baseImageURI string) *config.Complement 
 
 func Getenv(key string, default_value string) string {
 	value, exists := os.LookupEnv(key)
-        if (exists) {
+	if exists {
 		return value
 	} else {
 		return default_value

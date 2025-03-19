@@ -30,8 +30,8 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/util"
 
+	"github.com/matrix-org/complement/config"
 	"github.com/matrix-org/complement/ct"
-	"github.com/matrix-org/complement/internal/config"
 )
 
 // Subset of Deployment used in federation
