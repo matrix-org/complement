@@ -48,10 +48,11 @@ type Server struct {
 	// Default: true
 	UnexpectedRequestsAreErrors bool
 
-	Priv       ed25519.PrivateKey
-	KeyID      gomatrixserverlib.KeyID
-	serverName string
-	listening  bool
+	Priv           ed25519.PrivateKey
+	KeyID          gomatrixserverlib.KeyID
+	serverName     string
+	customBindAddr string
+	listening      bool
 
 	certPath string
 	keyPath  string
@@ -134,6 +135,19 @@ func NewServer(t ct.TestLike, deployment FederationDeployment, opts ...func(*Ser
 		opt(srv)
 	}
 	return srv
+}
+
+// WithCustomBindAddr sets a custom port to listen on instead of a random high-numbered port.
+// Setting this to a fixed value e.g ':8080' reduces the amount of test concurrency as concurrent
+// tests will clash for the same port number. However, some tests need to know the fully qualified
+// Complement federation server domain _before_ starting the homeservers under test. For example,
+// in order to test notary servers the homeservers must be told the full host:port of the notary
+// server at startup in a config file. This isn't possible with high-numbered ports, and hence a
+// static value can be useful.
+func WithCustomBindAddr(bindAddr string) func(*Server) {
+	return func(s *Server) {
+		s.customBindAddr = bindAddr
+	}
 }
 
 // Return the server name of this federation server. Only valid AFTER calling Listen() - doing so
@@ -490,7 +504,11 @@ func (s *Server) Listen() (cancel func()) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	ln, err := net.Listen("tcp", ":0") //nolint
+	bindAddr := ":0"
+	if s.customBindAddr != "" {
+		bindAddr = s.customBindAddr
+	}
+	ln, err := net.Listen("tcp", bindAddr) //nolint
 	if err != nil {
 		ct.Fatalf(s.t, "ListenFederationServer: net.Listen failed: %s", err)
 	}

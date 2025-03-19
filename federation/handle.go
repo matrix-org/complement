@@ -420,6 +420,36 @@ func HandleKeyRequests() func(*Server) {
 }
 
 // EXPERIMENTAL
+// HandleNotaryKeyRequests is an option which will process GET /_matrix/key/v2/query/{serverName} requests universally when requested.
+// Responses will be signed with this server's private key.
+func HandleNotaryKeyRequests(getServerKeys func(serverName string) *gomatrixserverlib.ServerKeyFields) func(*Server) {
+	return func(srv *Server) {
+		srv.mux.HandleFunc("/_matrix/key/v2/query/{serverName}", func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			serverName := vars["serverName"]
+			k := getServerKeys(serverName)
+			toSign, err := json.Marshal(k)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte("complement: HandleNotaryKeyRequests cannot marshal serverkeyfields: " + err.Error()))
+				return
+			}
+
+			resp, err := gomatrixserverlib.SignJSON(
+				string(srv.serverName), srv.KeyID, srv.Priv, toSign,
+			)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte("complement: HandleNotaryKeyRequests cannot sign json: " + err.Error()))
+				return
+			}
+			w.WriteHeader(200)
+			w.Write(resp)
+		}).Methods("GET")
+	}
+}
+
+// EXPERIMENTAL
 // HandleMediaRequests is an option which will process /_matrix/media/v1/download/* using the provided map
 // as a way to do so. The key of the map is the media ID to be handled.
 func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*Server) {
