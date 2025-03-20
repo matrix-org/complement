@@ -422,7 +422,7 @@ func HandleKeyRequests() func(*Server) {
 // EXPERIMENTAL
 // HandleNotaryKeyRequests is an option which will process GET /_matrix/key/v2/query/{serverName} requests universally when requested.
 // Responses will be signed with this server's private key.
-func HandleNotaryKeyRequests(getServerKeys func(serverName string) *gomatrixserverlib.ServerKeyFields) func(*Server) {
+func HandleNotaryKeyRequests(getServerKeys func(serverName string) *gomatrixserverlib.ServerKeys) func(*Server) {
 	return func(srv *Server) {
 		srv.mux.HandleFunc("/_matrix/key/v2/query/{serverName}", func(w http.ResponseWriter, req *http.Request) {
 			vars := mux.Vars(req)
@@ -446,6 +446,47 @@ func HandleNotaryKeyRequests(getServerKeys func(serverName string) *gomatrixserv
 			w.WriteHeader(200)
 			w.Write(resp)
 		}).Methods("GET")
+		srv.mux.HandleFunc("/_matrix/key/v2/query", func(w http.ResponseWriter, req *http.Request) {
+			// The request format is:
+			// { "server_keys": { "<server_name>": { "<key_id>": { "minimum_valid_until_ts": <ts> }}}
+			type keyreq struct {
+				MinimumValidUntilTS spec.Timestamp `json:"minimum_valid_until_ts"`
+			}
+			request := struct {
+				ServerKeyMap map[spec.ServerName]map[gomatrixserverlib.KeyID]keyreq `json:"server_keys"`
+			}{map[spec.ServerName]map[gomatrixserverlib.KeyID]keyreq{}}
+
+			if err := json.NewDecoder(req.Body).Decode(&request); err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte("complement: HandleNotaryKeyRequests cannot decode request body: " + err.Error()))
+				return
+			}
+			var response struct {
+				ServerKeys []gomatrixserverlib.ServerKeys `json:"server_keys"`
+			}
+			for serverName := range request.ServerKeyMap {
+				skf := getServerKeys(string(serverName))
+				if skf != nil {
+					response.ServerKeys = append(response.ServerKeys, *skf)
+				}
+			}
+			toSign, err := json.Marshal(&response)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte("complement: HandleNotaryKeyRequests cannot marshal response body: " + err.Error()))
+				return
+			}
+			resp, err := gomatrixserverlib.SignJSON(
+				string(srv.serverName), srv.KeyID, srv.Priv, toSign,
+			)
+			if err != nil {
+				w.WriteHeader(500)
+				w.Write([]byte("complement: HandleNotaryKeyRequests cannot sign json: " + err.Error()))
+				return
+			}
+			w.WriteHeader(200)
+			w.Write(resp)
+		}).Methods("POST")
 	}
 }
 
