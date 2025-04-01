@@ -39,6 +39,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/matrix-org/complement/config"
 )
@@ -90,10 +91,14 @@ func (d *Deployer) CreateDirtyServer(hsName string) (*HomeserverDeployment, erro
 	if uri, ok := d.config.BaseImageURIs[hsName]; ok {
 		baseImageURI = uri
 	}
+	baseImageArch := d.config.BaseImageArch
+	if arch, ok := d.config.BaseImageArchs[hsName]; ok {
+		baseImageArch = arch
+	}
 
 	containerName := fmt.Sprintf("complement_%s_dirty_%s", d.config.PackageNamespace, hsName)
 	hsDeployment, err := deployImage(
-		d.Docker, baseImageURI, containerName,
+		d.Docker, baseImageURI, baseImageArch, containerName,
 		d.config.PackageNamespace, "", hsName, nil, "dirty",
 		networkName, d.config,
 	)
@@ -172,7 +177,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		// TODO: Make CSAPI port configurable
 		containerName := fmt.Sprintf("complement_%s_%s_%s_%d", d.config.PackageNamespace, d.DeployNamespace, contextStr, counter)
 		deployment, err := deployImage(
-			d.Docker, img.ID, containerName,
+			d.Docker, img.ID, "", containerName,
 			d.config.PackageNamespace, blueprintName, hsName, asIDToRegistrationMap, contextStr, networkName, d.config,
 		)
 		if err != nil {
@@ -329,7 +334,7 @@ func (d *Deployer) StartServer(hsDep *HomeserverDeployment) error {
 
 // nolint
 func deployImage(
-	docker *client.Client, imageID string, containerName, pkgNamespace, blueprintName, hsName string,
+	docker *client.Client, imageID, imageArch, containerName, pkgNamespace, blueprintName, hsName string,
 	asIDToRegistrationMap map[string]string, contextStr, networkName string, cfg *config.Complement,
 ) (*HomeserverDeployment, error) {
 	ctx := context.Background()
@@ -402,7 +407,10 @@ func deployImage(
 				Aliases: []string{hsName},
 			},
 		},
-	}, nil, containerName)
+	}, &ocispec.Platform{
+		OS:           "linux",
+		Architecture: imageArch,
+	}, containerName)
 	if err != nil {
 		return nil, err
 	}

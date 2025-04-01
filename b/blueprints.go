@@ -55,6 +55,8 @@ type Homeserver struct {
 	ApplicationServices []ApplicationService
 	// Optionally override the baseImageURI for blueprint creation
 	BaseImageURI *string
+	// Optionally override the baseImageArch for blueprint creation
+	BaseImageArch *string
 }
 
 type User struct {

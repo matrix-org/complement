@@ -398,18 +398,23 @@ func (d *Builder) constructHomeserver(blueprintName string, runner *instruction.
 func (d *Builder) deployBaseImage(blueprintName string, hs b.Homeserver, contextStr, networkName string) (*HomeserverDeployment, error) {
 	asIDToRegistrationMap := asIDToRegistrationFromLabels(labelsForApplicationServices(hs))
 	var baseImageURI string
+	var baseImageArch string
 	if hs.BaseImageURI == nil {
 		baseImageURI = d.Config.BaseImageURI
 		// Use HS specific base image if defined
 		if uri, ok := d.Config.BaseImageURIs[hs.Name]; ok {
 			baseImageURI = uri
 		}
+		if arch, ok := d.Config.BaseImageArchs[hs.Name]; ok {
+			baseImageArch = arch
+		}
 	} else {
 		baseImageURI = *hs.BaseImageURI
+		baseImageArch = *hs.BaseImageArch
 	}
 
 	return deployImage(
-		d.Docker, baseImageURI, fmt.Sprintf("complement_%s", contextStr),
+		d.Docker, baseImageURI, baseImageArch, fmt.Sprintf("complement_%s", contextStr),
 		d.Config.PackageNamespace, blueprintName, hs.Name, asIDToRegistrationMap, contextStr,
 		networkName, d.Config,
 	)

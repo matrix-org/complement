@@ -30,6 +30,12 @@ type Complement struct {
 	// blueprints. This image must conform to Complement's rules on containers, such as listening on the
 	// correct ports.
 	BaseImageURI string
+	// Name: COMPLEMENT_BASE_ARCH
+	// Default: ""
+	// Description: The architecture of the Docker image to use as a base homeserver when generating
+	// blueprints. This can be used to emulate a particular architecture with a multi-platform image.
+	// If "", the architecture of the host running Complement is used.
+	BaseImageArch string
 	// Name: COMPLEMENT_DEBUG
 	// Default: 0
 	// Description: If 1, prints out more verbose logging such as HTTP request/response bodies.
@@ -71,6 +77,11 @@ type Complement struct {
 	// for the `hs1` homeserver in blueprints, but not any other homeserver (e.g `hs2`). This matching
 	// is case-insensitive. This allows Complement to test how different homeserver implementations work with each other.
 	BaseImageURIs map[string]string
+	// Name: COMPLEMENT_BASE_ARCH_*
+	// Description: This allows you to set the architecture of the base image used for a particular named homeserver.
+	// For example, `COMPLEMENT_BASE_ARCH_HS1=arm64` would use an `arm64` image for the `hs1` homeserver in blueprints,
+	// but not any other homeserver (e.g `hs2`). This matching is case-insensitive.
+	BaseImageArchs map[string]string
 
 	// The namespace for all complement created blueprints and deployments
 	PackageNamespace string
@@ -118,14 +129,19 @@ type Complement struct {
 	PostTestScript string
 }
 
-var hsRegex = regexp.MustCompile(`COMPLEMENT_BASE_IMAGE_(.+)=(.+)$`)
+var hsUriRegex = regexp.MustCompile(`COMPLEMENT_BASE_IMAGE_(.+)=(.+)$`)
+var hsArchRegex = regexp.MustCompile(`COMPLEMENT_BASE_ARCH_(.+)=(.+)$`)
 
 func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
-	cfg := &Complement{BaseImageURIs: map[string]string{}}
+	cfg := &Complement{
+		BaseImageURIs:  map[string]string{},
+		BaseImageArchs: map[string]string{},
+	}
 	cfg.BaseImageURI = os.Getenv("COMPLEMENT_BASE_IMAGE")
 	if cfg.BaseImageURI == "" {
 		cfg.BaseImageURI = baseImageURI
 	}
+	cfg.BaseImageArch = os.Getenv("COMPLEMENT_BASE_ARCH")
 	cfg.DebugLoggingEnabled = os.Getenv("COMPLEMENT_DEBUG") == "1"
 	cfg.AlwaysPrintServerLogs = os.Getenv("COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS") == "1"
 	cfg.EnableDirtyRuns = os.Getenv("COMPLEMENT_ENABLE_DIRTY_RUNS") == "1"
@@ -153,9 +169,13 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 	for _, env := range os.Environ() {
 		// FindStringSubmatch returns the complete match as well as the capture groups.
 		// In this case we expect there to be 3 matches.
-		if matches := hsRegex.FindStringSubmatch(env); len(matches) == 3 {
+		if matches := hsUriRegex.FindStringSubmatch(env); len(matches) == 3 {
 			hs := matches[1]                   // first capture group; homeserver name
 			cfg.BaseImageURIs[hs] = matches[2] // second capture group; homeserver image
+		}
+		if matches := hsArchRegex.FindStringSubmatch(env); len(matches) == 3 {
+			hs := matches[1]                    // first capture group; homeserver name
+			cfg.BaseImageArchs[hs] = matches[2] // second capture group; homeserver arch
 		}
 	}
 

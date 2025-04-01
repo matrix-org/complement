@@ -16,6 +16,15 @@ If 1, always prints the Homeserver container logs even on success. When used wit
 This allows you to override the base image used for a particular named homeserver. For example, `COMPLEMENT_BASE_IMAGE_HS1=complement-dendrite:latest` would use `complement-dendrite:latest` for the `hs1` homeserver in blueprints, but not any other homeserver (e.g `hs2`). This matching is case-insensitive. This allows Complement to test how different homeserver implementations work with each other.  
 - Type: `map[string]string`
 
+#### `COMPLEMENT_BASE_ARCH`
+This allows you to override the architecture of the Docker image to use as a base homeserver when generating blueprints. This can be used to emulate a particular architecture with a multi-platform image. If "", the architecture of the host running Complement is used.
+- Type: `string`
+- Default: ""
+
+#### `COMPLEMENT_BASE_ARCH_*`
+This allows you to set the architecture of the base image used for a particular named homeserver. For example, `COMPLEMENT_BASE_ARCH_HS1=arm64` would use an `arm64` for the `hs1` homeserver in blueprints, but not any other homeserver (e.g `hs2`). This matching is case-insensitive.
+- Type: `map[string]string`
+
 #### `COMPLEMENT_DEBUG`
 If 1, prints out more verbose logging such as HTTP request/response bodies.  
 - Type: `bool`
