@@ -380,8 +380,7 @@ func deployImage(
 			"complement_hs_name":   hsName,
 		},
 	}, &container.HostConfig{
-		CapAdd:          []string{"NET_ADMIN"}, // TODO : this should be some sort of option
-		PublishAllPorts: true,
+		CapAdd: []string{"NET_ADMIN"}, // TODO : this should be some sort of option
 		PortBindings: nat.PortMap{
 			nat.Port("8008/tcp"): []nat.PortBinding{
 				{
