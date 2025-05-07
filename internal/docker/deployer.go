@@ -34,7 +34,6 @@ import (
 	"github.com/docker/go-connections/nat"
 	complementRuntime "github.com/matrix-org/complement/runtime"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
@@ -516,7 +515,7 @@ func copyToContainer(docker *client.Client, containerID, path string, data []byt
 	tw.Close()
 
 	// Put our new fake file in the container volume
-	err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
+	err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, container.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: false,
 	})
 	if err != nil {
@@ -528,7 +527,7 @@ func copyToContainer(docker *client.Client, containerID, path string, data []byt
 // Waits until a homeserver container has NAT ports assigned and returns its clientside API URL and federation API URL.
 func waitForPorts(ctx context.Context, docker *client.Client, containerID string) (baseURL string, fedBaseURL string, err error) {
 	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
-	var inspect types.ContainerJSON
+	var inspect container.InspectResponse
 	inspectStartTime := time.Now()
 	for time.Since(inspectStartTime) < time.Second {
 		inspect, err = docker.ContainerInspect(ctx, containerID)
