@@ -5,7 +5,7 @@ go 1.23
 toolchain go1.23.9
 
 require (
-	github.com/docker/docker v28.1.1+incompatible
+	github.com/docker/docker v28.0.4+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/gorilla/mux v1.8.0
 	github.com/matrix-org/gomatrix v0.0.0-20220926102614-ceba4d9f7530
@@ -36,7 +36,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/sys/atomicwriter v0.1.0 // indirect
 	github.com/moby/term v0.0.0-20210610120745-9d4ed1856297 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
