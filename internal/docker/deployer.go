@@ -400,6 +400,16 @@ func deployImage(
 		EndpointsConfig: map[string]*network.EndpointSettings{
 			networkName: {
 				Aliases: []string{hsName},
+				DriverOpts: map[string]string{
+					// Pin the interface name, as otherwise it will be
+					// non-deterministic. We choose an interface name
+					// other than "ethX" to avoid colliding with Docker's
+					// own auto-generated interface entries.
+					"com.docker.network.endpoint.ifname": "en0",
+				},
+				// Ensure that this endpoint provides the default route
+				// (higher wins).
+				GwPriority: 100,
 			},
 		},
 	}, nil, containerName)
