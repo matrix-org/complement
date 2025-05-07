@@ -1,8 +1,8 @@
 module github.com/matrix-org/complement
 
-go 1.22
+go 1.23
 
-toolchain go1.22.1
+toolchain go1.23.9
 
 require (
 	github.com/docker/docker v28.1.1+incompatible
