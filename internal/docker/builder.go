@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -81,7 +81,7 @@ func (d *Builder) Cleanup() {
 
 // removeImages removes all images with `complementLabel`.
 func (d *Builder) removeNetworks() error {
-	networks, err := d.Docker.NetworkList(context.Background(), types.NetworkListOptions{
+	networks, err := d.Docker.NetworkList(context.Background(), network.ListOptions{
 		Filters: label(
 			complementLabel,
 			"complement_pkg="+d.Config.PackageNamespace,
@@ -438,7 +438,7 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 // Name is guaranteed not to be empty when err == nil
 func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkName string, err error) {
 	// check if a network already exists for this blueprint
-	nws, err := docker.NetworkList(context.Background(), types.NetworkListOptions{
+	nws, err := docker.NetworkList(context.Background(), network.ListOptions{
 		Filters: label(
 			"complement_pkg="+pkgNamespace,
 			"complement_blueprint="+blueprintName,
@@ -456,7 +456,7 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 	}
 	networkName = "complement_" + pkgNamespace + "_" + blueprintName
 	// make a user-defined network so we get DNS based on the container name
-	nw, err := docker.NetworkCreate(context.Background(), networkName, types.NetworkCreate{
+	nw, err := docker.NetworkCreate(context.Background(), networkName, network.CreateOptions{
 		Labels: map[string]string{
 			complementLabel:        blueprintName,
 			"complement_blueprint": blueprintName,
