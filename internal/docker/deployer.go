@@ -36,6 +36,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
 
 	"github.com/matrix-org/complement/config"
 )
@@ -381,7 +382,13 @@ func deployImage(
 		PublishAllPorts: true,
 		ExtraHosts:      extraHosts,
 		Mounts:          mounts,
-	}, nil, nil, containerName)
+	}, &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{
+			networkName: {
+				Aliases: []string{hsName},
+			},
+		},
+	}, nil, containerName)
 	if err != nil {
 		return nil, fmt.Errorf("ContainerCreate: %s", err)
 	}
