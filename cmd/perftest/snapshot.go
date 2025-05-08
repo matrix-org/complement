@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/matrix-org/complement/internal/docker"
 )
 
@@ -30,7 +30,7 @@ func snapshotStats(spanName, desc string, deployment *docker.Deployment, absDura
 		if err != nil {
 			return nil
 		}
-		var sj types.StatsJSON
+		var sj container.StatsResponse
 		err = json.NewDecoder(stats.Body).Decode(&sj)
 		stats.Body.Close()
 		if err != nil {

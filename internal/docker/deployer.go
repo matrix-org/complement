@@ -31,10 +31,8 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
 	complementRuntime "github.com/matrix-org/complement/runtime"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
@@ -382,20 +380,8 @@ func deployImage(
 	}, &container.HostConfig{
 		CapAdd:          []string{"NET_ADMIN"}, // TODO : this should be some sort of option
 		PublishAllPorts: true,
-		PortBindings: nat.PortMap{
-			nat.Port("8008/tcp"): []nat.PortBinding{
-				{
-					HostIP: cfg.HSPortBindingIP,
-				},
-			},
-			nat.Port("8448/tcp"): []nat.PortBinding{
-				{
-					HostIP: cfg.HSPortBindingIP,
-				},
-			},
-		},
-		ExtraHosts: extraHosts,
-		Mounts:     mounts,
+		ExtraHosts:      extraHosts,
+		Mounts:          mounts,
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
 			networkName: {
@@ -404,7 +390,7 @@ func deployImage(
 		},
 	}, nil, containerName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ContainerCreate: %s", err)
 	}
 	for _, w := range body.Warnings {
 		log.Printf("WARN: ContainerCreate: %s", w)
@@ -446,7 +432,7 @@ func deployImage(
 
 	err = docker.ContainerStart(ctx, containerID, container.StartOptions{})
 	if err != nil {
-		return stubDeployment, err
+		return stubDeployment, fmt.Errorf("ContainerStart: %s", err)
 	}
 	if cfg.DebugLoggingEnabled {
 		log.Printf("%s: Started container %s", contextStr, containerID)
@@ -458,7 +444,7 @@ func deployImage(
 	}
 	inspect, err := docker.ContainerInspect(ctx, containerID)
 	if err != nil {
-		return stubDeployment, err
+		return stubDeployment, fmt.Errorf("ContainerInspect: %s", err)
 	}
 	for vol := range inspect.Config.Volumes {
 		log.Printf(
@@ -506,7 +492,7 @@ func copyToContainer(docker *client.Client, containerID, path string, data []byt
 	tw.Close()
 
 	// Put our new fake file in the container volume
-	err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, types.CopyToContainerOptions{
+	err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, container.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: false,
 	})
 	if err != nil {
@@ -518,7 +504,7 @@ func copyToContainer(docker *client.Client, containerID, path string, data []byt
 // Waits until a homeserver container has NAT ports assigned and returns its clientside API URL and federation API URL.
 func waitForPorts(ctx context.Context, docker *client.Client, containerID string) (baseURL string, fedBaseURL string, err error) {
 	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
-	var inspect types.ContainerJSON
+	var inspect container.InspectResponse
 	inspectStartTime := time.Now()
 	for time.Since(inspectStartTime) < time.Second {
 		inspect, err = docker.ContainerInspect(ctx, containerID)
