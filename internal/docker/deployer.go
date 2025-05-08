@@ -31,13 +31,11 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
 	complementRuntime "github.com/matrix-org/complement/runtime"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/network"
 
 	"github.com/matrix-org/complement/config"
 )
@@ -381,39 +379,11 @@ func deployImage(
 	}, &container.HostConfig{
 		CapAdd:          []string{"NET_ADMIN"}, // TODO : this should be some sort of option
 		PublishAllPorts: true,
-		PortBindings: nat.PortMap{
-			nat.Port("8008/tcp"): []nat.PortBinding{
-				{
-					HostIP: cfg.HSPortBindingIP,
-				},
-			},
-			nat.Port("8448/tcp"): []nat.PortBinding{
-				{
-					HostIP: cfg.HSPortBindingIP,
-				},
-			},
-		},
-		ExtraHosts: extraHosts,
-		Mounts:     mounts,
-	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{
-			networkName: {
-				Aliases: []string{hsName},
-				DriverOpts: map[string]string{
-					// Pin the interface name, as otherwise it will be
-					// non-deterministic. We choose an interface name
-					// other than "ethX" to avoid colliding with Docker's
-					// own auto-generated interface entries.
-					"com.docker.network.endpoint.ifname": "en0",
-				},
-				// Ensure that this endpoint provides the default route
-				// (higher wins).
-				GwPriority: 100,
-			},
-		},
-	}, nil, containerName)
+		ExtraHosts:      extraHosts,
+		Mounts:          mounts,
+	}, nil, nil, containerName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ContainerCreate: %s", err)
 	}
 	for _, w := range body.Warnings {
 		log.Printf("WARN: ContainerCreate: %s", w)
@@ -455,7 +425,7 @@ func deployImage(
 
 	err = docker.ContainerStart(ctx, containerID, container.StartOptions{})
 	if err != nil {
-		return stubDeployment, err
+		return stubDeployment, fmt.Errorf("ContainerStart: %s", err)
 	}
 	if cfg.DebugLoggingEnabled {
 		log.Printf("%s: Started container %s", contextStr, containerID)
@@ -467,7 +437,7 @@ func deployImage(
 	}
 	inspect, err := docker.ContainerInspect(ctx, containerID)
 	if err != nil {
-		return stubDeployment, err
+		return stubDeployment, fmt.Errorf("ContainerInspect: %s", err)
 	}
 	for vol := range inspect.Config.Volumes {
 		log.Printf(
