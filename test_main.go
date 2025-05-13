@@ -16,7 +16,14 @@ var (
 )
 
 type complementOpts struct {
-	cleanup          func(config *config.Complement)
+	// Args:
+	// - We pass in the Complement config (`testPackage.Config`) so the deployer can inspect
+	// `DebugLoggingEnabled`, `SpawnHSTimeout`, `PackageNamespace` etc.
+	cleanup func(config *config.Complement)
+	// Args:
+	// - We pass in `t` as there needs to be a way to handle an error in the custom deployer.
+	// - We pass in the Complement config (`testPackage.Config`) so the deployer can inspect
+	// `DebugLoggingEnabled`, `SpawnHSTimeout`, `PackageNamespace`, etc.
 	customDeployment func(t ct.TestLike, numServers int, config *config.Complement) Deployment
 }
 type opt func(*complementOpts)
@@ -65,7 +72,6 @@ func TestMain(m *testing.M, namespace string, customOpts ...opt) {
 	}
 	exitCode := m.Run()
 	if opts.cleanup != nil {
-		// TODO: Need access to `testPackage.Config` to see if `PackageNamespace` etc.
 		opts.cleanup(testPackage.Config)
 	}
 	testPackage.Cleanup()
@@ -93,8 +99,6 @@ func Deploy(t ct.TestLike, numServers int) Deployment {
 		ct.Fatalf(t, "Deploy: testPackage not set, did you forget to call complement.TestMain?")
 	}
 	if customDeployer != nil {
-		// TODO: Need a way to return an error or pass in `t`
-		// TODO: Need access to `testPackage.Config` to see if `DebugLoggingEnabled`, `SpawnHSTimeout`, `PackageNamespace` etc.
 		return customDeployer(t, numServers, testPackage.Config)
 	}
 	return testPackage.Deploy(t, numServers)
