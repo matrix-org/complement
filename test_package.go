@@ -20,6 +20,12 @@ import (
 
 // Deployment provides a way for tests to interact with a set of homeservers.
 type Deployment interface {
+	// Returns the resolvable host name of a homeserver given its short alias (e.g.,
+	// "hs1", "hs2").
+	//
+	// In the case of the standard Docker deployment, this will be the same `hs1`, `hs2`
+	// but may be different for other custom deployments.
+	GetFullyQualifiedHomeserverName(hsName string) (string, error)
 	// UnauthenticatedClient returns a blank CSAPI client.
 	UnauthenticatedClient(t ct.TestLike, serverName string) *client.CSAPI
 	// Register a new user on the given server.
