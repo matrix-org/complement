@@ -537,26 +537,30 @@ func printPortBindingsOfAllComplementContainers(docker *client.Client, contextSt
 }
 
 func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {
-	csapiPort := fmt.Sprintf("%d/tcp", csPort)
-	csapiPortInfo, ok := p[nat.Port(csapiPort)]
-	if !ok {
-		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", csapiPort, p)
+	baseURL, err = portInfoToEndpoint(p, csPort)
+	if err != nil {
+		return
 	}
-	if len(csapiPortInfo) == 0 {
-		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", csapiPort, p)
-	}
-	baseURL = fmt.Sprintf("http://"+csapiPortInfo[0].HostIP+":%s", csapiPortInfo[0].HostPort)
 
-	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
-	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
-	if !ok {
-		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", ssapiPort, p)
-	}
-	if len(ssapiPortInfo) == 0 {
-		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", ssapiPort, p)
-	}
-	fedBaseURL = fmt.Sprintf("https://"+csapiPortInfo[0].HostIP+":%s", ssapiPortInfo[0].HostPort)
+	fedBaseURL, err = portInfoToEndpoint(p, ssPort)
 	return
+}
+
+func portInfoToEndpoint(p nat.PortMap, port int) (string, error) {
+	textPort := fmt.Sprintf("%d/tcp", port)
+	portInfo, ok := p[nat.Port(textPort)]
+	if !ok {
+		return "", fmt.Errorf("port %s not exposed - exposed ports: %v", textPort, p)
+	}
+	if len(portInfo) == 0 {
+		return "", fmt.Errorf("port %s exposed with not mapped port: %+v", textPort, p)
+	}
+	hostIP := portInfo[0].HostIP
+	// This seems to be empty sometimes? At least on podman v4.3.1. Fall back to localhost.
+	if hostIP == "" {
+		hostIP = "127.0.0.1"
+	}
+	return fmt.Sprintf("http://%s:%s", hostIP, portInfo[0].HostPort), nil
 }
 
 type result struct {
