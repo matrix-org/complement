@@ -20,8 +20,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
 )
 
@@ -128,8 +128,8 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	})
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement1",
-		Origin:         spec.ServerName(srv.ServerName()),
-		Destination:    "hs1",
+		Origin:         srv.ServerName(),
+		Destination:    deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		OriginServerTS: spec.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			rejectedEvent.JSON(),
@@ -199,8 +199,8 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	_, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement2",
-		Origin:         spec.ServerName(srv.ServerName()),
-		Destination:    "hs1",
+		Origin:         srv.ServerName(),
+		Destination:    deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		OriginServerTS: spec.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			sentEvent1.JSON(),

@@ -325,8 +325,8 @@ func TestFederatedEventRelationships(t *testing.T) {
 	fedClient := srv.FederationClient(deployment)
 	_, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID:  "complement",
-		Origin:         spec.ServerName(srv.ServerName()),
-		Destination:    spec.ServerName("hs1"),
+		Origin:         srv.ServerName(),
+		Destination:    deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		OriginServerTS: spec.AsTimestamp(time.Now()),
 		PDUs: []json.RawMessage{
 			eventE.JSON(),

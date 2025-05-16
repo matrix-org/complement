@@ -1853,7 +1853,7 @@ func TestPartialStateJoin(t *testing.T) {
 		fedClient2 := testServer2.FederationClient(deployment)
 
 		// charlie sends a make_join
-		_, err := fedClient2.MakeJoin(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", roomID, testServer2.UserID("charlie"))
+		_, err := fedClient2.MakeJoin(context.Background(), testServer2.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, testServer2.UserID("charlie"))
 
 		if err == nil {
 			t.Errorf("MakeJoin returned 200, want 404")
@@ -1919,12 +1919,12 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Fatalf("MakeRespMakeJoin: invalid room version: %s", err)
 		}
 		eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
-		joinEvent, err := eb.Build(time.Now(), spec.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv)
+		joinEvent, err := eb.Build(time.Now(), testServer2.ServerName(), testServer2.KeyID, testServer2.Priv)
 		must.NotError(t, "JoinEvent.Build", err)
 
 		// SendJoin should return a 404 because the homeserver under test has not
 		// finished its partial join.
-		_, err = fedClient2.SendJoin(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", joinEvent)
+		_, err = fedClient2.SendJoin(context.Background(), testServer2.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), joinEvent)
 		if err == nil {
 			t.Errorf("SendJoin returned 200, want 404")
 		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -2031,7 +2031,7 @@ func TestPartialStateJoin(t *testing.T) {
 		fedClient2 := testServer2.FederationClient(deployment)
 
 		// charlie sends a make_knock
-		_, err := fedClient2.MakeKnock(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
+		_, err := fedClient2.MakeKnock(context.Background(), testServer2.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
 
 		if err == nil {
 			t.Errorf("MakeKnock returned 200, want 404")
@@ -2097,12 +2097,12 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Fatalf("MakeRespMakeJoin: invalid room version: %s", err)
 		}
 		eb := verImpl.NewEventBuilderFromProtoEvent(&makeKnockResp.KnockEvent)
-		knockEvent, err := eb.Build(time.Now(), spec.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv)
+		knockEvent, err := eb.Build(time.Now(), testServer2.ServerName(), testServer2.KeyID, testServer2.Priv)
 		must.NotError(t, "KnockEvent.Build", err)
 
 		// SendKnock should return a 404 because the homeserver under test has not
 		// finished its partial join.
-		_, err = fedClient2.SendKnock(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", knockEvent)
+		_, err = fedClient2.SendKnock(context.Background(), testServer2.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), knockEvent)
 		if err == nil {
 			t.Errorf("SendKnock returned 200, want 404")
 		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -4194,7 +4194,7 @@ func testReceiveEventDuringPartialStateJoin(
 	// is resolved. For now, we use this to check whether Synapse has calculated the partial state
 	// flag for the last event correctly.
 
-	stateReq := fclient.NewFederationRequest("GET", spec.ServerName(psjResult.Server.ServerName()), "hs1",
+	stateReq := fclient.NewFederationRequest("GET", psjResult.Server.ServerName(), "hs1",
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
 			url.PathEscape(psjResult.ServerRoom.RoomID),
 			url.QueryEscape(event.EventID()),
@@ -4238,7 +4238,7 @@ func testReceiveEventDuringPartialStateJoin(
 	)
 
 	// check the server's idea of the state at the event. We do this by making a `state_ids` request over federation
-	stateReq = fclient.NewFederationRequest("GET", spec.ServerName(psjResult.Server.ServerName()), "hs1",
+	stateReq = fclient.NewFederationRequest("GET", psjResult.Server.ServerName(), "hs1",
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
 			url.PathEscape(psjResult.ServerRoom.RoomID),
 			url.QueryEscape(event.EventID()),

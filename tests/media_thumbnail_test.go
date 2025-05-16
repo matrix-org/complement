@@ -3,14 +3,6 @@ package tests
 import (
 	"bytes"
 	"context"
-	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/federation"
-	"github.com/matrix-org/complement/helpers"
-	"github.com/matrix-org/complement/internal/data"
-	"github.com/matrix-org/complement/runtime"
-	"github.com/matrix-org/gomatrixserverlib/fclient"
-	"github.com/matrix-org/gomatrixserverlib/spec"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -20,6 +12,14 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/matrix-org/complement"
+	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/internal/data"
+	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
 )
 
 // TODO: add JPEG testing
@@ -36,11 +36,11 @@ func TestLocalPngThumbnail(t *testing.T) {
 
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
-    t.Run("test /_matrix/media/v3 endpoint", func(t *testing.T) {
+	t.Run("test /_matrix/media/v3 endpoint", func(t *testing.T) {
 		// Synapse no longer allows downloads over the unauthenticated media endpoints by default
-    	runtime.SkipIf(t, runtime.Synapse)
+		runtime.SkipIf(t, runtime.Synapse)
 		fetchAndValidateThumbnail(t, alice, uri, false)
-    })
+	})
 
 	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
 		runtime.SkipIf(t, runtime.Dendrite)
@@ -62,11 +62,11 @@ func TestRemotePngThumbnail(t *testing.T) {
 
 	uri := alice.UploadContent(t, data.LargePng, fileName, contentType)
 
-    t.Run("test /_matrix/media/v3 endpoint", func(t *testing.T) {
+	t.Run("test /_matrix/media/v3 endpoint", func(t *testing.T) {
 		// Synapse no longer allows downloads over the unauthenticated media endpoints by default
-    	runtime.SkipIf(t, runtime.Synapse)
+		runtime.SkipIf(t, runtime.Synapse)
 		fetchAndValidateThumbnail(t, bob, uri, false)
-    })
+	})
 
 	t.Run("test /_matrix/client/v1/media endpoint", func(t *testing.T) {
 		runtime.SkipIf(t, runtime.Dendrite)
@@ -95,7 +95,7 @@ func TestFederationThumbnail(t *testing.T) {
 	)
 	cancel := srv.Listen()
 	defer cancel()
-	origin := spec.ServerName(srv.ServerName())
+	origin := srv.ServerName()
 
 	fileName := "test.png"
 	contentType := "image/png"

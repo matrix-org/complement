@@ -8,12 +8,11 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
-	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/tidwall/gjson"
@@ -133,7 +132,8 @@ func TestIsDirectFlagFederation(t *testing.T) {
 		t.Fatalf("failed to make invite request: %s", err)
 	}
 	_, since := alice.MustSync(t, client.SyncReq{})
-	_, err = srv.FederationClient(deployment).SendInviteV2(context.Background(), spec.ServerName(srv.ServerName()), "hs1", inviteReq)
+	fedClient := srv.FederationClient(deployment)
+	_, err = fedClient.SendInviteV2(context.Background(), srv.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), inviteReq)
 	if err != nil {
 		t.Fatalf("failed to send invite v2: %s", err)
 	}

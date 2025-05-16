@@ -233,7 +233,7 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 		t.Fatalf("failed to create event: invalid room version: %s", err)
 	}
 	eb := verImpl.NewEventBuilderFromProtoEvent(&proto)
-	signedBadEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
+	signedBadEvent, err := eb.Build(time.Now(), srv.ServerName(), srv.KeyID, srv.Priv)
 	if err != nil {
 		t.Fatalf("failed to sign event: %s", err)
 	}
@@ -274,8 +274,8 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 	fedClient := srv.FederationClient(deployment)
 	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "wut",
-		Origin:        spec.ServerName(srv.ServerName()),
-		Destination:   spec.ServerName("hs1"),
+		Origin:        srv.ServerName(),
+		Destination:   deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		PDUs: []json.RawMessage{
 			sentEvent.JSON(),
 		},
@@ -320,8 +320,8 @@ func TestOutboundFederationIgnoresMissingEventWithBadJSONForRoomVersion6(t *test
 
 	resp, err = fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "t2",
-		Origin:        spec.ServerName(srv.ServerName()),
-		Destination:   spec.ServerName("hs1"),
+		Origin:        srv.ServerName(),
+		Destination:   deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		PDUs: []json.RawMessage{
 			message3.JSON(),
 		},
@@ -384,7 +384,7 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 
 			req := fclient.NewFederationRequest(
 				"POST",
-				spec.ServerName(srv.ServerName()),
+				srv.ServerName(),
 				"hs1",
 				fmt.Sprintf("/_matrix/federation/v1/get_missing_events/%s", roomID),
 			)
@@ -533,7 +533,7 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 	}
 	eb.AuthEvents = room.AuthEvents(stateNeeded)
 
-	signedBadEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
+	signedBadEvent, err := eb.Build(time.Now(), srv.ServerName(), srv.KeyID, srv.Priv)
 	switch e := err.(type) {
 	case nil:
 	case gomatrixserverlib.EventValidationError:
@@ -579,8 +579,8 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 	fedClient := srv.FederationClient(deployment)
 	resp, err := fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
 		TransactionID: "wut",
-		Origin:        spec.ServerName(srv.ServerName()),
-		Destination:   spec.ServerName("hs1"),
+		Origin:        srv.ServerName(),
+		Destination:   deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		PDUs: []json.RawMessage{
 			sentEvent.JSON(),
 		},

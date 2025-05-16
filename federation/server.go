@@ -210,11 +210,11 @@ func (s *Server) FederationClient(deployment FederationDeployment) fclient.Feder
 		KeyID:      s.KeyID,
 		PrivateKey: s.Priv,
 	}
-	f := fclient.NewFederationClient(
+	fedClient := fclient.NewFederationClient(
 		[]*fclient.SigningIdentity{&identity},
 		fclient.WithTransport(deployment.RoundTripper()),
 	)
-	return f
+	return fedClient
 }
 
 // MustSendTransaction sends the given PDUs/EDUs to the target destination, returning an error if the /send fails or if the response contains an error
@@ -224,10 +224,10 @@ func (s *Server) FederationClient(deployment FederationDeployment) fclient.Feder
 //   - `destination`: This should be a resolvable addresses within the deployment network.
 func (s *Server) MustSendTransaction(t ct.TestLike, deployment FederationDeployment, destination spec.ServerName, pdus []json.RawMessage, edus []gomatrixserverlib.EDU) {
 	t.Helper()
-	cli := s.FederationClient(deployment)
+	fedClient := s.FederationClient(deployment)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	resp, err := cli.SendTransaction(ctx, gomatrixserverlib.Transaction{
+	resp, err := fedClient.SendTransaction(ctx, gomatrixserverlib.Transaction{
 		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("complement-%d", time.Now().Nanosecond())),
 		Origin:        spec.ServerName(s.ServerName()),
 		Destination:   destination,
