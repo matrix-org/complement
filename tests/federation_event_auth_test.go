@@ -62,7 +62,7 @@ func TestEventAuth(t *testing.T) {
 	})
 	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 	firstJoinEvent := room.CurrentState("m.room.member", charlie)
-	srv.MustLeaveRoom(t, deployment, "hs1", roomID, charlie)
+	srv.MustLeaveRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 	leaveEvent := room.CurrentState("m.room.member", charlie)
 	room = srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 

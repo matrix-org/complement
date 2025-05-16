@@ -288,10 +288,10 @@ func TestSync(t *testing.T) {
 			charlie := srv.UserID("charlie")
 
 			redactionRoomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			redactionRoom := srv.MustJoinRoom(t, deployment, "hs1", redactionRoomID, charlie)
+			redactionRoom := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), redactionRoomID, charlie)
 
 			sentinelRoomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			sentinelRoom := srv.MustJoinRoom(t, deployment, "hs1", sentinelRoomID, charlie)
+			sentinelRoom := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), sentinelRoomID, charlie)
 
 			// charlie creates a bogus redaction, which he sends out, followed by
 			// a good event - in another room - to act as a sentinel. It's not
@@ -304,7 +304,7 @@ func TestSync(t *testing.T) {
 				Redacts: "$12345"})
 			redactionRoom.AddEvent(redactionEvent)
 			t.Logf("Created redaction event %s", redactionEvent.EventID())
-			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON()}, nil)
+			srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{redactionEvent.JSON()}, nil)
 
 			sentinelEvent := srv.MustCreateEvent(t, sentinelRoom, federation.Event{
 				Type:    "m.room.test",
@@ -313,7 +313,7 @@ func TestSync(t *testing.T) {
 			})
 			sentinelRoom.AddEvent(sentinelEvent)
 			t.Logf("Created sentinel event %s", sentinelEvent.EventID())
-			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON(), sentinelEvent.JSON()}, nil)
+			srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{redactionEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 			// wait for the sentinel to arrive
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(sentinelRoomID, sentinelEvent.EventID()))
@@ -332,7 +332,7 @@ func TestSync(t *testing.T) {
 				pdus[i] = ev.JSON()
 				lastSentEventId = ev.EventID()
 			}
-			srv.MustSendTransaction(t, deployment, "hs1", pdus, nil)
+			srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), pdus, nil)
 			t.Logf("Sent filler events, with final event %s", lastSentEventId)
 
 			// sync, starting from the same ?since each time, until the final message turns up.
@@ -463,7 +463,7 @@ func TestSyncTimelineGap(t *testing.T) {
 	charlie := srv.UserID("charlie")
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 
 	filterID := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -515,7 +515,7 @@ func TestSyncTimelineGap(t *testing.T) {
 	// requests.
 	respondToGetMissingEventsEndpoints(t, srv, room, missingEvents)
 
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{lastEvent.JSON()}, nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{lastEvent.JSON()}, nil)
 
 	// We now test two different modes of /sync work. The first is when we are
 	// syncing when the server receives the `lastEvent` (and so, at least

@@ -219,7 +219,10 @@ func (s *Server) FederationClient(deployment FederationDeployment) fclient.Feder
 
 // MustSendTransaction sends the given PDUs/EDUs to the target destination, returning an error if the /send fails or if the response contains an error
 // for any sent PDUs. Times out after 10 seconds.
-func (s *Server) MustSendTransaction(t ct.TestLike, deployment FederationDeployment, destination string, pdus []json.RawMessage, edus []gomatrixserverlib.EDU) {
+//
+// Args:
+//   - `destination`: This should be a resolvable addresses within the deployment network.
+func (s *Server) MustSendTransaction(t ct.TestLike, deployment FederationDeployment, destination spec.ServerName, pdus []json.RawMessage, edus []gomatrixserverlib.EDU) {
 	t.Helper()
 	cli := s.FederationClient(deployment)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -227,7 +230,7 @@ func (s *Server) MustSendTransaction(t ct.TestLike, deployment FederationDeploym
 	resp, err := cli.SendTransaction(ctx, gomatrixserverlib.Transaction{
 		TransactionID: gomatrixserverlib.TransactionID(fmt.Sprintf("complement-%d", time.Now().Nanosecond())),
 		Origin:        spec.ServerName(s.ServerName()),
-		Destination:   spec.ServerName(destination),
+		Destination:   destination,
 		PDUs:          pdus,
 		EDUs:          edus,
 	})
@@ -320,6 +323,9 @@ func (s *Server) MustCreateEvent(t ct.TestLike, room *ServerRoom, ev Event) goma
 
 // MustJoinRoom will make the server send a make_join and a send_join to join a room
 // It returns the resultant room.
+//
+// Args:
+//   - `remoteServer`: This should be a resolvable addresses within the deployment network.
 func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string, opts ...JoinRoomOpt) *ServerRoom {
 	t.Helper()
 	var jr joinRoom
@@ -402,6 +408,9 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 }
 
 // Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
+//
+// Args:
+//   - `remoteServer`: This should be a resolvable addresses within the deployment network.
 func (s *Server) MustLeaveRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string) {
 	t.Helper()
 	origin := spec.ServerName(s.serverName)

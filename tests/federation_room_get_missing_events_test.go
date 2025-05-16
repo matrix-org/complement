@@ -127,7 +127,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	).Methods("POST")
 
 	// 3) ...and send that alone to the HS.
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{mostRecentEvent.JSON()}, nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{mostRecentEvent.JSON()}, nil)
 
 	// 6) Ensure Alice sees all injected events in the correct order.
 	correctOrderEventIDs := append([]string{lastSharedEvent.EventID()}, missingEventIDs...)

@@ -65,12 +65,12 @@ func TestUnrejectRejectedEvents(t *testing.T) {
 	// Send event B into the room. Event A at this point is unknown
 	// to the homeserver and we're not going to respond to the events
 	// request for it, so it should get rejected.
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{eventB.JSON()}, nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{eventB.JSON()}, nil)
 
 	// Now we're going to send Event A into the room, which should give
 	// the server the prerequisite event to pass Event B later. This one
 	// should appear in /sync.
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{eventA.JSON()}, nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{eventA.JSON()}, nil)
 
 	// Wait for event A to appear in the room. We're going to store the
 	// sync token here because we want to assert on the next sync that
@@ -82,7 +82,7 @@ func TestUnrejectRejectedEvents(t *testing.T) {
 
 	// Finally, send Event B again. This time it should be unrejected and
 	// should be sent as a new event down /sync for the first time.
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{eventB.JSON()}, nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{eventB.JSON()}, nil)
 
 	// Now see if event B appears in the room. Use the since token from the
 	// last sync to ensure we're only waiting for new events since event A.

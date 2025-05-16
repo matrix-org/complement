@@ -177,7 +177,7 @@ func TestNetworkPartitionOrdering(t *testing.T) {
 	}
 
 	// remote homeserver now injects event 1'
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event1prime.JSON()}, nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event1prime.JSON()}, nil)
 
 	// ensure it gets there
 	alice.MustSyncUntil(t, client.SyncReq{TimeoutMillis: "1000"}, client.SyncTimelineHasEventID(serverRoom.RoomID, event1prime.EventID()))

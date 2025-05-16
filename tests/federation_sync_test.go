@@ -85,7 +85,7 @@ func TestSyncOmitsStateChangeOnFilteredEvents(t *testing.T) {
 	})
 
 	// fork the dag earlier at e1 and send s2
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{s2.JSON()}, nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{s2.JSON()}, nil)
 
 	// wait until we see S2 to ensure the server has processed this.
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(serverRoom.RoomID, s2.EventID()))
