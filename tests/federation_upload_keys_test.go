@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 func TestFederationKeyUploadQuery(t *testing.T) {
@@ -24,7 +25,9 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 
 	// for device lists to be shared between alice and bob they must share a room
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 
 	// Do an initial sync so that we can see the changes come down sync.
 	// We wait until we see the newly joined room as that can cause alice to appear in device_lists

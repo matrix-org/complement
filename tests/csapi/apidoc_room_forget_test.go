@@ -14,6 +14,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // These tests ensure that forgetting about rooms works as intended
@@ -40,7 +41,7 @@ func TestRoomForget(t *testing.T) {
 		t.Run("Forgotten room messages cannot be paginated", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -62,7 +63,7 @@ func TestRoomForget(t *testing.T) {
 		t.Run("Forgetting room does not show up in v2 initial /sync", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -107,7 +108,7 @@ func TestRoomForget(t *testing.T) {
 			// left if it is forgotten quickly. This is arguably a bug in the spec.
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -145,7 +146,7 @@ func TestRoomForget(t *testing.T) {
 		t.Run("Can forget room you've been kicked from", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -187,7 +188,7 @@ func TestRoomForget(t *testing.T) {
 				},
 			})
 			// Bob joins room
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			messageID := alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
@@ -210,7 +211,7 @@ func TestRoomForget(t *testing.T) {
 			})
 			// Re-invite bob
 			alice.MustInviteRoom(t, roomID, bob.UserID)
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			// Query messages
 			queryParams := url.Values{}
 			queryParams.Set("dir", "b")

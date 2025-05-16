@@ -22,8 +22,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -73,14 +73,16 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 
 	// join the room by room ID, providing the serverName to join via
-	alice.MustJoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{srv.ServerName()})
 
 	// remove the make/send join paths from the Complement server to force HS2 to join via HS1
 	acceptMakeSendJoinRequests = false
 
 	// join the room using ?server_name on HS2
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
-	roomID := bob.MustJoinRoom(t, serverRoom.RoomID, []string{"hs1"})
+	roomID := bob.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	must.Equal(t, roomID, serverRoom.RoomID, "joined room mismatch")
 }
 
@@ -110,7 +112,10 @@ func TestJoinFederatedRoomFailOver(t *testing.T) {
 	t.Logf("%s created room %s.", bob.UserID, roomID)
 
 	t.Logf("%s joins the room via {complement,hs2}.", alice.UserID)
-	alice.MustJoinRoom(t, roomID, []string{srv.ServerName(), "hs2"})
+	alice.MustJoinRoom(t, roomID, []spec.ServerName{
+		srv.ServerName(),
+		deployment.GetFullyQualifiedHomeserverName(t, "hs2"),
+	})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 }
 
@@ -301,7 +306,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
-	origin := spec.ServerName(srv.ServerName())
+	origin := srv.ServerName()
 	defer cancel()
 
 	fedClient := srv.FederationClient(deployment)
@@ -324,7 +329,7 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	})
 
 	// charlie sends a make_join for a different user
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, srv.UserID("charlie2"))
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, srv.UserID("charlie2"))
 	must.NotError(t, "MakeJoin", err)
 
 	// ... and does a switcheroo to turn it into a join for himself
@@ -334,11 +339,11 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	verImpl, err := gomatrixserverlib.GetRoomVersion(makeJoinResp.RoomVersion)
 	must.NotError(t, "JoinEvent.GetRoomVersion", err)
 	eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
-	joinEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
+	joinEvent, err := eb.Build(time.Now(), srv.ServerName(), srv.KeyID, srv.Priv)
 	must.NotError(t, "JoinEvent.Build", err)
 
 	// SendJoin should return a 403.
-	_, err = fedClient.SendJoin(context.Background(), origin, "hs1", joinEvent)
+	_, err = fedClient.SendJoin(context.Background(), origin, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), joinEvent)
 	if err == nil {
 		t.Errorf("SendJoin returned 200, want 403")
 	} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -406,7 +411,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomId := alice.MustCreateRoom(t, createRoomOpts)
 	charlie := srv.UserID("charlie")
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomId, charlie)
+	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomId, charlie)
 
 	// a helper function which makes a send_* request to the given path and checks
 	// that it fails with a 400 error
@@ -417,7 +422,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 			url.PathEscape(event.EventID()),
 		)
 		t.Logf("PUT %s", path)
-		req := fclient.NewFederationRequest("PUT", spec.ServerName(srv.ServerName()), "hs1", path)
+		req := fclient.NewFederationRequest("PUT", srv.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), path)
 		if err := req.SetContent(event); err != nil {
 			t.Errorf("req.SetContent: %v", err)
 			return
@@ -506,7 +511,7 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	)
 	cancel := srv.Listen()
 	defer cancel()
-	origin := spec.ServerName(srv.ServerName())
+	origin := srv.ServerName()
 
 	// annoyingly we can't get to the room that alice and bob already share (see https://github.com/matrix-org/complement/issues/254)
 	// so we have to create a new one.
@@ -519,7 +524,7 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	// now we send a make_join...
 	charlie := srv.UserID("charlie")
 	fedClient := srv.FederationClient(deployment)
-	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, "hs1", roomID, charlie)
+	makeJoinResp, err := fedClient.MakeJoin(context.Background(), origin, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 	if err != nil {
 		t.Fatalf("make_join failed: %v", err)
 	}
@@ -528,13 +533,13 @@ func TestSendJoinPartialStateResponse(t *testing.T) {
 	verImpl, err := gomatrixserverlib.GetRoomVersion(makeJoinResp.RoomVersion)
 	must.NotError(t, "JoinEvent.GetRoomVersion", err)
 	eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
-	joinEvent, err := eb.Build(time.Now(), spec.ServerName(srv.ServerName()), srv.KeyID, srv.Priv)
+	joinEvent, err := eb.Build(time.Now(), srv.ServerName(), srv.KeyID, srv.Priv)
 	if err != nil {
 		t.Fatalf("failed to sign join event: %v", err)
 	}
 
 	// and send_join it, with the magic param
-	sendJoinResp, err := fedClient.SendJoinPartialState(context.Background(), origin, "hs1", joinEvent)
+	sendJoinResp, err := fedClient.SendJoinPartialState(context.Background(), origin, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), joinEvent)
 	if err != nil {
 		t.Fatalf("send_join failed: %v", err)
 	}
@@ -602,6 +607,8 @@ func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
 		})
 
 		// Join the AS bridge user to the remote federated room (without a profile set)
-		as.MustJoinRoom(t, roomID, []string{"hs2"})
+		as.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs2"),
+		})
 	})
 }

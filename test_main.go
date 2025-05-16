@@ -39,6 +39,12 @@ func WithCleanup(fn func(config *config.Complement)) opt {
 }
 
 // WithDeployment adds a custom mechanism to deploy homeservers.
+//
+// For test consistency and compatibility, deployers should be creating servers that can
+// be referred to as `hs1`, `hs2`, etc as the `hsName` in the `Deployment` interface.
+// The actual resolvable address of the homeserver in the network can be something
+// different and just needs to be mapped by
+// your implementation of `deployment.GetFullyQualifiedHomeserverName(hsName)`.
 func WithDeployment(fn func(t ct.TestLike, numServers int, config *config.Complement) Deployment) opt {
 	return func(co *complementOpts) {
 		co.customDeployment = fn
@@ -93,6 +99,9 @@ func OldDeploy(t ct.TestLike, blueprint b.Blueprint) Deployment {
 // Deploy will deploy the given number of servers or terminate the test.
 // This function is the main setup function for all tests as it provides a deployment with
 // which tests can interact with.
+//
+// For test consistency and compatibility, deployers should be creating servers that can
+// be referred to as `hs1`, `hs2`, etc as the `hsName` in the `Deployment` interface.
 func Deploy(t ct.TestLike, numServers int) Deployment {
 	t.Helper()
 	if testPackage == nil {

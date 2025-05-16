@@ -1,10 +1,12 @@
 package csapi_tests
 
 import (
+	"testing"
+
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/runtime"
-	"testing"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/helpers"
@@ -29,7 +31,9 @@ func TestMembershipOnEvents(t *testing.T) {
 			"msgtype": "m.text",
 			"body":    "prejoin",
 		}})
-	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	postJoinEventID := alice.SendEventSynced(t, roomID, b.Event{Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",

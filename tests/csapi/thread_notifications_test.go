@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // Builds a `SyncCheckOpt` which enforces that a sync result satisfies some `check` function
@@ -313,7 +314,9 @@ func TestThreadReceiptsInSyncMSC4102(t *testing.T) {
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	eventA := alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{

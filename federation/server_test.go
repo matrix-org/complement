@@ -55,7 +55,7 @@ func TestComplementServerIsSigned(t *testing.T) {
 		transport := &http.Transport{TLSClientConfig: tc.config}
 		client := &http.Client{Transport: transport}
 
-		resp, err := client.Get("https://" + srv.ServerName())
+		resp, err := client.Get("https://" + string(srv.ServerName()))
 		if err != nil {
 			if tc.wantSuccess {
 				t.Fatalf("Failed to GET: %s", err)

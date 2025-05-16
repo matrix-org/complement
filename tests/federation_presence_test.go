@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 func TestRemotePresence(t *testing.T) {
@@ -20,7 +21,9 @@ func TestRemotePresence(t *testing.T) {
 
 	// for presence to be sent over federation alice and bob must share a room
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 
 	// sytest: Presence changes are also reported to remote room members
 	t.Run("Presence changes are also reported to remote room members", func(t *testing.T) {

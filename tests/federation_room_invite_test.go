@@ -7,8 +7,8 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib"
 
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 )
 
 // This test ensures that invite rejections are correctly sent out over federation.
@@ -45,7 +45,7 @@ func TestFederationRejectInvite(t *testing.T) {
 
 	// Alice creates the room, and delia joins
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, delia)
+	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, delia)
 
 	// Alice invites Charlie; Delia should see the invite
 	waiter = helpers.NewWaiter()

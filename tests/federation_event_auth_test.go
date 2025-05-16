@@ -7,10 +7,9 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
-	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/gomatrixserverlib"
 )
@@ -60,11 +59,11 @@ func TestEventAuth(t *testing.T) {
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 	firstJoinEvent := room.CurrentState("m.room.member", charlie)
-	srv.MustLeaveRoom(t, deployment, "hs1", roomID, charlie)
+	srv.MustLeaveRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 	leaveEvent := room.CurrentState("m.room.member", charlie)
-	room = srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+	room = srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 
 	// now update the auth chain a bit: dendrite had a bug where it returned the auth chain for all
 	// the current state in addition to the event asked for
@@ -80,7 +79,15 @@ func TestEventAuth(t *testing.T) {
 	getEventAuth := func(t *testing.T, eventID string, wantAuthEventIDs []string) {
 		t.Helper()
 		t.Logf("/event_auth for %s - want %v", eventID, wantAuthEventIDs)
-		eventAuthResp, err := srv.FederationClient(deployment).GetEventAuth(context.Background(), spec.ServerName(srv.ServerName()), "hs1", room.Version, roomID, eventID)
+		fedClient := srv.FederationClient(deployment)
+		eventAuthResp, err := fedClient.GetEventAuth(
+			context.Background(),
+			srv.ServerName(),
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+			room.Version,
+			roomID,
+			eventID,
+		)
 		must.NotError(t, "failed to /event_auth", err)
 		if len(eventAuthResp.AuthEvents) == 0 {
 			t.Fatalf("/event_auth returned 0 auth events")

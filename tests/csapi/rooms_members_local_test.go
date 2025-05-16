@@ -7,6 +7,7 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 func TestMembersLocal(t *testing.T) {
@@ -30,7 +31,7 @@ func TestMembersLocal(t *testing.T) {
 	)
 
 	_, incrementalSyncTokenBeforeBobJoinsRoom := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
-	bob.MustJoinRoom(t, roomID, []string{})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: New room members see their own join event

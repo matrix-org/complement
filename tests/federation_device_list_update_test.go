@@ -16,6 +16,7 @@ import (
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 )
 
@@ -120,7 +121,9 @@ func TestDeviceListsUpdateOverFederation(t *testing.T) {
 			_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 			bobSince := bob.MustSyncUntil(t, client.SyncReq{TimeoutMillis: "0"}, client.SyncInvitedTo(bob.UserID, roomID))
 
-			bob.MustJoinRoom(t, roomID, []string{"hs1"})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{
+				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+			})
 
 			// both alice and bob should see device list updates for each other
 			aliceSince = alice.MustSyncUntil(
@@ -205,7 +208,7 @@ func TestDeviceListsUpdateOverFederationOnRoomJoin(t *testing.T) {
 	initalEvents := federation.InitialRoomEvents(roomVer, bob)
 	room := srv.MustMakeRoom(t, roomVer, initalEvents)
 
-	alice.MustJoinRoom(t, room.RoomID, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, room.RoomID, []spec.ServerName{srv.ServerName()})
 	alice.SendEventSynced(t, room.RoomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
@@ -256,7 +259,9 @@ func TestUserAppearsInChangedDeviceListOnJoinOverFederation(t *testing.T) {
 	_, since := joinee.MustSync(t, client.SyncReq{})
 
 	// the joiner now joins the room over federation
-	joiner.MustJoinRoom(t, roomID, []string{"hs2"})
+	joiner.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs2"),
+	})
 
 	// we must see the joiner's user ID in device_lists.changed
 	since = joinee.MustSyncUntil(t, client.SyncReq{

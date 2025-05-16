@@ -16,6 +16,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 func TestPresence(t *testing.T) {
@@ -27,7 +28,9 @@ func TestPresence(t *testing.T) {
 
 	// to share presence alice and bob must be in a shared room
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 
 	// sytest: GET /presence/:user_id/status fetches initial status
 	t.Run("GET /presence/:user_id/status fetches initial status", func(t *testing.T) {

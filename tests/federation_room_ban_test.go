@@ -6,6 +6,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // Regression test for https://github.com/matrix-org/synapse/issues/1563
@@ -21,7 +22,9 @@ func TestUnbanViaInvite(t *testing.T) {
 	roomID := bob.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
-	alice.MustJoinRoom(t, roomID, []string{"hs2"})
+	alice.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs2"),
+	})
 
 	// Ban Alice
 	bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
@@ -41,5 +44,7 @@ func TestUnbanViaInvite(t *testing.T) {
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
 
 	// Alice accepts (this is what previously failed in the issue)
-	alice.MustJoinRoom(t, roomID, []string{"hs2"})
+	alice.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs2"),
+	})
 }

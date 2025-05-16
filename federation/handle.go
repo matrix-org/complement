@@ -117,7 +117,7 @@ func MakeRespMakeKnock(s *Server, room *ServerRoom, userID string) (resp fclient
 // the current server is returned to the joining server.
 func SendJoinRequestsHandler(s *Server, w http.ResponseWriter, req *http.Request, expectPartialState bool, omitServersInRoom bool) {
 	fedReq, errResp := fclient.VerifyHTTPRequest(
-		req, time.Now(), spec.ServerName(s.serverName), nil, s.keyRing,
+		req, time.Now(), s.serverName, nil, s.keyRing,
 	)
 	if fedReq == nil {
 		w.WriteHeader(errResp.Code)
@@ -208,7 +208,7 @@ func HandleInviteRequests(inviteCallback func(gomatrixserverlib.PDU)) func(*Serv
 		// https://matrix.org/docs/spec/server_server/r0.1.4#put-matrix-federation-v2-invite-roomid-eventid
 		s.mux.Handle("/_matrix/federation/v2/invite/{roomID}/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			fedReq, errResp := fclient.VerifyHTTPRequest(
-				req, time.Now(), spec.ServerName(s.serverName), nil, s.keyRing,
+				req, time.Now(), s.serverName, nil, s.keyRing,
 			)
 			if fedReq == nil {
 				w.WriteHeader(errResp.Code)
@@ -236,7 +236,7 @@ func HandleInviteRequests(inviteCallback func(gomatrixserverlib.PDU)) func(*Serv
 			}
 
 			// Sign the event before we send it back
-			signedEvent := inviteRequest.Event().Sign(s.serverName, s.KeyID, s.Priv)
+			signedEvent := inviteRequest.Event().Sign(string(s.serverName), s.KeyID, s.Priv)
 
 			// Send the response
 			res := map[string]interface{}{
@@ -263,7 +263,7 @@ func HandleDirectoryLookups() func(*Server) {
 				b, err := json.Marshal(fclient.RespDirectory{
 					RoomID: roomID,
 					Servers: []spec.ServerName{
-						spec.ServerName(s.serverName),
+						s.serverName,
 					},
 				})
 				if err != nil {
@@ -432,7 +432,7 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 			origin := vars["origin"]
 			mediaId := vars["mediaId"]
 
-			if origin != srv.serverName {
+			if origin != string(srv.serverName) {
 				w.WriteHeader(400)
 				w.Write([]byte("complement: Invalid Origin; Expected " + srv.serverName))
 				return
@@ -471,7 +471,7 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.PDU), eduCallb
 
 			// Check federation signature
 			fedReq, errResp := fclient.VerifyHTTPRequest(
-				req, time.Now(), spec.ServerName(srv.serverName), nil, srv.keyRing,
+				req, time.Now(), srv.serverName, nil, srv.keyRing,
 			)
 			if fedReq == nil {
 				log.Printf(
