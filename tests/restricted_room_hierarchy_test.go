@@ -75,7 +75,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 						{
 							"type":    "m.room_membership",
 							"room_id": &space,
-							"via":     []string{"hs1"},
+							"via":     []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 						},
 					},
 				},
@@ -86,7 +86,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 		Type:     "m.space.child",
 		StateKey: &room,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 
