@@ -68,7 +68,7 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
-	srvRoom := srv.MustJoinRoom(t, deployment, "hs1", roomID, bob)
+	srvRoom := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, bob)
 	lastSharedEvent := srvRoom.Timeline[len(srvRoom.Timeline)-1]
 
 	// 2) Inject events into Complement but don't deliver them to the HS.
@@ -379,7 +379,7 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 				Sender: alice.UserID,
 			})
 
-			room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+			room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie, roomID))
 
 			req := fclient.NewFederationRequest(

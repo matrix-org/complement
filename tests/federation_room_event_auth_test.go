@@ -114,7 +114,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 		"preset": "public_chat",
 	})
 	charlie := srv.UserID("charlie")
-	room := srv.MustJoinRoom(t, deployment, "hs1", testRoomID, charlie)
+	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), testRoomID, charlie)
 	charlieMembershipEvent := room.CurrentState("m.room.member", charlie)
 
 	// have Charlie send a PL event which will be rejected

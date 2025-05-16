@@ -1283,7 +1283,7 @@ func TestPartialStateJoin(t *testing.T) {
 		defer cancelListener()
 
 		// join complement to the public room
-		room := server.MustJoinRoom(t, deployment, "hs1", roomID, server.UserID("david"))
+		room := server.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, server.UserID("david"))
 
 		// we expect a /state_ids request from hs2 after it joins the room
 		// we will respond to the request with garbage
@@ -2241,7 +2241,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room := server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2289,7 +2289,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room := server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2331,7 +2331,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2405,7 +2405,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room = server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				elsie,
 				federation.WithPartialState(),
@@ -2455,7 +2455,7 @@ func TestPartialStateJoin(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 			// @elsie:server2 joins the room.
-			server2Room := server2.MustJoinRoom(t, deployment, "hs1", roomID, elsie)
+			server2Room := server2.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, elsie)
 			alice.MustSyncUntil(t,
 				client.SyncReq{
 					Since:  syncToken,
@@ -2587,7 +2587,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room := server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2618,7 +2618,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2988,7 +2988,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// @charlie joins the room.
 			// Now @charlie's device list is definitely being tracked.
-			otherRoom := server.MustJoinRoom(t, deployment, "hs1", otherRoomID, server.UserID("charlie"))
+			otherRoom := server.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), otherRoomID, server.UserID("charlie"))
 			alice.MustSyncUntil(t,
 				client.SyncReq{
 					Since:  syncToken,
@@ -3416,7 +3416,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// @elsie joins the room.
 			// The homeserver under test is now subscribed to @elsie's device list updates.
-			server.MustJoinRoom(t, deployment, "hs1", otherRoomID, server.UserID("elsie"))
+			server.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), otherRoomID, server.UserID("elsie"))
 			alice.MustSyncUntil(t,
 				client.SyncReq{
 					Since:  syncToken,

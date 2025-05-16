@@ -411,7 +411,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	roomId := alice.MustCreateRoom(t, createRoomOpts)
 	charlie := srv.UserID("charlie")
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomId, charlie)
+	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomId, charlie)
 
 	// a helper function which makes a send_* request to the given path and checks
 	// that it fails with a 400 error

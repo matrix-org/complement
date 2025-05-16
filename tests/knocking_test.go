@@ -73,7 +73,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	})
 	alice.MustInviteRoom(t, roomIDOne, david)
 	inviteWaiter.Wait(t, 5*time.Second)
-	serverRoomOne := srv.MustJoinRoom(t, deployment, "hs1", roomIDOne, david)
+	serverRoomOne := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomIDOne, david)
 
 	// Test knocking between two users on the same homeserver
 	knockingBetweenTwoUsersTest(t, deployment, roomIDOne, alice, bob, serverRoomOne, false, joinRule)
@@ -86,7 +86,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	inviteWaiter = helpers.NewWaiter()
 	alice.MustInviteRoom(t, roomIDTwo, david)
 	inviteWaiter.Wait(t, 5*time.Second)
-	serverRoomTwo := srv.MustJoinRoom(t, deployment, "hs1", roomIDTwo, david)
+	serverRoomTwo := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomIDTwo, david)
 
 	// Test knocking between two users, each on a separate homeserver
 	knockingBetweenTwoUsersTest(t, deployment, roomIDTwo, alice, charlie, serverRoomTwo, true, joinRule)

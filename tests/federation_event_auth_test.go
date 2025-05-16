@@ -60,11 +60,11 @@ func TestEventAuth(t *testing.T) {
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 	firstJoinEvent := room.CurrentState("m.room.member", charlie)
 	srv.MustLeaveRoom(t, deployment, "hs1", roomID, charlie)
 	leaveEvent := room.CurrentState("m.room.member", charlie)
-	room = srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+	room = srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 
 	// now update the auth chain a bit: dendrite had a bug where it returned the auth chain for all
 	// the current state in addition to the event asked for
