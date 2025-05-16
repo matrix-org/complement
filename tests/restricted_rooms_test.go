@@ -44,7 +44,7 @@ func setupRestrictedRoom(t *testing.T, deployment complement.Deployment, roomVer
 						{
 							"type":    "m.room_membership",
 							"room_id": &allowed_room,
-							"via":     []string{"hs1"},
+							"via":     []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 						},
 					},
 				},
@@ -258,7 +258,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 						{
 							"type":    "m.room_membership",
 							"room_id": &allowed_room,
-							"via":     []string{"hs2"},
+							"via":     []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs2"))},
 						},
 					},
 				},

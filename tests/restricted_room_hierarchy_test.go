@@ -161,7 +161,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 						{
 							"type":    "m.room_membership",
 							"room_id": &space,
-							"via":     []string{"hs1"},
+							"via":     []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 						},
 					},
 				},
