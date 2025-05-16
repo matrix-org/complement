@@ -2779,7 +2779,7 @@ func TestPartialStateJoin(t *testing.T) {
 				server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{
 					{
 						Type:        "m.device_list_update",
-						Origin:      server.ServerName(),
+						Origin:      string(server.ServerName()),
 						Destination: "hs1",
 						Content:     deviceListUpdate,
 					},

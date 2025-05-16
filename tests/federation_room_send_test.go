@@ -64,7 +64,7 @@ func TestOutboundFederationSend(t *testing.T) {
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice.MustJoinRoom(t, roomAlias, []spec.ServerName{deployment.GetConfig().HostnameRunningComplement})
+	alice.MustJoinRoom(t, roomAlias, []spec.ServerName{srv.ServerName()})
 
 	// the local homeserver sends an event into the room
 	alice.SendEventSynced(t, serverRoom.RoomID, b.Event{
@@ -146,8 +146,8 @@ func TestNetworkPartitionOrdering(t *testing.T) {
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice.MustJoinRoom(t, roomAlias, []spec.ServerName{deployment.GetConfig().HostnameRunningComplement})
-	bob.MustJoinRoom(t, roomAlias, []spec.ServerName{deployment.GetConfig().HostnameRunningComplement})
+	alice.MustJoinRoom(t, roomAlias, []spec.ServerName{srv.ServerName()})
+	bob.MustJoinRoom(t, roomAlias, []spec.ServerName{srv.ServerName()})
 	// bob requests the last 4 timeline events. We don't care about it right now but do want the since token
 	_, bobSince := bob.MustSync(t, client.SyncReq{
 		Filter: `{"room":{"timeline":{"limit":4}}}`,

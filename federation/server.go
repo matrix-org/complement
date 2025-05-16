@@ -48,9 +48,10 @@ type Server struct {
 	// Default: true
 	UnexpectedRequestsAreErrors bool
 
-	Priv       ed25519.PrivateKey
-	KeyID      gomatrixserverlib.KeyID
-	serverName string
+	Priv  ed25519.PrivateKey
+	KeyID gomatrixserverlib.KeyID
+	// The homeserver name. This should be a resolvable address in the deployment network
+	serverName spec.ServerName
 	listening  bool
 
 	certPath string
@@ -80,7 +81,7 @@ func NewServer(t ct.TestLike, deployment FederationDeployment, opts ...func(*Ser
 		mux:   mux.NewRouter(),
 		// The server name will be updated when the caller calls Listen() to include the port number
 		// of the HTTP server e.g "host.docker.internal:56353"
-		serverName:                  deployment.GetConfig().HostnameRunningComplement,
+		serverName:                  spec.ServerName(deployment.GetConfig().HostnameRunningComplement),
 		rooms:                       make(map[string]*ServerRoom),
 		aliases:                     make(map[string]string),
 		UnexpectedRequestsAreErrors: true,
@@ -142,7 +143,7 @@ func NewServer(t ct.TestLike, deployment FederationDeployment, opts ...func(*Ser
 // It is not supported to call ServerName() before Listen() because Listen() modifies the server name.
 // Listen() will select a random OS-provided high-numbered port to listen on, which then needs to be
 // retrofitted into the server name so containers know how to route to it.
-func (s *Server) ServerName() string {
+func (s *Server) ServerName() spec.ServerName {
 	if !s.listening {
 		ct.Fatalf(s.t, "ServerName() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name. Ensure you Listen() first!")
 	}
@@ -495,7 +496,7 @@ func (s *Server) Listen() (cancel func()) {
 		ct.Fatalf(s.t, "ListenFederationServer: net.Listen failed: %s", err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
-	s.serverName += fmt.Sprintf(":%d", port)
+	s.serverName = spec.ServerName(fmt.Sprintf("%s:%d", s.serverName, port))
 	s.listening = true
 
 	go func() {
@@ -647,7 +648,7 @@ func (f *basicKeyFetcher) FetchKeys(
 ) {
 	result := make(map[gomatrixserverlib.PublicKeyLookupRequest]gomatrixserverlib.PublicKeyLookupResult, len(requests))
 	for req := range requests {
-		if string(req.ServerName) == f.srv.serverName && req.KeyID == f.srv.KeyID {
+		if req.ServerName == f.srv.serverName && req.KeyID == f.srv.KeyID {
 			publicKey := f.srv.Priv.Public().(ed25519.PublicKey)
 			result[req] = gomatrixserverlib.PublicKeyLookupResult{
 				ValidUntilTS: spec.AsTimestamp(time.Now().Add(24 * time.Hour)),

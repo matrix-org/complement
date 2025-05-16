@@ -236,7 +236,7 @@ func HandleInviteRequests(inviteCallback func(gomatrixserverlib.PDU)) func(*Serv
 			}
 
 			// Sign the event before we send it back
-			signedEvent := inviteRequest.Event().Sign(s.serverName, s.KeyID, s.Priv)
+			signedEvent := inviteRequest.Event().Sign(string(s.serverName), s.KeyID, s.Priv)
 
 			// Send the response
 			res := map[string]interface{}{
@@ -432,7 +432,7 @@ func HandleMediaRequests(mediaIds map[string]func(w http.ResponseWriter)) func(*
 			origin := vars["origin"]
 			mediaId := vars["mediaId"]
 
-			if origin != srv.serverName {
+			if origin != string(srv.serverName) {
 				w.WriteHeader(400)
 				w.Write([]byte("complement: Invalid Origin; Expected " + srv.serverName))
 				return

@@ -73,7 +73,7 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 
 	// join the room by room ID, providing the serverName to join via
-	alice.MustJoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{srv.ServerName()})
 
 	// remove the make/send join paths from the Complement server to force HS2 to join via HS1
 	acceptMakeSendJoinRequests = false
