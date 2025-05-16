@@ -82,7 +82,7 @@ func TestInboundFederationProfile(t *testing.T) {
 		fedReq := fclient.NewFederationRequest(
 			"GET",
 			origin,
-			"hs1",
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			"/_matrix/federation/v1/query/profile"+
 				"?user_id=@user1:localhost:http"+
 				"&field=displayname",
@@ -106,7 +106,7 @@ func TestInboundFederationProfile(t *testing.T) {
 		fedReq := fclient.NewFederationRequest(
 			"GET",
 			origin,
-			"hs1",
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			"/_matrix/federation/v1/query/profile"+
 				"?user_id="+alice.UserID+
 				"&field=displayname",

@@ -385,7 +385,7 @@ func TestInboundCanReturnMissingEvents(t *testing.T) {
 			req := fclient.NewFederationRequest(
 				"POST",
 				srv.ServerName(),
-				"hs1",
+				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 				fmt.Sprintf("/_matrix/federation/v1/get_missing_events/%s", roomID),
 			)
 

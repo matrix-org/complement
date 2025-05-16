@@ -206,7 +206,7 @@ func (s *Server) FederationClient(deployment FederationDeployment) fclient.Feder
 		ct.Fatalf(s.t, "FederationClient() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the way federation requests are signed. Ensure you Listen() first!")
 	}
 	identity := fclient.SigningIdentity{
-		ServerName: spec.ServerName(s.ServerName()),
+		ServerName: s.ServerName(),
 		KeyID:      s.KeyID,
 		PrivateKey: s.Priv,
 	}
@@ -459,7 +459,7 @@ func (s *Server) ValidFederationRequest(t ct.TestLike, handler func(fr *fclient.
 	return func(w http.ResponseWriter, req *http.Request) {
 		// Check federation signature
 		fedReq, errResp := fclient.VerifyHTTPRequest(
-			req, time.Now(), spec.ServerName(s.serverName), nil, s.keyRing,
+			req, time.Now(), s.serverName, nil, s.keyRing,
 		)
 		if fedReq == nil {
 			ct.Errorf(t,

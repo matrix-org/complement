@@ -422,7 +422,7 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 			url.PathEscape(event.EventID()),
 		)
 		t.Logf("PUT %s", path)
-		req := fclient.NewFederationRequest("PUT", srv.ServerName(), "hs1", path)
+		req := fclient.NewFederationRequest("PUT", srv.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), path)
 		if err := req.SetContent(event); err != nil {
 			t.Errorf("req.SetContent: %v", err)
 			return

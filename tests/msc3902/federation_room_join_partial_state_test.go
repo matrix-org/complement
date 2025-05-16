@@ -4194,7 +4194,7 @@ func testReceiveEventDuringPartialStateJoin(
 	// is resolved. For now, we use this to check whether Synapse has calculated the partial state
 	// flag for the last event correctly.
 
-	stateReq := fclient.NewFederationRequest("GET", psjResult.Server.ServerName(), "hs1",
+	stateReq := fclient.NewFederationRequest("GET", psjResult.Server.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
 			url.PathEscape(psjResult.ServerRoom.RoomID),
 			url.QueryEscape(event.EventID()),
@@ -4238,7 +4238,7 @@ func testReceiveEventDuringPartialStateJoin(
 	)
 
 	// check the server's idea of the state at the event. We do this by making a `state_ids` request over federation
-	stateReq = fclient.NewFederationRequest("GET", psjResult.Server.ServerName(), "hs1",
+	stateReq = fclient.NewFederationRequest("GET", psjResult.Server.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
 			url.PathEscape(psjResult.ServerRoom.RoomID),
 			url.QueryEscape(event.EventID()),

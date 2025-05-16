@@ -122,7 +122,7 @@ func TestFederationThumbnail(t *testing.T) {
 	fedReq := fclient.NewFederationRequest(
 		"GET",
 		origin,
-		"hs1",
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		"/_matrix/federation/v1/media/thumbnail/"+mediaId+"?method=scale&width=32&height=32",
 	)
 
