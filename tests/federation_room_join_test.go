@@ -22,8 +22,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -80,7 +80,9 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 
 	// join the room using ?server_name on HS2
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
-	roomID := bob.MustJoinRoom(t, serverRoom.RoomID, []string{"hs1"})
+	roomID := bob.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	must.Equal(t, roomID, serverRoom.RoomID, "joined room mismatch")
 }
 
@@ -110,7 +112,10 @@ func TestJoinFederatedRoomFailOver(t *testing.T) {
 	t.Logf("%s created room %s.", bob.UserID, roomID)
 
 	t.Logf("%s joins the room via {complement,hs2}.", alice.UserID)
-	alice.MustJoinRoom(t, roomID, []string{srv.ServerName(), "hs2"})
+	alice.MustJoinRoom(t, roomID, []spec.ServerName{
+		srv.ServerName(),
+		deployment.GetFullyQualifiedHomeserverName(t, "hs2"),
+	})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 }
 
@@ -602,6 +607,8 @@ func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
 		})
 
 		// Join the AS bridge user to the remote federated room (without a profile set)
-		as.MustJoinRoom(t, roomID, []string{"hs2"})
+		as.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs2"),
+		})
 	})
 }

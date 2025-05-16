@@ -17,6 +17,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/b"
@@ -102,7 +103,7 @@ func knockingBetweenTwoUsersTest(
 	joinRule string,
 ) {
 	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
-		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{
+		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		}, 403)
 	})
@@ -121,20 +122,22 @@ func knockingBetweenTwoUsersTest(
 
 	t.Run("Attempting to join a room with join rule 'knock' without an invite should fail", func(t *testing.T) {
 		// Set server_name so we can find rooms via ID over federation
-		res := knockingUser.JoinRoom(t, roomID, []string{"hs1"})
+		res := knockingUser.JoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 403,
 		})
 	})
 
 	t.Run("Knocking on a room with join rule 'knock' should succeed", func(t *testing.T) {
-		mustKnockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []string{
+		mustKnockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		})
 	})
 
 	t.Run("A user that has already knocked is allowed to knock again on the same room", func(t *testing.T) {
-		mustKnockOnRoomSynced(t, knockingUser, roomID, "I really like knock knock jokes", []string{
+		mustKnockOnRoomSynced(t, knockingUser, roomID, "I really like knock knock jokes", []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		})
 	})
@@ -198,7 +201,7 @@ func knockingBetweenTwoUsersTest(
 			})
 
 			// Knock again to return us to the knocked state
-			mustKnockOnRoomSynced(t, knockingUser, roomID, "Let me in... again?", []string{
+			mustKnockOnRoomSynced(t, knockingUser, roomID, "Let me in... again?", []spec.ServerName{
 				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			})
 		})
@@ -228,7 +231,7 @@ func knockingBetweenTwoUsersTest(
 		}))
 
 		// Knock again
-		mustKnockOnRoomSynced(t, knockingUser, roomID, "Pleeease let me in?", []string{
+		mustKnockOnRoomSynced(t, knockingUser, roomID, "Pleeease let me in?", []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		})
 	})
@@ -246,7 +249,7 @@ func knockingBetweenTwoUsersTest(
 		)
 
 		// Knock again, this time without a reason
-		mustKnockOnRoomSynced(t, knockingUser, roomID, "", []string{
+		mustKnockOnRoomSynced(t, knockingUser, roomID, "", []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		})
 	})
@@ -264,15 +267,17 @@ func knockingBetweenTwoUsersTest(
 
 	t.Run("A user cannot knock on a room they are already invited to", func(t *testing.T) {
 		reason := "I'm sticking my hand out the window and knocking again!"
-		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{
+		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		}, 403)
 	})
 
 	t.Run("A user cannot knock on a room they are already in", func(t *testing.T) {
-		knockingUser.MustJoinRoom(t, roomID, []string{"hs1"})
+		knockingUser.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		})
 		reason := "I'm sticking my hand out the window and knocking again!"
-		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{
+		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		}, 403)
 	})
@@ -300,7 +305,7 @@ func knockingBetweenTwoUsersTest(
 				ev.Get("content").Get("membership").Str != "ban"
 		}))
 
-		knockOnRoomWithStatus(t, knockingUser, roomID, "I didn't mean it!", []string{
+		knockOnRoomWithStatus(t, knockingUser, roomID, "I didn't mean it!", []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		}, 403)
 	})
@@ -331,7 +336,11 @@ func syncKnockedOn(userID, roomID string) client.SyncCheckOpt {
 // mustKnockOnRoomSynced will knock on a given room on the behalf of a user, and block until the knock has persisted.
 // serverNames should be populated if knocking on a room that the user's homeserver isn't currently a part of.
 // Fails the test if the knock response does not return a 200 status code.
-func mustKnockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []string) {
+//
+// Args:
+//   - `serverNames`: The list of servers to attempt to knock on the room through.
+//     These should be a resolvable addresses within the deplyment network.
+func mustKnockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []spec.ServerName) {
 	knockOnRoomWithStatus(t, c, roomID, reason, serverNames, 200)
 
 	// The knock should have succeeded. Block until we see the knock appear down sync
@@ -341,7 +350,11 @@ func mustKnockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string,
 // knockOnRoomWithStatus will knock on a given room on the behalf of a user.
 // serverNames should be populated if knocking on a room that the user's homeserver isn't currently a part of.
 // expectedStatus allows setting an expected status code. If the response code differs, the test will fail.
-func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []string, expectedStatus int) {
+//
+// Args:
+//   - `serverNames`: The list of servers to attempt to knock on the room through.
+//     These should be a resolvable addresses within the deployment network.
+func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []spec.ServerName, expectedStatus int) {
 	b := []byte("{}")
 	var err error
 	if reason != "" {
@@ -358,8 +371,12 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 	}
 
 	// Add any server names to the query parameters
+	serverNameStrings := make([]string, len(serverNames))
+	for i, serverName := range serverNames {
+		serverNameStrings[i] = string(serverName)
+	}
 	query := url.Values{
-		"server_name": serverNames,
+		"server_name": serverNameStrings,
 	}
 
 	// Knock on the room

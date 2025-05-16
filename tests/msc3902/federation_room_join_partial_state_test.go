@@ -1307,7 +1307,7 @@ func TestPartialStateJoin(t *testing.T) {
 		).Methods("GET")
 
 		// join charlie on hs2 to the room, via the complement homeserver
-		charlie.MustJoinRoom(t, roomID, []string{server.ServerName()})
+		charlie.MustJoinRoom(t, roomID, []spec.ServerName{server.ServerName()})
 
 		// and let hs1 know that charlie has joined,
 		// otherwise hs1 will refuse /state_ids requests
@@ -3554,7 +3554,7 @@ func TestPartialStateJoin(t *testing.T) {
 		defer psjResult.Destroy(t)
 
 		server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
-		bob.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+		bob.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 		alice.MustSyncUntil(t,
 			client.SyncReq{
 				Filter: buildLazyLoadingSyncFilter(nil),
@@ -3748,7 +3748,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Bob joins too")
-			bob.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			bob.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 
 			t.Log("Bob waits to see his join")
 			bobNextBatch := bob.MustSyncUntil(
@@ -3809,7 +3809,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The resync has not completed because we have not called psjResult.FinishStateRequest()
 			t.Log("Alice rejoins her room")
-			alice.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			alice.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 			aliceNextBatch = alice.MustSyncUntil(
 				t,
 				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
@@ -3857,7 +3857,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The resync has not completed because we have not called psjResult.FinishStateRequest()
 			t.Log("Now Bob joins the room")
-			bob.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			bob.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 			bob.MustSyncUntil(
 				t,
 				client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
@@ -3969,7 +3969,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Alice tries to rejoin...")
-			response := alice.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			response := alice.JoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 
 			t.Log("... but Alice was forbidden from rejoining")
 			must.MatchResponse(t, response, match.HTTPResponse{StatusCode: http.StatusForbidden})
@@ -4391,7 +4391,7 @@ func beginPartialStateJoin(t *testing.T, server *server, serverRoom *federation.
 	)
 
 	// have joiningUser join the room by room ID.
-	joiningUser.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+	joiningUser.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 	t.Logf("/join request completed")
 
 	success = true

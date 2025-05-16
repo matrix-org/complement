@@ -14,6 +14,7 @@ import (
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 )
 
@@ -44,7 +45,7 @@ func TestSyncOmitsStateChangeOnFilteredEvents(t *testing.T) {
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, bob))
 
 	// Join Alice to the new room on the federation server and send E1.
-	alice.MustJoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{srv.ServerName()})
 	e1 := alice.SendEventSynced(t, serverRoom.RoomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{

@@ -19,8 +19,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -92,7 +92,9 @@ func TestEventRelationships(t *testing.T) {
 
 	// Join the room from another server
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
-	_ = bob.MustJoinRoom(t, roomID, []string{"hs1"})
+	_ = bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// Now hit /event_relationships with eventD
@@ -304,7 +306,7 @@ func TestFederatedEventRelationships(t *testing.T) {
 
 	// join the room on HS1
 	// HS1 will not have any of these messages, only the room state.
-	alice.MustJoinRoom(t, room.RoomID, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, room.RoomID, []spec.ServerName{srv.ServerName()})
 
 	// send a new child in the thread (child of D) so the HS has something to latch on to.
 	eventE := srv.MustCreateEvent(t, room, federation.Event{

@@ -11,11 +11,12 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/matrix-org/util"
 )
 
@@ -183,7 +184,7 @@ func TestSync(t *testing.T) {
 			sendMessages(t, alice, roomID, "alice message 1-", 4)
 			_, nextBatch := bob.MustSync(t, client.SyncReq{Filter: filterBob})
 			sendMessages(t, alice, roomID, "alice message 2-", 4)
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			res, _ := bob.MustSync(t, client.SyncReq{Filter: filterBob, Since: nextBatch})
 			room := res.Get("rooms.join." + client.GjsonEscape(roomID))
@@ -211,7 +212,7 @@ func TestSync(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			_, nextBatch := bob.MustSync(t, client.SyncReq{})
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			nextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(userID string, sync gjson.Result) error {
 				presence := sync.Get("presence")
@@ -232,7 +233,7 @@ func TestSync(t *testing.T) {
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			sendMessages(t, alice, roomID, "dummy message", 1)
 			_, nextBatch = alice.MustSync(t, client.SyncReq{Since: nextBatch})
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			// wait until there are presence events
@@ -723,7 +724,7 @@ func TestRoomSummary(t *testing.T) {
 	}
 
 	sinceToken := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-	bob.MustJoinRoom(t, roomID, []string{})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 	// Verify Bob sees the correct room summary
 	bob.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
 	// .. and Alice as well.

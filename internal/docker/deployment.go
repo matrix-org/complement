@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // Deployment is the complete instantiation of a Blueprint, with running containers
@@ -57,14 +58,14 @@ func (hsDep *HomeserverDeployment) SetEndpoints(baseURL string, fedBaseURL strin
 	}
 }
 
-func (d *Deployment) GetFullyQualifiedHomeserverName(t ct.TestLike, hsName string) string {
+func (d *Deployment) GetFullyQualifiedHomeserverName(t ct.TestLike, hsName string) spec.ServerName {
 	_, ok := d.HS[hsName]
 	if !ok {
 		ct.Fatalf(t, "Deployment.GetFullyQualifiedHomeserverName - HS name '%s' not found", hsName)
 	}
 	// We have network aliases for each Docker container that will resolve the `hsName` to
 	// the container.
-	return hsName
+	return spec.ServerName(hsName)
 }
 
 // DestroyAtCleanup destroys the entire deployment. It should be called at cleanup time for dirty

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 	"golang.org/x/crypto/curve25519"
 
@@ -139,7 +140,11 @@ func (c *CSAPI) CreateRoom(t ct.TestLike, body map[string]interface{}) *http.Res
 }
 
 // MustJoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
-func (c *CSAPI) MustJoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []string) string {
+//
+// Args:
+//   - `serverNames`: The list of servers to attempt to join the room through.
+//     These should be a resolvable addresses within the deployment network.
+func (c *CSAPI) MustJoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []spec.ServerName) string {
 	t.Helper()
 	res := c.JoinRoom(t, roomIDOrAlias, serverNames)
 	mustRespond2xx(t, res)
@@ -153,12 +158,19 @@ func (c *CSAPI) MustJoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []
 }
 
 // JoinRoom joins the room ID or alias given. Returns the raw http response
-func (c *CSAPI) JoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []string) *http.Response {
+//
+// Args:
+//   - `serverNames`: The list of servers to attempt to join the room through.
+//     These should be a resolvable addresses within the deployment network.
+func (c *CSAPI) JoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []spec.ServerName) *http.Response {
 	t.Helper()
 	// construct URL query parameters
-	query := make(url.Values, len(serverNames))
-	for _, serverName := range serverNames {
-		query.Add("server_name", serverName)
+	serverNameStrings := make([]string, len(serverNames))
+	for i, serverName := range serverNames {
+		serverNameStrings[i] = string(serverName)
+	}
+	query := url.Values{
+		"server_name": serverNameStrings,
 	}
 	// join the room
 	return c.Do(

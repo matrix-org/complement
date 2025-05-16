@@ -26,6 +26,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 var (
@@ -470,7 +471,9 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 
 	// Querying is done by bob who is not yet in any of the rooms.
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	bob.MustJoinRoom(t, root, []string{"hs1"})
+	bob.MustJoinRoom(t, root, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 
 	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{

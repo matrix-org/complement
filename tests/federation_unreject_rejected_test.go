@@ -6,8 +6,9 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // TestUnrejectRejectedEvents creates two events: A and B.
@@ -36,7 +37,7 @@ func TestUnrejectRejectedEvents(t *testing.T) {
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, bob))
 
 	// Join Alice to the new room on the federation server.
-	alice.MustJoinRoom(t, serverRoom.RoomID, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{srv.ServerName()})
 	alice.MustSyncUntil(
 		t, client.SyncReq{},
 		client.SyncJoinedTo(alice.UserID, serverRoom.RoomID),
