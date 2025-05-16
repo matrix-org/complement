@@ -75,7 +75,7 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	serverRoomOne := srv.MustJoinRoom(t, deployment, "hs1", roomIDOne, david)
 
 	// Test knocking between two users on the same homeserver
-	knockingBetweenTwoUsersTest(t, roomIDOne, alice, bob, serverRoomOne, false, joinRule)
+	knockingBetweenTwoUsersTest(t, deployment, roomIDOne, alice, bob, serverRoomOne, false, joinRule)
 
 	// Create a room for alice and charlie to test knocking with
 	roomIDTwo := alice.MustCreateRoom(t, map[string]interface{}{
@@ -88,12 +88,23 @@ func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
 	serverRoomTwo := srv.MustJoinRoom(t, deployment, "hs1", roomIDTwo, david)
 
 	// Test knocking between two users, each on a separate homeserver
-	knockingBetweenTwoUsersTest(t, roomIDTwo, alice, charlie, serverRoomTwo, true, joinRule)
+	knockingBetweenTwoUsersTest(t, deployment, roomIDTwo, alice, charlie, serverRoomTwo, true, joinRule)
 }
 
-func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knockingUser *client.CSAPI, serverRoom *federation.ServerRoom, testFederation bool, joinRule string) {
+func knockingBetweenTwoUsersTest(
+	t *testing.T,
+	deployment complement.Deployment,
+	roomID string,
+	inRoomUser,
+	knockingUser *client.CSAPI,
+	serverRoom *federation.ServerRoom,
+	testFederation bool,
+	joinRule string,
+) {
 	t.Run("Knocking on a room with a join rule other than 'knock' should fail", func(t *testing.T) {
-		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{"hs1"}, 403)
+		knockOnRoomWithStatus(t, knockingUser, roomID, "Can I knock anyways?", []string{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		}, 403)
 	})
 
 	t.Run("Change the join rule of a room from 'invite' to 'knock'", func(t *testing.T) {
@@ -117,11 +128,15 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 	})
 
 	t.Run("Knocking on a room with join rule 'knock' should succeed", func(t *testing.T) {
-		mustKnockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []string{"hs1"})
+		mustKnockOnRoomSynced(t, knockingUser, roomID, testKnockReason, []string{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		})
 	})
 
 	t.Run("A user that has already knocked is allowed to knock again on the same room", func(t *testing.T) {
-		mustKnockOnRoomSynced(t, knockingUser, roomID, "I really like knock knock jokes", []string{"hs1"})
+		mustKnockOnRoomSynced(t, knockingUser, roomID, "I really like knock knock jokes", []string{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		})
 	})
 
 	t.Run("Users in the room see a user's membership update when they knock", func(t *testing.T) {
@@ -183,7 +198,9 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 			})
 
 			// Knock again to return us to the knocked state
-			mustKnockOnRoomSynced(t, knockingUser, roomID, "Let me in... again?", []string{"hs1"})
+			mustKnockOnRoomSynced(t, knockingUser, roomID, "Let me in... again?", []string{
+				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+			})
 		})
 	}
 
@@ -211,7 +228,9 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		}))
 
 		// Knock again
-		mustKnockOnRoomSynced(t, knockingUser, roomID, "Pleeease let me in?", []string{"hs1"})
+		mustKnockOnRoomSynced(t, knockingUser, roomID, "Pleeease let me in?", []string{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		})
 	})
 
 	t.Run("A user can knock on a room without a reason", func(t *testing.T) {
@@ -227,7 +246,9 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 		)
 
 		// Knock again, this time without a reason
-		mustKnockOnRoomSynced(t, knockingUser, roomID, "", []string{"hs1"})
+		mustKnockOnRoomSynced(t, knockingUser, roomID, "", []string{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		})
 	})
 
 	t.Run("A user in the room can accept a knock", func(t *testing.T) {
@@ -243,13 +264,17 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 
 	t.Run("A user cannot knock on a room they are already invited to", func(t *testing.T) {
 		reason := "I'm sticking my hand out the window and knocking again!"
-		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{"hs1"}, 403)
+		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		}, 403)
 	})
 
 	t.Run("A user cannot knock on a room they are already in", func(t *testing.T) {
 		knockingUser.MustJoinRoom(t, roomID, []string{"hs1"})
 		reason := "I'm sticking my hand out the window and knocking again!"
-		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{"hs1"}, 403)
+		knockOnRoomWithStatus(t, knockingUser, roomID, reason, []string{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		}, 403)
 	})
 
 	t.Run("A user that is banned from a room cannot knock on it", func(t *testing.T) {
@@ -275,7 +300,9 @@ func knockingBetweenTwoUsersTest(t *testing.T, roomID string, inRoomUser, knocki
 				ev.Get("content").Get("membership").Str != "ban"
 		}))
 
-		knockOnRoomWithStatus(t, knockingUser, roomID, "I didn't mean it!", []string{"hs1"}, 403)
+		knockOnRoomWithStatus(t, knockingUser, roomID, "I didn't mean it!", []string{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		}, 403)
 	})
 }
 
