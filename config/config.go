@@ -106,6 +106,7 @@ type Complement struct {
 	// disable this behaviour being added later, once this has stablised.
 	EnableDirtyRuns bool
 
+	// TODO: unused as of d2e04c99
 	HSPortBindingIP string
 
 	// Name: COMPLEMENT_POST_TEST_SCRIPT
