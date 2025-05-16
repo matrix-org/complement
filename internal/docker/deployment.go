@@ -57,16 +57,6 @@ func (hsDep *HomeserverDeployment) SetEndpoints(baseURL string, fedBaseURL strin
 	}
 }
 
-func (d *Deployment) GetFullyQualifiedHomeserverName(hsName string) (string, error) {
-	_, ok := d.HS[hsName]
-	if !ok {
-		return "", fmt.Errorf("Deployment.GetFullyQualifiedHomeserverName - HS name '%s' not found", hsName)
-	}
-	// We have network aliases for each Docker container that will resolve the `hsName` to
-	// the container.
-	return hsName, nil
-}
-
 // DestroyAtCleanup destroys the entire deployment. It should be called at cleanup time for dirty
 // deployments only. Handles configuration options for things which should run at container destroy
 // time, like post-run scripts and printing logs.
