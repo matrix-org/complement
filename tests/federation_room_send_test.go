@@ -9,6 +9,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 	"golang.org/x/exp/slices"
 
@@ -63,7 +64,7 @@ func TestOutboundFederationSend(t *testing.T) {
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice.MustJoinRoom(t, roomAlias, []string{deployment.GetConfig().HostnameRunningComplement})
+	alice.MustJoinRoom(t, roomAlias, []spec.ServerName{srv.ServerName()})
 
 	// the local homeserver sends an event into the room
 	alice.SendEventSynced(t, serverRoom.RoomID, b.Event{
@@ -145,8 +146,8 @@ func TestNetworkPartitionOrdering(t *testing.T) {
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice.MustJoinRoom(t, roomAlias, []string{deployment.GetConfig().HostnameRunningComplement})
-	bob.MustJoinRoom(t, roomAlias, []string{deployment.GetConfig().HostnameRunningComplement})
+	alice.MustJoinRoom(t, roomAlias, []spec.ServerName{srv.ServerName()})
+	bob.MustJoinRoom(t, roomAlias, []spec.ServerName{srv.ServerName()})
 	// bob requests the last 4 timeline events. We don't care about it right now but do want the since token
 	_, bobSince := bob.MustSync(t, client.SyncReq{
 		Filter: `{"room":{"timeline":{"limit":4}}}`,
@@ -176,7 +177,7 @@ func TestNetworkPartitionOrdering(t *testing.T) {
 	}
 
 	// remote homeserver now injects event 1'
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event1prime.JSON()}, nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event1prime.JSON()}, nil)
 
 	// ensure it gets there
 	alice.MustSyncUntil(t, client.SyncReq{TimeoutMillis: "1000"}, client.SyncTimelineHasEventID(serverRoom.RoomID, event1prime.EventID()))

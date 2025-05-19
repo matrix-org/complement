@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // Request the room summary and ensure the expected rooms are in the response.
@@ -74,7 +75,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 						{
 							"type":    "m.room_membership",
 							"room_id": &space,
-							"via":     []string{"hs1"},
+							"via":     []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 						},
 					},
 				},
@@ -85,7 +86,7 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 		Type:     "m.space.child",
 		StateKey: &room,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 
@@ -99,7 +100,9 @@ func TestRestrictedRoomsSpacesSummaryLocal(t *testing.T) {
 	requestAndAssertSummary(t, bob, space, []interface{}{space})
 
 	// Join the space, and now the restricted room should appear.
-	bob.MustJoinRoom(t, space, []string{"hs1"})
+	bob.MustJoinRoom(t, space, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, space))
 	requestAndAssertSummary(t, bob, space, []interface{}{space, room})
 }
@@ -158,7 +161,7 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 						{
 							"type":    "m.room_membership",
 							"room_id": &space,
-							"via":     []string{"hs1"},
+							"via":     []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 						},
 					},
 				},
@@ -183,7 +186,9 @@ func TestRestrictedRoomsSpacesSummaryFederation(t *testing.T) {
 
 	// charlie joins the space and now hs2 knows that alice is in the space (and
 	// can join the room).
-	charlie.MustJoinRoom(t, space, []string{"hs1"})
+	charlie.MustJoinRoom(t, space, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, space))
 
 	// The restricted room should appear for alice (who is in the space).

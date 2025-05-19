@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 func TestKeyChangesLocal(t *testing.T) {
@@ -32,7 +33,7 @@ func TestKeyChangesLocal(t *testing.T) {
 		bob.MustUploadKeys(t, bobDeviceKeys, bobOTKs)
 
 		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-		bob.MustJoinRoom(t, roomID, []string{})
+		bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 		nextBatch1 := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		reqBody := client.WithJSONBody(t, map[string]interface{}{

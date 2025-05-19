@@ -109,14 +109,18 @@ func TestFederationRoomsInvite(t *testing.T) {
 			// bob1 is invited and can join the room (hs2 is now participating of the room)
 			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.MustJoinRoom(t, roomID, []string{"hs1"})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{
+				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+			})
 			// Make sure alice can see bob in the room
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			// bob2 is invited and can also join the room
 			alice.MustInviteRoom(t, roomID, bob2.UserID)
 			bob2.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob2.UserID, roomID))
-			bob2.MustJoinRoom(t, roomID, []string{"hs1"})
+			bob2.MustJoinRoom(t, roomID, []spec.ServerName{
+				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+			})
 			// Make sure alice can see bob2 in the room
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob2.UserID, roomID))
 		})
@@ -131,7 +135,9 @@ func TestFederationRoomsInvite(t *testing.T) {
 			// bob1 is invited and can join the room (hs2 is now participating of the room)
 			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.MustJoinRoom(t, roomID, []string{"hs1"})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{
+				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+			})
 			// Make sure alice can see bob in the room
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
@@ -151,7 +157,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 				"invite":    []string{bob.UserID},
 				"is_direct": true,
 			})
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			bob.MustSyncUntil(t, client.SyncReq{},
 				client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
 					// We expect a membership event ..

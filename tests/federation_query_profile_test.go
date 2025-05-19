@@ -8,7 +8,6 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
-	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
@@ -76,14 +75,14 @@ func TestInboundFederationProfile(t *testing.T) {
 	)
 	cancel := srv.Listen()
 	defer cancel()
-	origin := spec.ServerName(srv.ServerName())
+	origin := srv.ServerName()
 
 	// sytest: Non-numeric ports in server names are rejected
 	t.Run("Non-numeric ports in server names are rejected", func(t *testing.T) {
 		fedReq := fclient.NewFederationRequest(
 			"GET",
 			origin,
-			"hs1",
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			"/_matrix/federation/v1/query/profile"+
 				"?user_id=@user1:localhost:http"+
 				"&field=displayname",
@@ -107,7 +106,7 @@ func TestInboundFederationProfile(t *testing.T) {
 		fedReq := fclient.NewFederationRequest(
 			"GET",
 			origin,
-			"hs1",
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			"/_matrix/federation/v1/query/profile"+
 				"?user_id="+alice.UserID+
 				"&field=displayname",

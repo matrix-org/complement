@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/complement/should"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // Test for https://github.com/matrix-org/dendrite/issues/3004
@@ -29,15 +30,21 @@ func TestACLs(t *testing.T) {
 	aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 	// 3. Join this room from 2nd server
-	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID))
 	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 	// create a different room used for a sentinel event
 	sentinelRoom := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(alice.UserID, sentinelRoom))
-	bob.MustJoinRoom(t, sentinelRoom, []string{"hs1"})
-	charlie.MustJoinRoom(t, sentinelRoom, []string{"hs1"})
+	bob.MustJoinRoom(t, sentinelRoom, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
+	charlie.MustJoinRoom(t, sentinelRoom, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince},
 		client.SyncJoinedTo(bob.UserID, sentinelRoom),
 		client.SyncJoinedTo(charlie.UserID, sentinelRoom),
@@ -59,7 +66,9 @@ func TestACLs(t *testing.T) {
 	bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncTimelineHasEventID(roomID, eventID))
 
 	// 5. Join from 3rd server.
-	charlie.MustJoinRoom(t, roomID, []string{"hs1"})
+	charlie.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(charlie.UserID, roomID))
 	charlieSince := charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
 

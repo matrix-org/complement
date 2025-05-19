@@ -6,6 +6,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // sytest: Typing notifications also sent to remote room members
@@ -19,7 +20,9 @@ func TestRemoteTyping(t *testing.T) {
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, nil)
-	charlie.MustJoinRoom(t, roomID, []string{"hs1"})
+	charlie.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 
 	bobToken := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 	charlieToken := charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))

@@ -21,6 +21,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 	"golang.org/x/exp/slices"
 )
@@ -71,7 +72,9 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 			// Join from the application service bridge user so we can use to send
 			// some messages at a specific time.
-			as.MustJoinRoom(t, roomID, []string{"hs1"})
+			as.MustJoinRoom(t, roomID, []spec.ServerName{
+				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+			})
 
 			// Send a couple messages with the same timestamp after the other test
 			// messages in the room.
@@ -91,7 +94,9 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 			// Join from the application service bridge user so we can use to send
 			// some messages at a specific time.
-			as.MustJoinRoom(t, roomID, []string{"hs1"})
+			as.MustJoinRoom(t, roomID, []spec.ServerName{
+				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+			})
 
 			// Send a couple messages with the same timestamp after the other test
 			// messages in the room.
@@ -164,14 +169,18 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			t.Run("looking forwards, should be able to find event that was sent before we joined", func(t *testing.T) {
 				t.Parallel()
 				roomID, eventA, _ := createTestRoom(t, alice)
-				remoteCharlie.MustJoinRoom(t, roomID, []string{"hs1"})
+				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventA.BeforeTimestamp, "f", eventA.EventID)
 			})
 
 			t.Run("looking backwards, should be able to find event that was sent before we joined", func(t *testing.T) {
 				t.Parallel()
 				roomID, _, eventB := createTestRoom(t, alice)
-				remoteCharlie.MustJoinRoom(t, roomID, []string{"hs1"})
+				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 			})
 
@@ -182,20 +191,26 @@ func TestJumpToDateEndpoint(t *testing.T) {
 
 				// Join from the application service bridge user so we can use it to send
 				// some messages at a specific time.
-				as.MustJoinRoom(t, roomID, []string{"hs1"})
+				as.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
 
 				// Import a message in the room before the room was created
 				importTime := time.Date(2022, 01, 03, 0, 0, 0, 0, time.Local)
 				importedEventID := sendMessageWithTimestamp(t, as, alice, roomID, importTime, "old imported event")
 
-				remoteCharlie.MustJoinRoom(t, roomID, []string{"hs1"})
+				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, timeBeforeRoomCreation, "b", importedEventID)
 			})
 
 			t.Run("can paginate after getting remote event from timestamp to event endpoint", func(t *testing.T) {
 				t.Parallel()
 				roomID, eventA, eventB := createTestRoom(t, alice)
-				remoteCharlie.MustJoinRoom(t, roomID, []string{"hs1"})
+				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 
 				// Get a pagination token from eventB
