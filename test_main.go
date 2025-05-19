@@ -6,17 +6,25 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/config"
 	"github.com/matrix-org/complement/ct"
 )
 
 var (
 	testPackage    *TestPackage
-	customDeployer func(numServers int) Deployment
+	customDeployer func(t ct.TestLike, numServers int, config *config.Complement) Deployment
 )
 
 type complementOpts struct {
-	cleanup          func()
-	customDeployment func(numServers int) Deployment
+	// Args:
+	// - We pass in the Complement config (`testPackage.Config`) so the deployer can inspect
+	// `DebugLoggingEnabled`, `SpawnHSTimeout`, `PackageNamespace` etc.
+	cleanup func(config *config.Complement)
+	// Args:
+	// - We pass in `t` as there needs to be a way to handle an error in the custom deployer.
+	// - We pass in the Complement config (`testPackage.Config`) so the deployer can inspect
+	// `DebugLoggingEnabled`, `SpawnHSTimeout`, `PackageNamespace`, etc.
+	customDeployment func(t ct.TestLike, numServers int, config *config.Complement) Deployment
 }
 type opt func(*complementOpts)
 
@@ -24,14 +32,14 @@ type opt func(*complementOpts)
 // It is called BEFORE Complement containers are destroyed.
 // This function should be used for per-suite cleanup operations e.g tearing down containers, killing
 // child processes, etc.
-func WithCleanup(fn func()) opt {
+func WithCleanup(fn func(config *config.Complement)) opt {
 	return func(co *complementOpts) {
 		co.cleanup = fn
 	}
 }
 
 // WithDeployment adds a custom mechanism to deploy homeservers.
-func WithDeployment(fn func(numServers int) Deployment) opt {
+func WithDeployment(fn func(t ct.TestLike, numServers int, config *config.Complement) Deployment) opt {
 	return func(co *complementOpts) {
 		co.customDeployment = fn
 	}
@@ -64,7 +72,7 @@ func TestMain(m *testing.M, namespace string, customOpts ...opt) {
 	}
 	exitCode := m.Run()
 	if opts.cleanup != nil {
-		opts.cleanup()
+		opts.cleanup(testPackage.Config)
 	}
 	testPackage.Cleanup()
 	os.Exit(exitCode)
@@ -91,7 +99,7 @@ func Deploy(t ct.TestLike, numServers int) Deployment {
 		ct.Fatalf(t, "Deploy: testPackage not set, did you forget to call complement.TestMain?")
 	}
 	if customDeployer != nil {
-		return customDeployer(numServers)
+		return customDeployer(t, numServers, testPackage.Config)
 	}
 	return testPackage.Deploy(t, numServers)
 }

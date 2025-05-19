@@ -47,7 +47,10 @@ type Builder struct {
 }
 
 func NewBuilder(cfg *config.Complement) (*Builder, error) {
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts(
+		client.FromEnv,
+		client.WithAPIVersionNegotiation(),
+	)
 	if err != nil {
 		return nil, err
 	}

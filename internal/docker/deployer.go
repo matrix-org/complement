@@ -56,7 +56,10 @@ type Deployer struct {
 }
 
 func NewDeployer(deployNamespace string, cfg *config.Complement) (*Deployer, error) {
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts(
+		client.FromEnv,
+		client.WithAPIVersionNegotiation(),
+	)
 	if err != nil {
 		return nil, err
 	}
