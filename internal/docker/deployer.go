@@ -313,9 +313,13 @@ func (d *Deployer) StartServer(hsDep *HomeserverDeployment) error {
 	}
 
 	// Wait for the container to be ready.
-	baseURL, fedBaseURL, err := waitForPorts(ctx, d.Docker, hsDep.ContainerID)
+	err = waitForPorts(ctx, d.Docker, hsDep.ContainerID)
 	if err != nil {
-		return fmt.Errorf("failed to get ports for container %s: %s", hsDep.ContainerID, err)
+		return fmt.Errorf("failed to wait for ports on container %s: %s", hsDep.ContainerID, err)
+	}
+	baseURL, fedBaseURL, err := getHostAccessibleHomeserverUrls(ctx, d.Docker, hsDep.ContainerID, d.config.HSPortBindingIP)
+	if err != nil {
+		return fmt.Errorf("failed to get host accessible homeserver URL's from container %s: %s", hsDep.ContainerID, err)
 	}
 	hsDep.SetEndpoints(baseURL, fedBaseURL)
 
@@ -441,10 +445,19 @@ func deployImage(
 		log.Printf("%s: Started container %s", contextStr, containerID)
 	}
 
-	baseURL, fedBaseURL, err := waitForPorts(ctx, docker, containerID)
+	// Wait for the container to be ready.
+	err = waitForPorts(ctx, docker, containerID)
 	if err != nil {
-		return stubDeployment, fmt.Errorf("%s : image %s : %w", contextStr, imageID, err)
+		return stubDeployment, fmt.Errorf("%s: failed to wait for ports on container %s: %w", contextStr, containerID, err)
 	}
+	baseURL, fedBaseURL, err := getHostAccessibleHomeserverUrls(ctx, docker, containerID, cfg.HSPortBindingIP)
+	if err != nil {
+		return stubDeployment, fmt.Errorf(
+			"%s: failed to get host accessible homeserver URL's from container %s: %s",
+			contextStr, containerID, err,
+		)
+	}
+
 	inspect, err := docker.ContainerInspect(ctx, containerID)
 	if err != nil {
 		return stubDeployment, fmt.Errorf("ContainerInspect: %s", err)
@@ -504,26 +517,90 @@ func copyToContainer(docker *client.Client, containerID, path string, data []byt
 	return nil
 }
 
-// Waits until a homeserver container has NAT ports assigned and returns its clientside API URL and federation API URL.
-func waitForPorts(ctx context.Context, docker *client.Client, containerID string) (baseURL string, fedBaseURL string, err error) {
+func assertHostnameEqual(inputUrl string, expectedHostname string) error {
+	parsedUrl, err := url.Parse(inputUrl)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL %s: %s", inputUrl, err)
+	}
+	if parsedUrl.Hostname() != expectedHostname {
+		return fmt.Errorf("expected hostname %s in URL %s, got %s", expectedHostname, inputUrl, parsedUrl.Hostname())
+	}
+
+	return nil
+}
+
+func getHostAccessibleHomeserverUrls(ctx context.Context, docker *client.Client, containerID string, hsPortBindingIP string) (baseURL string, fedBaseURL string, err error) {
+	inspectResponse, err := inspectPortsOnContainer(ctx, docker, containerID)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to inspect ports: %w", err)
+	}
+
+	baseURL, fedBaseURL, err = endpoints(inspectResponse.NetworkSettings.Ports, hsPortBindingIP, 8008, 8448)
+
+	// Sanity check that the URL's match the expected binding hostname. It's important
+	// that we use the canonical publically accessible hostname for the homeserver as ...
+	// such as important cookies that are set during a SSO/OIDC login process (cookies are
+	// scoped to the domain).
+	err = assertHostnameEqual(baseURL, hsPortBindingIP)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to assert baseURL has the correct hostname: %w", err)
+	}
+	err = assertHostnameEqual(fedBaseURL, hsPortBindingIP)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to assert fedBaseURL has the correct hostname: %w", err)
+	}
+
+	return baseURL, fedBaseURL, nil
+}
+
+// Waits until a homeserver container has NAT ports assigned.
+func waitForPorts(ctx context.Context, docker *client.Client, containerID string) (err error) {
 	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
-	var inspect container.InspectResponse
 	inspectStartTime := time.Now()
 	for time.Since(inspectStartTime) < time.Second {
-		inspect, err = docker.ContainerInspect(ctx, containerID)
-		if err != nil {
-			return "", "", err
-		}
-		if inspect.State != nil && !inspect.State.Running {
-			// the container exited, bail out with a container ID for logs
-			return "", "", fmt.Errorf("container is not running, state=%v", inspect.State.Status)
-		}
-		baseURL, fedBaseURL, err = endpoints(inspect.NetworkSettings.Ports, 8008, 8448)
+		_, err = inspectPortsOnContainer(ctx, docker, containerID)
 		if err == nil {
 			break
 		}
+
+		if inspectionErr, ok := err.(*ContainerInspectionError); ok && inspectionErr.Fatal {
+			// If the error is fatal, we should not retry.
+			return fmt.Errorf("Fatal inspection error: %s", err)
+		}
 	}
-	return baseURL, fedBaseURL, nil
+	return nil
+}
+
+type ContainerInspectionError struct {
+	// Error message
+	msg string
+	// Whether this error should stop retrying to inspect the container.
+	Fatal bool
+}
+
+func (e *ContainerInspectionError) Error() string { return e.msg }
+
+func inspectPortsOnContainer(
+	ctx context.Context,
+	docker *client.Client,
+	containerID string,
+) (inspectResponse container.InspectResponse, err error) {
+	inspectResponse, err = docker.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return container.InspectResponse{}, &ContainerInspectionError{
+			msg:   err.Error(),
+			Fatal: false,
+		}
+	}
+	if inspectResponse.State != nil && !inspectResponse.State.Running {
+		// the container exited, bail out with a container ID for logs
+		return container.InspectResponse{}, &ContainerInspectionError{
+			msg:   fmt.Sprintf("container (%s) is not running, state=%v", containerID, inspectResponse.State.Status),
+			Fatal: true,
+		}
+	}
+
+	return inspectResponse, nil
 }
 
 // Waits until a homeserver deployment is ready to serve requests.

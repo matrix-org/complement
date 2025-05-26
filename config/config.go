@@ -106,6 +106,7 @@ type Complement struct {
 	// disable this behaviour being added later, once this has stablised.
 	EnableDirtyRuns bool
 
+	// The hostname that will be used to bind the homeserver ports to, e.g. `127.0.0.1`
 	HSPortBindingIP string
 
 	// Name: COMPLEMENT_POST_TEST_SCRIPT
