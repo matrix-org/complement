@@ -529,6 +529,8 @@ func assertHostnameEqual(inputUrl string, expectedHostname string) error {
 	return nil
 }
 
+// Returns URL's that are accessible from the host machine (outside the container) for
+// the homeserver's client API and federation API.
 func getHostAccessibleHomeserverUrls(ctx context.Context, docker *client.Client, containerID string, hsPortBindingIP string) (baseURL string, fedBaseURL string, err error) {
 	inspectResponse, err := inspectPortsOnContainer(ctx, docker, containerID)
 	if err != nil {
@@ -537,10 +539,10 @@ func getHostAccessibleHomeserverUrls(ctx context.Context, docker *client.Client,
 
 	baseURL, fedBaseURL, err = endpoints(inspectResponse.NetworkSettings.Ports, hsPortBindingIP, 8008, 8448)
 
-	// Sanity check that the URL's match the expected binding hostname. It's important
-	// that we use the canonical publically accessible hostname for the homeserver as ...
-	// such as important cookies that are set during a SSO/OIDC login process (cookies are
-	// scoped to the domain).
+	// Sanity check that the URL's match the expected configured binding hostname. It's
+	// also important that we use the canonical publicly accessible hostname for the
+	// homeserver for some situations like SSO/OIDC login where important cookies are set
+	// for the domain.
 	err = assertHostnameEqual(baseURL, hsPortBindingIP)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to assert baseURL has the correct hostname: %w", err)
@@ -574,7 +576,8 @@ func waitForPorts(ctx context.Context, docker *client.Client, containerID string
 type ContainerInspectionError struct {
 	// Error message
 	msg string
-	// Whether this error should stop retrying to inspect the container.
+	// Indicates whether the caller should stop retrying to inspect the container because
+	// it has already exited.
 	Fatal bool
 }
 
