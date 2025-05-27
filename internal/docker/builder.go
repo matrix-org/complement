@@ -581,6 +581,13 @@ func findPortBinding(p nat.PortMap, hsPortBindingIP string, port int) (portBindi
 				HostIP:   hsPortBindingIP,
 				HostPort: pb.HostPort,
 			}, nil
+		} else if pb.HostIP == "" && hsPortBindingIP == "127.0.0.1" {
+			// `HostIP` can be empty in certain environments (observed with podman v4.3.1). We
+			// will assume this is only a binding for `127.0.0.1`.
+			return nat.PortBinding{
+				HostIP:   hsPortBindingIP,
+				HostPort: pb.HostPort,
+			}, nil
 		}
 	}
 
