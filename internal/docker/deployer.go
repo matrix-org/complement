@@ -313,7 +313,7 @@ func (d *Deployer) StartServer(hsDep *HomeserverDeployment) error {
 	}
 
 	// Wait for the container to be ready.
-	err = waitForPorts(ctx, d.Docker, hsDep.ContainerID)
+	err = waitForPorts(ctx, d.Docker, hsDep.ContainerID, d.config.HSPortBindingIP)
 	if err != nil {
 		return fmt.Errorf("failed to wait for ports on container %s: %s", hsDep.ContainerID, err)
 	}
@@ -455,7 +455,7 @@ func deployImage(
 	}
 
 	// Wait for the container to be ready.
-	err = waitForPorts(ctx, docker, containerID)
+	err = waitForPorts(ctx, docker, containerID, cfg.HSPortBindingIP)
 	if err != nil {
 		return stubDeployment, fmt.Errorf("%s: failed to wait for ports on container %s: %w", contextStr, containerID, err)
 	}
