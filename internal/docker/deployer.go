@@ -385,7 +385,16 @@ func deployImage(
 			"complement_hs_name":   hsName,
 		},
 	}, &container.HostConfig{
-		CapAdd:          []string{"NET_ADMIN"}, // TODO : this should be some sort of option
+		CapAdd: []string{"NET_ADMIN"}, // TODO : this should be some sort of option
+		// We use `PublishAllPorts` because although Complement only requires the ports 8008
+		// and 8448 to be accessible in the image, other custom out-of-repo tests may use
+		// additional ports that are specific to their own application.
+		//
+		// Ideally, we would only bind to `cfg.HSPortBindingIP` but there isn't a way to
+		// specify the `HostIP` when using `PublishAllPorts`. And although, we could specify
+		// a manual port mapping, it's not compatible with also having `PublishAllPorts` set
+		// to true (we run into `address already in use` errors). Binding to all interfaces
+		// means we're also listening on `cfg.HSPortBindingIP` so it's good enough.
 		PublishAllPorts: true,
 		ExtraHosts:      extraHosts,
 		Mounts:          mounts,
@@ -539,7 +548,7 @@ func getHostAccessibleHomeserverURLs(ctx context.Context, docker *client.Client,
 
 	baseURL, fedBaseURL, err = endpoints(inspectResponse.NetworkSettings.Ports, hsPortBindingIP, 8008, 8448)
 
-	// Sanity check that the URLs match the expected configured binding hostname. It's
+	// Sanity check that the URLs match the expected configured binding IP. It's
 	// also important that we use the canonical publicly accessible hostname for the
 	// homeserver for some situations like SSO/OIDC login where important cookies are set
 	// for the domain.
