@@ -541,7 +541,7 @@ func assertHostnameEqual(inputUrl string, expectedHostname string) error {
 // Returns URLs that are accessible from the host machine (outside the container) for
 // the homeserver's client API and federation API.
 func getHostAccessibleHomeserverURLs(ctx context.Context, docker *client.Client, containerID string, hsPortBindingIP string) (baseURL string, fedBaseURL string, err error) {
-	inspectResponse, err := inspectPortsOnContainer(ctx, docker, containerID)
+	inspectResponse, err := inspectContainer(ctx, docker, containerID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to inspect ports: %w", err)
 	}
@@ -569,7 +569,7 @@ func waitForPorts(ctx context.Context, docker *client.Client, containerID string
 	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
 	inspectStartTime := time.Now()
 	for time.Since(inspectStartTime) < time.Second {
-		_, err = inspectPortsOnContainer(ctx, docker, containerID)
+		_, err = inspectContainer(ctx, docker, containerID)
 		if err == nil {
 			break
 		}
@@ -592,7 +592,11 @@ type ContainerInspectionError struct {
 
 func (e *ContainerInspectionError) Error() string { return e.msg }
 
-func inspectPortsOnContainer(
+// inspectContainer inspects the container with the given ID and returns response.
+//
+// Returns a `ContainerInspectionError` representing the underlying error and indicates
+// `err.Fatal: true` if the container is no longer running.
+func inspectContainer(
 	ctx context.Context,
 	docker *client.Client,
 	containerID string,
