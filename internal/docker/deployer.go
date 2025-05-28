@@ -313,7 +313,7 @@ func (d *Deployer) StartServer(hsDep *HomeserverDeployment) error {
 	}
 
 	// Wait for the container to be ready.
-	err = waitForPorts(ctx, d.Docker, hsDep.ContainerID)
+	err = waitForContainer(ctx, d.Docker, hsDep.ContainerID)
 	if err != nil {
 		return fmt.Errorf("failed to wait for ports on container %s: %s", hsDep.ContainerID, err)
 	}
@@ -455,7 +455,7 @@ func deployImage(
 	}
 
 	// Wait for the container to be ready.
-	err = waitForPorts(ctx, docker, containerID)
+	err = waitForContainer(ctx, docker, containerID)
 	if err != nil {
 		return stubDeployment, fmt.Errorf("%s: failed to wait for ports on container %s: %w", contextStr, containerID, err)
 	}
@@ -564,8 +564,8 @@ func getHostAccessibleHomeserverURLs(ctx context.Context, docker *client.Client,
 	return baseURL, fedBaseURL, nil
 }
 
-// waitForPorts waits until a homeserver container has NAT ports assigned.
-func waitForPorts(ctx context.Context, docker *client.Client, containerID string) (err error) {
+// waitForContainer waits until a homeserver container has NAT ports assigned.
+func waitForContainer(ctx context.Context, docker *client.Client, containerID string) (err error) {
 	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
 	inspectStartTime := time.Now()
 	for time.Since(inspectStartTime) < time.Second {
