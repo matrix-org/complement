@@ -564,20 +564,24 @@ func getHostAccessibleHomeserverURLs(ctx context.Context, docker *client.Client,
 	return baseURL, fedBaseURL, nil
 }
 
-// waitForPorts waits until a homeserver container has NAT ports assigned.
-func waitForPorts(ctx context.Context, docker *client.Client, containerID string) (err error) {
+// waitForPorts waits until a homeserver container has NAT ports assigned (8008, 8448).
+func waitForPorts(ctx context.Context, docker *client.Client, containerID string, hsPortBindingIP string) (err error) {
 	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
 	inspectStartTime := time.Now()
 	for time.Since(inspectStartTime) < time.Second {
-		_, err = inspectContainer(ctx, docker, containerID)
-		if err == nil {
-			break
-		}
-
+		inspectResponse, err := inspectContainer(ctx, docker, containerID)
 		if inspectionErr, ok := err.(*containerInspectionError); ok && inspectionErr.Fatal {
 			// If the error is fatal, we should not retry.
 			return fmt.Errorf("Fatal inspection error: %s", err)
 		}
+
+		// Check to see if we can see the ports yet
+		_, csPortErr := findPortBinding(inspectResponse.NetworkSettings.Ports, hsPortBindingIP, 8008)
+		_, ssPortErr := findPortBinding(inspectResponse.NetworkSettings.Ports, hsPortBindingIP, 8448)
+		if csPortErr == nil && ssPortErr == nil {
+			break
+		}
+
 	}
 	return nil
 }
