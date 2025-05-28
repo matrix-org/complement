@@ -591,7 +591,7 @@ func findPortBinding(p nat.PortMap, hsPortBindingIP string, port int) (portBindi
 		}
 	}
 
-	return portBindings[0], nil
+	return nat.PortBinding{}, fmt.Errorf("unable to find matching port binding for %s %s: %+v", hsPortBindingIP, portString, p)
 }
 
 type result struct {
