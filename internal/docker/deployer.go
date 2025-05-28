@@ -317,7 +317,7 @@ func (d *Deployer) StartServer(hsDep *HomeserverDeployment) error {
 	if err != nil {
 		return fmt.Errorf("failed to wait for ports on container %s: %s", hsDep.ContainerID, err)
 	}
-	baseURL, fedBaseURL, err := getHostAccessibleHomeserverUrls(ctx, d.Docker, hsDep.ContainerID, d.config.HSPortBindingIP)
+	baseURL, fedBaseURL, err := getHostAccessibleHomeserverURLs(ctx, d.Docker, hsDep.ContainerID, d.config.HSPortBindingIP)
 	if err != nil {
 		return fmt.Errorf("failed to get host accessible homeserver URL's from container %s: %s", hsDep.ContainerID, err)
 	}
@@ -450,7 +450,7 @@ func deployImage(
 	if err != nil {
 		return stubDeployment, fmt.Errorf("%s: failed to wait for ports on container %s: %w", contextStr, containerID, err)
 	}
-	baseURL, fedBaseURL, err := getHostAccessibleHomeserverUrls(ctx, docker, containerID, cfg.HSPortBindingIP)
+	baseURL, fedBaseURL, err := getHostAccessibleHomeserverURLs(ctx, docker, containerID, cfg.HSPortBindingIP)
 	if err != nil {
 		return stubDeployment, fmt.Errorf(
 			"%s: failed to get host accessible homeserver URL's from container %s: %s",
@@ -529,9 +529,9 @@ func assertHostnameEqual(inputUrl string, expectedHostname string) error {
 	return nil
 }
 
-// Returns URL's that are accessible from the host machine (outside the container) for
+// Returns URLs that are accessible from the host machine (outside the container) for
 // the homeserver's client API and federation API.
-func getHostAccessibleHomeserverUrls(ctx context.Context, docker *client.Client, containerID string, hsPortBindingIP string) (baseURL string, fedBaseURL string, err error) {
+func getHostAccessibleHomeserverURLs(ctx context.Context, docker *client.Client, containerID string, hsPortBindingIP string) (baseURL string, fedBaseURL string, err error) {
 	inspectResponse, err := inspectPortsOnContainer(ctx, docker, containerID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to inspect ports: %w", err)
@@ -539,7 +539,7 @@ func getHostAccessibleHomeserverUrls(ctx context.Context, docker *client.Client,
 
 	baseURL, fedBaseURL, err = endpoints(inspectResponse.NetworkSettings.Ports, hsPortBindingIP, 8008, 8448)
 
-	// Sanity check that the URL's match the expected configured binding hostname. It's
+	// Sanity check that the URLs match the expected configured binding hostname. It's
 	// also important that we use the canonical publicly accessible hostname for the
 	// homeserver for some situations like SSO/OIDC login where important cookies are set
 	// for the domain.
