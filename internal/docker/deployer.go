@@ -574,7 +574,7 @@ func waitForPorts(ctx context.Context, docker *client.Client, containerID string
 			break
 		}
 
-		if inspectionErr, ok := err.(*ContainerInspectionError); ok && inspectionErr.Fatal {
+		if inspectionErr, ok := err.(*containerInspectionError); ok && inspectionErr.Fatal {
 			// If the error is fatal, we should not retry.
 			return fmt.Errorf("Fatal inspection error: %s", err)
 		}
@@ -582,7 +582,7 @@ func waitForPorts(ctx context.Context, docker *client.Client, containerID string
 	return nil
 }
 
-type ContainerInspectionError struct {
+type containerInspectionError struct {
 	// Error message
 	msg string
 	// Indicates whether the caller should stop retrying to inspect the container because
@@ -590,11 +590,11 @@ type ContainerInspectionError struct {
 	Fatal bool
 }
 
-func (e *ContainerInspectionError) Error() string { return e.msg }
+func (e *containerInspectionError) Error() string { return e.msg }
 
 // inspectContainer inspects the container with the given ID and returns response.
 //
-// Returns a `ContainerInspectionError` representing the underlying error and indicates
+// Returns a `containerInspectionError` representing the underlying error and indicates
 // `err.Fatal: true` if the container is no longer running.
 func inspectContainer(
 	ctx context.Context,
@@ -603,14 +603,14 @@ func inspectContainer(
 ) (inspectResponse container.InspectResponse, err error) {
 	inspectResponse, err = docker.ContainerInspect(ctx, containerID)
 	if err != nil {
-		return container.InspectResponse{}, &ContainerInspectionError{
+		return container.InspectResponse{}, &containerInspectionError{
 			msg:   err.Error(),
 			Fatal: false,
 		}
 	}
 	if inspectResponse.State != nil && !inspectResponse.State.Running {
 		// the container exited, bail out with a container ID for logs
-		return container.InspectResponse{}, &ContainerInspectionError{
+		return container.InspectResponse{}, &containerInspectionError{
 			msg:   fmt.Sprintf("container (%s) is not running, state=%v", containerID, inspectResponse.State.Status),
 			Fatal: true,
 		}
