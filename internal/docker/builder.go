@@ -539,7 +539,7 @@ func printPortBindingsOfAllComplementContainers(docker *client.Client, contextSt
 	log.Printf("=============== %s : END ALL COMPLEMENT DOCKER PORT BINDINGS ===============\n\n\n", contextStr)
 }
 
-// Transform the homeserver ports into the base URL and federation base URL.
+// endpoints transforms the homeserver ports into the base URL and federation base URL.
 func endpoints(p nat.PortMap, hsPortBindingIP string, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {
 	csapiPortBinding, err := findPortBinding(p, hsPortBindingIP, csPort)
 	if err != nil {
@@ -555,7 +555,7 @@ func endpoints(p nat.PortMap, hsPortBindingIP string, csPort, ssPort int) (baseU
 	return
 }
 
-// Find a matching port binding for the given host/port in the `nat.PortMap`.
+// findPortBinding finds a matching port binding for the given host/port in the `nat.PortMap`.
 //
 // This function will return the first port binding that matches the given host IP. If a
 // `0.0.0.0` binding is found, we will assume that it is listening on all interfaces,

@@ -538,8 +538,8 @@ func assertHostnameEqual(inputUrl string, expectedHostname string) error {
 	return nil
 }
 
-// Returns URLs that are accessible from the host machine (outside the container) for
-// the homeserver's client API and federation API.
+// getHostAccessibleHomeserverURLs returns URLs that are accessible from the host
+// machine (outside the container) for the homeserver's client API and federation API.
 func getHostAccessibleHomeserverURLs(ctx context.Context, docker *client.Client, containerID string, hsPortBindingIP string) (baseURL string, fedBaseURL string, err error) {
 	inspectResponse, err := inspectContainer(ctx, docker, containerID)
 	if err != nil {
@@ -564,7 +564,7 @@ func getHostAccessibleHomeserverURLs(ctx context.Context, docker *client.Client,
 	return baseURL, fedBaseURL, nil
 }
 
-// Waits until a homeserver container has NAT ports assigned.
+// waitForPorts waits until a homeserver container has NAT ports assigned.
 func waitForPorts(ctx context.Context, docker *client.Client, containerID string) (err error) {
 	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
 	inspectStartTime := time.Now()
@@ -619,7 +619,7 @@ func inspectContainer(
 	return inspectResponse, nil
 }
 
-// Waits until a homeserver deployment is ready to serve requests.
+// waitForContainer waits until a homeserver deployment is ready to serve requests.
 func waitForContainer(ctx context.Context, docker *client.Client, hsDep *HomeserverDeployment, stopTime time.Time) (iterCount int, lastErr error) {
 	iterCount = 0
 
