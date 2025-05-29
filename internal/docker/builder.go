@@ -539,27 +539,59 @@ func printPortBindingsOfAllComplementContainers(docker *client.Client, contextSt
 	log.Printf("=============== %s : END ALL COMPLEMENT DOCKER PORT BINDINGS ===============\n\n\n", contextStr)
 }
 
-func endpoints(p nat.PortMap, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {
-	csapiPort := fmt.Sprintf("%d/tcp", csPort)
-	csapiPortInfo, ok := p[nat.Port(csapiPort)]
-	if !ok {
-		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", csapiPort, p)
+// endpoints transforms the homeserver ports into the base URL and federation base URL.
+func endpoints(p nat.PortMap, hsPortBindingIP string, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {
+	csapiPortBinding, err := findPortBinding(p, hsPortBindingIP, csPort)
+	if err != nil {
+		return "", "", fmt.Errorf("Problem finding CS API port: %s", err)
 	}
-	if len(csapiPortInfo) == 0 {
-		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", csapiPort, p)
-	}
-	baseURL = fmt.Sprintf("http://"+csapiPortInfo[0].HostIP+":%s", csapiPortInfo[0].HostPort)
+	baseURL = fmt.Sprintf("http://"+csapiPortBinding.HostIP+":%s", csapiPortBinding.HostPort)
 
-	ssapiPort := fmt.Sprintf("%d/tcp", ssPort)
-	ssapiPortInfo, ok := p[nat.Port(ssapiPort)]
-	if !ok {
-		return "", "", fmt.Errorf("port %s not exposed - exposed ports: %v", ssapiPort, p)
+	ssapiPortBinding, err := findPortBinding(p, hsPortBindingIP, ssPort)
+	if err != nil {
+		return "", "", fmt.Errorf("Problem finding SS API port: %s", err)
 	}
-	if len(ssapiPortInfo) == 0 {
-		return "", "", fmt.Errorf("port %s exposed with not mapped port: %+v", ssapiPort, p)
-	}
-	fedBaseURL = fmt.Sprintf("https://"+csapiPortInfo[0].HostIP+":%s", ssapiPortInfo[0].HostPort)
+	fedBaseURL = fmt.Sprintf("https://"+ssapiPortBinding.HostIP+":%s", ssapiPortBinding.HostPort)
 	return
+}
+
+// findPortBinding finds a matching port binding for the given host/port in the `nat.PortMap`.
+//
+// This function will return the first port binding that matches the given host IP. If a
+// `0.0.0.0` binding is found, we will assume that it is listening on all interfaces,
+// including the `hsPortBindingIP`, and return a binding with the `hsPortBindingIP` as
+// the host IP.
+func findPortBinding(p nat.PortMap, hsPortBindingIP string, port int) (portBinding nat.PortBinding, err error) {
+	portString := fmt.Sprintf("%d/tcp", port)
+	portBindings, ok := p[nat.Port(portString)]
+	if !ok {
+		return nat.PortBinding{}, fmt.Errorf("port %s not exposed - exposed ports: %v", portString, p)
+	}
+	if len(portBindings) == 0 {
+		return nat.PortBinding{}, fmt.Errorf("port %s exposed with not mapped port: %+v", portString, p)
+	}
+
+	for _, pb := range portBindings {
+		if pb.HostIP == hsPortBindingIP {
+			return pb, nil
+		} else if pb.HostIP == "0.0.0.0" {
+			// `0.0.0.0` means "all interfaces", so we can assume that this will be listening
+			// for connections from `hsPortBindingIP` as well.
+			return nat.PortBinding{
+				HostIP:   hsPortBindingIP,
+				HostPort: pb.HostPort,
+			}, nil
+		} else if pb.HostIP == "" && hsPortBindingIP == "127.0.0.1" {
+			// `HostIP` can be empty in certain environments (observed with podman v4.3.1). We
+			// will assume this is only a binding for `127.0.0.1`.
+			return nat.PortBinding{
+				HostIP:   hsPortBindingIP,
+				HostPort: pb.HostPort,
+			}, nil
+		}
+	}
+
+	return nat.PortBinding{}, fmt.Errorf("unable to find matching port binding for %s %s: %+v", hsPortBindingIP, portString, p)
 }
 
 type result struct {
