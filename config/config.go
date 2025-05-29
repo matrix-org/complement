@@ -106,6 +106,14 @@ type Complement struct {
 	// disable this behaviour being added later, once this has stablised.
 	EnableDirtyRuns bool
 
+	// The IP that is used to connect to the running homeserver from the host.
+	//
+	// For Complement tests, this is always configured as `127.0.0.1` but can be
+	// overridden by homerunner to allow binding to a different IP address
+	// (`HOMERUNNER_HS_PORTBINDING_IP`).
+	//
+	// This field is used for the host-accessible homeserver URLs (as the hostname)
+	// so clients in your tests can access the homeserver.
 	HSPortBindingIP string
 
 	// Name: COMPLEMENT_POST_TEST_SCRIPT
