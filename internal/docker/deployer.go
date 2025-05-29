@@ -598,7 +598,7 @@ func (e *containerInspectionError) Error() string { return e.msg }
 
 // inspectContainer inspects the container with the given ID and returns response.
 //
-// Returns a `containerInspectionError` representing the underlying error and indicates
+// On failure, returns a `containerInspectionError` representing the underlying error and indicates
 // `err.Fatal: true` if the container is no longer running.
 func inspectContainer(
 	ctx context.Context,
