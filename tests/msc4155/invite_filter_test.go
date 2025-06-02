@@ -2,7 +2,6 @@ package tests
 
 import (
 	"testing"
-	"log"
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
