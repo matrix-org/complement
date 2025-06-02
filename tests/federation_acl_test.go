@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/complement/should"
 	"github.com/matrix-org/gomatrixserverlib/spec"
+	"github.com/tidwall/gjson"
 )
 
 // Test for https://github.com/matrix-org/dendrite/issues/3004
@@ -91,13 +92,56 @@ func TestACLs(t *testing.T) {
 			"body":    "I should be visible",
 		},
 	})
-	// wait for the sentinel event to come down sync
-	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncTimelineHasEventID(sentinelRoom, sentinelEventID))
-	charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncTimelineHasEventID(sentinelRoom, sentinelEventID))
 
-	// Verify with alice and charlie that we never received eventID
+	// Bob starts typing in both rooms
+	bob.SendTyping(t, roomID, true, 10000)
+	bob.SendTyping(t, sentinelRoom, true, 10000)
+
+	// And sets read markers on both rooms
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"m.fully_read": eventID,
+		"m.read":       eventID,
+	})
+	bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "read_markers"}, reqBody)
+
+	reqBody = client.WithJSONBody(t, map[string]interface{}{
+		"m.fully_read": sentinelEventID,
+		"m.read":       sentinelEventID,
+	})
+	bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", sentinelRoom, "read_markers"}, reqBody)
+
+	// wait for the sentinel event, read receipts and typing EDUs to come down sync
+	hasReadReceipt := client.SyncEphemeralHas(sentinelRoom, func(result gjson.Result) bool {
+		return result.Get("type").Str == "m.receipt"
+	})
+	hasTyping := client.SyncEphemeralHas(roomID, func(result gjson.Result) bool {
+		return result.Get("type").Str == "m.typing"
+	})
+
+	alice.MustSyncUntil(t,
+		client.SyncReq{Since: aliceSince},
+		client.SyncTimelineHasEventID(sentinelRoom, sentinelEventID),
+		hasReadReceipt, hasTyping,
+	)
+	charlie.MustSyncUntil(t,
+		client.SyncReq{Since: charlieSince},
+		client.SyncTimelineHasEventID(sentinelRoom, sentinelEventID),
+		hasReadReceipt, hasTyping,
+	)
+
+	// Verify with alice and charlie that we never received eventID and the typing EDU
 	for _, user := range []*client.CSAPI{alice, charlie} {
 		syncResp, _ := user.MustSync(t, client.SyncReq{})
+
+		t.Logf("sync response: %s", syncResp.Raw)
+
+		// No one should be typing, no read receipts, per MSC4163
+		ephemerals := syncResp.Get("rooms.join." + roomID + ".ephemeral")
+		must.MatchGJSON(t, ephemerals, match.JSONKeyArrayOfSize("events", 0))
+
+		// But on the sentinel room, we should have a read receipt and a fully read receipt
+		ephemerals = syncResp.Get("rooms.join." + sentinelRoom + ".ephemeral")
+		must.MatchGJSON(t, ephemerals, match.JSONKeyArrayOfSize("events", 2))
 
 		// we don't expect eventID (blocked) to be in the sync response
 		events := should.GetTimelineEventIDs(syncResp, roomID)
