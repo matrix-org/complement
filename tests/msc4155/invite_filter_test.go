@@ -148,7 +148,6 @@ func mustSetInviteConfig(t *testing.T, c *client.CSAPI, cfg InviteFilterConfig) 
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("Setting invite config B %+v\n", m)
 	c.MustSetGlobalAccountData(t, inviteFilterAccountData, m)
 }
 
