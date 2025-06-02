@@ -137,8 +137,6 @@ func TestInviteFiltering(t *testing.T) {
 
 // Tests that a given invite filter config is properly set
 func mustSetInviteConfig(t *testing.T, c *client.CSAPI, cfg InviteFilterConfig) {
-	log.Printf("Setting invite config A %+v\n", cfg)
-
 	b, err := json.Marshal(&cfg)
 	if err != nil {
 		panic(err)
