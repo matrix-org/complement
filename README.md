@@ -159,13 +159,21 @@ For example, `apidoc_presence_test.go` has:
 // +build !dendrite_blacklist
 ```
 
-and all Dendrite tests run with `-tags="dendrite_blacklist"` to cause this file to be skipped. You can run tests with build tags like this:
+and all Dendrite tests run with `-tags="dendrite_blacklist"` to cause this file
+to be skipped. You can run tests with build tags like this:
 
 ```
 COMPLEMENT_BASE_IMAGE=complement-synapse:latest go test -v -tags="synapse_blacklist" ./tests/...
 ```
 
 This runs Complement with a Synapse HS and ignores tests which Synapse doesn't implement.
+
+The currently known blacklist tags are:
+
+* `synapse_blacklist`
+* `dendrite_blacklist`
+* `conduit_blacklist`
+* `conduwuit_blacklist`
 
 ### Writing tests for unstable MSCs
 
