@@ -194,6 +194,8 @@ func TestInviteFiltering(t *testing.T) {
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomIDEvilBob))
 		evil_bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomIDEvilBob))
 	})
+	// TODO: Escaping a glob is not possible, so no tests exist for that.
+	// See https://github.com/matrix-org/matrix-spec/issues/2156
 }
 
 // Tests that a given invite filter config is properly set
