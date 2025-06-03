@@ -343,6 +343,10 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 			Pause:     true,
 			Reference: "localhost/complement:" + res.contextStr,
 			Changes:   toChanges(labels),
+
+			// Podman's compatibility API returns a 500 if the POST request has an empty body, so we give it an empty
+			// Config to chew on.
+			Config: &container.Config{},
 		})
 		if err != nil {
 			d.log("%s : failed to ContainerCommit: %s\n", res.contextStr, err)
