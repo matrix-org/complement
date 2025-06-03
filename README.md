@@ -167,6 +167,53 @@ COMPLEMENT_BASE_IMAGE=complement-synapse:latest go test -v -tags="synapse_blackl
 
 This runs Complement with a Synapse HS and ignores tests which Synapse doesn't implement.
 
+### Writing tests for unstable MSCs
+
+Complement is frequently used to test homeserver implementations of unstable
+MSCs. As these features/changes often become stable eventually and for
+convenience, this repo accepts such tests.
+
+Tests for a given MSC should be placed in a new directory under `tests/`. For
+example, to write tests for MSC9999, create a directory at `tests/msc9999`.
+
+This creates a new go "package", and tests contained within will not be run
+unless explicitly noted. A package directory should contain the following
+files:
+
+```
+tests/msc9999
+├── main_test.go
+└── msc9999_test.go
+```
+
+where `main_test.go` sets up Complement and indicates that this is a package
+containing tests:
+
+```go
+package tests
+
+import (
+    "testing"
+
+    "github.com/matrix-org/complement"
+)
+
+func TestMain(m *testing.M) {
+    complement.TestMain(m, "msc9999")
+}
+```
+
+and `msc9999_test.go` contains your actual tests. See existing `tests/msc*`
+directories for examples.
+
+You can create additional files to separate and organise logical chunks of
+tests. Just be sure each file is named `*_test.go` for `go test` to find it.
+
+Once an MSC is accepted, the tests should be migrated out of the `msc*`
+directory, as the MSC is now considered stable. Consider adding the tests to
+the blacklist of other homeserver implementations (see above section) if they
+don't yet implement the new changes described by the MSC.
+
 ## Why 'Complement'?
 
 Because **M**<sup>*C*</sup> = **1** - **M**
