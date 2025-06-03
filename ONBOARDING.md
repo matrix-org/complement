@@ -185,10 +185,6 @@ To conditionally skip an entire *file* based on the homeserver being run, add a 
 ```go
 // +build !dendrite_blacklist
 ```
-You can also do this based on features for MSC tests (which means you must run Complement *with* this tag for these tests *to run*):
-```go
-// +build msc_2836
-```
 See [GH Actions](https://github.com/matrix-org/complement/blob/master/.github/workflows/ci.yaml) for an example of how this is used for different homeservers in practice.
 
 ### Why do we use `t.Errorf` sometimes and `t.Fatalf` other times?
@@ -210,11 +206,11 @@ For Goland:
  * Under "Run"->"Edit Configurations..."->"Edit Configuration Templates..."->"Go Test", and add `COMPLEMENT_BASE_IMAGE=complement-dendrite:latest` to "Environment"
  * Then you can right-click on any test file or test case and "Run <test name>".
 
-	
+
 ### How do I make the linter checks pass?
 
 Use [`goimports`](https://pkg.go.dev/golang.org/x/tools/cmd/goimports) to sort imports and format in the style of `gofmt`.
-	
+
 Set this up to run on save in VSCode as follows:
 - File -> Preferences -> Settings.
   - Search for "Format On Save" and enable it.
