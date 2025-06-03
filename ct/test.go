@@ -14,6 +14,7 @@ type TestLike interface {
 	Skipf(msg string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(msg string, args ...interface{})
+	Fatal(msg string)
 	Fatalf(msg string, args ...interface{})
 	Failed() bool
 	Name() string
@@ -27,6 +28,13 @@ func Errorf(t TestLike, format string, args ...any) {
 	t.Helper()
 	format = ansiRedForeground + format + ansiResetForeground
 	t.Errorf(format, args...)
+}
+
+// Fatal is a wrapper around t.Fatal which prints the failing error message in red.
+func Fatal(t TestLike, format string) {
+	t.Helper()
+	format = ansiRedForeground + format + ansiResetForeground
+	t.Fatal(format)
 }
 
 // Fatalf is a wrapper around t.Fatalf which prints the failing error message in red.
