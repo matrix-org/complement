@@ -22,8 +22,8 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -352,15 +352,10 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	}
 
 	// Alice checks the room state to check that charlie isn't a member
-	res := alice.MustDo(
-		t,
-		"GET",
-		[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.member", charlie},
+	content := alice.MustGetStateEventContent(t, roomID, "m.room.member", charlie)
+	must.MatchGJSON(t, content,
+		match.JSONKeyEqual("membership", "ban"),
 	)
-	stateResp := must.ParseJSON(t, res.Body)
-	res.Body.Close()
-	membership := must.GetJSONFieldStr(t, stateResp, "membership")
-	must.Equal(t, membership, "ban", "membership of charlie")
 }
 
 // This test checks that we cannot submit anything via /v1/send_join except a join.

@@ -60,52 +60,47 @@ func TestPowerLevels(t *testing.T) {
 	// sytest: GET /rooms/:room_id/state/m.room.power_levels can fetch levels
 	t.Run("GET /rooms/:room_id/state/m.room.power_levels can fetch levels", func(t *testing.T) {
 		// Test if the old state still exists
-		res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
-
 		// note: before v10 we technically cannot assume that powerlevel integers are json numbers,
 		//  as they can be both strings and numbers.
 		// However, for this test, we control the test environment,
 		//  and we will assume the server is sane and give us powerlevels as numbers,
 		//  and if it doesn't, that's an offense worthy of a frown.
+		content := alice.MustGetStateEventContent(t, roomID, "m.room.power_levels", "")
+		must.MatchGJSON(t, content,
+			match.JSONKeyTypeEqual("ban", gjson.Number),
+			match.JSONKeyTypeEqual("kick", gjson.Number),
+			match.JSONKeyTypeEqual("redact", gjson.Number),
+			match.JSONKeyTypeEqual("state_default", gjson.Number),
+			match.JSONKeyTypeEqual("events_default", gjson.Number),
+			match.JSONKeyTypeEqual("users_default", gjson.Number),
 
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyTypeEqual("ban", gjson.Number),
-				match.JSONKeyTypeEqual("kick", gjson.Number),
-				match.JSONKeyTypeEqual("redact", gjson.Number),
-				match.JSONKeyTypeEqual("state_default", gjson.Number),
-				match.JSONKeyTypeEqual("events_default", gjson.Number),
-				match.JSONKeyTypeEqual("users_default", gjson.Number),
+			match.JSONMapEach("events", func(k, v gjson.Result) error {
+				if v.Type != gjson.Number {
+					return fmt.Errorf("key %s is not a number", k.Str)
+				} else {
+					return nil
+				}
+			}),
 
-				match.JSONMapEach("events", func(k, v gjson.Result) error {
-					if v.Type != gjson.Number {
-						return fmt.Errorf("key %s is not a number", k.Str)
-					} else {
-						return nil
-					}
-				}),
+			match.JSONMapEach("users", func(k, v gjson.Result) error {
+				if v.Type != gjson.Number {
+					return fmt.Errorf("key %s is not a number", k.Str)
+				} else {
+					return nil
+				}
+			}),
 
-				match.JSONMapEach("users", func(k, v gjson.Result) error {
-					if v.Type != gjson.Number {
-						return fmt.Errorf("key %s is not a number", k.Str)
-					} else {
-						return nil
-					}
-				}),
+			func(body gjson.Result) error {
+				userDefault := int(body.Get("users_default").Num)
+				thisUser := int(body.Get("users." + client.GjsonEscape(alice.UserID)).Num)
 
-				func(body gjson.Result) error {
-					userDefault := int(body.Get("users_default").Num)
-					thisUser := int(body.Get("users." + client.GjsonEscape(alice.UserID)).Num)
-
-					if thisUser > userDefault {
-						return nil
-					} else {
-						return fmt.Errorf("expected room creator (%d) to have a higher-than-default powerlevel (which is %d)", thisUser, userDefault)
-					}
-				},
+				if thisUser > userDefault {
+					return nil
+				} else {
+					return fmt.Errorf("expected room creator (%d) to have a higher-than-default powerlevel (which is %d)", thisUser, userDefault)
+				}
 			},
-		})
+		)
 	})
 
 	// sytest: PUT /rooms/:room_id/state/m.room.power_levels can set levels
@@ -172,13 +167,7 @@ func TestPowerLevels(t *testing.T) {
 		})
 
 		// Test if the old state still exists
-		res = alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"})
-
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyMissing("users"),
-			},
-		})
+		content := alice.MustGetStateEventContent(t, roomID, "m.room.power_levels", "")
+		must.MatchGJSON(t, content, match.JSONKeyMissing("users"))
 	})
 }

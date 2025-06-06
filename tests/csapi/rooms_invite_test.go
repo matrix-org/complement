@@ -175,12 +175,7 @@ func verifyState(t *testing.T, res gjson.Result, roomID string, cl *client.CSAPI
 		eventContent := event.Get("content." + field).Str
 		eventStateKey := event.Get("state_key").Str
 
-		res := cl.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, eventStateKey})
-
-		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONKeyEqual(field, eventContent),
-			},
-		})
+		content := cl.MustGetStateEventContent(t, roomID, eventType, eventStateKey)
+		must.MatchGJSON(t, content, match.JSONKeyEqual(field, eventContent))
 	}
 }

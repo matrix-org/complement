@@ -99,14 +99,11 @@ func TestACLs(t *testing.T) {
 		must.ContainSubset(t, events, []string{sentinelEventID})
 
 		// Validate the ACL event is actually in the rooms state
-		res := user.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.server_acl"})
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 200,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("allow", []string{"*"}),
-				match.JSONKeyEqual("deny", []string{"hs2"}),
-				match.JSONKeyEqual("allow_ip_literals", true),
-			},
-		})
+		content := user.MustGetStateEventContent(t, roomID, "m.room.server_acl", "")
+		must.MatchGJSON(t, content,
+			match.JSONKeyEqual("allow", []string{"*"}),
+			match.JSONKeyEqual("deny", []string{"hs2"}),
+			match.JSONKeyEqual("allow_ip_literals", true),
+		)
 	}
 }

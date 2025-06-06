@@ -128,28 +128,12 @@ func TestLeftRoomFixture(t *testing.T) {
 	// sytest: Can get rooms/{roomId}/state for a departed room (SPEC-216)
 	t.Run("Can get rooms/{roomId}/state for a departed room", func(t *testing.T) {
 		// Bob gets the old state
-		resp := bob.MustDo(
-			t,
-			"GET",
-			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", madeUpStateKey},
-		)
-		must.MatchResponse(t, resp, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONKeyEqual("body", beforeMadeUpState),
-			},
-		})
+		content := bob.MustGetStateEventContent(t, roomID, madeUpStateKey, "")
+		must.MatchGJSON(t, content, match.JSONKeyEqual("body", beforeMadeUpState))
 
 		// ...While Alice gets the new state
-		resp = alice.MustDo(
-			t,
-			"GET",
-			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", madeUpStateKey},
-		)
-		must.MatchResponse(t, resp, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONKeyEqual("body", afterMadeUpState),
-			},
-		})
+		content = alice.MustGetStateEventContent(t, roomID, madeUpStateKey, "")
+		must.MatchGJSON(t, content, match.JSONKeyEqual("body", afterMadeUpState))
 	})
 
 	// sytest: Can get rooms/{roomId}/members for a departed room (SPEC-216)
@@ -205,28 +189,12 @@ func TestLeftRoomFixture(t *testing.T) {
 	// sytest: Can get 'm.room.name' state for a departed room (SPEC-216)
 	t.Run("Can get 'm.room.name' state for a departed room", func(t *testing.T) {
 		// Bob gets the old name
-		resp := bob.MustDo(
-			t,
-			"GET",
-			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"},
-		)
-		must.MatchResponse(t, resp, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONKeyEqual("name", beforeRoomName),
-			},
-		})
+		content := bob.MustGetStateEventContent(t, roomID, "m.room.name", "")
+		must.MatchGJSON(t, content, match.JSONKeyEqual("name", beforeRoomName))
 
 		// ...While Alice gets the new name
-		resp = alice.MustDo(
-			t,
-			"GET",
-			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"},
-		)
-		must.MatchResponse(t, resp, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONKeyEqual("name", afterRoomName),
-			},
-		})
+		content = alice.MustGetStateEventContent(t, roomID, "m.room.name", "")
+		must.MatchGJSON(t, content, match.JSONKeyEqual("name", afterRoomName))
 	})
 
 	// sytest: Getting messages going forward is limited for a departed room (SPEC-216)

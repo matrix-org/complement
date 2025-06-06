@@ -355,6 +355,21 @@ func (c *CSAPI) SendRedaction(t ct.TestLike, roomID string, content map[string]i
 	return c.Do(t, "PUT", paths, WithJSONBody(t, content))
 }
 
+// MustGetStateEvent returns the event content for the given state event. Fails the test if the state event does not exist.
+func (c *CSAPI) MustGetStateEventContent(t ct.TestLike, roomID, eventType, stateKey string) (content gjson.Result) {
+	t.Helper()
+	res := c.GetStateEventContent(t, roomID, eventType, stateKey)
+	mustRespond2xx(t, res)
+	body := ParseJSON(t, res)
+	return gjson.ParseBytes(body)
+}
+
+// GetStateEvent returns the event content for the given state event. Use this form to detect absence via 404.
+func (c *CSAPI) GetStateEventContent(t ct.TestLike, roomID, eventType, stateKey string) *http.Response {
+	t.Helper()
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, stateKey})
+}
+
 // MustSendTyping marks this user as typing until the timeout is reached. If isTyping is false, timeout is ignored.
 func (c *CSAPI) MustSendTyping(t ct.TestLike, roomID string, isTyping bool, timeoutMillis int) {
 	res := c.SendTyping(t, roomID, isTyping, timeoutMillis)
@@ -822,6 +837,7 @@ func (c *CSAPI) SendToDeviceMessages(t ct.TestLike, evType string, messages map[
 }
 
 func mustRespond2xx(t ct.TestLike, res *http.Response) {
+	t.Helper()
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		return // 2xx
 	}
