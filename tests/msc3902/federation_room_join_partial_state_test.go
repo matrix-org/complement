@@ -560,7 +560,7 @@ func TestPartialStateJoin(t *testing.T) {
 			Type:    "m.typing",
 			Content: content,
 		}
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		// Alice should be able to see that Derek is typing (even though HS1 is resyncing).
 		aliceNextBatch := alice.MustSyncUntil(t,
@@ -575,7 +575,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// (See https://github.com/matrix-org/synapse/issues/13684)
 		event := psjResult.CreateMessageEvent(t, "charlie", nil)
 		serverRoom.AddEvent(event)
-		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+		server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event.JSON()}, nil)
 		aliceNextBatch = awaitEventViaSync(t, alice, serverRoom.RoomID, event.EventID(), aliceNextBatch)
 
 		// The resync completes.
@@ -591,7 +591,7 @@ func TestPartialStateJoin(t *testing.T) {
 			Type:    "m.typing",
 			Content: content,
 		}
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		// Alice should be able to see that no-one is typing.
 		alice.MustSyncUntil(t,
@@ -634,7 +634,7 @@ func TestPartialStateJoin(t *testing.T) {
 			Type:    "m.presence",
 			Content: content,
 		}
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		alice.MustSyncUntil(t,
 			client.SyncReq{
@@ -683,7 +683,7 @@ func TestPartialStateJoin(t *testing.T) {
 			Type:    "m.direct_to_device",
 			Content: content,
 		}
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		// Alice should see Derek's to-device message when she syncs.
 		alice.MustSyncUntil(t,
@@ -735,7 +735,7 @@ func TestPartialStateJoin(t *testing.T) {
 			Type:    "m.receipt",
 			Content: content,
 		}
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		// Alice should be able to see Derek's read receipt during the resync
 		alice.MustSyncUntil(t,
@@ -781,7 +781,7 @@ func TestPartialStateJoin(t *testing.T) {
 			Content: content,
 		}
 		aliceNextBatch := getSyncToken(t, alice)
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		// The resync completes.
 		psjResult.FinishStateRequest()
@@ -828,7 +828,7 @@ func TestPartialStateJoin(t *testing.T) {
 			Type:    "m.signing_key_update",
 			Content: content,
 		}
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{}, []gomatrixserverlib.EDU{edu})
 
 		// If we want to check the sync we need to have an encrypted room,
 		// for now just check that the fed transaction is accepted.
@@ -1007,7 +1007,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// derek sends a message into the room.
 		event := psjResult.CreateMessageEvent(t, "derek", nil)
 		t.Logf("Derek created event with ID %s", event.EventID())
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event.JSON()}, nil)
 
 		// wait for the homeserver to persist the event.
 		awaitEventArrival(t, time.Second, alice, serverRoom.RoomID, event.EventID())
@@ -1059,7 +1059,7 @@ func TestPartialStateJoin(t *testing.T) {
 		event2 := psjResult.CreateMessageEvent(t, "derek", nil)
 		t.Logf("Derek created event 1 with ID %s", event1.EventID())
 		t.Logf("Derek created event 2 with ID %s", event2.EventID())
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event1.JSON(), event2.JSON()}, nil)
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event1.JSON(), event2.JSON()}, nil)
 
 		// wait for the homeserver to persist the event.
 		awaitEventArrival(t, 5*time.Second, alice, serverRoom.RoomID, event2.EventID())
@@ -1128,7 +1128,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// derek sends a message into the room.
 		event := psjResult.CreateMessageEvent(t, "derek", nil)
-		psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+		psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event.JSON()}, nil)
 		t.Logf("Derek created event with ID %s", event.EventID())
 
 		// wait for the homeserver to persist the event.
@@ -1283,7 +1283,7 @@ func TestPartialStateJoin(t *testing.T) {
 		defer cancelListener()
 
 		// join complement to the public room
-		room := server.MustJoinRoom(t, deployment, "hs1", roomID, server.UserID("david"))
+		room := server.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, server.UserID("david"))
 
 		// we expect a /state_ids request from hs2 after it joins the room
 		// we will respond to the request with garbage
@@ -1307,12 +1307,12 @@ func TestPartialStateJoin(t *testing.T) {
 		).Methods("GET")
 
 		// join charlie on hs2 to the room, via the complement homeserver
-		charlie.MustJoinRoom(t, roomID, []string{server.ServerName()})
+		charlie.MustJoinRoom(t, roomID, []spec.ServerName{server.ServerName()})
 
 		// and let hs1 know that charlie has joined,
 		// otherwise hs1 will refuse /state_ids requests
 		member_event := room.CurrentState("m.room.member", charlie.UserID).JSON()
-		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{member_event}, nil)
+		server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{member_event}, nil)
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
 
 		// wait until hs2 starts syncing state
@@ -1385,7 +1385,7 @@ func TestPartialStateJoin(t *testing.T) {
 			})
 			lastEventID = event.EventID()
 			serverRoom.AddEvent(event)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event.JSON()}, nil)
 		}
 
 		// wait for the events to come down a /sync.
@@ -1495,14 +1495,14 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// now, send over the most recent event, which will make the server get_missing_events
 		// (we will send timelineEvent1), and then request state (we will send all the outliers).
-		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{timelineEvent2.JSON()}, nil)
+		server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{timelineEvent2.JSON()}, nil)
 
 		t.Logf("Charlie sent timeline event 2")
 		// wait for it to become visible, which implies that all the outliers have been pulled in.
 		awaitEventViaSync(t, alice, serverRoom.RoomID, timelineEvent2.EventID(), syncToken)
 
 		// now we send over all the other events in the gap.
-		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{lateEvent.JSON()}, nil)
+		server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{lateEvent.JSON()}, nil)
 		t.Logf("Charlie sent late event")
 
 		for i := 0; i < len(outliers); {
@@ -1511,7 +1511,7 @@ func TestPartialStateJoin(t *testing.T) {
 			for j := i; j < i+50 && j < len(outliers); j++ {
 				transactionEvents = append(transactionEvents, outliers[j].JSON())
 			}
-			server.MustSendTransaction(t, deployment, "hs1", transactionEvents, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), transactionEvents, nil)
 			t.Logf("Charlie sent %d ex-outliers", len(transactionEvents))
 			i += len(transactionEvents)
 		}
@@ -1588,7 +1588,7 @@ func TestPartialStateJoin(t *testing.T) {
 		serverRoom.AddEvent(sentinelEvent)
 		t.Logf("charlie created sentinel event %s", sentinelEvent.EventID())
 
-		server.MustSendTransaction(t, deployment, "hs1",
+		server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			[]json.RawMessage{badStateEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 		// wait for the sentinel event to be visible
@@ -1680,7 +1680,7 @@ func TestPartialStateJoin(t *testing.T) {
 		serverRoom.Depth = badStateEvent.Depth()
 		serverRoom.ForwardExtremities = []string{badStateEvent.EventID()}
 		t.Logf("derek created bad state event %s with auth events %#v", badStateEvent.EventID(), badStateEvent.AuthEventIDs())
-		server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{badStateEvent.JSON()}, nil)
+		server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{badStateEvent.JSON()}, nil)
 
 		// the bad state event should be visible at this point
 		syncToken = awaitEventViaSync(t, alice, serverRoom.RoomID, badStateEvent.EventID(), syncToken)
@@ -1785,7 +1785,7 @@ func TestPartialStateJoin(t *testing.T) {
 		serverRoom.AddEvent(sentinelEvent)
 		t.Logf("charlie created sentinel event %s", sentinelEvent.EventID())
 
-		server.MustSendTransaction(t, deployment, "hs1",
+		server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			[]json.RawMessage{badKickEvent.JSON(), rejectedStateEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 		// the bad kick event should be visible at this point
@@ -1853,7 +1853,7 @@ func TestPartialStateJoin(t *testing.T) {
 		fedClient2 := testServer2.FederationClient(deployment)
 
 		// charlie sends a make_join
-		_, err := fedClient2.MakeJoin(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", roomID, testServer2.UserID("charlie"))
+		_, err := fedClient2.MakeJoin(context.Background(), testServer2.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, testServer2.UserID("charlie"))
 
 		if err == nil {
 			t.Errorf("MakeJoin returned 200, want 404")
@@ -1919,12 +1919,12 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Fatalf("MakeRespMakeJoin: invalid room version: %s", err)
 		}
 		eb := verImpl.NewEventBuilderFromProtoEvent(&makeJoinResp.JoinEvent)
-		joinEvent, err := eb.Build(time.Now(), spec.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv)
+		joinEvent, err := eb.Build(time.Now(), testServer2.ServerName(), testServer2.KeyID, testServer2.Priv)
 		must.NotError(t, "JoinEvent.Build", err)
 
 		// SendJoin should return a 404 because the homeserver under test has not
 		// finished its partial join.
-		_, err = fedClient2.SendJoin(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", joinEvent)
+		_, err = fedClient2.SendJoin(context.Background(), testServer2.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), joinEvent)
 		if err == nil {
 			t.Errorf("SendJoin returned 200, want 404")
 		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -2031,7 +2031,7 @@ func TestPartialStateJoin(t *testing.T) {
 		fedClient2 := testServer2.FederationClient(deployment)
 
 		// charlie sends a make_knock
-		_, err := fedClient2.MakeKnock(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
+		_, err := fedClient2.MakeKnock(context.Background(), testServer2.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, testServer2.UserID("charlie"), federation.SupportedRoomVersions())
 
 		if err == nil {
 			t.Errorf("MakeKnock returned 200, want 404")
@@ -2097,12 +2097,12 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Fatalf("MakeRespMakeJoin: invalid room version: %s", err)
 		}
 		eb := verImpl.NewEventBuilderFromProtoEvent(&makeKnockResp.KnockEvent)
-		knockEvent, err := eb.Build(time.Now(), spec.ServerName(testServer2.ServerName()), testServer2.KeyID, testServer2.Priv)
+		knockEvent, err := eb.Build(time.Now(), testServer2.ServerName(), testServer2.KeyID, testServer2.Priv)
 		must.NotError(t, "KnockEvent.Build", err)
 
 		// SendKnock should return a 404 because the homeserver under test has not
 		// finished its partial join.
-		_, err = fedClient2.SendKnock(context.Background(), spec.ServerName(testServer2.ServerName()), "hs1", knockEvent)
+		_, err = fedClient2.SendKnock(context.Background(), testServer2.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), knockEvent)
 		if err == nil {
 			t.Errorf("SendKnock returned 200, want 404")
 		} else if httpError, ok := err.(gomatrix.HTTPError); ok {
@@ -2241,7 +2241,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room := server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2289,7 +2289,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room := server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2298,7 +2298,7 @@ func TestPartialStateJoin(t *testing.T) {
 			//     is idempotent. Here we wait for server 2 to observe the leave too.
 			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
 			joinEvent := room.CurrentState("m.room.member", server2.UserID("elsie"))
-			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			server1.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
 			// Both servers should receive device list updates now.
@@ -2331,7 +2331,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2346,7 +2346,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// not give server2 a complete or up to date copy of the room state.
 			leaveEvent := createLeaveEvent(t, server2, room, server2.UserID("elsie"))
 			room.AddEvent(leaveEvent)
-			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{leaveEvent.JSON()}, nil)
+			server1.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{leaveEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, leaveEvent.EventID(), "")
 
 			// Both homeservers should receive device list updates, since hs1 cannot know that
@@ -2405,13 +2405,13 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room = server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				elsie,
 				federation.WithPartialState(),
 			)
 			joinEvent := room.CurrentState("m.room.member", elsie)
-			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			server1.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			syncToken = awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
 			// Both servers should receive device list updates.
@@ -2435,7 +2435,7 @@ func TestPartialStateJoin(t *testing.T) {
 			room.Timeline = append(room.Timeline, badKickEvent)
 			room.Depth = badKickEvent.Depth()
 			room.ForwardExtremities = []string{badKickEvent.EventID()}
-			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{badKickEvent.JSON()}, nil)
+			server1.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{badKickEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, badKickEvent.EventID(), syncToken)
 
 			return syncToken, server2Room, psjResult
@@ -2455,7 +2455,7 @@ func TestPartialStateJoin(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 			// @elsie:server2 joins the room.
-			server2Room := server2.MustJoinRoom(t, deployment, "hs1", roomID, elsie)
+			server2Room := server2.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, elsie)
 			alice.MustSyncUntil(t,
 				client.SyncReq{
 					Since:  syncToken,
@@ -2469,7 +2469,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// server2 a complete or up to date copy of the room state.
 			leaveEvent := createLeaveEvent(t, server2, partialStateRoom, elsie)
 			partialStateRoom.AddEvent(leaveEvent)
-			server1.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{leaveEvent.JSON()}, nil)
+			server1.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{leaveEvent.JSON()}, nil)
 			syncToken = awaitEventViaSync(t, alice, partialStateRoom.RoomID, leaveEvent.EventID(), syncToken)
 
 			leaveSharedRoom = func() {
@@ -2587,7 +2587,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2Room := server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2618,7 +2618,7 @@ func TestPartialStateJoin(t *testing.T) {
 			server2.MustJoinRoom(
 				t,
 				deployment,
-				spec.ServerName(server1.ServerName()),
+				server1.ServerName(),
 				room.RoomID,
 				server2.UserID("elsie"),
 				federation.WithPartialState(),
@@ -2776,11 +2776,11 @@ func TestPartialStateJoin(t *testing.T) {
 					Deleted:           false,
 					Keys:              keys,
 				})
-				server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{}, []gomatrixserverlib.EDU{
+				server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{}, []gomatrixserverlib.EDU{
 					{
 						Type:        "m.device_list_update",
-						Origin:      server.ServerName(),
-						Destination: "hs1",
+						Origin:      string(server.ServerName()),
+						Destination: string(deployment.GetFullyQualifiedHomeserverName(t, "hs1")),
 						Content:     deviceListUpdate,
 					},
 				})
@@ -2931,7 +2931,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @charlie sends a message.
 			// Depending on the homeserver implementation, @t30alice:hs1 may be told that @charlie's devices are being tracked.
 			event := psjResult.CreateMessageEvent(t, "charlie", nil)
-			psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+			psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event.JSON()}, nil)
 			syncToken := awaitEventViaSync(t, alice, psjResult.ServerRoom.RoomID, event.EventID(), "")
 
 			// @charlie updates their device list.
@@ -2941,7 +2941,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Before completing the partial state join, try to wait for the homeserver to finish processing the device list update.
 			event = psjResult.CreateMessageEvent(t, "charlie", nil)
-			psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+			psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event.JSON()}, nil)
 			awaitEventViaSync(t, alice, psjResult.ServerRoom.RoomID, event.EventID(), syncToken)
 
 			// Finish the partial state join.
@@ -2975,7 +2975,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @charlie sends a message.
 			// Depending on the homeserver implementation, @t31alice:hs1 may be told that @charlie's devices are being tracked.
 			event := psjResult.CreateMessageEvent(t, "charlie", nil)
-			psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+			psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event.JSON()}, nil)
 			syncToken := awaitEventViaSync(t, alice, psjResult.ServerRoom.RoomID, event.EventID(), "")
 
 			// @charlie updates their device list.
@@ -2988,7 +2988,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// @charlie joins the room.
 			// Now @charlie's device list is definitely being tracked.
-			otherRoom := server.MustJoinRoom(t, deployment, "hs1", otherRoomID, server.UserID("charlie"))
+			otherRoom := server.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), otherRoomID, server.UserID("charlie"))
 			alice.MustSyncUntil(t,
 				client.SyncReq{
 					Since:  syncToken,
@@ -3021,7 +3021,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @elsie joins the room.
 			joinEvent := createJoinEvent(t, server, room, server.UserID("elsie"))
 			room.AddEvent(joinEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
 			// hs1 should now be tracking @elsie's device list. Enforce this in two steps:
@@ -3070,7 +3070,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @elsie joins the room.
 			joinEvent := createJoinEvent(t, server, room, server.UserID("elsie"))
 			room.AddEvent(joinEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
 			// hs1 should now be tracking @elsie's device list. Enforce this in two steps:
@@ -3086,7 +3086,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @elsie leaves the room.
 			leaveEvent := createLeaveEvent(t, server, room, server.UserID("elsie"))
 			room.AddEvent(leaveEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{leaveEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{leaveEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, leaveEvent.EventID(), syncToken)
 
 			// hs1 should no longer be tracking elsie's device list; subsequent
@@ -3115,7 +3115,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @elsie joins the room.
 			joinEvent := createJoinEvent(t, server, room, server.UserID("elsie"))
 			room.AddEvent(joinEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
 			// hs1 should now be tracking @elsie's device list. Enforce this in two steps:
@@ -3157,7 +3157,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @elsie joins the room.
 			joinEvent := createJoinEvent(t, server, room, server.UserID("elsie"))
 			room.AddEvent(joinEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
 			// hs1 should now be tracking @elsie's device list. Enforce this in two steps:
@@ -3218,7 +3218,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @elsie joins the room.
 			joinEvent := createJoinEvent(t, server, room, elsie)
 			room.AddEvent(joinEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			syncToken = awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
 
 			// @fred "bans" @derek.
@@ -3240,7 +3240,7 @@ func TestPartialStateJoin(t *testing.T) {
 			room.Timeline = append(room.Timeline, badKickEvent)
 			room.Depth = badKickEvent.Depth()
 			room.ForwardExtremities = []string{badKickEvent.EventID()}
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{badKickEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{badKickEvent.JSON()}, nil)
 			syncToken = awaitEventViaSync(t, alice, room.RoomID, badKickEvent.EventID(), syncToken)
 
 			// @derek kicks @elsie.
@@ -3253,12 +3253,12 @@ func TestPartialStateJoin(t *testing.T) {
 				Content:  map[string]interface{}{"membership": "leave"},
 			})
 			room.AddEvent(kickEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{kickEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{kickEvent.JSON()}, nil)
 
 			// Ensure that the kick event has been persisted.
 			sentinelEvent := psjResult.CreateMessageEvent(t, "charlie", nil)
 			room.AddEvent(sentinelEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{sentinelEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{sentinelEvent.JSON()}, nil)
 			syncToken = awaitEventViaSync(t, alice, room.RoomID, sentinelEvent.EventID(), syncToken)
 
 			// Check that the last kick was incorrectly rejected.
@@ -3332,7 +3332,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @elsie rejoins the room.
 			joinEvent := createJoinEvent(t, server, room, server.UserID("elsie"))
 			room.AddEvent(joinEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
 			// @elsie's device list is still cached.
@@ -3381,7 +3381,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @elsie rejoins the room.
 			joinEvent := createJoinEvent(t, server, room, server.UserID("elsie"))
 			room.AddEvent(joinEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{joinEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), syncToken)
 
 			// @elsie's device list ought to have been flushed from the cache.
@@ -3416,7 +3416,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// @elsie joins the room.
 			// The homeserver under test is now subscribed to @elsie's device list updates.
-			server.MustJoinRoom(t, deployment, "hs1", otherRoomID, server.UserID("elsie"))
+			server.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), otherRoomID, server.UserID("elsie"))
 			alice.MustSyncUntil(t,
 				client.SyncReq{
 					Since:  syncToken,
@@ -3554,7 +3554,7 @@ func TestPartialStateJoin(t *testing.T) {
 		defer psjResult.Destroy(t)
 
 		server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
-		bob.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+		bob.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 		alice.MustSyncUntil(t,
 			client.SyncReq{
 				Filter: buildLazyLoadingSyncFilter(nil),
@@ -3748,7 +3748,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Bob joins too")
-			bob.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			bob.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 
 			t.Log("Bob waits to see his join")
 			bobNextBatch := bob.MustSyncUntil(
@@ -3809,7 +3809,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The resync has not completed because we have not called psjResult.FinishStateRequest()
 			t.Log("Alice rejoins her room")
-			alice.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			alice.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 			aliceNextBatch = alice.MustSyncUntil(
 				t,
 				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
@@ -3857,7 +3857,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// The resync has not completed because we have not called psjResult.FinishStateRequest()
 			t.Log("Now Bob joins the room")
-			bob.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			bob.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 			bob.MustSyncUntil(
 				t,
 				client.SyncReq{Filter: buildLazyLoadingSyncFilter(nil)},
@@ -3901,7 +3901,7 @@ func TestPartialStateJoin(t *testing.T) {
 				}),
 			})
 			serverRoom.AddEvent(kickEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{kickEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{kickEvent.JSON()}, nil)
 
 			// The kick occurs mid-resync, because we have not yet called
 			// psjResult.FinishStateRequest().
@@ -3955,7 +3955,7 @@ func TestPartialStateJoin(t *testing.T) {
 				}),
 			})
 			serverRoom.AddEvent(banEvent)
-			server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{banEvent.JSON()}, nil)
+			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{banEvent.JSON()}, nil)
 
 			// The ban occurs mid-resync, because we have not yet called
 			// psjResult.FinishStateRequest().
@@ -3969,7 +3969,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 
 			t.Log("Alice tries to rejoin...")
-			response := alice.JoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+			response := alice.JoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 
 			t.Log("... but Alice was forbidden from rejoining")
 			must.MatchResponse(t, response, match.HTTPResponse{StatusCode: http.StatusForbidden})
@@ -4181,7 +4181,7 @@ func testReceiveEventDuringPartialStateJoin(
 	t *testing.T, deployment complement.Deployment, alice *client.CSAPI, psjResult partialStateJoinResult, event gomatrixserverlib.PDU, syncToken string,
 ) string {
 	// send the event to the homeserver
-	psjResult.Server.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{event.JSON()}, nil)
+	psjResult.Server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event.JSON()}, nil)
 
 	syncToken = awaitEventViaSync(t, alice, psjResult.ServerRoom.RoomID, event.EventID(), syncToken)
 
@@ -4194,7 +4194,7 @@ func testReceiveEventDuringPartialStateJoin(
 	// is resolved. For now, we use this to check whether Synapse has calculated the partial state
 	// flag for the last event correctly.
 
-	stateReq := fclient.NewFederationRequest("GET", spec.ServerName(psjResult.Server.ServerName()), "hs1",
+	stateReq := fclient.NewFederationRequest("GET", psjResult.Server.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
 			url.PathEscape(psjResult.ServerRoom.RoomID),
 			url.QueryEscape(event.EventID()),
@@ -4238,7 +4238,7 @@ func testReceiveEventDuringPartialStateJoin(
 	)
 
 	// check the server's idea of the state at the event. We do this by making a `state_ids` request over federation
-	stateReq = fclient.NewFederationRequest("GET", spec.ServerName(psjResult.Server.ServerName()), "hs1",
+	stateReq = fclient.NewFederationRequest("GET", psjResult.Server.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		fmt.Sprintf("/_matrix/federation/v1/state_ids/%s?event_id=%s",
 			url.PathEscape(psjResult.ServerRoom.RoomID),
 			url.QueryEscape(event.EventID()),
@@ -4391,7 +4391,7 @@ func beginPartialStateJoin(t *testing.T, server *server, serverRoom *federation.
 	)
 
 	// have joiningUser join the room by room ID.
-	joiningUser.MustJoinRoom(t, serverRoom.RoomID, []string{server.ServerName()})
+	joiningUser.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{server.ServerName()})
 	t.Logf("/join request completed")
 
 	success = true

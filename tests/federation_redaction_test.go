@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // test that a redaction is sent out over federation even if we don't have the original event
@@ -54,7 +55,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 	roomAlias := srv.MakeAliasMapping("flibble", serverRoom.RoomID)
 
 	// the local homeserver joins the room
-	alice.MustJoinRoom(t, roomAlias, []string{srv.ServerName()})
+	alice.MustJoinRoom(t, roomAlias, []spec.ServerName{srv.ServerName()})
 
 	// inject event to redact in the room
 	badEvent := srv.MustCreateEvent(t, serverRoom, federation.Event{
@@ -67,7 +68,7 @@ func TestFederationRedactSendsWithoutEvent(t *testing.T) {
 
 	eventID := badEvent.EventID()
 	fullServerName := srv.ServerName()
-	eventToRedact := eventID + ":" + fullServerName
+	eventToRedact := eventID + ":" + string(fullServerName)
 
 	// the client sends a request to the local homeserver to send the redaction
 	redactionEventID := alice.MustSendRedaction(t, serverRoom.RoomID, map[string]interface{}{

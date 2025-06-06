@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 
 	"github.com/tidwall/gjson"
 )
@@ -124,7 +125,9 @@ func TestDeviceListUpdates(t *testing.T) {
 
 		// The observing user must share a room with the dummy barrier user.
 		roomID := barry.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-		observingUser.MustJoinRoom(t, roomID, []string{otherHSName})
+		observingUser.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, otherHSName),
+		})
 		observingUser.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(observingUser.UserID, roomID))
 
 		return func(t *testing.T, nextBatch string) string {
@@ -164,7 +167,9 @@ func TestDeviceListUpdates(t *testing.T) {
 
 		// Bob joins the room
 		t.Logf("%s joins the test room.", bob.UserID)
-		bob.MustJoinRoom(t, roomID, []string{hsName})
+		bob.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, hsName),
+		})
 		bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		// Check that Alice receives a device list update from Bob
@@ -217,7 +222,9 @@ func TestDeviceListUpdates(t *testing.T) {
 
 		// Alice joins the room
 		t.Logf("%s joins the test room.", alice.UserID)
-		alice.MustJoinRoom(t, roomID, []string{otherHSName})
+		alice.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, otherHSName),
+		})
 		bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 		// Check that Alice receives a device list update from Bob
@@ -265,7 +272,9 @@ func TestDeviceListUpdates(t *testing.T) {
 
 		// Bob joins the room
 		t.Logf("%s joins the test room.", bob.UserID)
-		bob.MustJoinRoom(t, roomID, []string{hsName})
+		bob.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, hsName),
+		})
 		bobNextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		// Alice performs an initial sync
@@ -322,7 +331,9 @@ func TestDeviceListUpdates(t *testing.T) {
 
 		// Alice joins the room
 		t.Logf("%s joins the test room.", alice.UserID)
-		alice.MustJoinRoom(t, roomID, []string{otherHSName})
+		alice.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, otherHSName),
+		})
 		bobNextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 
 		// Alice performs an initial sync
@@ -379,7 +390,9 @@ func TestDeviceListUpdates(t *testing.T) {
 
 		// Bob joins the room
 		t.Logf("%s joins the test room.", bob.UserID)
-		bob.MustJoinRoom(t, roomID, []string{hsName})
+		bob.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, hsName),
+		})
 		bobNextBatch := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		// Alice performs an initial sync
@@ -411,7 +424,9 @@ func TestDeviceListUpdates(t *testing.T) {
 
 		// Bob rejoins the room
 		t.Logf("%s joins the test room.", bob.UserID)
-		bob.MustJoinRoom(t, roomID, []string{hsName})
+		bob.MustJoinRoom(t, roomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, hsName),
+		})
 		bob.MustSyncUntil(t, client.SyncReq{Since: bobNextBatch}, client.SyncJoinedTo(bob.UserID, roomID))
 
 		// Check that Alice is notified that Bob's devices have a change

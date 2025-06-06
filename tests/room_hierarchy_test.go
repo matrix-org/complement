@@ -26,6 +26,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 var (
@@ -159,7 +160,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r1,
 		Content: map[string]interface{}{
-			"via":       []string{"hs1"},
+			"via":       []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 			"suggested": true,
 		},
 	})
@@ -168,7 +169,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &ss1,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	rootToR2 := eventKey(root, r2, spaceChildEventType)
@@ -176,7 +177,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r2,
 		Content: map[string]interface{}{
-			"via":       []string{"hs1"},
+			"via":       []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 			"suggested": true,
 		},
 	})
@@ -185,14 +186,14 @@ func TestClientSpacesSummary(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r5,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	alice.SendEventSynced(t, r2, b.Event{ // parent link
 		Type:     spaceParentEventType,
 		StateKey: &root,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	ss1ToSS2 := eventKey(ss1, ss2, spaceChildEventType)
@@ -200,7 +201,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &ss2,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	ss2ToR3 := eventKey(ss2, r3, spaceChildEventType)
@@ -208,7 +209,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r3,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	ss2ToR4 := eventKey(ss2, r4, spaceChildEventType)
@@ -216,7 +217,7 @@ func TestClientSpacesSummary(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r4,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 
@@ -440,7 +441,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r1,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	rootToSS1 := eventKey(root, ss1, spaceChildEventType)
@@ -448,7 +449,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &ss1,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	ss1ToR2 := eventKey(ss1, r2, spaceChildEventType)
@@ -456,7 +457,7 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r2,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	ss1ToR3 := eventKey(ss1, r3, spaceChildEventType)
@@ -464,13 +465,15 @@ func TestClientSpacesSummaryJoinRules(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r3,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 
 	// Querying is done by bob who is not yet in any of the rooms.
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	bob.MustJoinRoom(t, root, []string{"hs1"})
+	bob.MustJoinRoom(t, root, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 
 	res := bob.MustDo(t, "GET", []string{"_matrix", "client", "v1", "rooms", root, "hierarchy"})
 	must.MatchResponse(t, res, match.HTTPResponse{
@@ -588,7 +591,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r1,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	rootToSS1 := eventKey(root, ss1, spaceChildEventType)
@@ -596,7 +599,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &ss1,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	rootToR2 := eventKey(root, r2, spaceChildEventType)
@@ -604,7 +607,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r2,
 		Content: map[string]interface{}{
-			"via": []string{"hs2"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs2"))},
 		},
 	})
 	ss1ToSS2 := eventKey(ss1, ss2, spaceChildEventType)
@@ -612,7 +615,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &ss2,
 		Content: map[string]interface{}{
-			"via": []string{"hs2"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs2"))},
 		},
 	})
 	ss1ToR3 := eventKey(ss1, r3, spaceChildEventType)
@@ -620,7 +623,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r3,
 		Content: map[string]interface{}{
-			"via": []string{"hs2"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs2"))},
 		},
 	})
 	ss2ToR4 := eventKey(ss2, r4, spaceChildEventType)
@@ -628,7 +631,7 @@ func TestFederatedClientSpaces(t *testing.T) {
 		Type:     spaceChildEventType,
 		StateKey: &r4,
 		Content: map[string]interface{}{
-			"via": []string{"hs1"},
+			"via": []string{string(deployment.GetFullyQualifiedHomeserverName(t, "hs1"))},
 		},
 	})
 	allEvents := []string{

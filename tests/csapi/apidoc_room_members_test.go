@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 func TestRoomMembers(t *testing.T) {
@@ -229,7 +230,7 @@ func TestRoomMembers(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 			alice.MustInviteRoom(t, roomID, bob.UserID)
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			bob.MustLeaveRoom(t, roomID)
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))

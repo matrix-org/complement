@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // Check if this homeserver supports Synapse-style admin registration.
@@ -69,7 +70,7 @@ func TestServerNotices(t *testing.T) {
 		})
 	})
 	t.Run("Alice can join the alert room", func(t *testing.T) {
-		alice.MustJoinRoom(t, roomID, []string{})
+		alice.MustJoinRoom(t, roomID, []spec.ServerName{})
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, eventID))
 	})
 	t.Run("Alice can leave the alert room, after joining it", func(t *testing.T) {

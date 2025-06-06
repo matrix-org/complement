@@ -11,11 +11,12 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
-	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/federation"
+	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/matrix-org/util"
 )
 
@@ -183,7 +184,7 @@ func TestSync(t *testing.T) {
 			sendMessages(t, alice, roomID, "alice message 1-", 4)
 			_, nextBatch := bob.MustSync(t, client.SyncReq{Filter: filterBob})
 			sendMessages(t, alice, roomID, "alice message 2-", 4)
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			res, _ := bob.MustSync(t, client.SyncReq{Filter: filterBob, Since: nextBatch})
 			room := res.Get("rooms.join." + client.GjsonEscape(roomID))
@@ -211,7 +212,7 @@ func TestSync(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			_, nextBatch := bob.MustSync(t, client.SyncReq{})
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 			nextBatch = bob.MustSyncUntil(t, client.SyncReq{Since: nextBatch}, func(userID string, sync gjson.Result) error {
 				presence := sync.Get("presence")
@@ -232,7 +233,7 @@ func TestSync(t *testing.T) {
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			sendMessages(t, alice, roomID, "dummy message", 1)
 			_, nextBatch = alice.MustSync(t, client.SyncReq{Since: nextBatch})
-			bob.MustJoinRoom(t, roomID, []string{})
+			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 			// wait until there are presence events
@@ -287,10 +288,10 @@ func TestSync(t *testing.T) {
 			charlie := srv.UserID("charlie")
 
 			redactionRoomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			redactionRoom := srv.MustJoinRoom(t, deployment, "hs1", redactionRoomID, charlie)
+			redactionRoom := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), redactionRoomID, charlie)
 
 			sentinelRoomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			sentinelRoom := srv.MustJoinRoom(t, deployment, "hs1", sentinelRoomID, charlie)
+			sentinelRoom := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), sentinelRoomID, charlie)
 
 			// charlie creates a bogus redaction, which he sends out, followed by
 			// a good event - in another room - to act as a sentinel. It's not
@@ -303,7 +304,7 @@ func TestSync(t *testing.T) {
 				Redacts: "$12345"})
 			redactionRoom.AddEvent(redactionEvent)
 			t.Logf("Created redaction event %s", redactionEvent.EventID())
-			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON()}, nil)
+			srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{redactionEvent.JSON()}, nil)
 
 			sentinelEvent := srv.MustCreateEvent(t, sentinelRoom, federation.Event{
 				Type:    "m.room.test",
@@ -312,7 +313,7 @@ func TestSync(t *testing.T) {
 			})
 			sentinelRoom.AddEvent(sentinelEvent)
 			t.Logf("Created sentinel event %s", sentinelEvent.EventID())
-			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{redactionEvent.JSON(), sentinelEvent.JSON()}, nil)
+			srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{redactionEvent.JSON(), sentinelEvent.JSON()}, nil)
 
 			// wait for the sentinel to arrive
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(sentinelRoomID, sentinelEvent.EventID()))
@@ -331,7 +332,7 @@ func TestSync(t *testing.T) {
 				pdus[i] = ev.JSON()
 				lastSentEventId = ev.EventID()
 			}
-			srv.MustSendTransaction(t, deployment, "hs1", pdus, nil)
+			srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), pdus, nil)
 			t.Logf("Sent filler events, with final event %s", lastSentEventId)
 
 			// sync, starting from the same ?since each time, until the final message turns up.
@@ -462,7 +463,7 @@ func TestSyncTimelineGap(t *testing.T) {
 	charlie := srv.UserID("charlie")
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
+	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
 
 	filterID := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -514,7 +515,7 @@ func TestSyncTimelineGap(t *testing.T) {
 	// requests.
 	respondToGetMissingEventsEndpoints(t, srv, room, missingEvents)
 
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{lastEvent.JSON()}, nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{lastEvent.JSON()}, nil)
 
 	// We now test two different modes of /sync work. The first is when we are
 	// syncing when the server receives the `lastEvent` (and so, at least
@@ -723,7 +724,7 @@ func TestRoomSummary(t *testing.T) {
 	}
 
 	sinceToken := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-	bob.MustJoinRoom(t, roomID, []string{})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 	// Verify Bob sees the correct room summary
 	bob.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
 	// .. and Alice as well.

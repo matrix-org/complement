@@ -260,7 +260,7 @@ func (r *ServerRoom) MustHaveMembershipForUser(t ct.TestLike, userID, wantMember
 }
 
 // ServersInRoom gets all servers currently joined to the room
-func (r *ServerRoom) ServersInRoom() (servers []string) {
+func (r *ServerRoom) ServersInRoom() (servers []spec.ServerName) {
 	serverSet := make(map[string]struct{})
 
 	r.StateMutex.RLock()
@@ -282,7 +282,7 @@ func (r *ServerRoom) ServersInRoom() (servers []string) {
 	r.StateMutex.RUnlock()
 
 	for server := range serverSet {
-		servers = append(servers, server)
+		servers = append(servers, spec.ServerName(server))
 	}
 
 	return
@@ -498,9 +498,14 @@ func (i *ServerRoomImplDefault) GenerateSendJoinResponse(room *ServerRoom, s *Se
 	authEvents := room.AuthChainForEvents(stateEvents)
 
 	// get servers in room *before* the join event
-	serversInRoom := []string{s.serverName}
+	serversInRoom := []spec.ServerName{s.serverName}
 	if !omitServersInRoom {
 		serversInRoom = room.ServersInRoom()
+	}
+
+	serversInRoomStrings := make([]string, len(serversInRoom))
+	for i, serverName := range serversInRoom {
+		serversInRoomStrings[i] = string(serverName)
 	}
 
 	// insert the join event into the room state
@@ -509,10 +514,11 @@ func (i *ServerRoomImplDefault) GenerateSendJoinResponse(room *ServerRoom, s *Se
 
 	// return state and auth chain
 	return fclient.RespSendJoin{
-		Origin:         spec.ServerName(s.serverName),
+		Origin:         s.serverName,
 		AuthEvents:     gomatrixserverlib.NewEventJSONsFromEvents(authEvents),
 		StateEvents:    gomatrixserverlib.NewEventJSONsFromEvents(stateEvents),
 		MembersOmitted: expectPartialState,
-		ServersInRoom:  serversInRoom,
+		// TODO: It feels like `ServersInRoom` should be `[]spec.ServerName` instead of `[]string`
+		ServersInRoom: serversInRoomStrings,
 	}
 }

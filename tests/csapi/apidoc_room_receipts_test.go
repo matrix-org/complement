@@ -12,7 +12,7 @@ import (
 
 // tests/10apidoc/37room-receipts.pl
 
-func createRoomForReadReceipts(t *testing.T, c *client.CSAPI, deployment complement.Deployment) (string, string) {
+func createRoomForReadReceipts(t *testing.T, c *client.CSAPI) (string, string) {
 	roomID := c.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 	c.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(c.UserID, roomID))
@@ -40,7 +40,7 @@ func TestRoomReceipts(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
+	roomID, eventID := createRoomForReadReceipts(t, alice)
 
 	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
 
@@ -53,7 +53,7 @@ func TestRoomReadMarkers(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	roomID, eventID := createRoomForReadReceipts(t, alice, deployment)
+	roomID, eventID := createRoomForReadReceipts(t, alice)
 
 	reqBody := client.WithJSONBody(t, map[string]interface{}{
 		"m.fully_read": eventID,

@@ -52,7 +52,7 @@ func TestRestrictedRoomsLocalJoinInMSC3787Room(t *testing.T) {
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	// Execute the checks.
-	checkRestrictedRoom(t, alice, bob, allowed_room, room, joinRule)
+	checkRestrictedRoom(t, deployment, alice, bob, allowed_room, room, joinRule)
 }
 
 // See TestRestrictedRoomsRemoteJoin
@@ -67,7 +67,7 @@ func TestRestrictedRoomsRemoteJoinInMSC3787Room(t *testing.T) {
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// Execute the checks.
-	checkRestrictedRoom(t, alice, bob, allowed_room, room, joinRule)
+	checkRestrictedRoom(t, deployment, alice, bob, allowed_room, room, joinRule)
 }
 
 // See TestRestrictedRoomsRemoteJoinLocalUser
