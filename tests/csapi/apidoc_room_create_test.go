@@ -59,13 +59,8 @@ func TestRoomCreate(t *testing.T) {
 				"topic":  "Test Room",
 				"preset": "public_chat",
 			})
-			res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.topic"})
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 200,
-				JSON: []match.JSON{
-					match.JSONKeyEqual("topic", "Test Room"),
-				},
-			})
+			content := alice.MustGetStateEventContent(t, roomID, "m.room.topic", "")
+			must.MatchGJSON(t, content, match.JSONKeyEqual("topic", "Test Room"))
 		})
 		// sytest: POST /createRoom makes a room with a name
 		t.Run("POST /createRoom makes a room with a name", func(t *testing.T) {
@@ -74,13 +69,8 @@ func TestRoomCreate(t *testing.T) {
 				"name":   "Test Room",
 				"preset": "public_chat",
 			})
-			res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.name"})
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 200,
-				JSON: []match.JSON{
-					match.JSONKeyEqual("name", "Test Room"),
-				},
-			})
+			content := alice.MustGetStateEventContent(t, roomID, "m.room.name", "")
+			must.MatchGJSON(t, content, match.JSONKeyEqual("name", "Test Room"))
 		})
 		// sytest: POST /createRoom creates a room with the given version
 		t.Run("POST /createRoom creates a room with the given version", func(t *testing.T) {
@@ -89,13 +79,8 @@ func TestRoomCreate(t *testing.T) {
 				"room_version": "2",
 				"preset":       "public_chat",
 			})
-			res := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.create"})
-			must.MatchResponse(t, res, match.HTTPResponse{
-				StatusCode: 200,
-				JSON: []match.JSON{
-					match.JSONKeyEqual("room_version", "2"),
-				},
-			})
+			content := alice.MustGetStateEventContent(t, roomID, "m.room.create", "")
+			must.MatchGJSON(t, content, match.JSONKeyEqual("room_version", "2"))
 		})
 		// sytest: POST /createRoom makes a private room with invites
 		t.Run("POST /createRoom makes a private room with invites", func(t *testing.T) {
