@@ -826,21 +826,31 @@ func TestLeaveReinviteSyncFederated(t *testing.T) {
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	
+	// Charlie is simply here to flag when events arrive over federation to hs2.
+	charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
-	// 1. Alice creates a room and Bob joins
+	// 1. Alice creates a room and both Bob and Charlie join
 	roomID := alice.MustCreateRoom(t, map[string]any{
 		"preset": "public_chat",
 	})
 
-	// Bob needs to join via federation, so we need to specify the server name
+	// Users on hs2 need to join via federation, so we need to specify the server name
 	alice.MustInviteRoom(t, roomID, bob.UserID)
+	alice.MustInviteRoom(t, roomID, charlie.UserID)
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(charlie.UserID, roomID))
+
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{
 		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 	})
+	charlie.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
 
-	// 2. Bob does a sync and verifies they see the join
+	// 2. Both Bob and Charlie do a sync and verify that they see the join
 	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+	charlieSince := charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, roomID))
 
 	// 3. Alice kicks Bob from the room and then re-invites them.
 	// For kicking, we need to use the POST /rooms/{roomId}/kick endpoint
@@ -851,12 +861,20 @@ func TestLeaveReinviteSyncFederated(t *testing.T) {
 	)
 
 	// Wait until Bob is kicked.
-	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+	aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+	charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncLeftFrom(bob.UserID, roomID))
 
 	// Alice re-invites Bob
 	alice.MustInviteRoom(t, roomID, bob.UserID)
+	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncInvitedTo(bob.UserID, roomID))
+	
+	// Wait until hs2 sees that Bob has been kicked and re-invited (this is all
+	// Charlie is needed for). If we don't wait, then Bob might sync too early
+	// (slow federation) and catch the kick in one sync iteration, and the
+	// invite in another, invalidating the test conditions.
+	charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncInvitedTo(bob.UserID, roomID))
 
-	// 4. Bob does a sync
+	// 4. Bob does an incremental sync. Bob's last sync was after they joined the room.
 	jsonRes, _ := bob.MustSync(t, client.SyncReq{Since: bobSince})
 
 	// Bob should only see an invite, not both an invite and a leave event
