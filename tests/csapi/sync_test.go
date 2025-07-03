@@ -731,6 +731,145 @@ func TestRoomSummary(t *testing.T) {
 	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
 }
 
+// TestLeaveReinviteSync tests that when a user is kicked and then re-invited,
+// they only see an invite in their sync response, not both an invite and leave event.
+func TestLeaveReinviteSync(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	// 1. Alice creates a room and Bob joins
+	roomID := alice.MustCreateRoom(t, map[string]any{
+		"preset": "public_chat",
+	})
+	bob.MustJoinRoom(t, roomID, nil)
+
+	// 2. Bob does a sync and verifies they see the join
+	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+	// 3. Alice kicks Bob from the room and then re-invites them.
+	// For kicking, we need to use the POST /rooms/{roomId}/kick endpoint
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
+		client.WithJSONBody(t, map[string]any{
+			"user_id": bob.UserID,
+		}),
+	)
+
+	// Wait until Bob is kicked.
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+
+	// Alice re-invites Bob
+	alice.MustInviteRoom(t, roomID, bob.UserID)
+
+	// 4. Bob does a sync
+	jsonRes, _ := bob.MustSync(t, client.SyncReq{Since: bobSince})
+
+	// Bob should only see an invite, not both an invite and a leave event
+	if !jsonRes.Get("rooms.invite." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Expected to see the room in the invite section of the sync response")
+	}
+
+	// Make sure there's no leave event for the room
+	if jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Room should not appear in the leave section of the sync response")
+	}
+}
+
+// TestLeaveJoinLeaveSync tests that when a user leaves, rejoins, and leaves again,
+// they only see a leave event in their sync response, not both a join and a leave event.
+func TestLeaveJoinLeaveSync(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	// 1. Alice creates a room and Bob joins
+	roomID := alice.MustCreateRoom(t, map[string]any{
+		"preset": "public_chat",
+	})
+	bob.MustJoinRoom(t, roomID, nil)
+
+	// 2. Bob does a sync and verifies they see the join
+	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+	// 3. Bob leaves the room
+	bob.MustLeaveRoom(t, roomID)
+
+	// 4. Bob rejoins the room
+	bob.MustJoinRoom(t, roomID, nil)
+
+	// 5. Bob leaves the room again
+	bob.MustLeaveRoom(t, roomID)
+
+	// 6. Bob does a sync
+	jsonRes, _ := bob.MustSync(t, client.SyncReq{Since: bobSince})
+
+	// Bob should only see a leave event, not both a join and a leave event
+	if !jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Expected to see the room in the leave section of the sync response")
+	}
+
+	// Make sure there's no join event for the room
+	if jsonRes.Get("rooms.join." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Room should not appear in the join section of the sync response")
+	}
+}
+
+// TestLeaveReinviteSyncFederated tests that when a user is kicked and then re-invited over federation,
+// they only see an invite in their sync response, not both an invite and leave event.
+func TestLeaveReinviteSyncFederated(t *testing.T) {
+	deployment := complement.Deploy(t, 2)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+
+	// 1. Alice creates a room and Bob joins
+	roomID := alice.MustCreateRoom(t, map[string]any{
+		"preset": "public_chat",
+	})
+
+	// Bob needs to join via federation, so we need to specify the server name
+	alice.MustInviteRoom(t, roomID, bob.UserID)
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
+
+	// 2. Bob does a sync and verifies they see the join
+	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+	// 3. Alice kicks Bob from the room and then re-invites them.
+	// For kicking, we need to use the POST /rooms/{roomId}/kick endpoint
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
+		client.WithJSONBody(t, map[string]any{
+			"user_id": bob.UserID,
+		}),
+	)
+
+	// Wait until Bob is kicked.
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+
+	// Alice re-invites Bob
+	alice.MustInviteRoom(t, roomID, bob.UserID)
+
+	// 4. Bob does a sync
+	jsonRes, _ := bob.MustSync(t, client.SyncReq{Since: bobSince})
+
+	// Bob should only see an invite, not both an invite and a leave event
+	if !jsonRes.Get("rooms.invite." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Expected to see the room in the invite section of the sync response")
+	}
+
+	// Make sure there's no leave event for the room
+	if jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Room should not appear in the leave section of the sync response")
+	}
+}
+
 func sendMessages(t *testing.T, client *client.CSAPI, roomID string, prefix string, count int) {
 	t.Helper()
 	for i := 0; i < count; i++ {
