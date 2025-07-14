@@ -61,6 +61,18 @@ func TestRoomCreate(t *testing.T) {
 			})
 			content := alice.MustGetStateEventContent(t, roomID, "m.room.topic", "")
 			must.MatchGJSON(t, content, match.JSONKeyEqual("topic", "Test Room"))
+
+			// The plain text topic is duplicated into m.topic
+			must.MatchGJSON(t, content,
+				match.JSONKeyArrayOfSize("m\\.topic.m\\.text", 1),
+				match.JSONKeyPresent("m\\.topic.m\\.text.0.body"),
+				match.JSONKeyEqual("m\\.topic.m\\.text.0.body", "Test Room"))
+
+			// The mime type must be unset or text/plain
+			mime := content.Get("m\\.topic.m\\.text.0.mimetype")
+			if mime.Exists() {
+				must.Equal(t, mime.String(), "text/plain", "no m.topic content block")
+			}
 		})
 		// POST /createRoom makes a room with a topic via initial_state
 		t.Run("POST /createRoom makes a room with a topic via initial_state", func(t *testing.T) {
@@ -103,6 +115,18 @@ func TestRoomCreate(t *testing.T) {
 			})
 			content := alice.MustGetStateEventContent(t, roomID, "m.room.topic", "")
 			must.MatchGJSON(t, content, match.JSONKeyEqual("topic", "Test Room"))
+
+			// The plain text topic is duplicated into m.topic
+			must.MatchGJSON(t, content,
+				match.JSONKeyArrayOfSize("m\\.topic.m\\.text", 1),
+				match.JSONKeyPresent("m\\.topic.m\\.text.0.body"),
+				match.JSONKeyEqual("m\\.topic.m\\.text.0.body", "Test Room"))
+
+			// The mime type must be unset or text/plain
+			mime := content.Get("m\\.topic.m\\.text.0.mimetype")
+			if mime.Exists() {
+				must.Equal(t, mime.String(), "text/plain", "no m.topic content block")
+			}
 		})
 		// sytest: POST /createRoom makes a room with a name
 		t.Run("POST /createRoom makes a room with a name", func(t *testing.T) {
