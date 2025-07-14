@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 func TestRoomCreate(t *testing.T) {
@@ -61,6 +62,9 @@ func TestRoomCreate(t *testing.T) {
 			})
 			content := alice.MustGetStateEventContent(t, roomID, "m.room.topic", "")
 			must.MatchGJSON(t, content, match.JSONKeyEqual("topic", "Test Room"))
+
+			// Rich topics not implemented yet on Dendrite
+			runtime.SkipIf(t, runtime.Dendrite)
 
 			// The plain text topic is duplicated into m.topic
 			must.MatchGJSON(t, content,
@@ -115,6 +119,9 @@ func TestRoomCreate(t *testing.T) {
 			})
 			content := alice.MustGetStateEventContent(t, roomID, "m.room.topic", "")
 			must.MatchGJSON(t, content, match.JSONKeyEqual("topic", "Test Room"))
+
+			// Rich topics not implemented yet on Dendrite
+			runtime.SkipIf(t, runtime.Dendrite)
 
 			// The plain text topic is duplicated into m.topic
 			must.MatchGJSON(t, content,
