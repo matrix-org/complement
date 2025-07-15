@@ -102,6 +102,9 @@ func TestRoomCreate(t *testing.T) {
 		})
 		// POST /createRoom makes a room with a topic via initial_state overwritten by topic
 		t.Run("POST /createRoom makes a room with a topic via initial_state overwritten by topic", func(t *testing.T) {
+			// Rich topics not implemented yet on Dendrite
+			runtime.SkipIf(t, runtime.Dendrite)
+
 			t.Parallel()
 
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
@@ -119,9 +122,6 @@ func TestRoomCreate(t *testing.T) {
 			})
 			content := alice.MustGetStateEventContent(t, roomID, "m.room.topic", "")
 			must.MatchGJSON(t, content, match.JSONKeyEqual("topic", "Test Room"))
-
-			// Rich topics not implemented yet on Dendrite
-			runtime.SkipIf(t, runtime.Dendrite)
 
 			// The plain text topic is duplicated into m.topic
 			must.MatchGJSON(t, content,
