@@ -62,9 +62,20 @@ func TestRoomCreate(t *testing.T) {
 			})
 			content := alice.MustGetStateEventContent(t, roomID, "m.room.topic", "")
 			must.MatchGJSON(t, content, match.JSONKeyEqual("topic", "Test Room"))
-
+		})
+		// POST /createRoom makes a room with a topic and writes rich topic representation
+		t.Run("POST /createRoom makes a room with a topic and writes rich topic representation", func(t *testing.T) {
 			// Rich topics not implemented yet on Dendrite
 			runtime.SkipIf(t, runtime.Dendrite)
+
+			t.Parallel()
+
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
+				"topic":  "Test Room",
+				"preset": "public_chat",
+			})
+			content := alice.MustGetStateEventContent(t, roomID, "m.room.topic", "")
+			must.MatchGJSON(t, content, match.JSONKeyEqual("topic", "Test Room"))
 
 			// The plain text topic is duplicated into m.topic
 			must.MatchGJSON(t, content,
