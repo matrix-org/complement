@@ -86,7 +86,7 @@ func TestRoomCreate(t *testing.T) {
 			// The mime type must be unset or text/plain
 			mime := content.Get("m\\.topic.m\\.text.0.mimetype")
 			if mime.Exists() {
-				must.Equal(t, mime.String(), "text/plain", "no m.topic content block")
+				must.Equal(t, mime.String(), "text/plain", "expected rich topic mimetype to be unset (defaults to text/plain) or explicitly set as text/plain")
 			}
 		})
 		// POST /createRoom makes a room with a topic via initial_state
@@ -143,7 +143,7 @@ func TestRoomCreate(t *testing.T) {
 			// The mime type must be unset or text/plain
 			mime := content.Get("m\\.topic.m\\.text.0.mimetype")
 			if mime.Exists() {
-				must.Equal(t, mime.String(), "text/plain", "no m.topic content block")
+				must.Equal(t, mime.String(), "text/plain", "expected rich topic mimetype to be unset (defaults to text/plain) or explicitly set as text/plain")
 			}
 		})
 		// sytest: POST /createRoom makes a room with a name
