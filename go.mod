@@ -9,7 +9,7 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/gorilla/mux v1.8.0
 	github.com/matrix-org/gomatrix v0.0.0-20220926102614-ceba4d9f7530
-	github.com/matrix-org/gomatrixserverlib v0.0.0-20250811173135-d6bb4bdbc2ac
+	github.com/matrix-org/gomatrixserverlib v0.0.0-20250811195804-7a73c05d2a24
 	github.com/matrix-org/util v0.0.0-20221111132719-399730281e66
 	github.com/sirupsen/logrus v1.9.3
 	github.com/tidwall/gjson v1.18.0
