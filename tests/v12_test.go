@@ -497,7 +497,7 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 		initialCreator            *client.CSAPI
 		initialVersion            string
 		initialUserPLs            map[string]int
-		entitiyDoingUpgrade       *client.CSAPI
+		entityDoingUpgrade       *client.CSAPI
 		newAdditionalCreators     []string
 		// assertions
 		wantAdditionalCreators []string
@@ -510,7 +510,7 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 			initialUserPLs: map[string]int{
 				bob.UserID: 100,
 			},
-			entitiyDoingUpgrade:    bob,
+			entityDoingUpgrade:    bob,
 			wantAdditionalCreators: []string{},
 			wantNewUsersMap:        map[string]int64{},
 		},
@@ -522,7 +522,7 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 				bob.UserID:     100,
 				charlie.UserID: 100,
 			},
-			entitiyDoingUpgrade:    bob,
+			entityDoingUpgrade:    bob,
 			wantAdditionalCreators: []string{},
 			wantNewUsersMap: map[string]int64{
 				charlie.UserID: 100,
@@ -535,7 +535,7 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 			initialUserPLs: map[string]int{
 				bob.UserID: 150, // bob has enough permission to upgrade
 			},
-			entitiyDoingUpgrade:    bob,
+			entityDoingUpgrade:    bob,
 			newAdditionalCreators:  []string{charlie.UserID},
 			wantAdditionalCreators: []string{charlie.UserID},
 			wantNewUsersMap:        map[string]int64{},
@@ -548,7 +548,7 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 				bob.UserID:     150, // bob has enough permission to upgrade
 				charlie.UserID: 50,  // gets removed as he will become an additional creator
 			},
-			entitiyDoingUpgrade:    bob,
+			entityDoingUpgrade:    bob,
 			newAdditionalCreators:  []string{charlie.UserID},
 			wantAdditionalCreators: []string{charlie.UserID},
 			wantNewUsersMap:        map[string]int64{},
@@ -561,7 +561,7 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 				alice.UserID: 100,
 				bob.UserID:   100,
 			},
-			entitiyDoingUpgrade:    alice,
+			entityDoingUpgrade:    alice,
 			newAdditionalCreators:  []string{bob.UserID},
 			wantAdditionalCreators: []string{bob.UserID},
 			wantNewUsersMap:        map[string]int64{}, // both alice and bob are removed as they are now creators.
@@ -575,7 +575,7 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 				bob.UserID:     100,
 				charlie.UserID: 50,
 			},
-			entitiyDoingUpgrade:    alice,
+			entityDoingUpgrade:    alice,
 			newAdditionalCreators:  []string{bob.UserID},
 			wantAdditionalCreators: []string{bob.UserID},
 			wantNewUsersMap: map[string]int64{
@@ -606,10 +606,10 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 		if tc.newAdditionalCreators != nil {
 			upgradeBody["additional_creators"] = tc.newAdditionalCreators
 		}
-		res := tc.entitiyDoingUpgrade.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"}, client.WithJSONBody(t, upgradeBody))
+		res := tc.entityDoingUpgrade.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"}, client.WithJSONBody(t, upgradeBody))
 		newRoomID := must.ParseJSON(t, res.Body).Get("replacement_room").Str
 		// New Create event assertions
-		createContent := tc.entitiyDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomCreate, "")
+		createContent := tc.entityDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomCreate, "")
 		createAssertions := []match.JSON{
 			match.JSONKeyEqual("room_version", roomVersion12),
 		}
@@ -624,7 +624,7 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 			t, createContent, createAssertions...,
 		)
 		// New PL assertions
-		plContent := tc.entitiyDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomPowerLevels, "")
+		plContent := tc.entityDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomPowerLevels, "")
 		if tc.wantNewUsersMap != nil {
 			plContent.Get("users").ForEach(func(key, v gjson.Result) bool {
 				gotVal := v.Int()
@@ -663,7 +663,7 @@ func TestMSC4289PrivilegedRoomCreators_Downgrades(t *testing.T) {
 		initialAdditionalCreators []string
 		newVersion                string
 		initialPLs                map[string]any
-		entitiyDoingUpgrade       *client.CSAPI
+		entityDoingUpgrade       *client.CSAPI
 		// assertions
 		wantNewUsersMap        map[string]int64
 	}{
@@ -672,7 +672,7 @@ func TestMSC4289PrivilegedRoomCreators_Downgrades(t *testing.T) {
 			initialCreator: alice,
 			newVersion: "11",
 			initialPLs: map[string]any{},
-			entitiyDoingUpgrade:    alice,
+			entityDoingUpgrade:    alice,
 			wantNewUsersMap:        map[string]int64{
 				// Max PL needed to do anything in a room with no default power levels.
 				alice.UserID: 50,
@@ -685,7 +685,7 @@ func TestMSC4289PrivilegedRoomCreators_Downgrades(t *testing.T) {
 			initialPLs: map[string]any{
 				"ban": 100,
 			},
-			entitiyDoingUpgrade:    alice,
+			entityDoingUpgrade:    alice,
 			wantNewUsersMap:        map[string]int64{
 				// Max PL needed to do anything in a room with no default power levels.
 				alice.UserID: 100,
@@ -699,7 +699,7 @@ func TestMSC4289PrivilegedRoomCreators_Downgrades(t *testing.T) {
 			},
 			newVersion: "11",
 			initialPLs: map[string]any{},
-			entitiyDoingUpgrade:    alice,
+			entityDoingUpgrade:    alice,
 			wantNewUsersMap:        map[string]int64{
 				// Max PL needed to do anything in a room with no default power levels.
 				alice.UserID: 50,
@@ -729,10 +729,10 @@ func TestMSC4289PrivilegedRoomCreators_Downgrades(t *testing.T) {
 		upgradeBody := map[string]any{
 			"new_version": tc.newVersion,
 		}
-		res := tc.entitiyDoingUpgrade.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"}, client.WithJSONBody(t, upgradeBody))
+		res := tc.entityDoingUpgrade.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"}, client.WithJSONBody(t, upgradeBody))
 		newRoomID := must.ParseJSON(t, res.Body).Get("replacement_room").Str
 		// New Create event assertions
-		createContent := tc.entitiyDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomCreate, "")
+		createContent := tc.entityDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomCreate, "")
 		createAssertions := []match.JSON{
 			match.JSONKeyEqual("room_version", tc.newVersion),
 		}
@@ -740,7 +740,7 @@ func TestMSC4289PrivilegedRoomCreators_Downgrades(t *testing.T) {
 			t, createContent, createAssertions...,
 		)
 		// New PL assertions
-		plContent := tc.entitiyDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomPowerLevels, "")
+		plContent := tc.entityDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomPowerLevels, "")
 		if tc.wantNewUsersMap != nil {
 			plContent.Get("users").ForEach(func(key, v gjson.Result) bool {
 				gotVal := v.Int()
