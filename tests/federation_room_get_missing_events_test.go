@@ -638,7 +638,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 		federation.HandleTransactionRequests(nil, nil),
 		federation.HandleInviteRequests(nil),
 	)
-    // We expect to be pushed events that we don't care about responding to (not relevant to the test)
+	// We expect to be pushed events that we don't care about responding to (not relevant to the test)
 	srv.UnexpectedRequestsAreErrors = false
 	cancel := srv.Listen()
 	defer cancel()
@@ -730,7 +730,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 		PrevEvents: []string{eventD.EventID()},
 		AuthEvents: []string{createEvent.EventID(), plEvent.EventID(), jrEvent.EventID(), eventD.EventID()},
 	})
-    // We include this in auth_events for subsequent events below.
+	// We include this in auth_events for subsequent events below.
 	srvRoom.AddEvent(eventE)
 
 	// Create 3 unrelated events (one for /send, one for /gme, one for /state_ids snapshot)
@@ -835,7 +835,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 		eventID := vars["eventID"]
 		var event gomatrixserverlib.PDU
 		// find the event
-		for _, ev := range allEvents {
+		for _, ev := range allEventsToShare {
 			if ev.EventID() == eventID {
 				event = ev
 				break
@@ -843,7 +843,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 		}
 		// we should see a request for event B
 		if eventID == eventB.EventID() {
-			eventWaiter.Finish()
+			eventBWaiter.Finish()
 		}
 
 		if event == nil {
@@ -875,7 +875,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 	// wait for the server to make the requests
 	gmeWaiter.Wait(t, 5*time.Second)
 	stateIDWaiter.Wait(t, 5*time.Second)
-	eventWaiter.Wait(t, 5*time.Second)
+	eventBWaiter.Wait(t, 5*time.Second)
 
 	// let things settle
 	time.Sleep(time.Second)
