@@ -495,7 +495,6 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 	testCases := []struct {
 		name                      string
 		initialCreator            *client.CSAPI
-		initialAdditionalCreators []string
 		initialVersion            string
 		initialUserPLs            map[string]int
 		entitiyDoingUpgrade       *client.CSAPI
@@ -589,10 +588,6 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 		createBody := map[string]interface{}{
 			"room_version": tc.initialVersion,
 			"preset":       "public_chat",
-		}
-		if tc.initialAdditionalCreators != nil {
-			must.Equal(t, tc.initialVersion, roomVersion12, "can only set additional_creators on v12")
-			createBody["additional_creators"] = tc.initialAdditionalCreators
 		}
 		roomID := tc.initialCreator.MustCreateRoom(t, createBody)
 		alice.JoinRoom(t, roomID, []spec.ServerName{"hs1"})
