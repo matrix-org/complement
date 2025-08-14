@@ -24,6 +24,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 // TODO:
@@ -629,6 +630,9 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 // crucially D and E ARE PERSISTED because C exists in-memory.
 // This breaks the auth chain for the room, which matters when doing state resolution.
 func TestCorruptedAuthChain(t *testing.T) {
+	// Dendrite doesn't make exactly the same requests as it seems to fallback to /event_auth.
+	// As this is intended for a synapse bugfix, we'll skip dendrite for now.
+	runtime.SkipIf(t, runtime.Dendrite)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
@@ -777,6 +781,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 
 	// add handlers for them
 	gmeWaiter := helpers.NewWaiter()
+	// We will send 'sendTxnEvent' via /send. The homeserver will see the event has unknown prev_events and hit /get_missing_events
 	srv.Mux().HandleFunc("/_matrix/federation/v1/get_missing_events/{roomID}", func(w http.ResponseWriter, req *http.Request) {
 		defer gmeWaiter.Finish()
 		body := must.ParseJSON(t, req.Body)
@@ -795,6 +800,8 @@ func TestCorruptedAuthChain(t *testing.T) {
 		w.Write(responseBytes)
 	})
 	stateIDWaiter := helpers.NewWaiter()
+	// The homeserver won't be able to link up the events returned via /get_missing_events to what it previously knew, so it will
+	// ask for a state snapshot via /state_ids.
 	srv.Mux().HandleFunc("/_matrix/federation/v1/state_ids/{roomID}", func(w http.ResponseWriter, req *http.Request) {
 		defer stateIDWaiter.Finish()
 		t.Logf("/state_ids req for room %s => %s", mux.Vars(req)["roomID"], req.URL.Query().Encode())
@@ -830,6 +837,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 		w.Write(responseBytes)
 	})
 	eventBWaiter := helpers.NewWaiter()
+	// /state_ids will return some unknown events which the homeserver will try to fetch via /event
 	srv.Mux().Handle("/_matrix/federation/v1/event/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		vars := mux.Vars(req)
 		eventID := vars["eventID"]
