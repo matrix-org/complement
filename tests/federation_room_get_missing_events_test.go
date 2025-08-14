@@ -638,7 +638,8 @@ func TestCorruptedAuthChain(t *testing.T) {
 		federation.HandleTransactionRequests(nil, nil),
 		federation.HandleInviteRequests(nil),
 	)
-	srv.UnexpectedRequestsAreErrors = false // we expect to be pushed events
+    // We expect to be pushed events that we don't care about responding to (not relevant to the test)
+	srv.UnexpectedRequestsAreErrors = false
 	cancel := srv.Listen()
 	defer cancel()
 
@@ -649,7 +650,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 		"room_version": "10",
 	})
 	sentinel.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
-	// pack out the room state
+	// Pad out the room state
 	for i := 0; i < 100; i++ {
 		if i%2 == 0 {
 			alice.MustLeaveRoom(t, roomID)
@@ -675,7 +676,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 	plEvent := srvRoom.CurrentState(spec.MRoomPowerLevels, "")
 	jrEvent := srvRoom.CurrentState(spec.MRoomJoinRules, "")
 
-	// Create A,B,C,D,E which will be profile changes for Bob
+	// Create A,B,C,D,E which will be profile changes for Bob (where each event is dependent on the next)
 	eventA := srv.MustCreateEvent(t, srvRoom, federation.Event{
 		Type:     spec.MRoomMember,
 		Sender:   bob,
@@ -729,7 +730,8 @@ func TestCorruptedAuthChain(t *testing.T) {
 		PrevEvents: []string{eventD.EventID()},
 		AuthEvents: []string{createEvent.EventID(), plEvent.EventID(), jrEvent.EventID(), eventD.EventID()},
 	})
-	srvRoom.AddEvent(eventE) // so we include this in auth_events for subsequent events below.
+    // We include this in auth_events for subsequent events below.
+	srvRoom.AddEvent(eventE)
 
 	// Create 3 unrelated events (one for /send, one for /gme, one for /state_ids snapshot)
 	stateIDsEvent := srv.MustCreateEvent(t, srvRoom, federation.Event{
@@ -764,7 +766,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 	srvRoom.AddEvent(sendTxnEvent)
 
 	// the possible events to return in /event. This omits B.
-	allEvents := []gomatrixserverlib.PDU{
+	allEventsToShare := []gomatrixserverlib.PDU{
 		stateIDsEvent, gmeEvent, sendTxnEvent, eventA, eventC, eventD, eventE,
 	}
 	t.Logf("event A: %s", eventA.EventID())
@@ -827,7 +829,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 		must.NotError(t, "failed to marshal response", err)
 		w.Write(responseBytes)
 	})
-	eventWaiter := helpers.NewWaiter()
+	eventBWaiter := helpers.NewWaiter()
 	srv.Mux().Handle("/_matrix/federation/v1/event/{eventID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		vars := mux.Vars(req)
 		eventID := vars["eventID"]
