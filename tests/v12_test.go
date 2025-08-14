@@ -652,6 +652,122 @@ func TestMSC4289PrivilegedRoomCreators_Upgrades(t *testing.T) {
 	}
 }
 
+func TestMSC4289PrivilegedRoomCreators_Downgrades(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "alice",
+	})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "bob",
+	})
+
+	testCases := []struct {
+		name                      string
+		initialCreator            *client.CSAPI
+		initialAdditionalCreators []string
+		newVersion                string
+		initialPLs                map[string]any
+		entitiyDoingUpgrade       *client.CSAPI
+		// assertions
+		wantNewUsersMap        map[string]int64
+	}{
+		{
+			name:           "upgrading a room from v12 to v11 keeps the old room's creator user as an admin of the new room",
+			initialCreator: alice,
+			newVersion: "11",
+			initialPLs: map[string]any{},
+			entitiyDoingUpgrade:    alice,
+			wantNewUsersMap:        map[string]int64{
+				// Max PL needed to do anything in a room with no default power levels.
+				alice.UserID: 50,
+			},
+		},
+		{
+			name:           "upgrading a room from v12 to v11 sets the old room's creator to the max power level needed to carry out any action",
+			initialCreator: alice,
+			newVersion: "11",
+			initialPLs: map[string]any{
+				"ban": 100,
+			},
+			entitiyDoingUpgrade:    alice,
+			wantNewUsersMap:        map[string]int64{
+				// Max PL needed to do anything in a room with no default power levels.
+				alice.UserID: 100,
+			},
+		},
+		{
+			name:           "upgrading a room from v12 to v11 keeps the additional_creator users as admins of the new room",
+			initialCreator: alice,
+			initialAdditionalCreators: []string{
+				bob.UserID,
+			},
+			newVersion: "11",
+			initialPLs: map[string]any{},
+			entitiyDoingUpgrade:    alice,
+			wantNewUsersMap:        map[string]int64{
+				// Max PL needed to do anything in a room with no default power levels.
+				alice.UserID: 50,
+				bob.UserID: 50,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		createBody := map[string]interface{}{
+			"room_version": roomVersion12,
+			"preset":       "public_chat",
+		}
+		if tc.initialAdditionalCreators != nil {
+			createBody["creation_content"] = map[string]any{
+				"additional_creators": tc.initialAdditionalCreators,
+			}
+		}
+		roomID := tc.initialCreator.MustCreateRoom(t, createBody)
+		alice.JoinRoom(t, roomID, []spec.ServerName{"hs1"})
+		bob.JoinRoom(t, roomID, []spec.ServerName{"hs1"})
+		tc.initialCreator.SendEventSynced(t, roomID, b.Event{
+			Type:     spec.MRoomPowerLevels,
+			StateKey: b.Ptr(""),
+			Content: tc.initialPLs,
+		})
+		upgradeBody := map[string]any{
+			"new_version": tc.newVersion,
+		}
+		res := tc.entitiyDoingUpgrade.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"}, client.WithJSONBody(t, upgradeBody))
+		newRoomID := must.ParseJSON(t, res.Body).Get("replacement_room").Str
+		// New Create event assertions
+		createContent := tc.entitiyDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomCreate, "")
+		createAssertions := []match.JSON{
+			match.JSONKeyEqual("room_version", tc.newVersion),
+		}
+		must.MatchGJSON(
+			t, createContent, createAssertions...,
+		)
+		// New PL assertions
+		plContent := tc.entitiyDoingUpgrade.MustGetStateEventContent(t, newRoomID, spec.MRoomPowerLevels, "")
+		if tc.wantNewUsersMap != nil {
+			plContent.Get("users").ForEach(func(key, v gjson.Result) bool {
+				gotVal := v.Int()
+				wantVal, ok := tc.wantNewUsersMap[key.Str]
+				if !ok {
+					ct.Errorf(t, "%s: upgraded room PL content, user %s has PL %v but want it missing", tc.name, key.Str, gotVal)
+					return true
+				}
+				if gotVal != wantVal {
+					ct.Errorf(t, "%s: upgraded room PL content, user %s has PL %v want %v", tc.name, key.Str, gotVal, wantVal)
+				}
+				delete(tc.wantNewUsersMap, key.Str)
+				return true
+			})
+			if len(tc.wantNewUsersMap) > 0 {
+				ct.Fatalf(t, "%s: upgraded room PL content missed these users %v", tc.name, tc.wantNewUsersMap)
+			}
+		}
+		t.Logf("OK: %v", tc.name)
+	}
+}
+
 // Test that the room ID is in fact the hash of the create event.
 func TestMSC4291RoomIDAsHashOfCreateEvent(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
