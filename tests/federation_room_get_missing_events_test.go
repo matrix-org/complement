@@ -648,6 +648,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 	defer cancel()
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
+	// ensure the server under test remains in the room when alice rejoins
 	sentinel := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "sentinel"})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
@@ -679,6 +680,7 @@ func TestCorruptedAuthChain(t *testing.T) {
 	createEvent := srvRoom.CurrentState(spec.MRoomCreate, "")
 	plEvent := srvRoom.CurrentState(spec.MRoomPowerLevels, "")
 	jrEvent := srvRoom.CurrentState(spec.MRoomJoinRules, "")
+	bobOriginalJoinEvent := srvRoom.CurrentState(spec.MRoomMember, bob)
 
 	// Create A,B,C,D,E which will be profile changes for Bob (where each event is dependent on the next)
 	eventA := srv.MustCreateEvent(t, srvRoom, federation.Event{
@@ -889,9 +891,22 @@ func TestCorruptedAuthChain(t *testing.T) {
 	eventBWaiter.Wait(t, 5*time.Second)
 
 	// At this point all we know is that the server requested event B when doing /state_ids.
-	// We don't know that sendTxnEvent has been fully processed / the room state has been updated.
+	// We don't know if sendTxnEvent has been fully processed / the room state has been updated.
+	// If the server is functioning correctly, sendTxnEvent will never be delivered to the client
+	// as the server will be unable to fetch room state for it. So send another event as a sentinel.
 	// Wait until we see sendTxnEvent in the sync timeline before asserting that the room state is correct.
-	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, sendTxnEvent.EventID()))
+	sentinelEvent := srv.MustCreateEvent(t, srvRoom, federation.Event{
+		Type:   "m.room.message",
+		Sender: bob,
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "finished",
+		},
+		PrevEvents: []string{bobOriginalJoinEvent.EventID()},
+		AuthEvents: []string{createEvent.EventID(), plEvent.EventID(), bobOriginalJoinEvent.EventID()},
+	})
+	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{sentinelEvent.JSON()}, nil)
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, sentinelEvent.EventID()))
 
 	// we should not see event E as the current state for bob.
 	content := alice.MustGetStateEventContent(t, roomID, spec.MRoomMember, bob)
