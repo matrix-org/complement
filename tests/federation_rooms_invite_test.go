@@ -149,6 +149,27 @@ func TestFederationRoomsInvite(t *testing.T) {
 			alice.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob2.UserID, roomID))
 		})
 
+		t.Run("Invitee user can rescind invite over federation", func(t *testing.T) {
+			t.Parallel()
+			roomID := alice.MustCreateRoom(t, map[string]interface{}{
+				"preset": "private_chat",
+				"invite": []string{bob.UserID},
+			})
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			resp := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
+				client.WithJSONBody(t, map[string]interface{}{
+					"user_id": bob.UserID,
+					"reason":  "testing",
+				}),
+			)
+
+			must.MatchResponse(t, resp, match.HTTPResponse{
+				StatusCode: 200,
+			})
+
+			bob.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob.UserID, roomID))
+		})
+
 		t.Run("Invited user has 'is_direct' flag in prev_content after joining", func(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
