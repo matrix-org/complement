@@ -778,6 +778,9 @@ func TestCorruptedAuthChain(t *testing.T) {
 	t.Logf("event C: %s", eventC.EventID())
 	t.Logf("event D: %s", eventD.EventID())
 	t.Logf("event E: %s", eventE.EventID())
+	t.Logf("event for /state_ids: %s", stateIDsEvent.EventID())
+	t.Logf("event for /get_missing_events: %s", gmeEvent.EventID())
+	t.Logf("event for /send: %s", sendTxnEvent.EventID())
 
 	// add handlers for them
 	gmeWaiter := helpers.NewWaiter()
@@ -885,8 +888,10 @@ func TestCorruptedAuthChain(t *testing.T) {
 	stateIDWaiter.Wait(t, 5*time.Second)
 	eventBWaiter.Wait(t, 5*time.Second)
 
-	// let things settle
-	time.Sleep(time.Second)
+	// At this point all we know is that the server requested event B when doing /state_ids.
+	// We don't know that sendTxnEvent has been fully processed / the room state has been updated.
+	// Wait until we see sendTxnEvent in the sync timeline before asserting that the room state is correct.
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, sendTxnEvent.EventID()))
 
 	// we should not see event E as the current state for bob.
 	content := alice.MustGetStateEventContent(t, roomID, spec.MRoomMember, bob)
