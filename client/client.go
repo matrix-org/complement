@@ -261,12 +261,12 @@ func (c *CSAPI) GetAllPushRules(t ct.TestLike) gjson.Result {
 	return gjson.ParseBytes(pushRulesBytes)
 }
 
-// GetPushRule queries the contents of a client's push rule by scope, kind and rule ID.
+// MustGetPushRule queries the contents of a client's push rule by scope, kind and rule ID.
 // A parsed gjson result is returned. Fails the test if the query to server returns a non-2xx status code.
 //
 // Example of checking that a global underride rule contains the expected actions:
 //
-//	containsDisplayNameRule := c.GetPushRule(t, "global", "underride", ".m.rule.contains_display_name")
+//	containsDisplayNameRule := c.MustGetPushRule(t, "global", "underride", ".m.rule.contains_display_name")
 //	must.MatchGJSON(
 //	  t,
 //	  containsDisplayNameRule,
@@ -276,7 +276,7 @@ func (c *CSAPI) GetAllPushRules(t ct.TestLike) gjson.Result {
 //	    map[string]interface{}{"set_tweak": "highlight"},
 //	  }),
 //	)
-func (c *CSAPI) GetPushRule(t ct.TestLike, scope string, kind string, ruleID string) gjson.Result {
+func (c *CSAPI) MustGetPushRule(t ct.TestLike, scope string, kind string, ruleID string) gjson.Result {
 	t.Helper()
 
 	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID})
