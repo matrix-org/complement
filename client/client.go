@@ -279,9 +279,18 @@ func (c *CSAPI) GetAllPushRules(t ct.TestLike) gjson.Result {
 func (c *CSAPI) MustGetPushRule(t ct.TestLike, scope string, kind string, ruleID string) gjson.Result {
 	t.Helper()
 
-	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID})
+	res := c.GetPushRule(t, scope, kind, ruleID)
+	mustRespond2xx(t, res)
+
 	pushRuleBytes := ParseJSON(t, res)
 	return gjson.ParseBytes(pushRuleBytes)
+}
+
+// GetPushRule queries the contents of a client's push rule by scope, kind and rule ID.
+func (c *CSAPI) GetPushRule(t ct.TestLike, scope string, kind string, ruleID string) *http.Response {
+	t.Helper()
+
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID})
 }
 
 // SetPushRule creates a new push rule on the user, or modifies an existing one.
