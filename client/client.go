@@ -319,6 +319,14 @@ func (c *CSAPI) SetPushRule(t ct.TestLike, scope string, kind string, ruleID str
 	return c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID}, WithJSONBody(t, body), WithQueries(queryParams))
 }
 
+// MustDisablePushRule disables a push rule on the user.
+// Fails the test if response is non-2xx.
+func (c *CSAPI) MustDisablePushRule(t ct.TestLike, scope string, kind string, ruleID string) {
+	c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID, "enabled"}, WithJSONBody(t, map[string]interface{}{
+		"enabled": false,
+	}))
+}
+
 // Unsafe_SendEventUnsynced sends `e` into the room. This function is UNSAFE as it does not wait
 // for the event to be fully processed. This can cause flakey tests. Prefer `SendEventSynced`.
 // Returns the event ID of the sent event.
