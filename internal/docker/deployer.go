@@ -350,6 +350,9 @@ func deployImage(
 		extraHosts = []string{"host.docker.internal:host-gateway"}
 	}
 
+	log.Printf("runtime.GOOS: %+v", runtime.GOOS)
+	log.Printf("extraHosts: %+v", extraHosts)
+
 	for _, m := range cfg.HostMounts {
 		mounts = append(mounts, mount.Mount{
 			Source:   m.HostPath,

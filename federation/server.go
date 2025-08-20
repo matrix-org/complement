@@ -482,7 +482,11 @@ func (s *Server) ValidFederationRequest(t ct.TestLike, handler func(fr *fclient.
 			w.Header().Set(k, v)
 		}
 		w.WriteHeader(res.Code)
-		b, _ := json.Marshal(res.JSON)
+		b, e := json.Marshal(res.JSON)
+		if e != nil {
+			t.Fatalf("Unable to marshall JSON for federation response: %s", e)
+		}
+		//t.Logf("AJB b=%s", b)
 		w.Write(b)
 	}
 }

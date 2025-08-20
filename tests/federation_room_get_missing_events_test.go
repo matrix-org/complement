@@ -154,6 +154,10 @@ func TestGetMissingEventsGapFilling(t *testing.T) {
 	if len(correctOrderEventIDs) != 0 {
 		t.Errorf("missed some event IDs : %v", correctOrderEventIDs)
 	}
+
+	t.Logf("Sleeping")
+	time.Sleep(1 * time.Hour)
+	t.Logf("Finished sleeping")
 }
 
 // A homeserver receiving a response from `get_missing_events` for a version 6

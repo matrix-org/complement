@@ -242,6 +242,10 @@ func TestJumpToDateEndpoint(t *testing.T) {
 						}), match.CheckOffAllowUnwanted()),
 					},
 				})
+
+				t.Logf("Sleeping")
+				time.Sleep(1 * time.Hour)
+				t.Logf("Finished sleeping")
 			})
 		})
 	})
