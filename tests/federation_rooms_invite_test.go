@@ -149,7 +149,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			alice.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob2.UserID, roomID))
 		})
 
-		t.Run("Invitee user can rescind invite over federation", func(t *testing.T) {
+		t.Run("Inviter user can rescind invite over federation", func(t *testing.T) {
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
