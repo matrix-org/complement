@@ -156,16 +156,12 @@ func TestFederationRoomsInvite(t *testing.T) {
 				"invite": []string{bob.UserID},
 			})
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
-			resp := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
 				client.WithJSONBody(t, map[string]interface{}{
 					"user_id": bob.UserID,
 					"reason":  "testing",
 				}),
 			)
-
-			must.MatchResponse(t, resp, match.HTTPResponse{
-				StatusCode: 200,
-			})
 
 			bob.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
