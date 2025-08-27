@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -23,6 +24,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
+	alice2 := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice2"})
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "bob"})
 	bob2 := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "bob2"})
 
@@ -164,6 +166,56 @@ func TestFederationRoomsInvite(t *testing.T) {
 			)
 
 			bob.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob.UserID, roomID))
+		})
+
+		t.Run("Non-invitee user cannot rescind invite over federation", func(t *testing.T) {
+			t.Parallel()
+
+			// First create a room that Bob is in. This is so that later we can
+			// send a message to test that Bob doesn't see the rescission.
+			roomID1 := alice.MustCreateRoom(t, map[string]interface{}{
+				"preset": "private_chat",
+				"invite": []string{bob.UserID},
+			})
+			since := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID1))
+			bob.MustJoinRoom(t, roomID1, []spec.ServerName{})
+
+			// Second room which Alice and Alice2 join, Alice2 invites Bob and
+			// then Alice kicks him.
+			roomID2 := alice.MustCreateRoom(t, map[string]interface{}{
+				"preset": "private_chat",
+				"invite": []string{alice2.UserID},
+			})
+			alice2.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice2.UserID, roomID2))
+			alice2.MustJoinRoom(t, roomID2, []spec.ServerName{})
+
+			alice2.MustInviteRoom(t, roomID2, bob.UserID)
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID2))
+
+			// Alice, not the original inviter, kicks bob. This does not result
+			// in bob seeing the rescission.
+			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID2, "kick"},
+				client.WithJSONBody(t, map[string]interface{}{
+					"user_id": bob.UserID,
+					"reason":  "testing",
+				}),
+			)
+
+			// Check bob *doesn't* see the rescission. We do this by sending a
+			// message in room1 and checking that once Bob receives that message
+			// he still hasn't seen the leave.
+			eventID := alice.SendEventSynced(t, roomID1, b.Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"body":    "1",
+					"msgtype": "m.text",
+				},
+				Sender: alice.UserID,
+			})
+			bob.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncTimelineHasEventID(roomID1, eventID))
+
+			// Check bob is still invited by doing an initial sync
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID2))
 		})
 
 		t.Run("Invited user has 'is_direct' flag in prev_content after joining", func(t *testing.T) {
