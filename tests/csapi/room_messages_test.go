@@ -235,8 +235,8 @@ type MessageDraft struct {
 }
 
 type EventInfo struct {
-	Message MessageDraft
-	PDU     gomatrixserverlib.PDU
+	MessageDraft MessageDraft
+	PDU          gomatrixserverlib.PDU
 }
 
 func TestRoomMessagesGaps(t *testing.T) {
@@ -259,7 +259,7 @@ func TestRoomMessagesGaps(t *testing.T) {
 	charlie := srv.UserID("charlie")
 	remoteRoom := srv.MustMakeRoom(t, roomVersion, federation.InitialRoomEvents(roomVersion, charlie))
 
-	messages := []MessageDraft{
+	messageDrafts := []MessageDraft{
 		MessageDraft{charlie, true, "foo"},
 		MessageDraft{charlie, true, "bar"},
 		MessageDraft{charlie, true, "baz"},
@@ -273,49 +273,49 @@ func TestRoomMessagesGaps(t *testing.T) {
 
 	// Create some events
 	// Map from event_id to event info
-	eventIDs := make([]string, len(messages))
+	eventIDs := make([]string, len(messageDrafts))
 	eventMap := make(map[string]EventInfo)
-	for messageIndex, message := range messages {
+	for messageDraftIndex, messageDraft := range messageDrafts {
 		federation_event := federation.Event{
-			Sender: message.Sender,
+			Sender: messageDraft.Sender,
 			Type:   "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
-				"body":    message.Message,
+				"body":    messageDraft.Message,
 			},
 		}
-		if messageIndex > 2 {
+		if messageDraftIndex > 2 {
 			federation_event.PrevEvents = []string{
-				eventIDs[messageIndex-1],
+				eventIDs[messageDraftIndex-1],
 				// Always connect it to some known part of the DAG (for the local server's sake
 				// later)
-				eventIDs[messageIndex-2],
+				eventIDs[messageDraftIndex-2],
 			}
 		}
 
 		event := srv.MustCreateEvent(t, remoteRoom, federation_event)
-		eventIDs[messageIndex] = event.EventID()
+		eventIDs[messageDraftIndex] = event.EventID()
 		eventMap[event.EventID()] = EventInfo{
-			Message: message,
-			PDU:     event,
+			MessageDraft: messageDraft,
+			PDU:          event,
 		}
 		remoteRoom.AddEvent(event)
 	}
 
 	// Sanity check we sent all of the events in the room
-	if len(eventMap) != len(messages) {
+	if len(eventMap) != len(messageDrafts) {
 		t.Fatalf(
-			"expected the number of events (%d) to match the number of messages we expected to send (%d)",
-			len(messages),
+			"expected the number of events (%d) to match the number of message drafts we expected to send (%d)",
+			len(messageDrafts),
 			len(eventMap),
 		)
 	}
 
 	// Make it easy to cross-reference the events being talked about in the logs
 	for eventIndex, eventID := range eventIDs {
-		message := eventMap[eventID].Message
+		messageDraft := eventMap[eventID].MessageDraft
 		event := eventMap[eventID].PDU
-		t.Logf("Message %d: %s-6s -> event_id=%s", eventIndex, message.Message, event.EventID())
+		t.Logf("Message %d: %s-6s -> event_id=%s", eventIndex, messageDraft.Message, event.EventID())
 	}
 
 	// The other server is bound to ask about the missing events we reference in the
@@ -360,7 +360,7 @@ func TestRoomMessagesGaps(t *testing.T) {
 
 			pdusToShare := []json.RawMessage{}
 			for _, eventInfo := range eventMap {
-				if eventInfo.Message.ShareInitially {
+				if eventInfo.MessageDraft.ShareInitially {
 					pdusToShare = append(pdusToShare, eventInfo.PDU.JSON())
 				}
 			}
@@ -379,10 +379,10 @@ func TestRoomMessagesGaps(t *testing.T) {
 	srv.Mux().HandleFunc(
 		"/_matrix/federation/v1/event/{eventID}",
 		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
-			t.Logf("Got /event for %s (%s)", pathParams["eventID"], eventMap[pathParams["eventID"]].Message.Message)
+			t.Logf("Got /event for %s (%s)", pathParams["eventID"], eventMap[pathParams["eventID"]].MessageDraft.Message)
 
 			eventInfo, ok := eventMap[pathParams["eventID"]]
-			if !ok || !eventInfo.Message.ShareInitially {
+			if !ok || !eventInfo.MessageDraft.ShareInitially {
 				t.Errorf("Received /event for an unknown event: %s", pathParams["eventID"])
 				return util.JSONResponse{
 					Code: 400,
