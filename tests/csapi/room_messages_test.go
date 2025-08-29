@@ -315,7 +315,7 @@ func TestRoomMessagesGaps(t *testing.T) {
 	for eventIndex, eventID := range eventIDs {
 		messageDraft := eventMap[eventID].MessageDraft
 		event := eventMap[eventID].PDU
-		t.Logf("Message %d: %s-6s -> event_id=%s", eventIndex, messageDraft.Message, event.EventID())
+		t.Logf("Message %d: %-6s -> event_id=%s", eventIndex, messageDraft.Message, event.EventID())
 	}
 
 	// The other server is bound to ask about the missing events we reference in the
@@ -327,7 +327,7 @@ func TestRoomMessagesGaps(t *testing.T) {
 	srv.Mux().HandleFunc(
 		"/_matrix/federation/v1/get_missing_events/{roomID}",
 		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
-			t.Logf("Got /get_missing_events for %s", pathParams["roomID"])
+			t.Logf("Received /get_missing_events for %s", pathParams["roomID"])
 			if pathParams["roomID"] != remoteRoom.RoomID {
 				t.Errorf("Received /get_missing_events for the wrong room: %s", remoteRoom.RoomID)
 				return util.JSONResponse{
@@ -349,7 +349,7 @@ func TestRoomMessagesGaps(t *testing.T) {
 	srv.Mux().HandleFunc(
 		"/_matrix/federation/v1/backfill/{roomID}",
 		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
-			t.Logf("Got /backfill for %s", pathParams["roomID"])
+			t.Logf("Received /backfill for %s", pathParams["roomID"])
 			if pathParams["roomID"] != remoteRoom.RoomID {
 				t.Errorf("Received /backfill for the wrong room: %s", remoteRoom.RoomID)
 				return util.JSONResponse{
@@ -376,19 +376,28 @@ func TestRoomMessagesGaps(t *testing.T) {
 		}),
 	).Methods("GET")
 
+	// Servers might ask about missing events via `/event`
 	srv.Mux().HandleFunc(
 		"/_matrix/federation/v1/event/{eventID}",
 		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
-			t.Logf("Got /event for %s (%s)", pathParams["eventID"], eventMap[pathParams["eventID"]].MessageDraft.Message)
-
 			eventInfo, ok := eventMap[pathParams["eventID"]]
-			if !ok || !eventInfo.MessageDraft.ShareInitially {
-				t.Errorf("Received /event for an unknown event: %s", pathParams["eventID"])
+			if !ok {
+				t.Errorf("Received /event for an unknown event (at-least not one of the messages): %s", pathParams["eventID"])
 				return util.JSONResponse{
 					Code: 400,
 					JSON: "unknown event",
 				}
 			}
+
+			if !eventInfo.MessageDraft.ShareInitially {
+				t.Errorf("🙅 Received /event for an event we're not sharing: %s (%s)", pathParams["eventID"], eventInfo.MessageDraft.Message)
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "not sharing",
+				}
+			}
+
+			t.Logf("Received /event for %s (%s)", pathParams["eventID"], eventInfo.MessageDraft.Message)
 
 			return util.JSONResponse{
 				Code: 200,
@@ -403,14 +412,15 @@ func TestRoomMessagesGaps(t *testing.T) {
 		}),
 	).Methods("GET")
 
-	// Because state never changes in the room, we can just always respond the same
+	// Because state never changes in the room, we can just always respond the same and
+	// assume they're not asking about state before all the state was sent.
 	//
 	// Backfill will cause us to asked about `/state_ids`
 	roomStateForMessages := remoteRoom.AllCurrentState()
 	srv.Mux().HandleFunc(
 		"/_matrix/federation/v1/state_ids/{roomID}",
 		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
-			t.Logf("Got /state_ids for %s", pathParams["roomID"])
+			t.Logf("Received /state_ids for %s", pathParams["roomID"])
 			if pathParams["roomID"] != remoteRoom.RoomID {
 				t.Errorf("Received /state_ids for the wrong room: %s", remoteRoom.RoomID)
 				return util.JSONResponse{
@@ -436,7 +446,7 @@ func TestRoomMessagesGaps(t *testing.T) {
 	srv.Mux().HandleFunc(
 		"/_matrix/federation/v1/state/{roomID}",
 		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
-			t.Logf("Got /state for %s", pathParams["roomID"])
+			t.Logf("Received /state for %s", pathParams["roomID"])
 			if pathParams["roomID"] != remoteRoom.RoomID {
 				t.Errorf("Received /state for the wrong room: %s", remoteRoom.RoomID)
 				return util.JSONResponse{
