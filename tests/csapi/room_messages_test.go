@@ -1,20 +1,27 @@
 package csapi_tests
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/fclient"
+	"github.com/matrix-org/gomatrixserverlib/spec"
+	"github.com/matrix-org/util"
 )
 
 // sytest: POST /rooms/:room_id/send/:event_type sends a message
@@ -219,4 +226,298 @@ func TestRoomMessagesLazyLoadingLocalUser(t *testing.T) {
 			}),
 		},
 	})
+}
+
+type MessageDraft struct {
+	Sender         string
+	ShareInitially bool
+	Message        string
+}
+
+type EventInfo struct {
+	Message MessageDraft
+	PDU     gomatrixserverlib.PDU
+}
+
+func TestRoomMessagesGaps(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	// Create a remote homeserver
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		// The other server might try to send us some junk, just ignore it
+		federation.HandleTransactionRequests(nil, nil),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+
+	roomVersion := alice.GetDefaultRoomVersion(t)
+	charlie := srv.UserID("charlie")
+	remoteRoom := srv.MustMakeRoom(t, roomVersion, federation.InitialRoomEvents(roomVersion, charlie))
+
+	messages := []MessageDraft{
+		MessageDraft{charlie, true, "foo"},
+		MessageDraft{charlie, true, "bar"},
+		MessageDraft{charlie, true, "baz"},
+		MessageDraft{charlie, false, "qux"},
+		MessageDraft{charlie, true, "corge"},
+		MessageDraft{charlie, true, "grault"},
+		MessageDraft{charlie, true, "garply"},
+		MessageDraft{charlie, true, "waldo"},
+		MessageDraft{charlie, true, "fred"},
+	}
+
+	// Create some events
+	// Map from event_id to event info
+	eventIDs := make([]string, len(messages))
+	eventMap := make(map[string]EventInfo)
+	for messageIndex, message := range messages {
+		federation_event := federation.Event{
+			Sender: message.Sender,
+			Type:   "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    message.Message,
+			},
+		}
+		if messageIndex > 2 {
+			federation_event.PrevEvents = []string{
+				eventIDs[messageIndex-1],
+				// Always connect it to some known part of the DAG (for the local server's sake
+				// later)
+				eventIDs[messageIndex-2],
+			}
+		}
+
+		event := srv.MustCreateEvent(t, remoteRoom, federation_event)
+		eventIDs[messageIndex] = event.EventID()
+		eventMap[event.EventID()] = EventInfo{
+			Message: message,
+			PDU:     event,
+		}
+		remoteRoom.AddEvent(event)
+	}
+
+	// Sanity check we sent all of the events in the room
+	if len(eventMap) != len(messages) {
+		t.Fatalf(
+			"expected the number of events (%d) to match the number of messages we expected to send (%d)",
+			len(messages),
+			len(eventMap),
+		)
+	}
+
+	// Make it easy to cross-reference the events being talked about in the logs
+	for eventIndex, eventID := range eventIDs {
+		message := eventMap[eventID].Message
+		event := eventMap[eventID].PDU
+		t.Logf("Message %d: %s-6s -> event_id=%s", eventIndex, message.Message, event.EventID())
+	}
+
+	// The other server is bound to ask about the missing events we reference in the
+	// prev_event_ids of others but we don't divulge that to them because we want the gaps
+	// to remain.
+	//
+	// We need to respond successfully (200 OK) so we remain on the good list of
+	// federation destinations.
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/get_missing_events/{roomID}",
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			t.Logf("Got /get_missing_events for %s", pathParams["roomID"])
+			if pathParams["roomID"] != remoteRoom.RoomID {
+				t.Errorf("Received /get_missing_events for the wrong room: %s", remoteRoom.RoomID)
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "wrong room",
+				}
+			}
+
+			return util.JSONResponse{
+				Code: 200,
+				JSON: map[string]interface{}{
+					"events": []string{},
+				},
+			}
+		}),
+	).Methods("POST")
+
+	// TODO
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/backfill/{roomID}",
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			t.Logf("Got /backfill for %s", pathParams["roomID"])
+			if pathParams["roomID"] != remoteRoom.RoomID {
+				t.Errorf("Received /backfill for the wrong room: %s", remoteRoom.RoomID)
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "wrong room",
+				}
+			}
+
+			pdusToShare := []json.RawMessage{}
+			for _, eventInfo := range eventMap {
+				if eventInfo.Message.ShareInitially {
+					pdusToShare = append(pdusToShare, eventInfo.PDU.JSON())
+				}
+			}
+
+			return util.JSONResponse{
+				Code: 200,
+				JSON: map[string]interface{}{
+					"origin":           srv.ServerName(),
+					"origin_server_ts": time.Now().Unix(),
+					"pdus":             pdusToShare,
+				},
+			}
+		}),
+	).Methods("GET")
+
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/event/{eventID}",
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			t.Logf("Got /event for %s (%s)", pathParams["eventID"], eventMap[pathParams["eventID"]].Message.Message)
+
+			eventInfo, ok := eventMap[pathParams["eventID"]]
+			if !ok || !eventInfo.Message.ShareInitially {
+				t.Errorf("Received /event for an unknown event: %s", pathParams["eventID"])
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "unknown event",
+				}
+			}
+
+			return util.JSONResponse{
+				Code: 200,
+				JSON: map[string]interface{}{
+					"origin":           srv.ServerName(),
+					"origin_server_ts": time.Now().Unix(),
+					"pdus": []json.RawMessage{
+						eventInfo.PDU.JSON(),
+					},
+				},
+			}
+		}),
+	).Methods("GET")
+
+	// Because state never changes in the room, we can just always respond the same
+	//
+	// Backfill will cause us to asked about `/state_ids`
+	roomStateForMessages := remoteRoom.AllCurrentState()
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/state_ids/{roomID}",
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			t.Logf("Got /state_ids for %s", pathParams["roomID"])
+			if pathParams["roomID"] != remoteRoom.RoomID {
+				t.Errorf("Received /state_ids for the wrong room: %s", remoteRoom.RoomID)
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "wrong room",
+				}
+			}
+
+			return util.JSONResponse{
+				Code: 200,
+				JSON: struct {
+					AuthChainIDs []string `json:"auth_chain_ids"`
+					PDUIDs       []string `json:"pdu_ids"`
+				}{
+					AuthChainIDs: eventIDsFromEvents(remoteRoom.AuthChainForEvents(roomStateForMessages)),
+					PDUIDs:       eventIDsFromEvents(roomStateForMessages),
+				},
+			}
+		}),
+	).Methods("GET")
+	// After asking for `/state_ids`, the homeserver might actually ask about the actual
+	// `state` for those event IDs
+	srv.Mux().HandleFunc(
+		"/_matrix/federation/v1/state/{roomID}",
+		srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+			t.Logf("Got /state for %s", pathParams["roomID"])
+			if pathParams["roomID"] != remoteRoom.RoomID {
+				t.Errorf("Received /state for the wrong room: %s", remoteRoom.RoomID)
+				return util.JSONResponse{
+					Code: 400,
+					JSON: "wrong room",
+				}
+			}
+
+			return util.JSONResponse{
+				Code: 200,
+				JSON: struct {
+					AuthChain gomatrixserverlib.EventJSONs `json:"auth_chain"`
+					PDUs      gomatrixserverlib.EventJSONs `json:"pdus"`
+				}{
+					AuthChain: gomatrixserverlib.NewEventJSONsFromEvents(remoteRoom.AuthChainForEvents(roomStateForMessages)),
+					PDUs:      gomatrixserverlib.NewEventJSONsFromEvents(roomStateForMessages),
+				},
+			}
+		}),
+	).Methods("GET")
+
+	// The local homeserver joins the room
+	alice.MustJoinRoom(t, remoteRoom.RoomID, []spec.ServerName{srv.ServerName()})
+
+	// Backfill the local server with *some* of the messages (leave some gaps)
+	// for _, eventID := range slices.Backward(eventIDs) {
+	// 	// message := eventMap[eventID].Message
+	// 	event := eventMap[eventID].PDU
+	// 	// if message.ShareInitially {
+	// 	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{event.JSON()}, nil)
+	// 	// }
+	// }
+
+	messagesRes := alice.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", remoteRoom.RoomID, "messages"},
+		client.WithContentType("application/json"),
+		client.WithQueries(url.Values{
+			"dir":   []string{"b"},
+			"limit": []string{"100"},
+		}),
+	)
+	messagesResBody := client.ParseJSON(t, messagesRes)
+	t.Logf("asdf %s", messagesResBody)
+
+	fetchUntilMessagesResponseHas(t, alice, remoteRoom.RoomID, func(ev gjson.Result) bool {
+		t.Logf("asdf %s %s", ev.Get("event_id").Str, ev.Get("content").Raw)
+		return ev.Get("event_id").Str == eventIDs[0]
+	})
+}
+
+func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string, check func(gjson.Result) bool) {
+	t.Helper()
+	start := time.Now()
+	checkCounter := 0
+	for {
+		if time.Since(start) > c.SyncUntilTimeout {
+			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", checkCounter)
+		}
+
+		messagesRes := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
+			"dir":   []string{"b"},
+			"limit": []string{"100"},
+		}))
+		messsageResBody := client.ParseJSON(t, messagesRes)
+		wantKey := "chunk"
+		keyRes := gjson.GetBytes(messsageResBody, wantKey)
+		if !keyRes.Exists() {
+			t.Fatalf("missing key '%s'", wantKey)
+		}
+		if !keyRes.IsArray() {
+			t.Fatalf("key '%s' is not an array (was %s)", wantKey, keyRes.Type)
+		}
+
+		events := keyRes.Array()
+		for _, ev := range events {
+			if check(ev) {
+				return
+			}
+		}
+
+		checkCounter++
+		// Add a slight delay so we don't hammer the messages endpoint
+		time.Sleep(500 * time.Millisecond)
+	}
 }
