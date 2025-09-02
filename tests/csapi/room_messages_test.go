@@ -325,12 +325,17 @@ func TestRoomMessagesGaps(t *testing.T) {
 		MessageDraft{bob, "I think he was serious. His profile pic is now him in a spacesuit."},
 		MessageDraft{alice, "Well. I guess he really left for the moon. Talk about a conversation killer."},
 	}
-	newEventIDs = sendAndTrackMessages(t, roomID, messageDrafts, &eventIDs, &eventMap)
-	// Make sure all of the messages have federated
-	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
-	bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
-	// Charlie isn't in the room right now so won't see anything yet
-	// charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+	// We have to send these one by one because we want to ensure that events are
+	// sequential in history and we need to make sure each homeserver knows about all of
+	// the events before we send the next one.
+	for _, messageDraft := range messageDrafts {
+		newEventIDs = sendAndTrackMessages(t, roomID, []MessageDraft{messageDraft}, &eventIDs, &eventMap)
+		// Make sure all of the messages have federated
+		aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+		bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+		// Charlie isn't in the room right now so won't see anything yet
+		// charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+	}
 
 	// Charlie joins back after going to the moon (has a gap in history)
 	charlie.MustJoinRoom(t, roomID, []spec.ServerName{
@@ -358,11 +363,16 @@ func TestRoomMessagesGaps(t *testing.T) {
 		MessageDraft{bob, "You can't be serious. You just got back!"},
 		MessageDraft{charlie, "Serious as a vacuum. Talk to you guys from the stars. Bob, Alice... try to keep Earth in one piece for me."},
 	}
-	newEventIDs = sendAndTrackMessages(t, roomID, messageDrafts, &eventIDs, &eventMap)
-	// Make sure all of the messages have federated
-	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
-	bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
-	charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+	// We have to send these one by one because we want to ensure that events are
+	// sequential in history and we need to make sure each homeserver knows about all of
+	// the events before we send the next one.
+	for _, messageDraft := range messageDrafts {
+		newEventIDs = sendAndTrackMessages(t, roomID, []MessageDraft{messageDraft}, &eventIDs, &eventMap)
+		// Make sure all of the messages have federated
+		aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+		bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+		charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+	}
 
 	// Charlie leaves the room
 	charlie.MustLeaveRoom(t, roomID)
@@ -383,12 +393,17 @@ func TestRoomMessagesGaps(t *testing.T) {
 		MessageDraft{bob, "Deal. But low-key, I'm still expecting Charlie to message us a photo of his pizza on Mars."},
 		MessageDraft{alice, "With extra red dust."},
 	}
-	newEventIDs = sendAndTrackMessages(t, roomID, messageDrafts, &eventIDs, &eventMap)
-	// Make sure all of the messages have federated
-	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
-	bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
-	// Charlie isn't in the room right now so won't see anything yet
-	// charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+	// We have to send these one by one because we want to ensure that events are
+	// sequential in history and we need to make sure each homeserver knows about all of
+	// the events before we send the next one.
+	for _, messageDraft := range messageDrafts {
+		newEventIDs = sendAndTrackMessages(t, roomID, []MessageDraft{messageDraft}, &eventIDs, &eventMap)
+		// Make sure all of the messages have federated
+		aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+		bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+		// Charlie isn't in the room right now so won't see anything yet
+		// charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince, Filter: string(includeMoreTimelineFilter)}, syncTimelineHasEventIDs(roomID, newEventIDs)...)
+	}
 
 	// Charlie joins back after going to mars (has a gap in history)
 	charlie.MustJoinRoom(t, roomID, []spec.ServerName{
@@ -459,9 +474,9 @@ func TestRoomMessagesGaps(t *testing.T) {
 				"backfill": []string{"true"},
 				// TODO: This works to get around current issues in Synapse around finding gaps to backfill
 				// but is kinda the wrong thing to use.
-				// "from":     []string{gap.Get("next_pagination_token").Str},
+				"from": []string{gap.Get("next_pagination_token").Str},
 				// This gives a perfect continuation point to fill in
-				"from": []string{gap.Get("prev_pagination_token").Str},
+				// "from": []string{gap.Get("prev_pagination_token").Str},
 			}),
 		)
 	}
