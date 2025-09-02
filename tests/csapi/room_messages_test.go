@@ -272,11 +272,20 @@ func TestRoomMessagesGaps(t *testing.T) {
 	charlieJoinEventIDs := make([]string, 0)
 
 	// Everyone joins the room
+	//
+	// Alice creates the room
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	// Bob joins the room
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{
 		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 	})
 	awaitPartialStateJoinCompletion(t, roomID, bob)
+	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID))
+	bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncJoinedTo(bob.UserID, roomID))
+	// Charlie not joined yet
+	// charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncJoinedTo(bob.UserID, roomID))
+
+	// Charlie joins the room
 	charlie.MustJoinRoom(t, roomID, []spec.ServerName{
 		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 	})
@@ -284,6 +293,9 @@ func TestRoomMessagesGaps(t *testing.T) {
 	charlieJoinEventIDs = append(charlieJoinEventIDs, charlieJoinEventID)
 	t.Logf("Charlie initially joins the room: %s", charlieJoinEventID)
 	awaitPartialStateJoinCompletion(t, roomID, charlie)
+	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(charlie.UserID, roomID))
+	bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncJoinedTo(charlie.UserID, roomID))
+	charlieSince = charlie.MustSyncUntil(t, client.SyncReq{Since: charlieSince}, client.SyncJoinedTo(charlie.UserID, roomID))
 
 	messageDrafts := []MessageDraft{
 		MessageDraft{alice, "I was just reading that commercial moon trips might start next year."},
@@ -445,7 +457,11 @@ func TestRoomMessagesGaps(t *testing.T) {
 				"dir":      []string{"b"},
 				"limit":    []string{"100"},
 				"backfill": []string{"true"},
-				"from":     []string{gap.Get("prev_pagination_token").Str},
+				// TODO: This works to get around current issues in Synapse around finding gaps to backfill
+				// but is kinda the wrong thing to use.
+				// "from":     []string{gap.Get("next_pagination_token").Str},
+				// This gives a perfect continuation point to fill in
+				"from": []string{gap.Get("prev_pagination_token").Str},
 			}),
 		)
 	}
