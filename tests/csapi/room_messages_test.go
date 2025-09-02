@@ -461,6 +461,9 @@ func TestRoomMessagesGaps(t *testing.T) {
 		}
 	}
 
+	// XXX: Sleep here if you're manually testing with a real-client
+	// time.Sleep(2 * time.Hour)
+
 	// Fetch with `?backfill=true` to close the gaps
 	for _, gap := range gaps {
 		// TODO: Do a better job of retrying until we see the new event. Not every server
