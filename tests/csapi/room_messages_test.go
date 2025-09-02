@@ -472,11 +472,8 @@ func TestRoomMessagesGaps(t *testing.T) {
 				"dir":      []string{"b"},
 				"limit":    []string{"100"},
 				"backfill": []string{"true"},
-				// TODO: This works to get around current issues in Synapse around finding gaps to backfill
-				// but is kinda the wrong thing to use.
-				"from": []string{gap.Get("next_pagination_token").Str},
 				// This gives a perfect continuation point to fill in
-				// "from": []string{gap.Get("prev_pagination_token").Str},
+				"from": []string{gap.Get("prev_pagination_token").Str},
 			}),
 		)
 	}
