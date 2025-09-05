@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
@@ -750,6 +751,19 @@ func (t *loggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		t.t.Logf("[CSAPI] %s %s%s => %s (%s)", req.Method, t.hsName, req.URL.Path, res.Status, time.Since(start))
 	}
 	return res, err
+}
+
+// Extracts a JSON object given a search key
+// Caller must check `result.Exists()` to see whether the object actually exists.
+func GetOptionalJSONFieldObject(t ct.TestLike, body []byte, wantKey string) gjson.Result {
+	t.Helper()
+	res := gjson.GetBytes(body, wantKey)
+	if !res.Exists() {
+		log.Printf("OptionalJSONFieldObject: key '%s' absent from %s", wantKey, string(body))
+	} else if !res.IsObject() {
+		ct.Fatalf(t, "OptionalJSONFieldObject: key '%s' is not an object, body: %s", wantKey, string(body))
+	}
+	return res
 }
 
 // GetJSONFieldStr extracts a value from a byte-encoded JSON body given a search key
