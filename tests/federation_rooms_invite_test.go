@@ -168,7 +168,7 @@ func TestFederationRoomsInvite(t *testing.T) {
 			bob.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob.UserID, roomID))
 		})
 
-		t.Run("Non-invitee user cannot rescind invite over federation", func(t *testing.T) {
+		t.Run("Non-inviter user cannot rescind invite over federation", func(t *testing.T) {
 			t.Parallel()
 
 			// First create a room that Bob is in. This is so that later we can
@@ -193,7 +193,9 @@ func TestFederationRoomsInvite(t *testing.T) {
 			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID2))
 
 			// Alice, not the original inviter, kicks bob. This does not result
-			// in bob seeing the rescission.
+			// in bob seeing the rescission. Ideally we would see the
+			// rescission, but currently we have no way to auth that over
+			// federation.
 			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID2, "kick"},
 				client.WithJSONBody(t, map[string]interface{}{
 					"user_id": bob.UserID,
