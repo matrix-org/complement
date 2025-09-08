@@ -261,12 +261,12 @@ func (c *CSAPI) GetAllPushRules(t ct.TestLike) gjson.Result {
 	return gjson.ParseBytes(pushRulesBytes)
 }
 
-// GetPushRule queries the contents of a client's push rule by scope, kind and rule ID.
+// MustGetPushRule queries the contents of a client's push rule by scope, kind and rule ID.
 // A parsed gjson result is returned. Fails the test if the query to server returns a non-2xx status code.
 //
 // Example of checking that a global underride rule contains the expected actions:
 //
-//	containsDisplayNameRule := c.GetPushRule(t, "global", "underride", ".m.rule.contains_display_name")
+//	containsDisplayNameRule := c.MustGetPushRule(t, "global", "underride", ".m.rule.contains_display_name")
 //	must.MatchGJSON(
 //	  t,
 //	  containsDisplayNameRule,
@@ -276,12 +276,21 @@ func (c *CSAPI) GetAllPushRules(t ct.TestLike) gjson.Result {
 //	    map[string]interface{}{"set_tweak": "highlight"},
 //	  }),
 //	)
-func (c *CSAPI) GetPushRule(t ct.TestLike, scope string, kind string, ruleID string) gjson.Result {
+func (c *CSAPI) MustGetPushRule(t ct.TestLike, scope string, kind string, ruleID string) gjson.Result {
 	t.Helper()
 
-	res := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID})
+	res := c.GetPushRule(t, scope, kind, ruleID)
+	mustRespond2xx(t, res)
+
 	pushRuleBytes := ParseJSON(t, res)
 	return gjson.ParseBytes(pushRuleBytes)
+}
+
+// GetPushRule queries the contents of a client's push rule by scope, kind and rule ID.
+func (c *CSAPI) GetPushRule(t ct.TestLike, scope string, kind string, ruleID string) *http.Response {
+	t.Helper()
+
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID})
 }
 
 // SetPushRule creates a new push rule on the user, or modifies an existing one.
@@ -308,6 +317,14 @@ func (c *CSAPI) SetPushRule(t ct.TestLike, scope string, kind string, ruleID str
 	}
 
 	return c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID}, WithJSONBody(t, body), WithQueries(queryParams))
+}
+
+// MustDisablePushRule disables a push rule on the user.
+// Fails the test if response is non-2xx.
+func (c *CSAPI) MustDisablePushRule(t ct.TestLike, scope string, kind string, ruleID string) {
+	c.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", scope, kind, ruleID, "enabled"}, WithJSONBody(t, map[string]interface{}{
+		"enabled": false,
+	}))
 }
 
 // Unsafe_SendEventUnsynced sends `e` into the room. This function is UNSAFE as it does not wait
