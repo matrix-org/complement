@@ -52,7 +52,7 @@ func TestThreadSubscriptionsSlidingSync(t *testing.T) {
 		// Subscribe to the thread manually
 		alice.MustDo(t, "PUT", []string{"_matrix", "client", "unstable", "io.element.msc4306", "rooms", roomID, "thread", threadRootID, "subscription"}, client.WithJSONBody(t, map[string]interface{}{}))
 
-		_, ext := MustDoSlidingSync(t, alice, "", map[string]interface{}{
+		_, thread_subscription_ext := MustDoSlidingSync(t, alice, "", map[string]interface{}{
 			"enabled": true,
 			"limit":   2,
 		})
