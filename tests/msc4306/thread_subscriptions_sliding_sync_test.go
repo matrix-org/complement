@@ -34,7 +34,9 @@ func MustDoSlidingSync(t *testing.T, user *client.CSAPI, pos string, thread_subs
 	return newPos, extension
 }
 
-func TestThreadSubscriptionsSlidingSync(t *testing.T) {
+// Tests the thread subscriptions extension to sliding sync, introduced in MSC4308
+// but treated as the same unit as MSC4306.
+func TestMSC4308ThreadSubscriptionsSlidingSync(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
