@@ -59,7 +59,7 @@ func TestMSC4308ThreadSubscriptionsSlidingSync(t *testing.T) {
 			"limit":   2,
 		})
 
-		must.MatchGJSON(t, ext,
+		must.MatchGJSON(t, thread_subscription_ext,
 			match.JSONKeyTypeEqual("subscribed."+gjson.Escape(roomID)+"."+gjson.Escape(threadRootID)+".bump_stamp", gjson.Number),
 			match.JSONKeyEqual("subscribed."+gjson.Escape(roomID)+"."+gjson.Escape(threadRootID)+".automatic", false),
 		)
