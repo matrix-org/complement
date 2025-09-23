@@ -17,21 +17,34 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-var txnID int64 = 100
+var txnID int64 = 10000
 
-func sendStickyEvent(t ct.TestLike, c *client.CSAPI, roomID string, timeout string, e b.Event) string {
+func withStickyDuration(valMs int) func(qps url.Values) {
+	return func(qps url.Values) {
+		qps["msc4354_stick_duration_ms"] = []string{strconv.Itoa(valMs)}
+	}
+}
+func withDelayedEventDuration(valMs int) func(qps url.Values) {
+	return func(qps url.Values) {
+		qps["org.matrix.msc4140.delay"] = []string{strconv.Itoa(valMs)}
+	}
+}
+
+func sendStickyEvent(t ct.TestLike, c *client.CSAPI, roomID string, e b.Event, opts ...func(qps url.Values)) string {
 	t.Helper()
 	txID := int(atomic.AddInt64(&txnID, 1))
 	paths := []string{"_matrix", "client", "v3", "rooms", roomID, "send", e.Type, strconv.Itoa(txID)}
 	if e.StateKey != nil {
 		paths = []string{"_matrix", "client", "v3", "rooms", roomID, "state", e.Type, *e.StateKey}
 	}
-	res := c.MustDo(t, "PUT", paths, client.WithJSONBody(t, e.Content), client.WithQueries(url.Values{
-		"msc4354_stick_duration_ms": []string{timeout},
-	}))
-	body := client.ParseJSON(t, res)
-	eventID := client.GetJSONFieldStr(t, body, "event_id")
-	return eventID
+	qps := url.Values{}
+	withStickyDuration(60000)(qps) // default 60s to make the event sticky.
+	for _, o := range opts {
+		o(qps)
+	}
+	res := c.MustDo(t, "PUT", paths, client.WithJSONBody(t, e.Content), client.WithQueries(qps))
+	body := must.ParseJSON(t, res.Body)
+	return body.Get("event_id").Str
 }
 
 func MustDoSlidingSync(t ct.TestLike, user *client.CSAPI, pos string) (gjson.Result, string) {
@@ -82,12 +95,78 @@ func mustHaveStickyEventID(t ct.TestLike, eventID string, arr []gjson.Result) {
 	ct.Fatalf(t, "event '%s' was not in array of length %d", eventID, len(arr))
 }
 
+func mustNotExist(t ct.TestLike, eventID string, arr []gjson.Result) {
+	t.Helper()
+	for _, ev := range arr {
+		if ev.Get("event_id").Str == eventID {
+			ct.Fatalf(t, "event '%s' was in array of length %d", eventID, len(arr))
+			return
+		}
+	}
+}
+
 var stopMsg = b.Event{
 	Type: "m.room.message",
 	Content: map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    "STOP",
 	},
+}
+
+// Helper function to do /sync or SSS requests. Does a single /sync request.
+// Returns the sticky/timeline events for the provided room ID, if any.
+// Returns `true` if the timeline included stopAtEventID.
+func performSync(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSync bool, since, roomID, stopAtEventID string) (syncResp syncResponse, nextSince string, stop bool) {
+	var timeline []gjson.Result
+	var sticky []gjson.Result
+	var resp gjson.Result
+	if useSimplifiedSlidingSync {
+		resp, nextSince = MustDoSlidingSync(t, cli, since)
+		timeline = resp.Get("rooms." + client.GjsonEscape(roomID) + ".timeline").Array()
+		sticky = resp.Get("extensions.org\\.matrix\\.msc4354\\.sticky_events.rooms." + client.GjsonEscape(roomID) + ".events").Array()
+	} else {
+		resp, nextSince = cli.MustSync(t, client.SyncReq{Since: since})
+		timeline = resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.events").Array()
+		sticky = resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".msc4354_sticky.events").Array()
+	}
+	for _, ev := range timeline {
+		if ev.Get("event_id").Str == stopAtEventID {
+			stop = true
+			break
+		}
+	}
+	return syncResponse{
+		stickyEvents:   sticky,
+		timelineEvents: timeline,
+	}, nextSince, stop
+
+}
+
+// Helper function to sync until stopAtEventID is returned. Gathers all seen sticky events
+// The intention is that tests can repeatedly hit this function until `true`,
+// to gather up sticky events returned in the provided room.
+func gatherSyncResults(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSync bool, roomID, stopAtEventID string) syncResponse {
+	start := time.Now()
+	timeout := 5 * time.Second
+	var gatheredResponse syncResponse
+	var since string
+	var stop bool
+	for {
+		var resp syncResponse
+		resp, since, stop = performSync(t, cli, useSimplifiedSlidingSync, since, roomID, stopAtEventID)
+		gatheredResponse.stickyEvents = append(gatheredResponse.stickyEvents, resp.stickyEvents...)
+		gatheredResponse.timelineEvents = append(gatheredResponse.timelineEvents, resp.timelineEvents...)
+		if stop {
+			return gatheredResponse
+		}
+		time.Sleep(100 * time.Millisecond)
+		if time.Since(start) > timeout {
+			ct.Fatalf(
+				t, "gatherSyncResults: timed out waiting to see '%s', got %d timeline, %d sticky events",
+				stopAtEventID, len(gatheredResponse.timelineEvents), len(gatheredResponse.stickyEvents),
+			)
+		}
+	}
 }
 
 func TestStickyEvents(t *testing.T) {
@@ -116,62 +195,6 @@ func TestStickyEvents(t *testing.T) {
 		}
 	}
 
-	// Helper function to do /sync or SSS requests. Does a single /sync request.
-	// Returns the sticky/timeline events for the provided room ID, if any.
-	// Returns `true` if the timeline included stopAtEventID.
-	performSync := func(t ct.TestLike, useSimplifiedSlidingSync bool, since, roomID, stopAtEventID string) (syncResp syncResponse, nextSince string, stop bool) {
-		var timeline []gjson.Result
-		var sticky []gjson.Result
-		var resp gjson.Result
-		if useSimplifiedSlidingSync {
-			resp, nextSince = MustDoSlidingSync(t, alice, since)
-			timeline = resp.Get("rooms." + client.GjsonEscape(roomID) + ".timeline").Array()
-			sticky = resp.Get("extensions.org\\.matrix\\.msc4354\\.sticky_events.rooms." + client.GjsonEscape(roomID) + ".events").Array()
-		} else {
-			resp, nextSince = alice.MustSync(t, client.SyncReq{Since: since})
-			timeline = resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.events").Array()
-			sticky = resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".msc4354_sticky.events").Array()
-		}
-		for _, ev := range timeline {
-			if ev.Get("event_id").Str == stopAtEventID {
-				stop = true
-				break
-			}
-		}
-		return syncResponse{
-			stickyEvents:   sticky,
-			timelineEvents: timeline,
-		}, nextSince, stop
-
-	}
-
-	// Helper function to sync until stopAtEventID is returned. Gathers all seen sticky events
-	// The intention is that tests can repeatedly hit this function until `true`,
-	// to gather up sticky events returned in the provided room.
-	gatherSyncResults := func(t ct.TestLike, useSimplifiedSlidingSync bool, roomID, stopAtEventID string) syncResponse {
-		start := time.Now()
-		timeout := 5 * time.Second
-		var gatheredResponse syncResponse
-		var since string
-		var stop bool
-		for {
-			var resp syncResponse
-			resp, since, stop = performSync(t, useSimplifiedSlidingSync, since, roomID, stopAtEventID)
-			gatheredResponse.stickyEvents = append(gatheredResponse.stickyEvents, resp.stickyEvents...)
-			gatheredResponse.timelineEvents = append(gatheredResponse.timelineEvents, resp.timelineEvents...)
-			if stop {
-				return gatheredResponse
-			}
-			time.Sleep(100 * time.Millisecond)
-			if time.Since(start) > timeout {
-				ct.Fatalf(
-					t, "gatherSyncResults: timed out waiting to see '%s', got %d timeline, %d sticky events",
-					stopAtEventID, len(gatheredResponse.timelineEvents), len(gatheredResponse.stickyEvents),
-				)
-			}
-		}
-	}
-
 	testCaseConfigurations := []struct {
 		stickyEventIsStateEvent  bool
 		useSimplifiedSlidingSync bool
@@ -193,15 +216,15 @@ func TestStickyEvents(t *testing.T) {
 		t.Run(eventTypeMsg+" appears in timeline if no gaps "+syncMsg, func(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			stickyEvent := makeStickyEvent(tc.stickyEventIsStateEvent)
-			stickyEventID := sendStickyEvent(t, alice, roomID, "20000", stickyEvent)
+			stickyEventID := sendStickyEvent(t, alice, roomID, stickyEvent)
 			stopEventID := alice.Unsafe_SendEventUnsynced(t, roomID, stopMsg)
-			syncResp := gatherSyncResults(t, tc.useSimplifiedSlidingSync, roomID, stopEventID)
+			syncResp := gatherSyncResults(t, alice, tc.useSimplifiedSlidingSync, roomID, stopEventID)
 			mustHaveStickyEventID(t, stickyEventID, syncResp.timelineEvents)
 		})
 		t.Run(eventTypeMsg+" appears in sticky if gaps "+syncMsg, func(t *testing.T) {
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			stickyEvent := makeStickyEvent(tc.stickyEventIsStateEvent)
-			stickyEventID := sendStickyEvent(t, alice, roomID, "20000", stickyEvent)
+			stickyEventID := sendStickyEvent(t, alice, roomID, stickyEvent)
 			for i := 0; i < 25; i++ {
 				alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
 					Type: "m.room.message",
@@ -212,9 +235,66 @@ func TestStickyEvents(t *testing.T) {
 				})
 			}
 			stopEventID := alice.Unsafe_SendEventUnsynced(t, roomID, stopMsg)
-			syncResp := gatherSyncResults(t, tc.useSimplifiedSlidingSync, roomID, stopEventID)
+			syncResp := gatherSyncResults(t, alice, tc.useSimplifiedSlidingSync, roomID, stopEventID)
 			mustHaveStickyEventID(t, stickyEventID, syncResp.stickyEvents)
 		})
 		// now send unrelated normal events so the sticky event
 	}
+}
+
+// Test MSC4354 works with MSC4140: Delayed Events
+func TestDelayedStickyEvents(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	msg := "This is a delayed sticky event"
+	stickyEvent := b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    msg,
+		},
+	}
+	hasStickyEvent := func(arr []gjson.Result) bool {
+		for _, stickyEvent := range arr {
+			// we don't know the sticky event ID if it's delayed, so check for equality via the content.
+			if stickyEvent.Get("content.body").Str == msg {
+				return true
+			}
+		}
+		return false
+	}
+
+	// it should have been delayed, so we shouldn't see the sticky event initially
+	sendStickyEvent(t, alice, roomID, stickyEvent, withDelayedEventDuration(3000))
+	stopEventID := alice.Unsafe_SendEventUnsynced(t, roomID, stopMsg)
+	syncResp := gatherSyncResults(t, alice, false, roomID, stopEventID)
+	if hasStickyEvent(syncResp.timelineEvents) {
+		ct.Fatalf(t, "timeline had the sticky event, is delayed events supported?")
+	}
+	must.Equal(t, len(syncResp.stickyEvents), 0, "events were in sticky events when they shouldn't have been")
+
+	// wait for the sticky event to send
+	time.Sleep(4 * time.Second)
+
+	for i := 0; i < 25; i++ {
+		stopEventID = alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    fmt.Sprintf("msg %d", i),
+			},
+		})
+	}
+
+	// now it should appear in the sticky section. We don't know the sticky event ID,
+	// so just look for any sticky event.
+	syncResp = gatherSyncResults(t, alice, false, roomID, stopEventID)
+	if !hasStickyEvent(syncResp.stickyEvents) {
+		ct.Fatalf(t, "sticky events missing from /sync, did it send?")
+	}
+
 }
