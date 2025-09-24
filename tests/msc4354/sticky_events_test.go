@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -12,9 +13,12 @@ import (
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/ct"
+	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 var txnID int64 = 10000
@@ -95,16 +99,6 @@ func mustHaveStickyEventID(t ct.TestLike, eventID string, arr []gjson.Result) {
 	ct.Fatalf(t, "event '%s' was not in array of length %d", eventID, len(arr))
 }
 
-func mustNotExist(t ct.TestLike, eventID string, arr []gjson.Result) {
-	t.Helper()
-	for _, ev := range arr {
-		if ev.Get("event_id").Str == eventID {
-			ct.Fatalf(t, "event '%s' was in array of length %d", eventID, len(arr))
-			return
-		}
-	}
-}
-
 var stopMsg = b.Event{
 	Type: "m.room.message",
 	Content: map[string]interface{}{
@@ -128,6 +122,7 @@ func performSync(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSync bool
 		resp, nextSince = cli.MustSync(t, client.SyncReq{Since: since})
 		timeline = resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.events").Array()
 		sticky = resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".msc4354_sticky.events").Array()
+		// t.Logf("%s\b", resp.Raw)
 	}
 	for _, ev := range timeline {
 		if ev.Get("event_id").Str == stopAtEventID {
@@ -296,5 +291,78 @@ func TestDelayedStickyEvents(t *testing.T) {
 	if !hasStickyEvent(syncResp.stickyEvents) {
 		ct.Fatalf(t, "sticky events missing from /sync, did it send?")
 	}
+}
+
+func TestSoftFailedStickyEvents(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(
+			nil, nil,
+		),
+	)
+	cancel := srv.Listen()
+	defer cancel()
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := srv.UserID("bob")
+
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	srvRoom := srv.MustJoinRoom(t, deployment, "hs1", roomID, bob)
+	latestEventID := srvRoom.ForwardExtremities[0]
+	t.Logf("latestEventID = %s", latestEventID)
+
+	// Alice kicks Bob. Concurrently, Bob sends a sticky event. The sticky event is soft-failed.
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"}, client.WithJSONBody(t, map[string]string{
+		"user_id": bob,
+		"reason":  "Testing",
+	}))
+	stickyPDU := srv.MustCreateEvent(t, srvRoom, federation.Event{
+		Type:   "m.room.message",
+		Sender: bob,
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Bob's sticky event",
+		},
+		PrevEvents: []string{latestEventID},
+		AuthEvents: []string{
+			srvRoom.CurrentState(spec.MRoomCreate, "").EventID(),
+			srvRoom.CurrentState(spec.MRoomPowerLevels, "").EventID(),
+			latestEventID, // bob's join
+		},
+	})
+	// XXX: this doesn't work as it trips the content hash check
+	stickyJSON := stickyPDU.JSON()
+	stickyJSON, err := sjson.SetBytes(stickyJSON, "msc4354_sticky.duration_ms", 600000)
+	must.NotError(t, "failed to set sticky field", err)
+	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{stickyJSON}, nil)
+	t.Logf("sticky event ID: %s", stickyPDU.EventID())
+
+	// now send 25 timeline events to shift the timeline.
+	for i := 0; i < 25; i++ {
+		alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    fmt.Sprintf("msg %d", i),
+			},
+		})
+	}
+	// now Bob rejoins. We should see the sticky event in the sticky section.
+	srv.MustJoinRoom(t, deployment, "hs1", roomID, bob)
+
+	stopEventID := alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "STOP",
+		},
+	})
+
+	syncResp := gatherSyncResults(t, alice, false, roomID, stopEventID)
+	mustHaveStickyEventID(t, stickyPDU.EventID(), syncResp.stickyEvents)
 
 }
