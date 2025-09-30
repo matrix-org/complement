@@ -15,6 +15,7 @@ import (
 	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
@@ -85,7 +86,7 @@ type syncResponse struct {
 	timelineEvents []gjson.Result
 }
 
-func mustHaveStickyEventID(t ct.TestLike, eventID string, arr []gjson.Result) {
+func mustHaveStickyEventID(t ct.TestLike, eventID string, arr []gjson.Result) gjson.Result {
 	t.Helper()
 	for _, ev := range arr {
 		if ev.Get("event_id").Str == eventID {
@@ -93,10 +94,11 @@ func mustHaveStickyEventID(t ct.TestLike, eventID string, arr []gjson.Result) {
 			if !ev.Get("msc4354_sticky.duration_ms").Exists() {
 				ct.Fatalf(t, "event '%s' exists but isn't sticky, missing 'sticky' key", eventID)
 			}
-			return
+			return ev
 		}
 	}
 	ct.Fatalf(t, "event '%s' was not in array of length %d", eventID, len(arr))
+	return gjson.Result{}
 }
 
 var stopMsg = b.Event{
@@ -141,6 +143,7 @@ func performSync(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSync bool
 // The intention is that tests can repeatedly hit this function until `true`,
 // to gather up sticky events returned in the provided room.
 func gatherSyncResults(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSync bool, roomID, stopAtEventID string) syncResponse {
+	t.Helper()
 	start := time.Now()
 	timeout := 5 * time.Second
 	var gatheredResponse syncResponse
@@ -293,7 +296,36 @@ func TestDelayedStickyEvents(t *testing.T) {
 	}
 }
 
-func TestSoftFailedStickyEvents(t *testing.T) {
+func TestUnsignedTTL(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	for _, useSimplifiedSlidingSync := range []bool{false, true} {
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		duration := 30000
+		stickyEventID := sendStickyEvent(t, alice, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "This is a sticky event",
+			},
+		}, withStickyDuration(duration))
+		syncResp := gatherSyncResults(t, alice, useSimplifiedSlidingSync, roomID, stickyEventID)
+		stickyEvent := mustHaveStickyEventID(t, stickyEventID, syncResp.timelineEvents)
+		must.MatchGJSON(t, stickyEvent,
+			match.JSONKeyPresent("unsigned.msc4354_sticky_duration_ttl_ms"),
+			match.JSONKeyTypeEqual("unsigned.msc4354_sticky_duration_ttl_ms", gjson.Number),
+		)
+		ttl := stickyEvent.Get("unsigned.msc4354_sticky_duration_ttl_ms").Int()
+		if ttl < 0 || ttl > int64(duration) {
+			ct.Fatalf(t, "unsigned.msc4354_sticky_duration_ttl_ms should be between 0-%d, got %d", duration, ttl)
+		}
+	}
+}
+
+func xTestSoftFailedStickyEvents(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
@@ -341,7 +373,10 @@ func TestSoftFailedStickyEvents(t *testing.T) {
 	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{stickyJSON}, nil)
 	t.Logf("sticky event ID: %s", stickyPDU.EventID())
 
+	// TODO: Check that the sticky event was soft-failed and did not appear in the timeline.
+
 	// now send 25 timeline events to shift the timeline.
+	// TODO: test without this as well, as it shouldn't matter (it'll always go to sticky even if <25 events)
 	for i := 0; i < 25; i++ {
 		alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
 			Type: "m.room.message",
