@@ -166,7 +166,7 @@ func (c *CSAPI) MustCreateRoom(t ct.TestLike, reqBody map[string]interface{}) st
 func (c *CSAPI) CreateRoom(t ct.TestLike, body map[string]interface{}) *http.Response {
 	t.Helper()
 	// Ensure we don't call /createRoom from the same user in parallel, else we might try to make
-	// 2 rooms in the same millisecond, causing v12 rooms to get the same room ID thus failing the test.
+	// 2 rooms in the same millisecond (same `origin_server_ts`), causing v12 rooms to get the same room ID thus failing the test.
 	c.createRoomMutex.Lock()
 	defer c.createRoomMutex.Unlock()
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, body))
