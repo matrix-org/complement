@@ -167,6 +167,18 @@ func gatherSyncResults(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSyn
 	}
 }
 
+func forEachSync(t *testing.T, f func(t *testing.T, useSimplifiedSlidingSync bool)) {
+	for _, useSimplifiedSlidingSync := range []bool{false, true} {
+		subtestName := "normal sync"
+		if useSimplifiedSlidingSync {
+			subtestName = "simplified sliding sync"
+		}
+		t.Run(subtestName, func(t *testing.T) {
+			f(t, useSimplifiedSlidingSync)
+		})
+	}
+}
+
 func TestStickyEvents(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
@@ -302,7 +314,7 @@ func TestUnsignedTTL(t *testing.T) {
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
-	for _, useSimplifiedSlidingSync := range []bool{false, true} {
+	forEachSync(t, func(t *testing.T, useSimplifiedSlidingSync bool) {
 		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 		duration := 30000
 		stickyEventID := sendStickyEvent(t, alice, roomID, b.Event{
@@ -322,7 +334,77 @@ func TestUnsignedTTL(t *testing.T) {
 		if ttl < 0 || ttl > int64(duration) {
 			ct.Fatalf(t, "unsigned.msc4354_sticky_duration_ttl_ms should be between 0-%d, got %d", duration, ttl)
 		}
-	}
+	})
+}
+
+// Test that newly joined users to history_visibility: joined rooms correctly see sticky events
+// in the `sticky` section.
+func TestStickyEventsIgnoreHistoryVisibility(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	forEachSync(t, func(t *testing.T, useSimplifiedSlidingSync bool) {
+		// configure the room with joined history visibility, meaning you don't see events prior to your join.
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		alice.SendEventSynced(t, roomID, b.Event{
+			Type:     spec.MRoomHistoryVisibility,
+			StateKey: b.Ptr(""),
+			Content: map[string]interface{}{
+				"history_visibility": "joined",
+			},
+		})
+		// Make a timeline like
+		// [ STICKY, MSG1, MSG2, ... MSG25, STICKY ]
+		// and ensure newly joined users see both sticky events
+		duration := 30000
+		stickyEventIDNotInTimeline := sendStickyEvent(t, alice, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "This is a sticky event which is beyond the timeline limit",
+			},
+		}, withStickyDuration(duration))
+		var lastEventIDBeforeBobJoins string
+		for i := 0; i < 25; i++ {
+			lastEventIDBeforeBobJoins = alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    fmt.Sprintf("msg %d", i),
+				},
+			})
+		}
+		stickyEventIDInTimeline := sendStickyEvent(t, alice, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "This is a sticky event which is inside the timeline limit",
+			},
+		}, withStickyDuration(duration))
+
+		bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
+
+		stopEventID := alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "STOP",
+			},
+		})
+
+		syncResp := gatherSyncResults(t, bob, useSimplifiedSlidingSync, roomID, stopEventID)
+		mustHaveStickyEventID(t, stickyEventIDNotInTimeline, syncResp.stickyEvents)
+		mustHaveStickyEventID(t, stickyEventIDInTimeline, syncResp.stickyEvents)
+		// check the server actually implements history visibility correctly
+		for _, ev := range syncResp.timelineEvents {
+			if ev.Get("event_id").Str == lastEventIDBeforeBobJoins {
+				ct.Fatalf(t, "bob saw normal event %d from before he joined, is history visibility working?", lastEventIDBeforeBobJoins)
+			}
+		}
+	})
 }
 
 func xTestSoftFailedStickyEvents(t *testing.T) {
