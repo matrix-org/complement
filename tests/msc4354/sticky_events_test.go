@@ -26,7 +26,7 @@ var txnID int64 = 10000
 
 func withStickyDuration(valMs int) func(qps url.Values) {
 	return func(qps url.Values) {
-		qps["msc4354_stick_duration_ms"] = []string{strconv.Itoa(valMs)}
+		qps["org.matrix.msc4354.sticky_duration_ms"] = []string{strconv.Itoa(valMs)}
 	}
 }
 func withDelayedEventDuration(valMs int) func(qps url.Values) {
