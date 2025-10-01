@@ -59,7 +59,9 @@ func TestACLs(t *testing.T) {
 		Content: map[string]interface{}{
 			"allow":             []string{"*"},
 			"allow_ip_literals": true,
-			"deny":              []string{"hs2"},
+			"deny": []string{
+				string(deployment.GetFullyQualifiedHomeserverName(t, "hs2")),
+			},
 		},
 	})
 	// wait for the ACL to show up on hs2
@@ -111,7 +113,9 @@ func TestACLs(t *testing.T) {
 		content := user.MustGetStateEventContent(t, roomID, "m.room.server_acl", "")
 		must.MatchGJSON(t, content,
 			match.JSONKeyEqual("allow", []string{"*"}),
-			match.JSONKeyEqual("deny", []string{"hs2"}),
+			match.JSONKeyEqual("deny", []string{
+				string(deployment.GetFullyQualifiedHomeserverName(t, "hs2")),
+			}),
 			match.JSONKeyEqual("allow_ip_literals", true),
 		)
 	}

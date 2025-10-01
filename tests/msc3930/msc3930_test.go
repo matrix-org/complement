@@ -39,7 +39,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 		// Request each of the push rule IDs defined by MSC3930 and verify their structure.
 
 		// This push rule silences all poll responses.
-		pollResponseRule := alice.GetPushRule(t, "global", "override", pollResponseRuleID)
+		pollResponseRule := alice.MustGetPushRule(t, "global", "override", pollResponseRuleID)
 		must.MatchGJSON(
 			t,
 			pollResponseRule,
@@ -55,7 +55,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 		)
 
 		// This push rule creates a sound and notifies the user when a poll is started in a one-to-one room.
-		pollStartOneToOneRule := alice.GetPushRule(t, "global", "underride", pollStartOneToOneRuleID)
+		pollStartOneToOneRule := alice.MustGetPushRule(t, "global", "underride", pollStartOneToOneRuleID)
 		must.MatchGJSON(
 			t,
 			pollStartOneToOneRule,
@@ -78,7 +78,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 		)
 
 		// This push rule creates a sound and notifies the user when a poll is ended in a one-to-one room.
-		pollEndOneToOneRule := alice.GetPushRule(t, "global", "underride", pollEndOneToOneRuleID)
+		pollEndOneToOneRule := alice.MustGetPushRule(t, "global", "underride", pollEndOneToOneRuleID)
 		must.MatchGJSON(
 			t,
 			pollEndOneToOneRule,
@@ -101,7 +101,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 		)
 
 		// This push rule notifies the user when a poll is started in any room.
-		pollStartRule := alice.GetPushRule(t, "global", "underride", pollStartRuleID)
+		pollStartRule := alice.MustGetPushRule(t, "global", "underride", pollStartRuleID)
 		must.MatchGJSON(
 			t,
 			pollStartRule,
@@ -118,7 +118,7 @@ func TestPollsLocalPushRules(t *testing.T) {
 		)
 
 		// This push rule notifies the user when a poll is ended in any room.
-		pollEndRule := alice.GetPushRule(t, "global", "underride", pollEndRuleID)
+		pollEndRule := alice.MustGetPushRule(t, "global", "underride", pollEndRuleID)
 		must.MatchGJSON(
 			t,
 			pollEndRule,
