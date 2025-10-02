@@ -6,6 +6,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/tidwall/gjson"
 )
 
 // sytest: PUT /rooms/:room_id/typing/:user_id sets typing notification
@@ -32,6 +33,30 @@ func TestTyping(t *testing.T) {
 	t.Run("Typing can be explicitly stopped", func(t *testing.T) {
 		alice.SendTyping(t, roomID, false, 0)
 		bob.MustSyncUntil(t, client.SyncReq{Since: token}, client.SyncUsersTyping(roomID, []string{}))
+	})
+
+	// Typing events include a `room_id` field over federation, but they should
+	// not do so down `/sync` to clients. Ensure homeservers strip that field out.
+	t.Run("Typing events DO NOT include a `room_id` field", func(t *testing.T) {
+		alice.SendTyping(t, roomID, true, 0)
+
+		bob.MustSyncUntil(
+			t,
+			client.SyncReq{Since: token},
+			client.SyncEphemeralHas(roomID, func(r gjson.Result) bool {
+				if r.Get("type").Str != "m.typing" {
+					return false
+				}
+
+				// Ensure that the `room_id` field does NOT exist.
+				if r.Get("room_id").Exists() {
+					t.Fatalf("Typing event included `room_id` field down sync: %s", r.Raw)
+				}
+
+				// Exit the /sync loop.
+				return true;
+			}),
+		)
 	})
 }
 
