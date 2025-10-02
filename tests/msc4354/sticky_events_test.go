@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -13,13 +12,11 @@ import (
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/ct"
-	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 )
 
 var txnID int64 = 10000
@@ -53,6 +50,7 @@ func sendStickyEvent(t ct.TestLike, c *client.CSAPI, roomID string, e b.Event, o
 }
 
 func MustDoSlidingSync(t ct.TestLike, user *client.CSAPI, pos string) (gjson.Result, string) {
+	t.Helper()
 	body := map[string]interface{}{
 		"lists": map[string]any{
 			"any-key": map[string]any{
@@ -111,8 +109,9 @@ var stopMsg = b.Event{
 
 // Helper function to do /sync or SSS requests. Does a single /sync request.
 // Returns the sticky/timeline events for the provided room ID, if any.
-// Returns `true` if the timeline included stopAtEventID.
+// Returns `true` if the timeline or sticky section included stopAtEventID.
 func performSync(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSync bool, since, roomID, stopAtEventID string) (syncResp syncResponse, nextSince string, stop bool) {
+	t.Helper()
 	var timeline []gjson.Result
 	var sticky []gjson.Result
 	var resp gjson.Result
@@ -126,7 +125,7 @@ func performSync(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSync bool
 		sticky = resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".msc4354_sticky.events").Array()
 		// t.Logf("%s\b", resp.Raw)
 	}
-	for _, ev := range timeline {
+	for _, ev := range append(append([]gjson.Result{}, timeline...), sticky...) {
 		if ev.Get("event_id").Str == stopAtEventID {
 			stop = true
 			break
@@ -407,79 +406,127 @@ func TestStickyEventsIgnoreHistoryVisibility(t *testing.T) {
 	})
 }
 
-func xTestSoftFailedStickyEvents(t *testing.T) {
-	deployment := complement.Deploy(t, 1)
+func xTestStickyEventsSentToNewlyJoinedServers(t *testing.T) {
+	deployment := complement.Deploy(t, 3)
 	defer deployment.Destroy(t)
 
-	srv := federation.NewServer(t, deployment,
-		federation.HandleKeyRequests(),
-		federation.HandleMakeSendJoinRequests(),
-		federation.HandleTransactionRequests(
-			nil, nil,
-		),
-	)
-	cancel := srv.Listen()
-	defer cancel()
-
+	// newJoiner will join via alice (hs1).
+	// we include bob as a bystander server. hs2 will not process the /send_join response
+	// but should receive the join event and realise it needs to send its own sticky events
+	// to hs3.
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	bob := srv.UserID("bob")
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	newJoiner := deployment.Register(t, "hs3", helpers.RegistrationOpts{})
 
-	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	srvRoom := srv.MustJoinRoom(t, deployment, "hs1", roomID, bob)
-	latestEventID := srvRoom.ForwardExtremities[0]
-	t.Logf("latestEventID = %s", latestEventID)
-
-	// Alice kicks Bob. Concurrently, Bob sends a sticky event. The sticky event is soft-failed.
-	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"}, client.WithJSONBody(t, map[string]string{
-		"user_id": bob,
-		"reason":  "Testing",
-	}))
-	stickyPDU := srv.MustCreateEvent(t, srvRoom, federation.Event{
-		Type:   "m.room.message",
-		Sender: bob,
-		Content: map[string]interface{}{
-			"msgtype": "m.text",
-			"body":    "Bob's sticky event",
-		},
-		PrevEvents: []string{latestEventID},
-		AuthEvents: []string{
-			srvRoom.CurrentState(spec.MRoomCreate, "").EventID(),
-			srvRoom.CurrentState(spec.MRoomPowerLevels, "").EventID(),
-			latestEventID, // bob's join
-		},
-	})
-	// XXX: this doesn't work as it trips the content hash check
-	stickyJSON := stickyPDU.JSON()
-	stickyJSON, err := sjson.SetBytes(stickyJSON, "msc4354_sticky.duration_ms", 600000)
-	must.NotError(t, "failed to set sticky field", err)
-	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{stickyJSON}, nil)
-	t.Logf("sticky event ID: %s", stickyPDU.EventID())
-
-	// TODO: Check that the sticky event was soft-failed and did not appear in the timeline.
-
-	// now send 25 timeline events to shift the timeline.
-	// TODO: test without this as well, as it shouldn't matter (it'll always go to sticky even if <25 events)
-	for i := 0; i < 25; i++ {
-		alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+	forEachSync(t, func(t *testing.T, useSimplifiedSlidingSync bool) {
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
+		// Make a timeline like
+		// [ STICKY, MSG1, MSG2, ... MSG25, STICKY ]
+		// and ensure newly joined servers see both sticky events
+		duration := 30000
+		aliceStickyEventIDNotInTimeline := sendStickyEvent(t, alice, roomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
 				"msgtype": "m.text",
-				"body":    fmt.Sprintf("msg %d", i),
+				"body":    "ALICE This is a sticky event which is beyond the timeline limit",
 			},
-		})
-	}
-	// now Bob rejoins. We should see the sticky event in the sticky section.
-	srv.MustJoinRoom(t, deployment, "hs1", roomID, bob)
+		}, withStickyDuration(duration))
+		bobStickyEventIDNotInTimeline := sendStickyEvent(t, bob, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "BOB This is a sticky event which is beyond the timeline limit",
+			},
+		}, withStickyDuration(duration))
+		for i := 0; i < 25; i++ {
+			alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+				Type: "m.room.message",
+				Content: map[string]interface{}{
+					"msgtype": "m.text",
+					"body":    fmt.Sprintf("msg %d", i),
+				},
+			})
+		}
+		aliceStickyEventIDInTimeline := sendStickyEvent(t, alice, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "ALICE This is a sticky event which is inside the timeline limit",
+			},
+		}, withStickyDuration(duration))
+		bobStickyEventIDInTimeline := sendStickyEvent(t, bob, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "BOB This is a sticky event which is inside the timeline limit",
+			},
+		}, withStickyDuration(duration))
 
-	stopEventID := alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+		newJoiner.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
+
+		// wait until hs1 and hs2 see the join, as this will trigger the sending of sticky events
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(newJoiner.UserID, roomID))
+		bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(newJoiner.UserID, roomID))
+
+		stopEventID := alice.Unsafe_SendEventUnsynced(t, roomID, stopMsg)
+
+		syncResp := gatherSyncResults(t, newJoiner, useSimplifiedSlidingSync, roomID, stopEventID)
+		mustHaveStickyEventID(t, aliceStickyEventIDInTimeline, syncResp.stickyEvents)
+		mustHaveStickyEventID(t, aliceStickyEventIDNotInTimeline, syncResp.stickyEvents)
+		mustHaveStickyEventID(t, bobStickyEventIDInTimeline, syncResp.stickyEvents)
+		mustHaveStickyEventID(t, bobStickyEventIDNotInTimeline, syncResp.stickyEvents)
+	})
+}
+
+func TestSoftFailedStickyEvents(t *testing.T) {
+	deployment := complement.Deploy(t, 2)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	sentinel := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
+	sentinel.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
+
+	// We want to concurrently:
+	// - Alice kicks Bob
+	// - Bob sends a sticky event.
+	// To do this, we will pause each server so they can't communicate their events with each other.
+	deployment.PauseServer(t, "hs2")
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"}, client.WithJSONBody(t, map[string]string{
+		"user_id": bob.UserID,
+		"reason":  "Testing",
+	}))
+	deployment.PauseServer(t, "hs1")
+	deployment.UnpauseServer(t, "hs2")
+	stickyEventID := sendStickyEvent(t, bob, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
-			"body":    "STOP",
+			"body":    "This is a sticky message sent whilst HS1 is offline",
 		},
 	})
+	deployment.UnpauseServer(t, "hs1")
 
-	syncResp := gatherSyncResults(t, alice, false, roomID, stopEventID)
-	mustHaveStickyEventID(t, stickyPDU.EventID(), syncResp.stickyEvents)
+	// we want to check that the sticky event was in fact soft-failed. This is hard to do since it won't
+	// come down /sync. Instead, we send a sentinel message from a different user and assert that we see
+	// the sentinel event but not the sticky event.
+	sentinelEventID := sentinel.Unsafe_SendEventUnsynced(t, roomID, stopMsg)
+	syncResp := gatherSyncResults(t, alice, false, roomID, sentinelEventID)
+	for _, ev := range append(syncResp.timelineEvents, syncResp.stickyEvents...) {
+		if ev.Get("event_id").Str == stickyEventID {
+			ct.Fatalf(t, "sticky event %s was not soft failed!", stickyEventID)
+		}
+	}
 
+	// now we rejoin bob.
+	// This should cause soft-failure of sticky events to be re-evaluated, causing it to appear in the 'sticky' section.
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
+	forEachSync(t, func(t *testing.T, useSimplifiedSlidingSync bool) {
+		syncResp := gatherSyncResults(t, alice, useSimplifiedSlidingSync, roomID, stickyEventID)
+		mustHaveStickyEventID(t, stickyEventID, syncResp.stickyEvents)
+	})
 }
