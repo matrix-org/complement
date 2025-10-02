@@ -17,15 +17,19 @@ func createRoomForReadReceipts(t *testing.T, c *client.CSAPI) (string, string) {
 
 	c.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(c.UserID, roomID))
 
-	eventID := c.SendEventSynced(t, roomID, b.Event{
+	eventID := sendMessageIntoRoom(t, c, roomID)
+
+	return roomID, eventID
+}
+
+func sendMessageIntoRoom(t *testing.T, c *client.CSAPI, roomID string) string {
+	return c.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Hello world!",
 		},
 	})
-
-	return roomID, eventID
 }
 
 func syncHasReadReceipt(roomID, userID, eventID string) client.SyncCheckOpt {
@@ -45,7 +49,35 @@ func TestRoomReceipts(t *testing.T) {
 	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID}, client.WithJSONBody(t, struct{}{}))
 
 	// Make sure the read receipt shows up in sync.
-	alice.MustSyncUntil(t, client.SyncReq{}, syncHasReadReceipt(roomID, alice.UserID, eventID))
+	sinceToken := alice.MustSyncUntil(t, client.SyncReq{}, syncHasReadReceipt(roomID, alice.UserID, eventID))
+
+	// Receipt events include a `room_id` field over federation, but they should
+	// not do so down `/sync` to clients. Ensure homeservers strip that field out.
+	t.Run("Receipts DO NOT include a `room_id` field", func(t *testing.T) {
+		// Send another event to read.
+		eventID2 := sendMessageIntoRoom(t, alice, roomID)
+
+		// Send a read receipt for the event.
+		alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "receipt", "m.read", eventID2}, client.WithJSONBody(t, struct{}{}))
+
+		alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: sinceToken},
+			client.SyncEphemeralHas(roomID, func(r gjson.Result) bool {
+				if r.Get("type").Str != "m.read" {
+					return false
+				}
+
+				// Ensure that the `room_id` field does NOT exist.
+				if r.Get("room_id").Exists() {
+					t.Fatalf("Read receipt included `room_id` field down sync: %s", r.Raw)
+				}
+
+				// Exit the /sync loop.
+				return true;
+			}),
+		)
+	})
 }
 
 // sytest: POST /rooms/:room_id/read_markers can create read marker
