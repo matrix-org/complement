@@ -50,7 +50,7 @@ func TestTyping(t *testing.T) {
 
 				// Ensure that the `room_id` field does NOT exist.
 				if r.Get("room_id").Exists() {
-					t.Fatalf("Typing event included `room_id` field down sync: %s", r.Raw)
+					t.Fatalf("Typing event should not contain `room_id` field when syncing but saw: %s", r.Raw)
 				}
 
 				// Exit the /sync loop.

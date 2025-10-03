@@ -76,7 +76,7 @@ func TestRoomReceipts(t *testing.T) {
 
 				// Ensure that the `room_id` field does NOT exist.
 				if r.Get("room_id").Exists() {
-					t.Fatalf("Read receipt included `room_id` field down sync: %s", r.Raw)
+					t.Fatalf("Read receipt should not contain 'room_id' field when syncing but saw: %s", r.Raw)
 				}
 
 				// Exit the /sync loop.
