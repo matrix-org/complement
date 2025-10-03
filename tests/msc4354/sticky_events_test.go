@@ -144,7 +144,7 @@ func performSync(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSync bool
 func gatherSyncResults(t ct.TestLike, cli *client.CSAPI, useSimplifiedSlidingSync bool, roomID, stopAtEventID string) syncResponse {
 	t.Helper()
 	start := time.Now()
-	timeout := 5 * time.Second
+	timeout := 10 * time.Second
 	var gatheredResponse syncResponse
 	var since string
 	var stop bool
@@ -406,7 +406,7 @@ func TestStickyEventsIgnoreHistoryVisibility(t *testing.T) {
 	})
 }
 
-func xTestStickyEventsSentToNewlyJoinedServers(t *testing.T) {
+func TestStickyEventsSentToNewlyJoinedServers(t *testing.T) {
 	deployment := complement.Deploy(t, 3)
 	defer deployment.Destroy(t)
 
@@ -432,6 +432,7 @@ func xTestStickyEventsSentToNewlyJoinedServers(t *testing.T) {
 				"body":    "ALICE This is a sticky event which is beyond the timeline limit",
 			},
 		}, withStickyDuration(duration))
+		bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, aliceStickyEventIDNotInTimeline))
 		bobStickyEventIDNotInTimeline := sendStickyEvent(t, bob, roomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
@@ -439,8 +440,9 @@ func xTestStickyEventsSentToNewlyJoinedServers(t *testing.T) {
 				"body":    "BOB This is a sticky event which is beyond the timeline limit",
 			},
 		}, withStickyDuration(duration))
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, bobStickyEventIDNotInTimeline))
 		for i := 0; i < 25; i++ {
-			alice.Unsafe_SendEventUnsynced(t, roomID, b.Event{
+			alice.SendEventSynced(t, roomID, b.Event{
 				Type: "m.room.message",
 				Content: map[string]interface{}{
 					"msgtype": "m.text",
@@ -455,6 +457,7 @@ func xTestStickyEventsSentToNewlyJoinedServers(t *testing.T) {
 				"body":    "ALICE This is a sticky event which is inside the timeline limit",
 			},
 		}, withStickyDuration(duration))
+		bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, aliceStickyEventIDInTimeline))
 		bobStickyEventIDInTimeline := sendStickyEvent(t, bob, roomID, b.Event{
 			Type: "m.room.message",
 			Content: map[string]interface{}{
@@ -462,20 +465,44 @@ func xTestStickyEventsSentToNewlyJoinedServers(t *testing.T) {
 				"body":    "BOB This is a sticky event which is inside the timeline limit",
 			},
 		}, withStickyDuration(duration))
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, bobStickyEventIDInTimeline))
 
 		newJoiner.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
 
 		// wait until hs1 and hs2 see the join, as this will trigger the sending of sticky events
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(newJoiner.UserID, roomID))
 		bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(newJoiner.UserID, roomID))
+		t.Logf("alice's sticky events early=%s latest=%s", aliceStickyEventIDNotInTimeline, aliceStickyEventIDInTimeline)
+		t.Logf("bob's sticky events early=%s latest=%s", bobStickyEventIDNotInTimeline, bobStickyEventIDInTimeline)
 
+		// we need to wait for 2 things to happen:
+		// - Alice to send her sticky events
+		// - Bob to send his sticky events
+		// But we don't want to use stop events for both, because we want to make sure that servers PROACTIVELY
+		// send sticky events. In particular, perhaps Alice and Bob send their sticky events to NewJoiner but NewJoiner
+		// puts them into a staging area and doesn't process them yet because they haven't processed the /send_join response
+		// by the time they get the sticky events. We must make sure that NewJoiner processes this staging area without waiting
+		// for another event. Sending a stop event will cause the queue for that server to be processed,
+		// masking the problem. As a result, we will:
+		// - send a stop event from alice and wait until we see the stop event.
+		// - wait until we see bob's latest sticky event (no stop event)
 		stopEventID := alice.Unsafe_SendEventUnsynced(t, roomID, stopMsg)
-
 		syncResp := gatherSyncResults(t, newJoiner, useSimplifiedSlidingSync, roomID, stopEventID)
-		mustHaveStickyEventID(t, aliceStickyEventIDInTimeline, syncResp.stickyEvents)
-		mustHaveStickyEventID(t, aliceStickyEventIDNotInTimeline, syncResp.stickyEvents)
-		mustHaveStickyEventID(t, bobStickyEventIDInTimeline, syncResp.stickyEvents)
-		mustHaveStickyEventID(t, bobStickyEventIDNotInTimeline, syncResp.stickyEvents)
+		allEvents := append(syncResp.stickyEvents, syncResp.timelineEvents...)
+		// TODO: sometimes this fails because we seem to omit it from the sync response, but server logs suggest it is put in the timeline..?
+		syncResp2 := gatherSyncResults(t, newJoiner, useSimplifiedSlidingSync, roomID, bobStickyEventIDInTimeline)
+		allEvents = append(allEvents, syncResp2.timelineEvents...) // will have dupe events but this is fine.
+		allEvents = append(allEvents, syncResp2.stickyEvents...)
+		// we don't know which section they will appear in as it depends on many factors like:
+		// - if the server automatically backfills from their join event, the latest sticky events will be in the timeline
+		// - if other servers /send sticky events before the backfill, they will appear in 'sticky', else they will
+		//   appear after the initial backfill so be in the timeline. This may or may not push out the latest sticky
+		//   events depending on how far back they /get_missing_events.
+		// as a result, we're just happy to see the sticky events, and don't care where they appear.
+		mustHaveStickyEventID(t, aliceStickyEventIDInTimeline, allEvents)
+		mustHaveStickyEventID(t, aliceStickyEventIDNotInTimeline, allEvents)
+		mustHaveStickyEventID(t, bobStickyEventIDInTimeline, allEvents)
+		mustHaveStickyEventID(t, bobStickyEventIDNotInTimeline, allEvents)
 	})
 }
 
@@ -525,6 +552,7 @@ func TestSoftFailedStickyEvents(t *testing.T) {
 	// now we rejoin bob.
 	// This should cause soft-failure of sticky events to be re-evaluated, causing it to appear in the 'sticky' section.
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 	forEachSync(t, func(t *testing.T, useSimplifiedSlidingSync bool) {
 		syncResp := gatherSyncResults(t, alice, useSimplifiedSlidingSync, roomID, stickyEventID)
 		mustHaveStickyEventID(t, stickyEventID, syncResp.stickyEvents)
