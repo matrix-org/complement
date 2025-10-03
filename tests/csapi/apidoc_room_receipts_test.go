@@ -64,8 +64,14 @@ func TestRoomReceipts(t *testing.T) {
 			t,
 			client.SyncReq{Since: sinceToken},
 			client.SyncEphemeralHas(roomID, func(r gjson.Result) bool {
-				if r.Get("type").Str != "m.read" {
+				// Check that this is a m.receipt ephemeral event.
+				if r.Get("type").Str != "m.receipt" {
 					return false
+				}
+
+				// Check that the receipt type is "m.read".
+				if !r.Get(`content.*.m\.read`).Exists() {
+					t.Fatalf("Receipt was not of type 'm.read'")
 				}
 
 				// Ensure that the `room_id` field does NOT exist.
