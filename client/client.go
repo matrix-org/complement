@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -48,6 +49,19 @@ type retryUntilParams struct {
 // See functions starting with `With...` in this package for more info.
 type RequestOpt func(req *http.Request)
 
+type CSAPIOpts struct {
+	UserID      string
+	AccessToken string
+	DeviceID    string
+	Password    string // if provided
+	BaseURL     string
+	Client      *http.Client
+	// how long are we willing to wait for MustSyncUntil.... calls
+	SyncUntilTimeout time.Duration
+	// True to enable verbose logging
+	Debug bool
+}
+
 type CSAPI struct {
 	UserID      string
 	AccessToken string
@@ -60,7 +74,22 @@ type CSAPI struct {
 	// True to enable verbose logging
 	Debug bool
 
-	txnID int64
+	txnID           int64
+	createRoomMutex *sync.Mutex
+}
+
+func NewCSAPI(opts CSAPIOpts) *CSAPI {
+	return &CSAPI{
+		UserID:           opts.UserID,
+		AccessToken:      opts.AccessToken,
+		DeviceID:         opts.DeviceID,
+		Password:         opts.Password,
+		BaseURL:          opts.BaseURL,
+		Client:           opts.Client,
+		SyncUntilTimeout: opts.SyncUntilTimeout,
+		Debug:            opts.Debug,
+		createRoomMutex:  &sync.Mutex{},
+	}
 }
 
 // CreateMedia creates an MXC URI for asynchronous media uploads.
@@ -137,6 +166,10 @@ func (c *CSAPI) MustCreateRoom(t ct.TestLike, reqBody map[string]interface{}) st
 // CreateRoom creates a room with an optional HTTP request body.
 func (c *CSAPI) CreateRoom(t ct.TestLike, body map[string]interface{}) *http.Response {
 	t.Helper()
+	// Ensure we don't call /createRoom from the same user in parallel, else we might try to make
+	// 2 rooms in the same millisecond (same `origin_server_ts`), causing v12 rooms to get the same room ID thus failing the test.
+	c.createRoomMutex.Lock()
+	defer c.createRoomMutex.Unlock()
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, body))
 }
 
