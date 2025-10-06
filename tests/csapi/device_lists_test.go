@@ -49,6 +49,7 @@ func TestDeviceListUpdates(t *testing.T) {
 						ed25519KeyID:    ed25519Key,
 						curve25519KeyID: curve25519Key,
 					},
+					"signatures": map[string]interface{}{},
 				},
 			}),
 		)
