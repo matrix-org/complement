@@ -558,3 +558,71 @@ func TestSoftFailedStickyEvents(t *testing.T) {
 		mustHaveStickyEventID(t, stickyEventID, syncResp.stickyEvents)
 	})
 }
+
+func TestStickyEventsChunkedInSync(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
+	_, bobSince := bob.MustSync(t, client.SyncReq{})
+	t.Logf("before any sticky events: since=%s", bobSince)
+
+	// This test assumes 3x /sync requests is enough to see all numMsgsToSend.
+	// This test assumes 1x /sync will not return more than expectedMaxChunk sticky events.
+	// As such, this test allows servers to return ceiling(numMsgsToSend/3) ~ expectedMaxChunk events
+	// per /sync request.
+	// Currently this means 84-230 per /sync.
+	numMsgsToSend := 250
+	expectedMaxChunk := 230
+
+	// send many sticky events
+	stickyEventIDs := make(map[string]bool)
+	for i := 0; i < numMsgsToSend; i++ {
+		eventID := sendStickyEvent(t, alice, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    fmt.Sprintf("msg %d", i),
+			},
+		}, withStickyDuration(1000*60*30))
+		stickyEventIDs[eventID] = true
+	}
+
+	// do a single /sync request on bob
+	resp, bobSince := bob.MustSync(t, client.SyncReq{Since: bobSince})
+	t.Logf("after 1st /sync: since=%s", bobSince)
+
+	removeStickyEvents := func(resp gjson.Result) {
+		// bob should not see all the sticky events.
+		// This includes timeline events (e.g N-25 sticky events + 25 timeline events is still N sticky events).
+		sticky := resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".msc4354_sticky.events").Array()
+		for _, ev := range sticky {
+			delete(stickyEventIDs, ev.Get("event_id").Str)
+		}
+		timeline := resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.events").Array()
+		for _, ev := range timeline {
+			delete(stickyEventIDs, ev.Get("event_id").Str)
+		}
+		t.Logf("/sync contained %d sticky events and %d timeline events", len(sticky), len(timeline))
+	}
+	removeStickyEvents(resp)
+
+	// we expect a max chunk of expectedMaxChunk
+	if len(stickyEventIDs) < (numMsgsToSend - expectedMaxChunk) {
+		ct.Fatalf(t, "sent %d sticky events, first sync contained %d, too many sticky events in one /sync", numMsgsToSend, numMsgsToSend-len(stickyEventIDs))
+	}
+
+	resp, bobSince = bob.MustSync(t, client.SyncReq{Since: bobSince, TimeoutMillis: "0"})
+	t.Logf("after 2nd /sync: since=%s", bobSince)
+	removeStickyEvents(resp)
+	resp, _ = bob.MustSync(t, client.SyncReq{Since: bobSince, TimeoutMillis: "0"})
+	t.Logf("after 3rd /sync: since=%s", bobSince)
+	removeStickyEvents(resp)
+	if len(stickyEventIDs) != 0 {
+		ct.Fatalf(t, "failed to see all sticky events, missing %d", len(stickyEventIDs))
+	}
+}
