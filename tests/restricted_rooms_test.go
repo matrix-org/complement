@@ -4,6 +4,7 @@ package tests
 
 import (
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -325,6 +326,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 	})
 	charlie.MustLeaveRoom(t, room)
 
+	time.Sleep(time.Second)
 	// Ensure the events have synced to hs1.
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room,
