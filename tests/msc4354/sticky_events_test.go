@@ -568,7 +568,7 @@ func TestStickyEventsChunkedInSync(t *testing.T) {
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
-	_, bobSince := bob.MustSync(t, client.SyncReq{})
+	_, bobSince, _ := performSync(t, bob, false, "", roomID, "")
 	t.Logf("before any sticky events: since=%s", bobSince)
 
 	// This test assumes 3x /sync requests is enough to see all numMsgsToSend.
@@ -593,21 +593,19 @@ func TestStickyEventsChunkedInSync(t *testing.T) {
 	}
 
 	// do a single /sync request on bob
-	resp, bobSince := bob.MustSync(t, client.SyncReq{Since: bobSince})
+	resp, bobSince, _ := performSync(t, bob, false, bobSince, roomID, "")
 	t.Logf("after 1st /sync: since=%s", bobSince)
 
-	removeStickyEvents := func(resp gjson.Result) {
+	removeStickyEvents := func(resp syncResponse) {
 		// bob should not see all the sticky events.
 		// This includes timeline events (e.g N-25 sticky events + 25 timeline events is still N sticky events).
-		sticky := resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".msc4354_sticky.events").Array()
-		for _, ev := range sticky {
+		for _, ev := range resp.stickyEvents {
 			delete(stickyEventIDs, ev.Get("event_id").Str)
 		}
-		timeline := resp.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.events").Array()
-		for _, ev := range timeline {
+		for _, ev := range resp.timelineEvents {
 			delete(stickyEventIDs, ev.Get("event_id").Str)
 		}
-		t.Logf("/sync contained %d sticky events and %d timeline events", len(sticky), len(timeline))
+		t.Logf("/sync contained %d sticky events and %d timeline events", len(resp.stickyEvents), len(resp.timelineEvents))
 	}
 	removeStickyEvents(resp)
 
@@ -616,10 +614,10 @@ func TestStickyEventsChunkedInSync(t *testing.T) {
 		ct.Fatalf(t, "sent %d sticky events, first sync contained %d, too many sticky events in one /sync", numMsgsToSend, numMsgsToSend-len(stickyEventIDs))
 	}
 
-	resp, bobSince = bob.MustSync(t, client.SyncReq{Since: bobSince, TimeoutMillis: "0"})
+	resp, bobSince, _ = performSync(t, bob, false, bobSince, roomID, "")
 	t.Logf("after 2nd /sync: since=%s", bobSince)
 	removeStickyEvents(resp)
-	resp, _ = bob.MustSync(t, client.SyncReq{Since: bobSince, TimeoutMillis: "0"})
+	resp, bobSince, _ = performSync(t, bob, false, bobSince, roomID, "")
 	t.Logf("after 3rd /sync: since=%s", bobSince)
 	removeStickyEvents(resp)
 	if len(stickyEventIDs) != 0 {
