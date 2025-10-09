@@ -656,6 +656,11 @@ func TestMSC4289PrivilegedRoomCreators_Downgrades(t *testing.T) {
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 		LocalpartSuffix: "bob",
 	})
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "charlie",
+	})
+
+	max_canonicaljson_power_level := int64(math.Pow(2, 53) - 1)
 
 	testCases := []struct {
 		name                      string
@@ -668,42 +673,52 @@ func TestMSC4289PrivilegedRoomCreators_Downgrades(t *testing.T) {
 		wantNewUsersMap        map[string]int64
 	}{
 		{
-			name:           "upgrading a room from v12 to v11 keeps the old room's creator user as an admin of the new room",
+			name:           "upgrading a room from v12 to v11 sets the old room's creator to the max canonicaljson power level in the new room",
 			initialCreator: alice,
 			newVersion: "11",
 			initialPLs: map[string]any{},
 			entityDoingUpgrade:    alice,
 			wantNewUsersMap:        map[string]int64{
-				// Max PL needed to do anything in a room with no default power levels.
-				alice.UserID: 50,
+				// Max canonicaljson power level.
+				alice.UserID: max_canonicaljson_power_level,
 			},
 		},
 		{
-			name:           "upgrading a room from v12 to v11 sets the old room's creator to the max power level needed to carry out any action",
-			initialCreator: alice,
-			newVersion: "11",
-			initialPLs: map[string]any{
-				"ban": 100,
-			},
-			entityDoingUpgrade:    alice,
-			wantNewUsersMap:        map[string]int64{
-				// Max PL needed to do anything in a room with no default power levels.
-				alice.UserID: 100,
-			},
-		},
-		{
-			name:           "upgrading a room from v12 to v11 keeps the additional_creator users as admins of the new room",
+			name:           "upgrading a room from v12 to v11 keeps the additional_creator users as admins of the new room. existing users remain the same",
 			initialCreator: alice,
 			initialAdditionalCreators: []string{
 				bob.UserID,
 			},
 			newVersion: "11",
-			initialPLs: map[string]any{},
+			initialPLs: map[string]any{
+				"users": map[string]int64{
+					charlie.UserID: 30,
+				},
+			},
 			entityDoingUpgrade:    alice,
 			wantNewUsersMap:        map[string]int64{
-				// Max PL needed to do anything in a room with no default power levels.
-				alice.UserID: 50,
-				bob.UserID: 50,
+				alice.UserID: max_canonicaljson_power_level,
+				bob.UserID: max_canonicaljson_power_level,
+				charlie.UserID: 30, // charlie is not a creator
+			},
+		},
+		{
+			name:           "upgrading a room from v12 to v11 sets any user who wasn't a creator, but had max canonicaljson power level in the old room, to just below the max canonicaljson power level in the new room",
+			initialCreator: alice,
+			newVersion: "11",
+			initialPLs: map[string]any{
+				"users": map[string]int64{
+					bob.UserID:   30,
+					charlie.UserID: max_canonicaljson_power_level,
+				},
+			},
+			entityDoingUpgrade:    alice,
+			wantNewUsersMap:        map[string]int64{
+				// Neither bob or charlie are creators.
+				alice.UserID: max_canonicaljson_power_level,
+				bob.UserID: 30,
+				// charlie's power level was reduced just below max canonicaljson int.
+				charlie.UserID: max_canonicaljson_power_level - 1,
 			},
 		},
 	}
