@@ -4,7 +4,6 @@ package tests
 
 import (
 	"testing"
-	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -326,19 +325,8 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 	})
 	charlie.MustLeaveRoom(t, room)
 
-	time.Sleep(time.Second)
 	// Ensure the events have synced to hs1.
-	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
-				return false
-			}
-			must.Equal(t, ev.Get("content").Get("membership").Str, "leave", "Charlie failed to leave the room")
-
-			return true
-		},
-	))
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, room))
 
 	// Have bob leave and rejoin. This should still work even though hs2 isn't in
 	// the room anymore!
