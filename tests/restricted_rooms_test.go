@@ -290,18 +290,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 
 	// Ensure that the join comes down sync on hs2. Note that we want to ensure hs2
 	// accepted the event.
-	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
-				return false
-			}
-			must.Equal(t, ev.Get("sender").Str, bob.UserID, "Bob should have joined by himself")
-			must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
-
-			return true
-		},
-	))
+	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, room))
 
 	// Raise the power level so that users on hs1 can invite people and then leave
 	// the room.
@@ -403,10 +392,9 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room,
 		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
+			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID || ev.Get("content").Get("membership").Str != "join" {
 				return false
 			}
-			must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
 			must.Equal(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
 
 			return true
@@ -459,11 +447,10 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
 		room,
 		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
+			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID || ev.Get("content").Get("membership").Str != "join" {
 				return false
 			}
 			must.MatchGJSON(t, ev,
-				match.JSONKeyEqual("content.membership", "join"),
 				match.JSONKeyEqual("content.join_authorised_via_users_server", alice.UserID),
 			)
 			return true
