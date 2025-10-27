@@ -269,95 +269,97 @@ func SyncPresenceHas(fromUser string, expectedPresence *string, checks ...func(g
 	}
 }
 
-// Checks that `userID` gets invited to `roomID`.
-//
-// This checks different parts of the /sync response depending on the client making the request.
-// If the client is also the person being invited to the room then the 'invite' block will be inspected.
-// If the client is different to the person being invited then the 'join' block will be inspected.
-func SyncInvitedTo(userID, roomID string) SyncCheckOpt {
-	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		// two forms which depend on what the client user is:
-		// - passively viewing an invite for a room you're joined to (timeline events)
-		// - actively being invited to a room.
-		if clientUserID == userID {
-			// active
-			err := checkArrayElements(
-				topLevelSyncJSON, "rooms.invite."+GjsonEscape(roomID)+".invite_state.events",
-				func(ev gjson.Result) bool {
-					return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
-				},
-			)
-			if err != nil {
-				return fmt.Errorf("SyncInvitedTo(%s): %s", roomID, err)
-			}
-			return nil
-		}
-		// passive
-		return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "invite"
-		})(clientUserID, topLevelSyncJSON)
-	}
-}
-
-// Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event.
-//
-// Additional checks can be passed to narrow down the check, all must pass.
-func SyncJoinedTo(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
-	checkJoined := func(ev gjson.Result) bool {
-		if ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "join" {
+func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Result) bool) SyncCheckOpt {
+	checkMembership := func(ev gjson.Result) bool {
+		if ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == membership {
 			for _, check := range checks {
 				if !check(ev) {
 					// short-circuit, bail early
 					return false
 				}
 			}
-			// passed both basic join check and all other checks
+			// passed both basic membership check and all other checks
 			return true
 		}
 		return false
 	}
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		// Check both the timeline and the state events for the join event
-		// since on initial sync, the state events may only be in
-		// <room>.state.events.
+		// Check both the timeline and the state events for the membership event since on
+		// initial sync, the state events may only be in state. Additionally, state only
+		// covers the "updates for the room up to the start of the timeline."
+
+		roomTypeKey := ""
+		if membership == "join" {
+			roomTypeKey = "join"
+		} else if membership == "leave" || membership == "ban" {
+			roomTypeKey = "leave"
+		} else if membership == "invite" {
+			roomTypeKey = "invite"
+		} else if membership == "knock" {
+			roomTypeKey = "knock"
+		} else {
+			return fmt.Errorf("syncMembershipIn(%s): unknown membership: %s", roomID, membership)
+		}
+
+		// Check the state
+		stateKey := ""
+		if membership == "join" || membership == "leave" || membership == "ban" {
+			stateKey = "state"
+		} else if membership == "invite" {
+			stateKey = "invite_state"
+		} else if membership == "knock" {
+			stateKey = "knock_state"
+		} else {
+			return fmt.Errorf("syncMembershipIn(%s): unknown membership: %s", roomID, membership)
+		}
 		firstErr := checkArrayElements(
-			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".timeline.events", checkJoined,
+			topLevelSyncJSON, "rooms."+roomTypeKey+"."+GjsonEscape(roomID)+"."+stateKey+".events", checkMembership,
 		)
 		if firstErr == nil {
 			return nil
 		}
 
-		secondErr := checkArrayElements(
-			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state.events", checkJoined,
-		)
-		if secondErr == nil {
-			return nil
-		}
-		return fmt.Errorf("SyncJoinedTo(%s): %s & %s", roomID, firstErr, secondErr)
-	}
-}
-
-// Check that `userID` is leaving `roomID` by inspecting the timeline for a membership event, or witnessing `roomID` in `rooms.leave`
-// Note: This will not work properly with initial syncs, see https://github.com/matrix-org/matrix-doc/issues/3537
-func SyncLeftFrom(userID, roomID string) SyncCheckOpt {
-	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-		// two forms which depend on what the client user is:
-		// - passively viewing a membership for a room you're joined in
-		// - actively leaving the room
-		if clientUserID == userID {
-			// active
-			events := topLevelSyncJSON.Get("rooms.leave." + GjsonEscape(roomID))
-			if !events.Exists() {
-				return fmt.Errorf("no leave section for room %s", roomID)
-			} else {
+		// Check the timeline (only available for join/leave/ban)
+		var secondErr error
+		if membership == "join" || membership == "leave" || membership == "ban" {
+			secondErr = checkArrayElements(
+				topLevelSyncJSON, "rooms."+roomTypeKey+"."+GjsonEscape(roomID)+".timeline.events", checkMembership,
+			)
+			if secondErr == nil {
 				return nil
 			}
 		}
-		// passive
-		return SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == "leave"
-		})(clientUserID, topLevelSyncJSON)
+
+		return fmt.Errorf("syncMembershipIn(%s): %s & %s", roomID, firstErr, secondErr)
 	}
+}
+
+// Checks that `userID` gets invited to `roomID`.
+//
+// This checks different parts of the /sync response depending on the client making the request.
+// If the client is also the person being invited to the room then we will look for an invite in the state block.
+// If the client is different to the person being invited then the timeline will be inspected for invite events.
+func SyncInvitedTo(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
+	return syncMembershipIn(userID, roomID, "invite")
+}
+
+// Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event.
+//
+// Additional checks can be passed to narrow down the check, all must pass.
+func SyncJoinedTo(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
+	return syncMembershipIn(userID, roomID, "join", checks...)
+}
+
+// Check that `userID` has left the `roomID`
+// Note: This will not work properly with initial syncs, see https://github.com/matrix-org/matrix-doc/issues/3537
+func SyncLeftFrom(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
+	return syncMembershipIn(userID, roomID, "leave", checks...)
+}
+
+// Check that `userID` is banned from the `roomID`
+// Note: This will not work properly with initial syncs, see https://github.com/matrix-org/matrix-doc/issues/3537
+func SyncBannedFrom(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
+	return syncMembershipIn(userID, roomID, "ban", checks...)
 }
 
 // Calls the `check` function for each global account data event, and returns with success if the
