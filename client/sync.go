@@ -366,21 +366,21 @@ func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Re
 	}
 }
 
-// Checks that `userID` gets invited to `roomID`.
+// Checks that `userID` gets invited to `roomID`
 //
 // Additional checks can be passed to narrow down the check, all must pass.
 func SyncInvitedTo(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
 	return syncMembershipIn(userID, roomID, "invite", checks...)
 }
 
-// Checks that `userID` has knocked on `roomID`.
+// Checks that `userID` has knocked on `roomID`
 //
 // Additional checks can be passed to narrow down the check, all must pass.
 func SyncKnockedOn(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
 	return syncMembershipIn(userID, roomID, "knock", checks...)
 }
 
-// Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event.
+// Check that `userID` gets joined to `roomID`
 //
 // Additional checks can be passed to narrow down the check, all must pass.
 func SyncJoinedTo(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
