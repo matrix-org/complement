@@ -368,11 +368,16 @@ func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Re
 
 // Checks that `userID` gets invited to `roomID`.
 //
-// This checks different parts of the /sync response depending on the client making the request.
-// If the client is also the person being invited to the room then we will look for an invite in the state block.
-// If the client is different to the person being invited then the timeline will be inspected for invite events.
+// Additional checks can be passed to narrow down the check, all must pass.
 func SyncInvitedTo(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
-	return syncMembershipIn(userID, roomID, "invite")
+	return syncMembershipIn(userID, roomID, "invite", checks...)
+}
+
+// Checks that `userID` has knocked on `roomID`.
+//
+// Additional checks can be passed to narrow down the check, all must pass.
+func SyncKnockedOn(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
+	return syncMembershipIn(userID, roomID, "knock", checks...)
 }
 
 // Check that `userID` gets joined to `roomID` by inspecting the join timeline for a membership event.
@@ -384,12 +389,16 @@ func SyncJoinedTo(userID, roomID string, checks ...func(gjson.Result) bool) Sync
 
 // Check that `userID` has left the `roomID`
 // Note: This will not work properly with initial syncs, see https://github.com/matrix-org/matrix-doc/issues/3537
+//
+// Additional checks can be passed to narrow down the check, all must pass.
 func SyncLeftFrom(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
 	return syncMembershipIn(userID, roomID, "leave", checks...)
 }
 
 // Check that `userID` is banned from the `roomID`
 // Note: This will not work properly with initial syncs, see https://github.com/matrix-org/matrix-doc/issues/3537
+//
+// Additional checks can be passed to narrow down the check, all must pass.
 func SyncBannedFrom(userID, roomID string, checks ...func(gjson.Result) bool) SyncCheckOpt {
 	return syncMembershipIn(userID, roomID, "ban", checks...)
 }
