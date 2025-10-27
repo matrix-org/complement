@@ -269,6 +269,14 @@ func SyncPresenceHas(fromUser string, expectedPresence *string, checks ...func(g
 	}
 }
 
+// syncMembershipIn checks that `userID` has `membership` in `roomID`, with optional
+// extra checks on the found membership event.
+//
+// This can be used to passively observe another user's membership changes in a room
+// although we assume that the observing client is joined to the room.
+//
+// Note: This will not work properly with leave/ban membership for initial syncs, see
+// https://github.com/matrix-org/matrix-doc/issues/3537
 func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Result) bool) SyncCheckOpt {
 	checkMembership := func(ev gjson.Result) bool {
 		if ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == userID && ev.Get("content.membership").Str == membership {
@@ -288,30 +296,46 @@ func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Re
 		// initial sync, the state events may only be in state. Additionally, state only
 		// covers the "updates for the room up to the start of the timeline."
 
-		roomTypeKey := ""
-		if membership == "join" {
-			roomTypeKey = "join"
-		} else if membership == "leave" || membership == "ban" {
-			roomTypeKey = "leave"
-		} else if membership == "invite" {
-			roomTypeKey = "invite"
-		} else if membership == "knock" {
-			roomTypeKey = "knock"
-		} else {
-			return fmt.Errorf("syncMembershipIn(%s): unknown membership: %s", roomID, membership)
+		// We assume the passively observing client user is joined to the room
+		roomTypeKey := "join"
+		// Otherwise, if the client is the user whose membership we are checking, we need to
+		// pick the correct room type JSON key based on the membership being checked.
+		if clientUserID == userID {
+			if membership == "join" {
+				roomTypeKey = "join"
+			} else if membership == "leave" || membership == "ban" {
+				roomTypeKey = "leave"
+			} else if membership == "invite" {
+				roomTypeKey = "invite"
+			} else if membership == "knock" {
+				roomTypeKey = "knock"
+			} else {
+				return fmt.Errorf("syncMembershipIn(%s, %s): unknown membership: %s", roomID, membership, membership)
+			}
 		}
 
-		// Check the state
-		stateKey := ""
-		if membership == "join" || membership == "leave" || membership == "ban" {
-			stateKey = "state"
-		} else if membership == "invite" {
-			stateKey = "invite_state"
-		} else if membership == "knock" {
-			stateKey = "knock_state"
-		} else {
-			return fmt.Errorf("syncMembershipIn(%s): unknown membership: %s", roomID, membership)
+		// We assume the passively observing client user is joined to the room (`rooms.join.<roomID>.state`)
+		stateKey := "state"
+		// Otherwise, if the client is the user whose membership we are checking,
+		// we need to pick the correct JSON key based on the membership being checked.
+		if clientUserID == userID {
+			if membership == "join" || membership == "leave" || membership == "ban" {
+				stateKey = "state"
+			} else if membership == "invite" {
+				stateKey = "invite_state"
+			} else if membership == "knock" {
+				stateKey = "knock_state"
+			} else {
+				return fmt.Errorf("syncMembershipIn(%s, %s): unknown membership: %s", roomID, membership, membership)
+			}
 		}
+
+		// Check the state first as it's a better source of truth than the `timeline`.
+		//
+		// FIXME: Ideally, we'd use something like `state_after` to get the actual current
+		// state in the room instead of us assuming that no state resets/conflicts happen
+		// when we apply state from the `timeline` on top of the `state`. But `state_after`
+		// is gated behind a sync request parameter which we can't control here.
 		firstErr := checkArrayElements(
 			topLevelSyncJSON, "rooms."+roomTypeKey+"."+GjsonEscape(roomID)+"."+stateKey+".events", checkMembership,
 		)
@@ -319,9 +343,17 @@ func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Re
 			return nil
 		}
 
-		// Check the timeline (only available for join/leave/ban)
+		// Check the timeline
+		//
+		// This is also important to differentiate between leave/ban because those both
+		// appear in the `leave` `roomTypeKey` and we need to specifically check the
+		// timeline for the membership event to differentiate them.
 		var secondErr error
-		if membership == "join" || membership == "leave" || membership == "ban" {
+		// We assume the passively observing client user is joined to the room
+		if clientUserID != userID ||
+			// Otherwise, if the client is the user whose membership we are checking,
+			// `timeline` is only available for join/leave/ban memberships.
+			membership == "join" || membership == "leave" || membership == "ban" {
 			secondErr = checkArrayElements(
 				topLevelSyncJSON, "rooms."+roomTypeKey+"."+GjsonEscape(roomID)+".timeline.events", checkMembership,
 			)
@@ -330,7 +362,7 @@ func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Re
 			}
 		}
 
-		return fmt.Errorf("syncMembershipIn(%s): %s & %s", roomID, firstErr, secondErr)
+		return fmt.Errorf("syncMembershipIn(%s, %s): %s & %s - %s", roomID, membership, firstErr, secondErr, topLevelSyncJSON)
 	}
 }
 
