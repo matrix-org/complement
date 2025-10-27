@@ -389,17 +389,12 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	})
 
 	// Double check that the join was authorised via hs1.
-	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID || ev.Get("content").Get("membership").Str != "join" {
-				return false
-			}
-			must.Equal(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
-
-			return true
-		},
-	))
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, room, func(ev gjson.Result) bool {
+		must.MatchGJSON(t, ev,
+			match.JSONKeyEqual("content.join_authorised_via_users_server", alice.UserID),
+		)
+		return true
+	}))
 
 	// Bump the power-level of bob.
 	t.Logf("%s allows %s to send invites.", alice.UserID, bob.UserID)
@@ -444,16 +439,10 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	})
 
 	// Double check that the join was authorised via hs1.
-	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID || ev.Get("content").Get("membership").Str != "join" {
-				return false
-			}
-			must.MatchGJSON(t, ev,
-				match.JSONKeyEqual("content.join_authorised_via_users_server", alice.UserID),
-			)
-			return true
-		},
-	))
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, room, func(ev gjson.Result) bool {
+		must.MatchGJSON(t, ev,
+			match.JSONKeyEqual("content.join_authorised_via_users_server", alice.UserID),
+		)
+		return true
+	}))
 }
