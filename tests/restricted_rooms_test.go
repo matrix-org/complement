@@ -121,14 +121,7 @@ func checkRestrictedRoom(t *testing.T, deployment complement.Deployment, alice *
 		// Wait until Alice sees Bob leave the allowed room. This ensures that Alice's HS
 		// has processed the leave before Bob tries rejoining, so that it rejects his
 		// attempt to join the room.
-		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-			allowed_room, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
-					return false
-				}
-
-				return ev.Get("content").Get("membership").Str == "leave"
-			}))
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, allowed_room))
 
 		res := bob.JoinRoom(t, room, []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
