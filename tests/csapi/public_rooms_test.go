@@ -149,8 +149,13 @@ func TestPublicRooms(t *testing.T) {
 					// Track which rooms we've correctly found
 					foundRooms := make(map[string]bool)
 
+					// Keep track of any rooms that we didn't expect to see.
+					unexpectedRooms := make([]string, 0)
+
 					// Check each room in the public rooms list
 					for _, roomData := range chunk.Array() {
+						roomId := roomData.Get("room_id").Str
+
 						// Verify required keys are present. This applies to any room we see.
 						err := should.MatchGJSON(
 							roomData,
@@ -160,7 +165,6 @@ func TestPublicRooms(t *testing.T) {
 						)
 						if err != nil {
 							// This room is missing required keys, log and try again.
-							roomId := roomData.Get("room_id").Str
 							t.Logf("Room %s data missing required keys: %s", roomId, err.Error())
 							return false
 						}
@@ -174,6 +178,7 @@ func TestPublicRooms(t *testing.T) {
 
 						// Skip rooms that aren't ours
 						if canonicalAlias == "" {
+							unexpectedRooms = append(unexpectedRooms, roomId)
 							continue
 						}
 
@@ -248,6 +253,10 @@ func TestPublicRooms(t *testing.T) {
 							}
 						}
 						t.Logf("Missing rooms in public list: %v (found %d/%d)", missing, len(foundRooms), len(createdRooms))
+
+						if len(unexpectedRooms) > 0 {
+							t.Logf("Also found unexpected rooms: %v", unexpectedRooms)
+						}
 						return false
 					}
 
