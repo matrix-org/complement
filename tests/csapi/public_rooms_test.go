@@ -1,6 +1,7 @@
 package csapi_tests
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/should"
 )
 
 func TestPublicRooms(t *testing.T) {
@@ -148,14 +150,21 @@ func TestPublicRooms(t *testing.T) {
 
 					// Check each room in the public rooms list
 					for _, roomData := range chunk.Array() {
-						// Verify required keys are present
-						must.MatchGJSON(
-							t,
+						// Verify required keys are present. This applies to any room we see.
+						err := should.MatchGJSON(
 							roomData,
 							match.JSONKeyPresent("world_readable"),
 							match.JSONKeyPresent("guest_can_join"),
 							match.JSONKeyPresent("num_joined_members"),
 						)
+						if err != nil {
+							// This room is missing required keys, log and try again.
+							roomId := roomData.Get("room_id").Str
+							t.Logf("Room %s data missing required keys: %s", roomId, err.Error())
+							return false
+						}
+
+						validationErrors := make([]error, 0)
 
 						canonicalAlias := roomData.Get("canonical_alias").Str
 						name := roomData.Get("name").Str
@@ -185,38 +194,47 @@ func TestPublicRooms(t *testing.T) {
 
 						// Verify member count
 						if numMembers != 1 {
-							t.Logf("Room %s has %d members, expected 1", matchedAlias, numMembers)
-							return false
+							err = fmt.Errorf("Room %s has %d members, expected 1", matchedAlias, numMembers)
+							validationErrors = append(validationErrors, err)
 						}
 
 						// Verify name field
 						if roomConfig.name != "" {
 							if name != roomConfig.name {
-								t.Logf("Room %s has name '%s', expected '%s'", matchedAlias, name, roomConfig.name)
-								return false
+								err = fmt.Errorf("Room %s has name '%s', expected '%s'", matchedAlias, name, roomConfig.name)
+								validationErrors = append(validationErrors, err)
 							}
 						} else {
 							if name != "" {
-								t.Logf("Room %s has unexpected name '%s', expected no name", matchedAlias, name)
-								return false
+								err = fmt.Errorf("Room %s has unexpected name '%s', expected no name", matchedAlias, name)
+								validationErrors = append(validationErrors, err)
 							}
 						}
 
 						// Verify topic field
 						if roomConfig.topic != "" {
 							if topic != roomConfig.topic {
-								t.Logf("Room %s has topic '%s', expected '%s'", matchedAlias, topic, roomConfig.topic)
-								return false
+								err = fmt.Errorf("Room %s has topic '%s', expected '%s'", matchedAlias, topic, roomConfig.topic)
+								validationErrors = append(validationErrors, err)
 							}
 						} else {
 							if topic != "" {
-								t.Logf("Room %s has unexpected topic '%s', expected no topic", matchedAlias, topic)
-								return false
+								err = fmt.Errorf("Room %s has unexpected topic '%s', expected no topic", matchedAlias, topic)
+								validationErrors = append(validationErrors, err)
 							}
+						}
+
+						if len(validationErrors) > 0 {
+							for _, e := range validationErrors {
+								t.Logf("Validation error for room %s: %s", matchedAlias, e.Error())
+							}
+
+							return false
 						}
 
 						// Mark this room as correctly found
 						foundRooms[matchedAlias] = true
+
 						t.Logf("Successfully validated room %s", matchedAlias)
 					}
 
