@@ -252,7 +252,7 @@ update-ca-certificates
 
 ## Sytest parity
 
-As of 20 October 2025:
+As of 29 October 2025:
 ```
 $ go build ./cmd/sytest-coverage
 $ ./sytest-coverage -v
@@ -507,11 +507,11 @@ $ ./sytest-coverage -v
     ✓ Can get rooms/{roomId}/members
 
 30rooms/60version_upgrade 0/19 tests
-30rooms/70publicroomslist 1/5 tests
+30rooms/70publicroomslist 2/5 tests
     × Asking for a remote rooms list, but supplying the local server's name, returns the local rooms list
     × Can get remote public room list
     × Can paginate public room list
-    × Can search public room list
+    ✓ Can search public room list
     ✓ Name/topic keys are correct
 
 31sync/01filter 2/2 tests
@@ -713,5 +713,5 @@ $ ./sytest-coverage -v
 90jira/SYN-516 0/1 tests
 90jira/SYN-627 0/1 tests
 
-TOTAL: 221/610 tests converted
+TOTAL: 222/610 tests converted
 ```
