@@ -19,6 +19,7 @@ import (
 func TestPublicRooms(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
+	hostname := deployment.GetFullyQualifiedHomeserverName(t, "hs1")
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Can search public room list
@@ -179,7 +180,7 @@ func TestPublicRooms(t *testing.T) {
 						// Find which of our rooms this matches
 						var matchedAlias string
 						for alias := range createdRooms {
-							expectedAlias := "#" + alias + ":hs1"
+							expectedAlias := "#" + alias + ":" + string(hostname)
 							if canonicalAlias == expectedAlias {
 								matchedAlias = alias
 								break
