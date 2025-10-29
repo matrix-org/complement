@@ -127,7 +127,7 @@ func TestPublicRooms(t *testing.T) {
 
 			// Poll /publicRooms until all our rooms appear with correct data
 			authedClient.MustDo(t, "GET", []string{"_matrix", "client", "v3", "publicRooms"},
-				client.WithRetryUntil(15*time.Second, func(res *http.Response) bool {
+				client.WithRetryUntil(authedClient.SyncUntilTimeout, func(res *http.Response) bool {
 					body := must.ParseJSON(t, res.Body)
 
 					must.MatchGJSON(
