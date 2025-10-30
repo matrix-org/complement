@@ -147,7 +147,7 @@ func TestPublicRooms(t *testing.T) {
 					}
 
 					// Track which rooms we've correctly found
-					foundRooms := make(map[string]bool)
+					validatedRooms := make(map[string]bool)
 
 					// Keep track of any rooms that we didn't expect to see.
 					unexpectedRooms := make([]string, 0)
@@ -239,20 +239,20 @@ func TestPublicRooms(t *testing.T) {
 						}
 
 						// Mark this room as correctly found
-						foundRooms[matchedAlias] = true
+						validatedRooms[matchedAlias] = true
 
 						t.Logf("Successfully validated room %s", matchedAlias)
 					}
 
-					// Check if we found all our rooms
-					if len(foundRooms) != len(createdRooms) {
+					// Check if we found and validated all of our rooms
+					if len(validatedRooms) != len(createdRooms) {
 						missing := []string{}
 						for alias := range createdRooms {
-							if !foundRooms[alias] {
+							if !validatedRooms[alias] {
 								missing = append(missing, alias)
 							}
 						}
-						t.Logf("Missing rooms in public list: %v (found %d/%d)", missing, len(foundRooms), len(createdRooms))
+						t.Logf("Missing rooms in public list: %v (found %d/%d)", missing, len(validatedRooms), len(createdRooms))
 
 						if len(unexpectedRooms) > 0 {
 							t.Logf("Also found unexpected rooms: %v", unexpectedRooms)
@@ -260,7 +260,7 @@ func TestPublicRooms(t *testing.T) {
 						return false
 					}
 
-					t.Logf("All %d rooms found with correct name/topic data", len(foundRooms))
+					t.Logf("All %d rooms found with correct name/topic data", len(validatedRooms))
 					return true
 				}),
 			)
