@@ -87,6 +87,7 @@ func TestPublicRooms(t *testing.T) {
 
 					// Create the room
 					roomOptions := map[string]interface{}{
+						// Add the room to the public rooms list.
 						"visibility":      "public",
 						"room_alias_name": roomConfig.alias,
 					}
@@ -201,6 +202,16 @@ func TestPublicRooms(t *testing.T) {
 
 						t.Fail()
 					}
+
+					// Remove the room from the public rooms list to avoid polluting other tests.
+					authedClient.MustDo(
+						t,
+						"PUT",
+						[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
+						client.WithJSONBody(t, map[string]interface{}{
+							"visibility": "private",
+						}),
+					)
 				})
 			}
 		})
