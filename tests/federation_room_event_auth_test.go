@@ -181,7 +181,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 	sentEvent2 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:       "m.room.message",
 		Sender:     charlie,
-		Content:    map[string]interface{}{"body": "sentEvent1"},
+		Content:    map[string]interface{}{"body": "sentEvent2"},
 		AuthEvents: room.EventIDsOrReferences(sentEventAuthEvents),
 	})
 	room.AddEvent(sentEvent2)
