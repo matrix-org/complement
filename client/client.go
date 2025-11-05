@@ -733,6 +733,17 @@ func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...Request
 			ct.Fatalf(t, "CSAPI.Do response returned error: %s", err)
 		}
 
+		// Make a copy of the response body so that downstream callers can read it multiple
+		// times if needed and don't need to worry about closing it.
+		var resBody []byte
+		if res.Body != nil {
+			resBody, err = io.ReadAll(res.Body)
+			if err != nil {
+				ct.Fatalf(t, "CSAPI.Do failed to read response body for RetryUntil check: %s", err)
+			}
+			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
+		}
+
 		// debug log the response
 		if c.Debug && res != nil {
 			var dump []byte
@@ -742,19 +753,12 @@ func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...Request
 			}
 			t.Logf("%s", string(dump))
 		}
+
 		if retryUntil == nil || retryUntil.timeout == 0 {
 			return res // don't retry
 		}
 
-		// check the condition, make a copy of the response body first in case the check consumes it
-		var resBody []byte
-		if res.Body != nil {
-			resBody, err = io.ReadAll(res.Body)
-			if err != nil {
-				ct.Fatalf(t, "CSAPI.Do failed to read response body for RetryUntil check: %s", err)
-			}
-			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
-		}
+		// check the condition
 		if retryUntil.untilFn(res) {
 			// remake the response and return
 			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
