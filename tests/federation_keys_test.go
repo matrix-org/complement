@@ -13,6 +13,7 @@ import (
 	"github.com/tidwall/sjson"
 
 	"github.com/matrix-org/complement"
+	"github.com/matrix-org/complement/internal"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
@@ -35,6 +36,7 @@ func TestInboundFederationKeys(t *testing.T) {
 	}
 
 	res, err := fedClient.Get("https://hs1/_matrix/key/v2/server")
+	defer internal.CloseIO(res.Body, "server key response body")
 	must.NotError(t, "failed to GET /keys", err)
 
 	var keys = map[string]ed25519.PublicKey{}

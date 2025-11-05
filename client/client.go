@@ -26,6 +26,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/ct"
+	"github.com/matrix-org/complement/internal"
 )
 
 type ctxKey string
@@ -668,6 +669,9 @@ func (c *CSAPI) MustDo(t ct.TestLike, method string, paths []string, opts ...Req
 //			match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
 //		},
 //	})
+//
+// The caller does not need to worry about closing the returned `http.Response.Body` as
+// this is handled automatically.
 func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
 	escapedPaths := make([]string, len(paths))
@@ -713,9 +717,22 @@ func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...Request
 	for {
 		// Perform the HTTP request
 		res, err := c.Client.Do(req)
+		// `defer` is function scoped but it's okay that we only clean up all requests at
+		// the end. To also be clear, `defer` arguments are evaluated at the time of the
+		// `defer` statement so we are only closing the original response body here. Our new
+		// response body will be untouched.
+		defer internal.CloseIO(
+			res.Body,
+			fmt.Sprintf(
+				"CSAPI.Do: response body from %s %s",
+				res.Request.Method,
+				res.Request.URL.String(),
+			),
+		)
 		if err != nil {
 			ct.Fatalf(t, "CSAPI.Do response returned error: %s", err)
 		}
+
 		// debug log the response
 		if c.Debug && res != nil {
 			var dump []byte

@@ -18,6 +18,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement/b"
+	"github.com/matrix-org/complement/internal"
 )
 
 // An instruction for the runner to run.
@@ -206,12 +207,21 @@ func (r *Runner) runInstructionSet(contextStr string, hsURL string, instrs []ins
 			return fmt.Errorf("terminated")
 		}
 		res, err := cli.Do(req)
+		defer internal.CloseIO(
+			res.Body,
+			fmt.Sprintf(
+				"runInstructionSet: response body from %s %s",
+				res.Request.Method,
+				res.Request.URL.String(),
+			),
+		)
 		if err != nil {
 			err = isFatalErr(fmt.Errorf("%s : failed to perform HTTP request to %s with body %+v: %w", contextStr, req.URL.String(), instr.body, err))
 			if err != nil {
 				return err
 			}
 		}
+
 		// parse the response if we have one (if bestEffort=true then we don't return an error above)
 		if res != nil && res.Body != nil {
 			if i < 100 || i%200 == 0 {

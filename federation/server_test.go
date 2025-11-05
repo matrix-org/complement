@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/matrix-org/complement/config"
+	"github.com/matrix-org/complement/internal"
 )
 
 type fedDeploy struct {
@@ -56,6 +57,7 @@ func TestComplementServerIsSigned(t *testing.T) {
 		client := &http.Client{Transport: transport}
 
 		resp, err := client.Get("https://" + string(srv.ServerName()))
+		defer internal.CloseIO(resp.Body, "server response body")
 		if err != nil {
 			if tc.wantSuccess {
 				t.Fatalf("Failed to GET: %s", err)
@@ -66,7 +68,6 @@ func TestComplementServerIsSigned(t *testing.T) {
 		if !tc.wantSuccess {
 			t.Fatalf("request succeeded when we expected it to fail")
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != 404 {
 			t.Errorf("expected 404, got %d", resp.StatusCode)

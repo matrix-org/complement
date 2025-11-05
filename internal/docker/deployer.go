@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
+	"github.com/matrix-org/complement/internal"
 	complementRuntime "github.com/matrix-org/complement/runtime"
 
 	"github.com/docker/docker/api/types/container"
@@ -663,6 +664,7 @@ func waitForContainer(ctx context.Context, docker *client.Client, hsDep *Homeser
 			break
 		}
 		res, err := http.Get(versionsURL)
+		defer internal.CloseIO(res.Body, "waitForContainer: version response body")
 		if err != nil {
 			lastErr = fmt.Errorf("GET %s => error: %s", versionsURL, err)
 			time.Sleep(50 * time.Millisecond)

@@ -12,6 +12,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/matrix-org/complement/internal"
 )
 
 // LoadSyncData loads sync data from disk or by doing a /sync request
@@ -72,10 +74,17 @@ func loadDataFromDisk(tempFile string) json.RawMessage {
 func doRequest(httpCli *http.Client, req *http.Request, token string) ([]byte, error) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	res, err := httpCli.Do(req)
+	defer internal.CloseIO(
+		res.Body,
+		fmt.Sprintf(
+			"doRequest: response body from %s %s",
+			res.Request.Method,
+			res.Request.URL.String(),
+		),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
-	defer res.Body.Close()
 	if res.StatusCode != 200 {
 		return nil, fmt.Errorf("response returned %s", res.Status)
 	}
