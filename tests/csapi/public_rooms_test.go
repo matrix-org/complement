@@ -224,13 +224,6 @@ func parsePublicRoomsResponse(t *testing.T, res *http.Response) []gjson.Result {
 	t.Helper()
 	body := must.ParseJSON(t, res.Body)
 
-	must.MatchGJSON(
-		t,
-		body,
-		match.JSONKeyPresent("chunk"),
-		match.JSONKeyTypeEqual("chunk", gjson.JSON),
-	)
-
 	chunk := body.Get("chunk")
 	if !chunk.Exists() {
 		t.Fatalf("`chunk` field on public rooms response does not exist, got body: %v", body)
