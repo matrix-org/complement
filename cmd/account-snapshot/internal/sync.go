@@ -74,6 +74,9 @@ func loadDataFromDisk(tempFile string) json.RawMessage {
 func doRequest(httpCli *http.Client, req *http.Request, token string) ([]byte, error) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	res, err := httpCli.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform request: %w", err)
+	}
 	defer internal.CloseIO(
 		res.Body,
 		fmt.Sprintf(
@@ -82,9 +85,6 @@ func doRequest(httpCli *http.Client, req *http.Request, token string) ([]byte, e
 			res.Request.URL.String(),
 		),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform request: %w", err)
-	}
 	if res.StatusCode != 200 {
 		return nil, fmt.Errorf("response returned %s", res.Status)
 	}

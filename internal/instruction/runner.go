@@ -207,6 +207,12 @@ func (r *Runner) runInstructionSet(contextStr string, hsURL string, instrs []ins
 			return fmt.Errorf("terminated")
 		}
 		res, err := cli.Do(req)
+		if err != nil {
+			err = isFatalErr(fmt.Errorf("%s : failed to perform HTTP request to %s with body %+v: %w", contextStr, req.URL.String(), instr.body, err))
+			if err != nil {
+				return err
+			}
+		}
 		defer internal.CloseIO(
 			res.Body,
 			fmt.Sprintf(
@@ -215,12 +221,6 @@ func (r *Runner) runInstructionSet(contextStr string, hsURL string, instrs []ins
 				res.Request.URL.String(),
 			),
 		)
-		if err != nil {
-			err = isFatalErr(fmt.Errorf("%s : failed to perform HTTP request to %s with body %+v: %w", contextStr, req.URL.String(), instr.body, err))
-			if err != nil {
-				return err
-			}
-		}
 
 		// parse the response if we have one (if bestEffort=true then we don't return an error above)
 		if res != nil && res.Body != nil {

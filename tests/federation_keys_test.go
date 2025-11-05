@@ -36,8 +36,8 @@ func TestInboundFederationKeys(t *testing.T) {
 	}
 
 	res, err := fedClient.Get("https://hs1/_matrix/key/v2/server")
-	defer internal.CloseIO(res.Body, "server key response body")
 	must.NotError(t, "failed to GET /keys", err)
+	defer internal.CloseIO(res.Body, "server key response body")
 
 	var keys = map[string]ed25519.PublicKey{}
 	var oldKeys = map[string]ed25519.PublicKey{}

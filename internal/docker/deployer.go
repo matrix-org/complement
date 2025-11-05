@@ -664,12 +664,12 @@ func waitForContainer(ctx context.Context, docker *client.Client, hsDep *Homeser
 			break
 		}
 		res, err := http.Get(versionsURL)
-		defer internal.CloseIO(res.Body, "waitForContainer: version response body")
 		if err != nil {
 			lastErr = fmt.Errorf("GET %s => error: %s", versionsURL, err)
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
+		defer internal.CloseIO(res.Body, "waitForContainer: version response body")
 		if res.StatusCode != 200 {
 			lastErr = fmt.Errorf("GET %s => HTTP %s", versionsURL, res.Status)
 			time.Sleep(50 * time.Millisecond)

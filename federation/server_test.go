@@ -57,7 +57,6 @@ func TestComplementServerIsSigned(t *testing.T) {
 		client := &http.Client{Transport: transport}
 
 		resp, err := client.Get("https://" + string(srv.ServerName()))
-		defer internal.CloseIO(resp.Body, "server response body")
 		if err != nil {
 			if tc.wantSuccess {
 				t.Fatalf("Failed to GET: %s", err)
@@ -65,6 +64,7 @@ func TestComplementServerIsSigned(t *testing.T) {
 				return // wanted failure, got failure
 			}
 		}
+		defer internal.CloseIO(resp.Body, "server response body")
 		if !tc.wantSuccess {
 			t.Fatalf("request succeeded when we expected it to fail")
 		}

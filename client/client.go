@@ -717,6 +717,9 @@ func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...Request
 	for {
 		// Perform the HTTP request
 		res, err := c.Client.Do(req)
+		if err != nil {
+			ct.Fatalf(t, "CSAPI.Do response returned error: %s", err)
+		}
 		// `defer` is function scoped but it's okay that we only clean up all requests at
 		// the end. To also be clear, `defer` arguments are evaluated at the time of the
 		// `defer` statement so we are only closing the original response body here. Our new
@@ -729,9 +732,6 @@ func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...Request
 				res.Request.URL.String(),
 			),
 		)
-		if err != nil {
-			ct.Fatalf(t, "CSAPI.Do response returned error: %s", err)
-		}
 
 		// Make a copy of the response body so that downstream callers can read it multiple
 		// times if needed and don't need to worry about closing it.
