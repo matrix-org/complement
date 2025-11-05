@@ -278,7 +278,7 @@ func TestSync(t *testing.T) {
 
 			t.Parallel()
 
-			// alice creates two rooms, which charlie (on our test server) joins
+			// alice creates two rooms, which hs2ObserverUser (on our test server) joins
 			srv := federation.NewServer(t, deployment,
 				federation.HandleKeyRequests(),
 				federation.HandleTransactionRequests(nil, nil),
@@ -286,21 +286,21 @@ func TestSync(t *testing.T) {
 			cancel := srv.Listen()
 			defer cancel()
 
-			charlie := srv.UserID("charlie")
+			hs2ObserverUser := srv.UserID("hs2ObserverUser")
 
 			redactionRoomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			redactionRoom := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), redactionRoomID, charlie)
+			redactionRoom := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), redactionRoomID, hs2ObserverUser)
 
 			sentinelRoomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-			sentinelRoom := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), sentinelRoomID, charlie)
+			sentinelRoom := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), sentinelRoomID, hs2ObserverUser)
 
-			// charlie creates a bogus redaction, which he sends out, followed by
+			// hs2ObserverUser creates a bogus redaction, which he sends out, followed by
 			// a good event - in another room - to act as a sentinel. It's not
 			// guaranteed, but hopefully if the sentinel is received, so was the
 			// redaction.
 			redactionEvent := srv.MustCreateEvent(t, redactionRoom, federation.Event{
 				Type:    "m.room.redaction",
-				Sender:  charlie,
+				Sender:  hs2ObserverUser,
 				Content: map[string]interface{}{},
 				Redacts: "$12345"})
 			redactionRoom.AddEvent(redactionEvent)
@@ -309,7 +309,7 @@ func TestSync(t *testing.T) {
 
 			sentinelEvent := srv.MustCreateEvent(t, sentinelRoom, federation.Event{
 				Type:    "m.room.test",
-				Sender:  charlie,
+				Sender:  hs2ObserverUser,
 				Content: map[string]interface{}{"body": "1234"},
 			})
 			sentinelRoom.AddEvent(sentinelEvent)
@@ -319,14 +319,14 @@ func TestSync(t *testing.T) {
 			// wait for the sentinel to arrive
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(sentinelRoomID, sentinelEvent.EventID()))
 
-			// charlie sends another batch of events to force a gappy sync.
+			// hs2ObserverUser sends another batch of events to force a gappy sync.
 			// We have to send 11 events to force a gap, since we use a filter with a timeline limit of 10 events.
 			pdus := make([]json.RawMessage, 11)
 			var lastSentEventId string
 			for i := range pdus {
 				ev := srv.MustCreateEvent(t, redactionRoom, federation.Event{
 					Type:    "m.room.message",
-					Sender:  charlie,
+					Sender:  hs2ObserverUser,
 					Content: map[string]interface{}{},
 				})
 				redactionRoom.AddEvent(ev)
@@ -404,7 +404,7 @@ func TestSync(t *testing.T) {
 				//
 				// Regression test for https://github.com/element-hq/synapse/issues/16948
 
-				charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "charlie"})
+				hs2ObserverUser := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "hs2ObserverUser"})
 				roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 
 				aliceSyncFilter := `{
@@ -415,23 +415,23 @@ func TestSync(t *testing.T) {
 				}`
 				_, initialSyncToken := alice.MustSync(t, client.SyncReq{Filter: aliceSyncFilter})
 
-				charlie.MustJoinRoom(t, roomID, nil)
+				hs2ObserverUser.MustJoinRoom(t, roomID, nil)
 				syncToken := alice.MustSyncUntil(t, client.SyncReq{Filter: aliceSyncFilter, Since: initialSyncToken},
-					syncDeviceListsHas("changed", charlie.UserID),
+					syncDeviceListsHas("changed", hs2ObserverUser.UserID),
 				)
 
 				// Charlie sends a message, and leaves
-				sendMessages(t, charlie, roomID, "test", 1)
-				charlie.MustLeaveRoom(t, roomID)
+				sendMessages(t, hs2ObserverUser, roomID, "test", 1)
+				hs2ObserverUser.MustLeaveRoom(t, roomID)
 
-				// Alice sees charlie in the "left" section
+				// Alice sees hs2ObserverUser in the "left" section
 				alice.MustSyncUntil(t, client.SyncReq{Filter: aliceSyncFilter, Since: syncToken},
-					syncDeviceListsHas("left", charlie.UserID),
+					syncDeviceListsHas("left", hs2ObserverUser.UserID),
 				)
 
 				// ... even if she makes the request twice
 				resp, _ := alice.MustSync(t, client.SyncReq{Filter: aliceSyncFilter, Since: syncToken})
-				if err := syncDeviceListsHas("left", charlie.UserID)(alice.UserID, resp); err != nil {
+				if err := syncDeviceListsHas("left", hs2ObserverUser.UserID)(alice.UserID, resp); err != nil {
 					t.Error(err)
 				}
 			})
@@ -442,11 +442,11 @@ func TestSync(t *testing.T) {
 // This is a regression test for
 // https://github.com/matrix-org/synapse/issues/16463
 //
-// We test this by having a local user (alice) and remote user (charlie) in a
+// We test this by having a local user (alice) and remote user (hs2ObserverUser) in a
 // room. Charlie sends 50+ messages into the room without sending to Alice's
 // server. Charlie then sends one more which get sent to Alice.
 //
-// Alice should observe that she receives some (though not all) of charlie's
+// Alice should observe that she receives some (though not all) of hs2ObserverUser's
 // events, with the `limited` flag set.
 func TestSyncTimelineGap(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
@@ -461,10 +461,10 @@ func TestSyncTimelineGap(t *testing.T) {
 	cancel := srv.Listen()
 	defer cancel()
 
-	charlie := srv.UserID("charlie")
+	hs2ObserverUser := srv.UserID("hs2ObserverUser")
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
-	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, charlie)
+	room := srv.MustJoinRoom(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), roomID, hs2ObserverUser)
 
 	filterID := createFilter(t, alice, map[string]interface{}{
 		"room": map[string]interface{}{
@@ -490,7 +490,7 @@ func TestSyncTimelineGap(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		event := srv.MustCreateEvent(t, room, federation.Event{
 			Type:   "m.room.message",
-			Sender: charlie,
+			Sender: hs2ObserverUser,
 			Content: map[string]interface{}{
 				"body":    "Remote message " + strconv.Itoa(i),
 				"msgtype": "m.text",
@@ -504,7 +504,7 @@ func TestSyncTimelineGap(t *testing.T) {
 	// previous 50.
 	lastEvent := srv.MustCreateEvent(t, room, federation.Event{
 		Type:   "m.room.message",
-		Sender: charlie,
+		Sender: hs2ObserverUser,
 		Content: map[string]interface{}{
 			"body":    "End",
 			"msgtype": "m.text",
@@ -521,11 +521,11 @@ func TestSyncTimelineGap(t *testing.T) {
 	// We now test two different modes of /sync work. The first is when we are
 	// syncing when the server receives the `lastEvent` (and so, at least
 	// Synapse, will start sending down some events immediately). In this mode
-	// we may see alice's message, but charlie's messages should set the limited
+	// we may see alice's message, but hs2ObserverUser's messages should set the limited
 	// flag.
 	//
 	// The second mode is when we incremental sync *after* all the events have
-	// finished being persisted, and so we get only charlie's messages.
+	// finished being persisted, and so we get only hs2ObserverUser's messages.
 	t.Run("incremental", func(t *testing.T) {
 		timelineSequence := make([]gjson.Result, 0)
 
@@ -575,7 +575,7 @@ func TestSyncTimelineGap(t *testing.T) {
 						t.Fatalf("Got message from alice after limited flag")
 					}
 				} else {
-					if ev.Get("sender").Str == charlie {
+					if ev.Get("sender").Str == hs2ObserverUser {
 						t.Fatalf("Got message from remote without limited flag being set")
 					}
 				}
@@ -632,24 +632,24 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
-	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{
-		LocalpartSuffix: "charlie",
+	hs2ObserverUser := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "hs2ObserverUser",
 	})
 
 	// Alice creates two rooms: one with her and Bob, and a second with her and Charlie.
 	bobRoomID := alice.MustCreateRoom(t, map[string]interface{}{})
-	charlieRoomID := alice.MustCreateRoom(t, map[string]interface{}{})
-	nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, bobRoomID), client.SyncJoinedTo(alice.UserID, charlieRoomID))
+	hs2ObserverUserRoomID := alice.MustCreateRoom(t, map[string]interface{}{})
+	nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, bobRoomID), client.SyncJoinedTo(alice.UserID, hs2ObserverUserRoomID))
 
 	alice.MustInviteRoom(t, bobRoomID, bob.UserID)
-	alice.MustInviteRoom(t, charlieRoomID, charlie.UserID)
+	alice.MustInviteRoom(t, hs2ObserverUserRoomID, hs2ObserverUser.UserID)
 	bob.MustJoinRoom(t, bobRoomID, nil)
-	charlie.MustJoinRoom(t, charlieRoomID, nil)
+	hs2ObserverUser.MustJoinRoom(t, hs2ObserverUserRoomID, nil)
 
 	nextBatch = alice.MustSyncUntil(t,
 		client.SyncReq{Since: nextBatch},
 		client.SyncJoinedTo(bob.UserID, bobRoomID),
-		client.SyncJoinedTo(charlie.UserID, charlieRoomID),
+		client.SyncJoinedTo(hs2ObserverUser.UserID, hs2ObserverUserRoomID),
 	)
 
 	// Bob and Charlie mark themselves as online.
@@ -657,7 +657,7 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 		"presence": "online",
 	})
 	bob.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", bob.UserID, "status"}, reqBody)
-	charlie.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", charlie.UserID, "status"}, reqBody)
+	hs2ObserverUser.Do(t, "PUT", []string{"_matrix", "client", "v3", "presence", hs2ObserverUser.UserID, "status"}, reqBody)
 
 	// Alice should see that Bob and Charlie are online. She may see this happen
 	// simultaneously in one /sync response, or separately in two /sync
@@ -676,14 +676,14 @@ func TestPresenceSyncDifferentRooms(t *testing.T) {
 			if x.Get("sender").Str == bob.UserID {
 				seenBobOnline = true
 			}
-			if x.Get("sender").Str == charlie.UserID {
+			if x.Get("sender").Str == hs2ObserverUser.UserID {
 				seenCharlieOnline = true
 			}
 			if seenBobOnline && seenCharlieOnline {
 				return nil
 			}
 		}
-		return fmt.Errorf("all users not present yet, bob %t charlie %t", seenBobOnline, seenCharlieOnline)
+		return fmt.Errorf("all users not present yet, bob %t hs2ObserverUser %t", seenBobOnline, seenCharlieOnline)
 	})
 }
 
@@ -730,6 +730,165 @@ func TestRoomSummary(t *testing.T) {
 	bob.MustSyncUntil(t, client.SyncReq{Since: sinceToken}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
 	// .. and Alice as well.
 	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID), joinedCheck)
+}
+
+// TestLeaveReinviteSync tests that when a user is kicked and then re-invited,
+// they only see an invite in their sync response, not both an invite and leave event.
+func TestLeaveReinviteSync(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	// 1. Alice creates a room and Bob joins
+	roomID := alice.MustCreateRoom(t, map[string]any{
+		"preset": "public_chat",
+	})
+	bob.MustJoinRoom(t, roomID, nil)
+
+	// 2. Bob does a sync and verifies they see the join
+	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+	// 3. Alice kicks Bob from the room and then re-invites them.
+	// For kicking, we need to use the POST /rooms/{roomId}/kick endpoint
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
+		client.WithJSONBody(t, map[string]any{
+			"user_id": bob.UserID,
+		}),
+	)
+
+	// Wait until Bob is kicked.
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+
+	// Alice re-invites Bob
+	alice.MustInviteRoom(t, roomID, bob.UserID)
+
+	// 4. Bob does a sync
+	jsonRes, _ := bob.MustSync(t, client.SyncReq{Since: bobSince})
+
+	// Bob should only see an invite, not both an invite and a leave event
+	if !jsonRes.Get("rooms.invite." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Expected to see the room in the invite section of the sync response")
+	}
+
+	// Make sure there's no leave event for the room
+	if jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Room should not appear in the leave section of the sync response")
+	}
+}
+
+// TestLeaveJoinLeaveSync tests that when a user leaves, rejoins, and leaves again,
+// they only see a leave event in their sync response, not both a join and a leave event.
+func TestLeaveJoinLeaveSync(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	// 1. Alice creates a room and Bob joins
+	roomID := alice.MustCreateRoom(t, map[string]any{
+		"preset": "public_chat",
+	})
+	bob.MustJoinRoom(t, roomID, nil)
+
+	// 2. Bob does a sync and verifies they see the join
+	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+	// 3. Bob leaves the room
+	bob.MustLeaveRoom(t, roomID)
+
+	// 4. Bob rejoins the room
+	bob.MustJoinRoom(t, roomID, nil)
+
+	// 5. Bob leaves the room again
+	bob.MustLeaveRoom(t, roomID)
+
+	// 6. Bob does a sync
+	jsonRes, _ := bob.MustSync(t, client.SyncReq{Since: bobSince})
+
+	// Bob should only see a leave event, not both a join and a leave event
+	if !jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Expected to see the room in the leave section of the sync response")
+	}
+
+	// Make sure there's no join event for the room
+	if jsonRes.Get("rooms.join." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Room should not appear in the join section of the sync response")
+	}
+}
+
+// TestLeaveReinviteSyncFederated tests that when a user is kicked and then re-invited over federation,
+// they only see an invite in their sync response, not both an invite and leave event.
+func TestLeaveReinviteSyncFederated(t *testing.T) {
+	deployment := complement.Deploy(t, 2)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	
+	// This user is here to flag when events arrive over federation to hs2.
+	hs2ObserverUser := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+
+	// 1. Alice creates a room and both Bob and Charlie join
+	roomID := alice.MustCreateRoom(t, map[string]any{
+		"preset": "public_chat",
+	})
+
+	// Users on hs2 need to join via federation, so we need to specify the server name
+	alice.MustInviteRoom(t, roomID, bob.UserID)
+	alice.MustInviteRoom(t, roomID, hs2ObserverUser.UserID)
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+	hs2ObserverUser.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(hs2ObserverUser.UserID, roomID))
+
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
+	hs2ObserverUser.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
+
+	// 2. Both Bob and Charlie do a sync and verify that they see the join
+	bobSince := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+	hs2ObserverUser.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(hs2ObserverUser.UserID, roomID))
+
+	// 3. Alice kicks Bob from the room and then re-invites them.
+	// For kicking, we need to use the POST /rooms/{roomId}/kick endpoint
+	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
+		client.WithJSONBody(t, map[string]any{
+			"user_id": bob.UserID,
+		}),
+	)
+
+	// Wait until Bob is kicked.
+	aliceSince := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+	
+	// Wait until hs2 sees that Bob has been kicked. If we don't wait, then we
+	// have no idea whether `hs2` received the kick event.
+	hs2ObserverUser.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, roomID))
+
+	// Alice re-invites Bob
+	alice.MustInviteRoom(t, roomID, bob.UserID)
+	alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncInvitedTo(bob.UserID, roomID))
+	
+	// Wait until hs2 sees that Bob has been re-invited. If we don't wait, then
+	// Bob might sync too early (slow federation) and catch the kick in one sync
+	// iteration, and the invite in another, invalidating the test conditions.
+	hs2ObserverUser.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+
+	// 4. Bob does an incremental sync. Bob's last sync was after they joined the room.
+	jsonRes, _ := bob.MustSync(t, client.SyncReq{Since: bobSince})
+
+	// Bob should only see an invite, not both an invite and a leave event
+	if !jsonRes.Get("rooms.invite." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Expected to see the room in the invite section of the sync response")
+	}
+
+	// Make sure there's no leave event for the room
+	if jsonRes.Get("rooms.leave." + client.GjsonEscape(roomID)).Exists() {
+		t.Errorf("Room should not appear in the leave section of the sync response")
+	}
 }
 
 func sendMessages(t *testing.T, client *client.CSAPI, roomID string, prefix string, count int) {
