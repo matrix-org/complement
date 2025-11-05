@@ -219,6 +219,7 @@ func TestPublicRooms(t *testing.T) {
 }
 
 func parsePublicRoomsResponse(t *testing.T, res *http.Response) []gjson.Result {
+	t.Helper()
 	body := must.ParseJSON(t, res.Body)
 
 	must.MatchGJSON(
