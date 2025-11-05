@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -57,6 +56,16 @@ func TestPublicRooms(t *testing.T) {
 					}
 
 					return true
+				}),
+			)
+
+			// Remove the room from the public rooms list to avoid polluting other tests.
+			authedClient.MustDo(
+				t,
+				"PUT",
+				[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
+				client.WithJSONBody(t, map[string]interface{}{
+					"visibility": "private",
 				}),
 			)
 		})
