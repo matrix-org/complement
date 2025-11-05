@@ -42,7 +42,7 @@ func TestPublicRooms(t *testing.T) {
 						"generic_search_term": "wombles",
 					},
 				}),
-				client.WithRetryUntil(15*time.Second, func(res *http.Response) bool {
+				client.WithRetryUntil(authedClient.SyncUntilTimeout, func(res *http.Response) bool {
 					results := parsePublicRoomsResponse(t, res)
 
 					if len(results) != 1 {
