@@ -134,7 +134,9 @@ func TestPublicRooms(t *testing.T) {
 						}),
 					)
 
-					t.Logf("Warning: Found unexpected rooms in public rooms list: %v", unexpectedRooms)
+					if len(unexpectedRooms) > 0 {
+						t.Logf("Warning: Found unexpected rooms in public rooms list: %v", unexpectedRooms)
+					}
 
 					// Verify required keys are present in the room data.
 					err := should.MatchGJSON(
