@@ -19,7 +19,7 @@ import (
 func TestPublicRooms(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	hostname := deployment.GetFullyQualifiedHomeserverName(t, "hs1")
+	server_name := deployment.GetFullyQualifiedHomeserverName(t, "hs1")
 
 	t.Run("parallel", func(t *testing.T) {
 		// sytest: Can search public room list
@@ -83,7 +83,7 @@ func TestPublicRooms(t *testing.T) {
 
 			for _, roomConfig := range roomConfigs {
 				t.Run(fmt.Sprintf("Creating room with alias %s", roomConfig.alias), func(t *testing.T) {
-					expectedCanonicalAlias := fmt.Sprintf("#%s:%s", roomConfig.alias, hostname)
+					expectedCanonicalAlias := fmt.Sprintf("#%s:%s", roomConfig.alias, server_name)
 
 					// Create the room
 					roomOptions := map[string]interface{}{
