@@ -247,14 +247,21 @@ func TestMessagesOverFederation(t *testing.T) {
 		LocalpartSuffix: "bob",
 	})
 
+	// Test to make sure all of the messages sent in the room are visible to someone else
+	// who joins the room later on.
 	t.Run("Visible shared history after joining new room (backfill)", func(t *testing.T) {
-		// Some homeservers have different hard-limits for /messages requests (Synapse's
-		// `MAX_LIMIT` is 1000) so we test a few different variations.
+		// Some homeservers have different hard-limits for `/messages?limit=xxx` requests
+		// (Synapse's `MAX_LIMIT` is 1000) so we test a few different variations.
 		for _, testCase := range []struct {
 			name                   string
 			numberOfMessagesToSend int
 			messagesRequestLimit   int
 		}{
+			// Test where the `/messages?limit=xxx` is <= than the number of messages the
+			// homeserver tries to backfill before responding to the `/messages` request.
+			// Because the Matrix spec default `limit` is 10, we can assume that this is lower
+			// than the number of messages that *any* homeserver will try to backfill before
+			// responding.
 			{
 				name: "`messagesRequestLimit` is lower than the number of messages backfilled (assumed)",
 				// We send more messages than fit in one request
@@ -263,13 +270,15 @@ func TestMessagesOverFederation(t *testing.T) {
 				// the number of messages that are backfilled.
 				messagesRequestLimit: 10,
 			},
-			// {
-			// 	name: "`messagesRequestLimit` is greater than the number of messages backfilled (in Synapse, 100)",
-			// 	// We send more messages than fit in one request
-			// 	numberOfMessagesToSend: 300,
-			// 	// We request more messages than Synapse tries to backfill at once (which is 100)
-			// 	messagesRequestLimit: 200,
-			// },
+			// Test where the `/messages?limit=xxx` is greater than the number of messages
+			// Synapse tries to backfill (100) before responding to the `/messages` request.
+			{
+				name: "`messagesRequestLimit` is greater than the number of messages backfilled (in Synapse, 100)",
+				// We send more messages than fit in one request
+				numberOfMessagesToSend: 300,
+				// We request more messages than Synapse tries to backfill at once (which is 100)
+				messagesRequestLimit: 200,
+			},
 		} {
 			t.Run(testCase.name, func(t *testing.T) {
 				// Alice creates the room
@@ -328,6 +337,19 @@ func TestMessagesOverFederation(t *testing.T) {
 					messagesResBody := client.ParseJSON(t, messagesRes)
 					actualEventIDsFromRequest := extractEventIDsFromMessagesResponse(t, messagesResBody)
 					actualEventIDs = append(actualEventIDs, actualEventIDsFromRequest...)
+
+					// Make it easy to understand what each `/messages` request returned
+					relevantActualEventIDsFromRequest := filterEventIDs(t, actualEventIDsFromRequest, eventIDs)
+					firstEventIndex := -1
+					lastEventIndex := -1
+					if len(relevantActualEventIDsFromRequest) > 0 {
+						firstEventIndex = slices.Index(eventIDs, relevantActualEventIDsFromRequest[0])
+						lastEventIndex = slices.Index(eventIDs, relevantActualEventIDsFromRequest[len(relevantActualEventIDsFromRequest)-1])
+					}
+					t.Logf("Fetched %d events from the `/messages` endpoint that included events %d to %d",
+						len(actualEventIDsFromRequest),
+						firstEventIndex, lastEventIndex,
+					)
 
 					endTokenRes := gjson.GetBytes(messagesResBody, "end")
 					// "`end`: If no further events are available (either because we have reached the
@@ -425,12 +447,7 @@ func extractEventIDsFromMessagesResponse(
 	return eventIDs
 }
 
-// assertMessagesTimeline asserts all events are in the `/messages` response in the
-// given order. Other unrelated events can be in between.
-//
-// messagesResBody: from a `/messages?dir=b` request (these will be in reverse-chronological order)
-// eventIDs: the list of event IDs in chronological order that we expect to see in the response
-func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expectedEventIDs []string) {
+func filterEventIDs(t *testing.T, actualEventIDs []string, expectedEventIDs []string) []string {
 	t.Helper()
 
 	relevantActualEventIDs := make([]string, 0, len(expectedEventIDs))
@@ -439,6 +456,19 @@ func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expe
 			relevantActualEventIDs = append(relevantActualEventIDs, eventID)
 		}
 	}
+
+	return relevantActualEventIDs
+}
+
+// assertMessagesTimeline asserts all events are in the `/messages` response in the
+// given order. Other unrelated events can be in between.
+//
+// messagesResBody: from a `/messages?dir=b` request (these will be in reverse-chronological order)
+// eventIDs: the list of event IDs in chronological order that we expect to see in the response
+func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expectedEventIDs []string) {
+	t.Helper()
+
+	relevantActualEventIDs := filterEventIDs(t, actualEventIDs, expectedEventIDs)
 	// Put them in chronological order to match the expected list
 	// slices.Reverse(relevantActualEvents)
 	slices.Reverse(relevantActualEventIDs)
