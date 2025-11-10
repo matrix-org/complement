@@ -29,6 +29,7 @@ func TestDelayedEvents(t *testing.T) {
 
 	user := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 	user2 := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	unauthedClient := deployment.UnauthenticatedClient(t, hsName)
 
 	roomID := user.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -166,14 +167,14 @@ func TestDelayedEvents(t *testing.T) {
 	})
 
 	t.Run("cannot update a delayed event without a delay ID", func(t *testing.T) {
-		res := user.Do(t, "POST", append(getPathForUpdateDelayedEvents(), ""))
+		res := unauthedClient.Do(t, "POST", append(getPathForUpdateDelayedEvents(), ""))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 		})
 	})
 
 	t.Run("cannot update a delayed event without a request body", func(t *testing.T) {
-		res := user.Do(t, "POST", append(getPathForUpdateDelayedEvents(), "abc"))
+		res := unauthedClient.Do(t, "POST", append(getPathForUpdateDelayedEvents(), "abc"))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 400,
 			JSON: []match.JSON{
@@ -183,7 +184,7 @@ func TestDelayedEvents(t *testing.T) {
 	})
 
 	t.Run("cannot update a delayed event without an action", func(t *testing.T) {
-		res := user.Do(
+		res := unauthedClient.Do(
 			t,
 			"POST",
 			append(getPathForUpdateDelayedEvents(), "abc"),
@@ -198,7 +199,7 @@ func TestDelayedEvents(t *testing.T) {
 	})
 
 	t.Run("cannot update a delayed event with an invalid action", func(t *testing.T) {
-		res := user.Do(
+		res := unauthedClient.Do(
 			t,
 			"POST",
 			append(getPathForUpdateDelayedEvents(), "abc"),
@@ -218,7 +219,7 @@ func TestDelayedEvents(t *testing.T) {
 		for _, action := range []string{"cancel", "restart", "send"} {
 			t.Run(fmt.Sprintf("cannot %s a delayed event without a matching delay ID", action), func(t *testing.T) {
 				t.Parallel()
-				res := user.Do(
+				res := unauthedClient.Do(
 					t,
 					"POST",
 					append(getPathForUpdateDelayedEvents(), "abc"),
@@ -258,7 +259,7 @@ func TestDelayedEvents(t *testing.T) {
 			StatusCode: 404,
 		})
 
-		user.MustDo(
+		unauthedClient.MustDo(
 			t,
 			"POST",
 			append(getPathForUpdateDelayedEvents(), delayID),
@@ -302,7 +303,7 @@ func TestDelayedEvents(t *testing.T) {
 			StatusCode: 404,
 		})
 
-		user.MustDo(
+		unauthedClient.MustDo(
 			t,
 			"POST",
 			append(getPathForUpdateDelayedEvents(), delayID),
@@ -346,7 +347,7 @@ func TestDelayedEvents(t *testing.T) {
 			StatusCode: 404,
 		})
 
-		user.MustDo(
+		unauthedClient.MustDo(
 			t,
 			"POST",
 			append(getPathForUpdateDelayedEvents(), delayID),
