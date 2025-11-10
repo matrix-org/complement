@@ -18,7 +18,7 @@ import (
 func TestPublicRooms(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
-	server_name := deployment.GetFullyQualifiedHomeserverName(t, "hs1")
+	hs1ServerName := deployment.GetFullyQualifiedHomeserverName(t, "hs1")
 
 	// sytest: Can search public room list
 	t.Run("Can search public room list", func(t *testing.T) {
@@ -29,6 +29,16 @@ func TestPublicRooms(t *testing.T) {
 			"name":       "Test Name",
 			"topic":      "Test Topic Wombles",
 		})
+
+		// Remove the room from the public rooms list to avoid polluting other tests.
+		defer authedClient.MustDo(
+			t,
+			"PUT",
+			[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
+			client.WithJSONBody(t, map[string]interface{}{
+				"visibility": "private",
+			}),
+		)
 
 		authedClient.MustDo(
 			t,
@@ -56,16 +66,6 @@ func TestPublicRooms(t *testing.T) {
 				return true
 			}),
 		)
-
-		// Remove the room from the public rooms list to avoid polluting other tests.
-		authedClient.MustDo(
-			t,
-			"PUT",
-			[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
-			client.WithJSONBody(t, map[string]interface{}{
-				"visibility": "private",
-			}),
-		)
 	})
 
 	// sytest: Name/topic keys are correct
@@ -89,7 +89,7 @@ func TestPublicRooms(t *testing.T) {
 
 		for _, roomConfig := range roomConfigs {
 			t.Run(fmt.Sprintf("Creating room with alias %s", roomConfig.alias), func(t *testing.T) {
-				expectedCanonicalAlias := fmt.Sprintf("#%s:%s", roomConfig.alias, server_name)
+				expectedCanonicalAlias := fmt.Sprintf("#%s:%s", roomConfig.alias, hs1ServerName)
 
 				// Create the room
 				roomOptions := map[string]interface{}{
@@ -107,6 +107,16 @@ func TestPublicRooms(t *testing.T) {
 
 				roomID := authedClient.MustCreateRoom(t, roomOptions)
 				t.Logf("Created room %s with alias %s", roomID, roomConfig.alias)
+
+				// Remove the room from the public rooms list to avoid polluting other tests.
+				defer authedClient.MustDo(
+					t,
+					"PUT",
+					[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
+					client.WithJSONBody(t, map[string]interface{}{
+						"visibility": "private",
+					}),
+				)
 
 				// Poll /publicRooms until the room appears with the correct data
 
@@ -210,16 +220,6 @@ func TestPublicRooms(t *testing.T) {
 
 					t.Fail()
 				}
-
-				// Remove the room from the public rooms list to avoid polluting other tests.
-				authedClient.MustDo(
-					t,
-					"PUT",
-					[]string{"_matrix", "client", "v3", "directory", "list", "room", roomID},
-					client.WithJSONBody(t, map[string]interface{}{
-						"visibility": "private",
-					}),
-				)
 			})
 		}
 	})
