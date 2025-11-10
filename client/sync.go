@@ -272,8 +272,8 @@ func SyncPresenceHas(fromUser string, expectedPresence *string, checks ...func(g
 // syncMembershipIn checks that `userID` has `membership` in `roomID`, with optional
 // extra checks on the found membership event.
 //
-// This can be used to passively observe another user's membership changes in a room
-// although we assume that the observing client is joined to the room.
+// This can be also used to passively observe another user's membership changes in a
+// room although we assume that the observing client is joined to the room.
 //
 // Note: This will not work properly with leave/ban membership for initial syncs, see
 // https://github.com/matrix-org/matrix-doc/issues/3537
