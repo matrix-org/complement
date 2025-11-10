@@ -227,22 +227,15 @@ func TestFederationRoomsInvite(t *testing.T) {
 				"is_direct": true,
 			})
 			bob.MustJoinRoom(t, roomID, []spec.ServerName{})
-			bob.MustSyncUntil(t, client.SyncReq{},
-				client.SyncTimelineHas(roomID, func(result gjson.Result) bool {
-					// We expect a membership event ..
-					if result.Get("type").Str != spec.MRoomMember {
-						return false
-					}
-					// .. for Bob
-					if result.Get("state_key").Str != bob.UserID {
-						return false
-					}
-					// Check that we've got tbe expected is_idrect flag
-					return result.Get("unsigned.prev_content.membership").Str == "invite" &&
-						result.Get("unsigned.prev_content.is_direct").Bool() == true &&
-						result.Get("unsigned.prev_sender").Str == alice.UserID
-				}),
-			)
+
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID, func(ev gjson.Result) bool {
+				must.MatchGJSON(t, ev,
+					match.JSONKeyEqual("unsigned.prev_content.membership", "invite"),
+					match.JSONKeyEqual("unsigned.prev_content.is_direct", true),
+					match.JSONKeyEqual("unsigned.prev_sender", alice.UserID),
+				)
+				return true
+			}))
 		})
 	})
 }
