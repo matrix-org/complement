@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
+	"github.com/matrix-org/complement/internal"
 	complementRuntime "github.com/matrix-org/complement/runtime"
 
 	"github.com/docker/docker/api/types/container"
@@ -668,6 +669,7 @@ func waitForContainer(ctx context.Context, docker *client.Client, hsDep *Homeser
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
+		defer internal.CloseIO(res.Body, "waitForContainer: version response body")
 		if res.StatusCode != 200 {
 			lastErr = fmt.Errorf("GET %s => HTTP %s", versionsURL, res.Status)
 			time.Sleep(50 * time.Millisecond)
