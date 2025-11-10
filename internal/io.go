@@ -22,14 +22,14 @@ import (
 //
 // ```go
 // res, err := client.Do(req)
-//	defer func(c io.Closer) {
-//		if c != nil {
-//			err := c.Close()
-//			if err != nil {
-//				log.Fatalf("error closing request body stream %v", err)
-//			}
-//		}
-//	}(res.Body)
+// defer func(c io.Closer) {
+// 	if c != nil {
+// 		err := c.Close()
+// 		if err != nil {
+// 			log.Fatalf("error closing request body stream %v", err)
+// 		}
+// 	}
+// }(res.Body)
 // ```
 func CloseIO(c io.Closer, contextString string) {
 	if c != nil {
