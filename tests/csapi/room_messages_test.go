@@ -1,9 +1,13 @@
 package csapi_tests
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -15,6 +19,7 @@ import (
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // sytest: POST /rooms/:room_id/send/:event_type sends a message
@@ -219,4 +224,282 @@ func TestRoomMessagesLazyLoadingLocalUser(t *testing.T) {
 			}),
 		},
 	})
+}
+
+type MessageDraft struct {
+	Sender  *client.CSAPI
+	Message string
+}
+
+type EventInfo struct {
+	MessageDraft MessageDraft
+	EventID      string
+}
+
+func TestMessagesOverFederation(t *testing.T) {
+	deployment := complement.Deploy(t, 2)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
+		LocalpartSuffix: "alice",
+	})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{
+		LocalpartSuffix: "bob",
+	})
+
+	t.Run("Visible history after joining new room (backfill)", func(t *testing.T) {
+		// Some homeservers have different hard-limits for /messages requests (Synapse's
+		// `MAX_LIMIT` is 1000) so we test a few different variations.
+		for _, testCase := range []struct {
+			name                   string
+			numberOfMessagesToSend int
+			messagesRequestLimit   int
+		}{
+			{
+				name: "`messagesRequestLimit` is lower than the number of messages backfilled (assumed)",
+				// We send more messages than fit in one request
+				numberOfMessagesToSend: 20,
+				// This is the default limit in the Matrix spec so it's bound to be lower than
+				// the number of messages that are backfilled.
+				messagesRequestLimit: 10,
+			},
+			// {
+			// 	name: "`messagesRequestLimit` is greater than the number of messages backfilled (in Synapse, 100)",
+			// 	// We send more messages than fit in one request
+			// 	numberOfMessagesToSend: 300,
+			// 	// We request more messages than Synapse tries to backfill at once (which is 100)
+			// 	messagesRequestLimit: 200,
+			// },
+		} {
+			t.Run(testCase.name, func(t *testing.T) {
+				// Alice creates the room
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+
+				// Keep track of the order
+				eventIDs := make([]string, 0)
+				// Map from event_id to event info
+				eventMap := make(map[string]EventInfo)
+
+				messageDrafts := make([]MessageDraft, 0, testCase.numberOfMessagesToSend)
+				for i := 0; i < testCase.numberOfMessagesToSend; i++ {
+					messageDrafts = append(messageDrafts, MessageDraft{alice, fmt.Sprintf("Filler message %d to increase history size.", i+1)})
+				}
+				sendAndTrackMessages(t, roomID, messageDrafts, &eventIDs, &eventMap)
+
+				// Bob joins the room
+				bob.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
+				awaitPartialStateJoinCompletion(t, roomID, bob)
+
+				// Make it easy to cross-reference the events being talked about in the logs
+				for eventIndex, eventID := range eventIDs {
+					// messageDraft := eventMap[eventID].MessageDraft
+					t.Logf("Message %d -> event_id=%s", eventIndex, eventID)
+				}
+
+				// Keep paginating backwards until we reach the start of the room
+				actualEventIDs := make(
+					[]string,
+					0,
+					// This is a minimum capacity (there will be more events)
+					testCase.numberOfMessagesToSend,
+				)
+				fromToken := ""
+				for {
+					messageQueryParams := url.Values{
+						"dir":   []string{"b"},
+						"limit": []string{strconv.Itoa(testCase.messagesRequestLimit)},
+					}
+					if fromToken != "" {
+						messageQueryParams.Set("from", fromToken)
+					}
+
+					messagesRes := bob.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
+						client.WithContentType("application/json"),
+						client.WithQueries(messageQueryParams),
+					)
+					messagesResBody := client.ParseJSON(t, messagesRes)
+					actualEventIDsFromRequest := extractEventIDsFromMessagesResponse(t, messagesResBody)
+					actualEventIDs = append(actualEventIDs, actualEventIDsFromRequest...)
+
+					endTokenRes := gjson.GetBytes(messagesResBody, "end")
+					// "`end`: If no further events are available (either because we have reached the
+					// start of the timeline, or because the user does not have permission to see
+					// any more events), this property is omitted from the response." (Matrix spec)
+					if !endTokenRes.Exists() {
+						break
+					}
+					fromToken = endTokenRes.Str
+
+					// Or if we don't see any more events, we will assume that we reached the
+					// start of the room. No more to paginate.
+					if len(actualEventIDsFromRequest) == 0 {
+						break
+					}
+				}
+
+				// Assert timeline order
+				assertMessagesInTimelineInOrder(t, actualEventIDs, eventIDs)
+			})
+		}
+	})
+}
+
+func sendMessageDrafts(
+	t *testing.T,
+	roomID string,
+	messageDrafts []MessageDraft,
+) []string {
+	t.Helper()
+
+	eventIDs := make([]string, len(messageDrafts))
+	for messageDraftIndex, messageDraft := range messageDrafts {
+		eventID := messageDraft.Sender.SendEventSynced(t, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    messageDraft.Message,
+			},
+		})
+		eventIDs[messageDraftIndex] = eventID
+	}
+
+	return eventIDs
+}
+
+// sendAndTrackMessages sends the given message drafts to the room, keeping track of the
+// new events in the list of `eventIDs` and `eventMap`. Returns the list of new event
+// IDs that were sent.
+func sendAndTrackMessages(
+	t *testing.T,
+	roomID string,
+	messageDrafts []MessageDraft,
+	eventIDs *[]string,
+	eventMap *map[string]EventInfo,
+) []string {
+	t.Helper()
+
+	newEventIDs := sendMessageDrafts(t, roomID, messageDrafts)
+
+	*eventIDs = append(*eventIDs, newEventIDs...)
+	for i, eventID := range newEventIDs {
+		(*eventMap)[eventID] = EventInfo{
+			MessageDraft: messageDrafts[i],
+			EventID:      eventID,
+		}
+	}
+
+	return newEventIDs
+}
+
+// extractEventIDsFromMessagesResponse extracts the event IDs from the given
+// `/messages` response body.
+func extractEventIDsFromMessagesResponse(
+	t *testing.T,
+	messagesResBody json.RawMessage,
+) []string {
+	t.Helper()
+
+	wantKey := "chunk"
+	keyRes := gjson.GetBytes(messagesResBody, wantKey)
+	if !keyRes.Exists() {
+		t.Fatalf("extractEventIDsFromMessagesResponse: missing key '%s'", wantKey)
+	}
+	if !keyRes.IsArray() {
+		t.Fatalf("extractEventIDsFromMessagesResponse: key '%s' is not an array (was %s)", wantKey, keyRes.Type)
+	}
+
+	var eventIDs []string
+	actualEvents := keyRes.Array()
+	for _, event := range actualEvents {
+		eventIDs = append(eventIDs, event.Get("event_id").Str)
+	}
+
+	return eventIDs
+}
+
+// assertMessagesTimeline asserts all events are in the `/messages` response in the
+// given order. Other unrelated events can be in between.
+//
+// messagesResBody: from a `/messages?dir=b` request (these will be in reverse-chronological order)
+// eventIDs: the list of event IDs in chronological order that we expect to see in the response
+func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expectedEventIDs []string) {
+	t.Helper()
+
+	relevantActualEventIDs := make([]string, 0, len(expectedEventIDs))
+	for _, eventID := range actualEventIDs {
+		if slices.Contains(expectedEventIDs, eventID) {
+			relevantActualEventIDs = append(relevantActualEventIDs, eventID)
+		}
+	}
+	// Put them in chronological order to match the expected list
+	// slices.Reverse(relevantActualEvents)
+	slices.Reverse(relevantActualEventIDs)
+
+	expectedLines := make([]string, len(expectedEventIDs))
+	for i, expectedEventID := range expectedEventIDs {
+		isExpectedInActual := slices.Contains(relevantActualEventIDs, expectedEventID)
+		isMissingIndicatorString := " "
+		if !isExpectedInActual {
+			isMissingIndicatorString = "?"
+		}
+
+		expectedLines[i] = fmt.Sprintf("%2d: %s  %s", i, isMissingIndicatorString, expectedEventID)
+	}
+	expectedDiffString := strings.Join(expectedLines, "\n")
+
+	actualLines := make([]string, len(relevantActualEventIDs))
+	for actualEventIndex, actualEventID := range relevantActualEventIDs {
+		isActualInExpected := slices.Contains(expectedEventIDs, actualEventID)
+		isActualInExpectedIndicatorString := " "
+		if isActualInExpected {
+			isActualInExpectedIndicatorString = "+"
+		}
+
+		expectedIndex := slices.Index(expectedEventIDs, actualEventID)
+		expectedIndexString := ""
+		if actualEventIndex != expectedIndex {
+			expectedDirectionString := "⬆️"
+			if expectedIndex > actualEventIndex {
+				expectedDirectionString = "⬇️"
+			}
+
+			expectedIndexString = fmt.Sprintf(" (expected index %d %s)", expectedIndex, expectedDirectionString)
+		}
+
+		actualLines[actualEventIndex] = fmt.Sprintf("%2d: %s  %s%s", actualEventIndex, isActualInExpectedIndicatorString, actualEventID, expectedIndexString)
+	}
+	actualDiffString := strings.Join(actualLines, "\n")
+
+	if len(relevantActualEventIDs) != len(expectedEventIDs) {
+		t.Fatalf("expected %d events in timeline (got %d)\nActual events ('+' = found expected items):\n%s\nExpected events ('?' = missing expected items):\n%s",
+			len(expectedEventIDs), len(relevantActualEventIDs), actualDiffString, expectedDiffString,
+		)
+	}
+
+	for i, eventID := range relevantActualEventIDs {
+		if eventID != expectedEventIDs[i] {
+			t.Fatalf("expected event ID %s (got %s) at index %d\nActual events ('+' = found expected items):\n%s\nExpected events ('?' = missing expected items):\n%s",
+				expectedEventIDs[i], eventID, i, actualDiffString, expectedDiffString,
+			)
+		}
+	}
+}
+
+// awaitPartialStateJoinCompletion waits until the joined room is no longer partial-stated
+func awaitPartialStateJoinCompletion(
+	t *testing.T, room_id string, user *client.CSAPI,
+) {
+	t.Helper()
+
+	// Use a `/members` request to wait for the room to be un-partial stated.
+	// We avoid using `/sync`, as it only waits (or used to wait) for full state at
+	// particular events, rather than the whole room.
+	user.MustDo(
+		t,
+		"GET",
+		[]string{"_matrix", "client", "v3", "rooms", room_id, "members"},
+	)
+	t.Logf("%s's partial state join to %s completed.", user.UserID, room_id)
 }
