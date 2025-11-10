@@ -45,6 +45,13 @@ func TestDelayedEvents(t *testing.T) {
 		matchDelayedEvents(t, user, 0)
 	})
 
+	t.Run("delayed event lookups are authenticated", func(t *testing.T) {
+		res := unauthedClient.Do(t, "GET", getPathForUpdateDelayedEvents())
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 401,
+		})
+	})
+
 	t.Run("delayed message events are sent on timeout", func(t *testing.T) {
 		var res *http.Response
 		var countExpected uint64
