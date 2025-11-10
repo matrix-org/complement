@@ -121,14 +121,7 @@ func checkRestrictedRoom(t *testing.T, deployment complement.Deployment, alice *
 		// Wait until Alice sees Bob leave the allowed room. This ensures that Alice's HS
 		// has processed the leave before Bob tries rejoining, so that it rejects his
 		// attempt to join the room.
-		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-			allowed_room, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.member" || ev.Get("sender").Str != bob.UserID {
-					return false
-				}
-
-				return ev.Get("content").Get("membership").Str == "leave"
-			}))
+		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(bob.UserID, allowed_room))
 
 		res := bob.JoinRoom(t, room, []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
@@ -297,18 +290,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 
 	// Ensure that the join comes down sync on hs2. Note that we want to ensure hs2
 	// accepted the event.
-	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
-				return false
-			}
-			must.Equal(t, ev.Get("sender").Str, bob.UserID, "Bob should have joined by himself")
-			must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
-
-			return true
-		},
-	))
+	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, room))
 
 	// Raise the power level so that users on hs1 can invite people and then leave
 	// the room.
@@ -326,17 +308,7 @@ func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, 
 	charlie.MustLeaveRoom(t, room)
 
 	// Ensure the events have synced to hs1.
-	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
-				return false
-			}
-			must.Equal(t, ev.Get("content").Get("membership").Str, "leave", "Charlie failed to leave the room")
-
-			return true
-		},
-	))
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(charlie.UserID, room))
 
 	// Have bob leave and rejoin. This should still work even though hs2 isn't in
 	// the room anymore!
@@ -417,18 +389,12 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	})
 
 	// Double check that the join was authorised via hs1.
-	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
-				return false
-			}
-			must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Charlie failed to join the room")
-			must.Equal(t, ev.Get("content").Get("join_authorised_via_users_server").Str, alice.UserID, "Join authorised via incorrect server")
-
-			return true
-		},
-	))
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, room, func(ev gjson.Result) bool {
+		must.MatchGJSON(t, ev,
+			match.JSONKeyEqual("content.join_authorised_via_users_server", alice.UserID),
+		)
+		return true
+	}))
 
 	// Bump the power-level of bob.
 	t.Logf("%s allows %s to send invites.", alice.UserID, bob.UserID)
@@ -473,17 +439,10 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	})
 
 	// Double check that the join was authorised via hs1.
-	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-		room,
-		func(ev gjson.Result) bool {
-			if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != charlie.UserID {
-				return false
-			}
-			must.MatchGJSON(t, ev,
-				match.JSONKeyEqual("content.membership", "join"),
-				match.JSONKeyEqual("content.join_authorised_via_users_server", alice.UserID),
-			)
-			return true
-		},
-	))
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, room, func(ev gjson.Result) bool {
+		must.MatchGJSON(t, ev,
+			match.JSONKeyEqual("content.join_authorised_via_users_server", alice.UserID),
+		)
+		return true
+	}))
 }

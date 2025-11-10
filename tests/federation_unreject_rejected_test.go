@@ -1,13 +1,16 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
@@ -65,7 +68,16 @@ func TestUnrejectRejectedEvents(t *testing.T) {
 	// Send event B into the room. Event A at this point is unknown
 	// to the homeserver and we're not going to respond to the events
 	// request for it, so it should get rejected.
-	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{eventB.JSON()}, nil)
+	fedClient := srv.FederationClient(deployment)
+	fedClient.SendTransaction(context.Background(), gomatrixserverlib.Transaction{
+		TransactionID:  "complement1",
+		Origin:         srv.ServerName(),
+		Destination:    deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		OriginServerTS: spec.AsTimestamp(time.Now()),
+		PDUs: []json.RawMessage{
+			eventB.JSON(),
+		},
+	})
 
 	// Now we're going to send Event A into the room, which should give
 	// the server the prerequisite event to pass Event B later. This one

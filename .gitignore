@@ -10,3 +10,6 @@ complement
 # For direnv users
 /.envrc
 .direnv/
+
+# devenv users
+.devenv/

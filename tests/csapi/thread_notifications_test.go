@@ -51,6 +51,21 @@ func syncHasThreadedReadReceipt(roomID, userID, eventID, threadID string) client
 	})
 }
 
+// Disables push rules that are introduced in MSC4306 (if present),
+// because they interfere with the normal semantics of notifications in threads.
+func disableMsc4306PushRules(t *testing.T, user *client.CSAPI) {
+	rules := []string{".io.element.msc4306.rule.subscribed_thread", ".io.element.msc4306.rule.unsubscribed_thread"}
+	for _, rule := range rules {
+		res := user.GetPushRule(t, "global", "postcontent", rule)
+		if res.StatusCode == 404 {
+			// No push rule to disable
+			continue
+		}
+
+		user.MustDisablePushRule(t, "global", "postcontent", rule)
+	}
+}
+
 // Test behavior of threaded receipts and notifications.
 //
 // 1. Send a series of messages, some of which are in threads.
@@ -79,7 +94,9 @@ func TestThreadedReceipts(t *testing.T) {
 
 	// Create a room with alice and bob.
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	disableMsc4306PushRules(t, alice)
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	disableMsc4306PushRules(t, bob)
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, nil)
@@ -312,7 +329,9 @@ func TestThreadReceiptsInSyncMSC4102(t *testing.T) {
 
 	// Create a room with alice and bob.
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	disableMsc4306PushRules(t, alice)
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	disableMsc4306PushRules(t, bob)
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{
 		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
