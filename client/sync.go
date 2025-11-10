@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -349,11 +350,11 @@ func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Re
 		// appear in the `leave` `roomTypeKey` and we need to specifically check the
 		// timeline for the membership event to differentiate them.
 		var secondErr error
-		// We assume the passively observing client user is joined to the room
-		if clientUserID != userID ||
-			// Otherwise, if the client is the user whose membership we are checking,
-			// `timeline` is only available for join/leave/ban memberships.
-			membership == "join" || membership == "leave" || membership == "ban" {
+		// The `timeline` is only available for join/leave/ban memberships.
+		if slices.Contains([]string{"join", "leave", "ban"}, membership) ||
+			// We assume the passively observing client user is joined to the room (therefore
+			// has `timeline`).
+			clientUserID != userID {
 			secondErr = checkArrayElements(
 				topLevelSyncJSON, "rooms."+roomTypeKey+"."+GjsonEscape(roomID)+".timeline.events", checkMembership,
 			)
