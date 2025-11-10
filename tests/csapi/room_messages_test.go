@@ -247,7 +247,7 @@ func TestMessagesOverFederation(t *testing.T) {
 		LocalpartSuffix: "bob",
 	})
 
-	t.Run("Visible history after joining new room (backfill)", func(t *testing.T) {
+	t.Run("Visible shared history after joining new room (backfill)", func(t *testing.T) {
 		// Some homeservers have different hard-limits for /messages requests (Synapse's
 		// `MAX_LIMIT` is 1000) so we test a few different variations.
 		for _, testCase := range []struct {
@@ -273,7 +273,13 @@ func TestMessagesOverFederation(t *testing.T) {
 		} {
 			t.Run(testCase.name, func(t *testing.T) {
 				// Alice creates the room
-				roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{
+					// The `public_chat` preset includes `history_visibility: "shared"` ("Previous
+					// events are always accessible to newly joined members. All events in the
+					// room are accessible, even those sent when the member was not a part of the
+					// room."), which is what we want to test.
+					"preset": "public_chat",
+				})
 
 				// Keep track of the order
 				eventIDs := make([]string, 0)
