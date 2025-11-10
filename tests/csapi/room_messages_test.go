@@ -372,6 +372,157 @@ func TestMessagesOverFederation(t *testing.T) {
 			})
 		}
 	})
+
+	// Test to make sure all of the messages sent in the room are visible to someone else
+	// who *re-joins* the room.
+	t.Run("Visible shared history after re-joining room (backfill)", func(t *testing.T) {
+		// Some homeservers have different hard-limits for `/messages?limit=xxx` requests
+		// (Synapse's `MAX_LIMIT` is 1000) so we test a few different variations.
+		for _, testCase := range []struct {
+			name                   string
+			numberOfMessagesToSend int
+			messagesRequestLimit   int
+		}{
+			// Test where the `/messages?limit=xxx` is <= than the number of messages the
+			// homeserver tries to backfill before responding to the `/messages` request.
+			// Because the Matrix spec default `limit` is 10, we can assume that this is lower
+			// than the number of messages that *any* homeserver will try to backfill before
+			// responding.
+			{
+				name: "`messagesRequestLimit` is lower than the number of messages backfilled (assumed)",
+				// We send more messages than fit in one request
+				numberOfMessagesToSend: 20,
+				// This is the default limit in the Matrix spec so it's bound to be lower than
+				// the number of messages that are backfilled.
+				messagesRequestLimit: 10,
+			},
+			// Test where the `/messages?limit=xxx` is greater than the number of messages
+			// Synapse tries to backfill (100) before responding to the `/messages` request.
+			//
+			// FIXME: This test currently doesn't work because the homeserver will backfill
+			// the `limit=100` and return those 100 new events + all of the old history
+			// leaving an invisible gap in between. So the events in the response includes the
+			// 100 new events, [gap], the old history from when you were previously joined.
+			// This is the type of scenario that MSC3871 (Gappy timelines) is trying to
+			// address. This is a hole in the spec as there is no way for a homeserver
+			// indicate gaps to the client so they can paginate the gap and cause the
+			// homeserver to backfill more.
+			//
+			// {
+			// 	name: "`messagesRequestLimit` is greater than the number of messages backfilled (in Synapse, 100)",
+			// 	// We send more messages than fit in one request
+			// 	numberOfMessagesToSend: 300,
+			// 	// We request more messages than Synapse tries to backfill at once (which is 100)
+			// 	messagesRequestLimit: 200,
+			// },
+		} {
+			t.Run(testCase.name, func(t *testing.T) {
+				// Start a sync loop
+				_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+
+				// Alice creates the room
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{
+					// The `public_chat` preset includes `history_visibility: "shared"` ("Previous
+					// events are always accessible to newly joined members. All events in the
+					// room are accessible, even those sent when the member was not a part of the
+					// room."), which is what we want to test.
+					"preset": "public_chat",
+				})
+
+				// Bob joins the room
+				bob.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
+				awaitPartialStateJoinCompletion(t, roomID, bob)
+				aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID))
+
+				// Bob leaves the room
+				bob.MustLeaveRoom(t, roomID)
+				// Make sure the leave has federated
+				aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncLeftFrom(bob.UserID, roomID))
+
+				// Keep track of the order
+				eventIDs := make([]string, 0)
+				// Map from event_id to event info
+				eventMap := make(map[string]EventInfo)
+
+				messageDrafts := make([]MessageDraft, 0, testCase.numberOfMessagesToSend)
+				for i := 0; i < testCase.numberOfMessagesToSend; i++ {
+					messageDrafts = append(messageDrafts, MessageDraft{alice, fmt.Sprintf("Filler message %d to increase history size.", i+1)})
+				}
+				sendAndTrackMessages(t, roomID, messageDrafts, &eventIDs, &eventMap)
+
+				// Bob joins the room
+				bob.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
+				awaitPartialStateJoinCompletion(t, roomID, bob)
+
+				// Make it easy to cross-reference the events being talked about in the logs
+				for eventIndex, eventID := range eventIDs {
+					// messageDraft := eventMap[eventID].MessageDraft
+					t.Logf("Message %d -> event_id=%s", eventIndex, eventID)
+				}
+
+				// Keep paginating backwards until we reach the start of the room
+				actualEventIDs := make(
+					[]string,
+					0,
+					// This is a minimum capacity (there will be more events)
+					testCase.numberOfMessagesToSend,
+				)
+				fromToken := ""
+				for {
+					messageQueryParams := url.Values{
+						"dir":   []string{"b"},
+						"limit": []string{strconv.Itoa(testCase.messagesRequestLimit)},
+					}
+					if fromToken != "" {
+						messageQueryParams.Set("from", fromToken)
+					}
+
+					messagesRes := bob.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
+						client.WithContentType("application/json"),
+						client.WithQueries(messageQueryParams),
+					)
+					messagesResBody := client.ParseJSON(t, messagesRes)
+					actualEventIDsFromRequest := extractEventIDsFromMessagesResponse(t, messagesResBody)
+					actualEventIDs = append(actualEventIDs, actualEventIDsFromRequest...)
+
+					// Make it easy to understand what each `/messages` request returned
+					relevantActualEventIDsFromRequest := filterEventIDs(t, actualEventIDsFromRequest, eventIDs)
+					firstEventIndex := -1
+					lastEventIndex := -1
+					if len(relevantActualEventIDsFromRequest) > 0 {
+						firstEventIndex = slices.Index(eventIDs, relevantActualEventIDsFromRequest[0])
+						lastEventIndex = slices.Index(eventIDs, relevantActualEventIDsFromRequest[len(relevantActualEventIDsFromRequest)-1])
+					}
+					t.Logf("Fetched %d events from the `/messages` endpoint that included events %d to %d",
+						len(actualEventIDsFromRequest),
+						firstEventIndex, lastEventIndex,
+					)
+
+					endTokenRes := gjson.GetBytes(messagesResBody, "end")
+					// "`end`: If no further events are available (either because we have reached the
+					// start of the timeline, or because the user does not have permission to see
+					// any more events), this property is omitted from the response." (Matrix spec)
+					if !endTokenRes.Exists() {
+						break
+					}
+					fromToken = endTokenRes.Str
+
+					// Or if we don't see any more events, we will assume that we reached the
+					// start of the room. No more to paginate.
+					if len(actualEventIDsFromRequest) == 0 {
+						break
+					}
+				}
+
+				// Assert timeline order
+				assertMessagesInTimelineInOrder(t, actualEventIDs, eventIDs)
+			})
+		}
+	})
 }
 
 func sendMessageDrafts(
