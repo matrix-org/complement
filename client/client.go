@@ -26,6 +26,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/ct"
+	"github.com/matrix-org/complement/internal"
 )
 
 type ctxKey string
@@ -668,6 +669,9 @@ func (c *CSAPI) MustDo(t ct.TestLike, method string, paths []string, opts ...Req
 //			match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
 //		},
 //	})
+//
+// The caller does not need to worry about closing the returned `http.Response.Body` as
+// this is handled automatically.
 func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
 	escapedPaths := make([]string, len(paths))
@@ -716,6 +720,30 @@ func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...Request
 		if err != nil {
 			ct.Fatalf(t, "CSAPI.Do response returned error: %s", err)
 		}
+		// `defer` is function scoped but it's okay that we only clean up all requests at
+		// the end. To also be clear, `defer` arguments are evaluated at the time of the
+		// `defer` statement so we are only closing the original response body here. Our new
+		// response body will be untouched.
+		defer internal.CloseIO(
+			res.Body,
+			fmt.Sprintf(
+				"CSAPI.Do: response body from %s %s",
+				res.Request.Method,
+				res.Request.URL.String(),
+			),
+		)
+
+		// Make a copy of the response body so that downstream callers can read it multiple
+		// times if needed and don't need to worry about closing it.
+		var resBody []byte
+		if res.Body != nil {
+			resBody, err = io.ReadAll(res.Body)
+			if err != nil {
+				ct.Fatalf(t, "CSAPI.Do failed to read response body for RetryUntil check: %s", err)
+			}
+			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
+		}
+
 		// debug log the response
 		if c.Debug && res != nil {
 			var dump []byte
@@ -725,19 +753,12 @@ func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...Request
 			}
 			t.Logf("%s", string(dump))
 		}
+
 		if retryUntil == nil || retryUntil.timeout == 0 {
 			return res // don't retry
 		}
 
-		// check the condition, make a copy of the response body first in case the check consumes it
-		var resBody []byte
-		if res.Body != nil {
-			resBody, err = io.ReadAll(res.Body)
-			if err != nil {
-				ct.Fatalf(t, "CSAPI.Do failed to read response body for RetryUntil check: %s", err)
-			}
-			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
-		}
+		// check the condition
 		if retryUntil.untilFn(res) {
 			// remake the response and return
 			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
