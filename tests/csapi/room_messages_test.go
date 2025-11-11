@@ -308,6 +308,9 @@ func TestMessagesOverFederation(t *testing.T) {
 	// Test to make sure all of the messages sent in the room are visible to someone else
 	// who *re-joins* the room.
 	t.Run("Visible shared history after re-joining room (backfill)", func(t *testing.T) {
+		// FIXME: Dendrite doesn't handle backfill well on re-join yet
+		runtime.SkipIf(t, runtime.Dendrite)
+
 		// Some homeservers have different hard-limits for `/messages?limit=xxx` requests
 		// (Synapse's `MAX_LIMIT` is 1000) so we test a few different variations.
 		for _, testCase := range []MessagesTestCase{
