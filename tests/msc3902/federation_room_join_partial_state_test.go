@@ -372,7 +372,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// release the federation /state response
 		psjResult.FinishStateRequest()
-		alice.MustAwaitPartialStateJoinCompletion(t, serverRoom.RoomID)
+		awaitPartialStateJoinCompletion(t, serverRoom, alice)
 
 		t.Log("8. Have Alice eager-sync. She should see the remote room.")
 		response, eagerSyncToken = alice.MustSync(t, getEagerSyncReq())
@@ -2259,7 +2259,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Finish the partial state join.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// Both homeservers should still receive device list updates.
 			renameDevice(t, alice, "A new device name 2")
@@ -2309,7 +2309,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Finish the partial state join.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// Both homeservers should still receive device list updates.
 			renameDevice(t, alice, "A new device name 3")
@@ -2358,7 +2358,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Finish the partial state join.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// @elsie:server2 should no longer receive device list updates.
 			renameDevice(t, alice, "A new device name 2")
@@ -2510,7 +2510,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Finish the partial state join.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// @elsie:server2 must receive missed device list updates.
 			mustReceiveDeviceListUpdate(t, deviceListUpdateChannel2, "@elsie did not receive missed device list update.")
@@ -2946,7 +2946,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Finish the partial state join.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// @charlie's device list update ought to have arrived by now.
 			mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("charlie"))
@@ -3045,7 +3045,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// Finish the partial state join.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// @elsie's device list ought to still be cached.
 			mustQueryKeysWithoutFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
@@ -3172,7 +3172,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			t.Fatalf("TODO: fail the partial state join")
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// hs1 should no longer be tracking elsie's device list; subsequent
 			// key requests from alice require a federation request.
@@ -3298,7 +3298,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// Finish the partial state join.
 			// The homeserver under test will discover that @elsie was actually not in the room.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// @elsie's device list ought to no longer be cached.
 			// `device_lists.left` is not working yet: https://github.com/matrix-org/synapse/issues/13886
@@ -3342,7 +3342,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// The homeserver under test will discover that there was a period where @elsie was
 			// actually not in the room.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// @elsie's device list ought to have been flushed from the cache.
 			mustQueryKeysWithFederationRequest(t, alice, userDevicesChannel, server.UserID("elsie"))
@@ -3374,7 +3374,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// Finish the partial state join.
 			// The homeserver under test will discover that @elsie was actually not in the room.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 			// `device_lists.left` is not working yet: https://github.com/matrix-org/synapse/issues/13886
 			// mustSyncUntilDeviceListsHas(t, alice, syncToken, "left", server.UserID("elsie"))
 
@@ -3432,7 +3432,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// The homeserver under test will discover that @elsie was actually not in the room, and
 			// so did not share a room the whole time.
 			psjResult.FinishStateRequest()
-			alice.MustAwaitPartialStateJoinCompletion(t, room.RoomID)
+			awaitPartialStateJoinCompletion(t, room, alice)
 
 			// @elsie's device list ought to be evicted from the cache.
 			mustSyncUntilDeviceListsHas(t, alice, syncToken, "changed", server.UserID("elsie"))
@@ -4027,7 +4027,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// finish syncing the state
 		psjResult.FinishStateRequest()
-		terry.MustAwaitPartialStateJoinCompletion(t, psjResult.ServerRoom.RoomID)
+		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, terry)
 
 		// The number of joined users should now be 3: one local user (terry) and two remote (charlie and derek)
 		assertPublicRoomDirectoryMemberCountEquals(t, 3)
@@ -4089,7 +4089,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// finish syncing the state
 		psjResult.FinishStateRequest()
-		rocky.MustAwaitPartialStateJoinCompletion(t, psjResult.ServerRoom.RoomID)
+		awaitPartialStateJoinCompletion(t, psjResult.ServerRoom, rocky)
 
 		assertUserInDirectory(t, "rod", server.UserID("rod"))
 		assertUserInDirectory(t, "todd", server.UserID("todd"))
@@ -4298,6 +4298,23 @@ func awaitEventArrival(t *testing.T, timeout time.Duration, alice *client.CSAPI,
 	t.Logf("Alice successfully observed event %s via /event", eventID)
 }
 
+// awaitPartialStateJoinCompletion waits until the joined room is no longer partial-stated
+func awaitPartialStateJoinCompletion(
+	t *testing.T, room *federation.ServerRoom, user *client.CSAPI,
+) {
+	t.Helper()
+
+	// Use a `/members` request to wait for the room to be un-partial stated.
+	// We avoid using `/sync`, as it only waits (or used to wait) for full state at
+	// particular events, rather than the whole room.
+	user.MustDo(
+		t,
+		"GET",
+		[]string{"_matrix", "client", "v3", "rooms", room.RoomID, "members"},
+	)
+	t.Logf("%s's partial state join to %s completed.", user.UserID, room.RoomID)
+}
+
 // buildLazyLoadingSyncFilter constructs a json-marshalled filter suitable the 'Filter' field of a client.SyncReq
 func buildLazyLoadingSyncFilter(timelineOptions map[string]interface{}) string {
 	timelineFilter := map[string]interface{}{
@@ -4398,7 +4415,7 @@ func (psj *partialStateJoinResult) Destroy(t *testing.T) {
 	// considered offline and interfere with subsequent tests.
 	t.Log("Cleaning up after test...")
 
-	psj.User.MustAwaitPartialStateJoinCompletion(t, psj.ServerRoom.RoomID)
+	awaitPartialStateJoinCompletion(t, psj.ServerRoom, psj.User)
 
 	// The caller is about to tear down the Complement homeserver. Leave the room, so
 	// that the homeserver under test stops sending it presence updates.
