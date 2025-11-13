@@ -214,6 +214,21 @@ func (c *CSAPI) JoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []spec
 	)
 }
 
+// MustAwaitPartialStateJoinCompletion waits until the joined room is no longer partial-stated
+func (c *CSAPI) MustAwaitPartialStateJoinCompletion(t ct.TestLike, room_id string) {
+	t.Helper()
+
+	// Use a `/members` request to wait for the room to be un-partial stated.
+	// We avoid using `/sync`, as it only waits (or used to wait) for full state at
+	// particular events, rather than the whole room.
+	c.MustDo(
+		t,
+		"GET",
+		[]string{"_matrix", "client", "v3", "rooms", room_id, "members"},
+	)
+	t.Logf("%s's partial state join to %s completed.", c.UserID, room_id)
+}
+
 // MustLeaveRoom leaves the room ID, else fails the test.
 func (c *CSAPI) MustLeaveRoom(t ct.TestLike, roomID string) {
 	res := c.LeaveRoom(t, roomID)

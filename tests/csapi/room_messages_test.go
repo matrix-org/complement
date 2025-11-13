@@ -367,7 +367,7 @@ func TestMessagesOverFederation(t *testing.T) {
 				bob.MustJoinRoom(t, roomID, []spec.ServerName{
 					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 				})
-				awaitPartialStateJoinCompletion(t, roomID, bob)
+				bob.MustAwaitPartialStateJoinCompletion(t, roomID)
 				aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID))
 
 				// Bob leaves the room
@@ -415,7 +415,7 @@ func _sendAndTestMessageHistory(
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{
 		serverToJoinVia,
 	})
-	awaitPartialStateJoinCompletion(t, roomID, bob)
+	bob.MustAwaitPartialStateJoinCompletion(t, roomID)
 
 	// Make it easy to cross-reference the events being talked about in the logs
 	for eventIndex, eventID := range eventIDs {
@@ -628,21 +628,4 @@ func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expe
 			)
 		}
 	}
-}
-
-// awaitPartialStateJoinCompletion waits until the joined room is no longer partial-stated
-func awaitPartialStateJoinCompletion(
-	t *testing.T, room_id string, user *client.CSAPI,
-) {
-	t.Helper()
-
-	// Use a `/members` request to wait for the room to be un-partial stated.
-	// We avoid using `/sync`, as it only waits (or used to wait) for full state at
-	// particular events, rather than the whole room.
-	user.MustDo(
-		t,
-		"GET",
-		[]string{"_matrix", "client", "v3", "rooms", room_id, "members"},
-	)
-	t.Logf("%s's partial state join to %s completed.", user.UserID, room_id)
 }
