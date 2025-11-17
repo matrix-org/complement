@@ -65,10 +65,11 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 
 		// Upgrade the room
 		newRoomID := alice.MustUpgradeRoom(t, roomID, "11")
+
 		// Alice2 joins the new room
 		alice2.MustJoinRoom(t, newRoomID, nil)
 
-		// Sanity check the push rules are in the expected state before the upgrade
+		// Sanity check the push rules are in the expected state after the upgrade
 		for _, client := range []*client.CSAPI{alice, alice2} {
 			pushRulesAfter := client.GetAllPushRules(t)
 			must.MatchGJSON(t, pushRulesAfter,
@@ -88,14 +89,13 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 	// When a homeserver becomes aware of a room upgrade (upgrade is done on remote
 	// homeserver), it should copy over any existing push rules for all of its local users
 	// from the old room to the new room at the time of upgrade.
-	t.Run("joining a remote upgraded room carries over the push rules", func(t *testing.T) {
+	t.Run("joining a remote upgraded room carries over existing push rules", func(t *testing.T) {
 		// Alice create a room
 		roomID := alice.MustCreateRoom(t, map[string]interface{}{
 			"preset":       "public_chat",
 			"room_version": "10",
 		})
 		// Remote bob joins the room
-		// alice.MustInviteRoom(t, roomID, bob.UserID)
 		bob.MustJoinRoom(t, roomID, []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 		})
@@ -137,7 +137,16 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 		// Upgrade the room
 		newRoomID := alice.MustUpgradeRoom(t, roomID, "11")
 
-		// Sanity check the push rules are in the expected state before the upgrade
+		// Remote bob joins the new room
+		bob.MustJoinRoom(t, newRoomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		})
+		// Remote bob2 joins the new room
+		bob2.MustJoinRoom(t, newRoomID, []spec.ServerName{
+			deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+		})
+
+		// Sanity check the push rules are in the expected state after the upgrade
 		for _, client := range []*client.CSAPI{bob, bob2} {
 			pushRulesAfter := client.GetAllPushRules(t)
 			must.MatchGJSON(t, pushRulesAfter,
