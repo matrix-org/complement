@@ -50,13 +50,7 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 		)
 
 		// Upgrade the room
-		upgradeRes := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"},
-			client.WithJSONBody(t, map[string]string{
-				"new_version": "11",
-			}),
-		)
-		body := must.ParseJSON(t, upgradeRes.Body)
-		newRoomID := must.GetJSONFieldStr(t, body, "replacement_room")
+		newRoomID := alice.MustUpgradeRoom(t, roomID, "11")
 
 		// Sanity check the push rules are in the expected state before the upgrade
 		pushRulesAfter := alice.GetAllPushRules(t)
@@ -109,13 +103,7 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 		)
 
 		// Upgrade the room
-		upgradeRes := alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"},
-			client.WithJSONBody(t, map[string]string{
-				"new_version": "11",
-			}),
-		)
-		body := must.ParseJSON(t, upgradeRes.Body)
-		newRoomID := must.GetJSONFieldStr(t, body, "replacement_room")
+		newRoomID := alice.MustUpgradeRoom(t, roomID, "11")
 
 		// Sanity check the push rules are in the expected state before the upgrade
 		pushRulesAfter := bob.GetAllPushRules(t)
@@ -131,5 +119,4 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			),
 		)
 	})
-
 }
