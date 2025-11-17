@@ -95,6 +95,9 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 		t.Run("joining a remote upgraded room carries over existing push rules", func(t *testing.T) {
 			t.Parallel()
 
+			// Start a sync loop
+			_, bobSince := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+
 			// Alice create a room
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset":       "public_chat",
@@ -104,6 +107,15 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			bob.MustJoinRoom(t, roomID, []spec.ServerName{
 				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			})
+			// Wait until we know the first bob is joined for sure. We want to make sure bob2
+			// doesn't also race us to remotely join the room as bob2 should be able to
+			// locally join and then send a join over federation (because the first bob is
+			// already joined to the room).
+			bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncJoinedTo(bob.UserID, roomID))
+			// Wait until the homeserver is fully participating in the room so that we can
+			// double-check the subsequent joins also work (sanity check participating vs
+			// non-participating logic in the homeserver)
+			bob.MustAwaitPartialStateJoinCompletion(t, roomID)
 			// Remote bob2 joins the room
 			//
 			// We use two users to ensure that all users get taken care of (not just the first
