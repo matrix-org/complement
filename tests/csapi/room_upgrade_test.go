@@ -120,9 +120,15 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			//
 			// We use two users to ensure that all users get taken care of (not just the first
 			// user on the homeserver).
-			bob2.MustJoinRoom(t, roomID, []spec.ServerName{
-				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
-			})
+			bob2.MustJoinRoom(t, roomID,
+				// bob2 can do a local join since bob is already in the room. No need to specify
+				// via servers here.
+				//
+				// []spec.ServerName{
+				// 	deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				// },
+				nil,
+			)
 
 			// Add some push rules
 			bob.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", roomID},
@@ -158,10 +164,25 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			bob.MustJoinRoom(t, newRoomID, []spec.ServerName{
 				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			})
+			// Wait until we know the first bob is joined for sure. We want to make sure bob2
+			// doesn't also race us to remotely join the room as bob2 should be able to
+			// locally join and then send a join over federation (because the first bob is
+			// already joined to the room).
+			bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncJoinedTo(bob.UserID, newRoomID))
+			// Wait until the homeserver is fully participating in the room so that we can
+			// double-check the subsequent joins also work (sanity check participating vs
+			// non-participating logic in the homeserver)
+			bob.MustAwaitPartialStateJoinCompletion(t, newRoomID)
 			// Remote bob2 joins the new room
-			bob2.MustJoinRoom(t, newRoomID, []spec.ServerName{
-				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
-			})
+			bob2.MustJoinRoom(t, newRoomID,
+				// bob2 can do a local join since bob is already in the room. No need to specify
+				// via servers here.
+				//
+				// []spec.ServerName{
+				// 	deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				// },
+				nil,
+			)
 
 			// Sanity check the push rules are in the expected state after the upgrade
 			for _, client := range []*client.CSAPI{bob, bob2} {
