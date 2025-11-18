@@ -417,7 +417,6 @@ func _sendAndTestMessageHistory(
 
 	// Make it easy to cross-reference the events being talked about in the logs
 	for eventIndex, eventID := range eventIDs {
-		// messageDraft := eventMap[eventID].MessageDraft
 		t.Logf("Message %d -> event_id=%s", eventIndex, eventID)
 	}
 
