@@ -479,7 +479,7 @@ func _sendAndTestMessageHistory(
 	slices.Reverse(chronologicalActualEventIds)
 
 	// Assert timeline order
-	assertMessagesInTimelineInOrder(t, chronologicalActualEventIds, eventIDs)
+	assertEventsInOrder(t, chronologicalActualEventIds, eventIDs)
 }
 
 func sendMessageDrafts(
@@ -568,16 +568,33 @@ func filterEventIDs(t *testing.T, actualEventIDs []string, expectedEventIDs []st
 	return relevantActualEventIDs
 }
 
-// assertMessagesTimeline asserts all events are in the `/messages` response in the
-// given order. Other unrelated events can be in between.
-func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expectedEventIDs []string) {
+// assertEventsInOrder asserts all `actualEventIDs` are present and in order according
+// to `expectedEventIDs`. Other unrelated events can be in between.
+func assertEventsInOrder(t *testing.T, actualEventIDs []string, expectedEventIDs []string) {
 	t.Helper()
 
 	relevantActualEventIDs := filterEventIDs(t, actualEventIDs, expectedEventIDs)
 
+	if len(relevantActualEventIDs) != len(expectedEventIDs) {
+		t.Fatalf("expected %d events in timeline (got %d relevant events filtered down from %d events)\n%s",
+			len(expectedEventIDs), len(relevantActualEventIDs), len(actualEventIDs),
+			generateEventOrderDiffString(relevantActualEventIDs, expectedEventIDs),
+		)
+	}
+
+	for i, eventID := range relevantActualEventIDs {
+		if eventID != expectedEventIDs[i] {
+			t.Fatalf("expected event ID %s (got %s) at index %d\n%s",
+				expectedEventIDs[i], eventID, i, generateEventOrderDiffString(relevantActualEventIDs, expectedEventIDs),
+			)
+		}
+	}
+}
+
+func generateEventOrderDiffString(actualEventIDs []string, expectedEventIDs []string) string {
 	expectedLines := make([]string, len(expectedEventIDs))
 	for i, expectedEventID := range expectedEventIDs {
-		isExpectedInActual := slices.Contains(relevantActualEventIDs, expectedEventID)
+		isExpectedInActual := slices.Contains(actualEventIDs, expectedEventID)
 		isMissingIndicatorString := " "
 		if !isExpectedInActual {
 			isMissingIndicatorString = "?"
@@ -587,8 +604,8 @@ func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expe
 	}
 	expectedDiffString := strings.Join(expectedLines, "\n")
 
-	actualLines := make([]string, len(relevantActualEventIDs))
-	for actualEventIndex, actualEventID := range relevantActualEventIDs {
+	actualLines := make([]string, len(actualEventIDs))
+	for actualEventIndex, actualEventID := range actualEventIDs {
 		isActualInExpected := slices.Contains(expectedEventIDs, actualEventID)
 		isActualInExpectedIndicatorString := " "
 		if isActualInExpected {
@@ -606,21 +623,15 @@ func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expe
 			expectedIndexString = fmt.Sprintf(" (expected index %d %s)", expectedIndex, expectedDirectionString)
 		}
 
-		actualLines[actualEventIndex] = fmt.Sprintf("%2d: %s  %s%s", actualEventIndex, isActualInExpectedIndicatorString, actualEventID, expectedIndexString)
+		actualLines[actualEventIndex] = fmt.Sprintf("%2d: %s  %s%s",
+			actualEventIndex, isActualInExpectedIndicatorString, actualEventID, expectedIndexString,
+		)
 	}
 	actualDiffString := strings.Join(actualLines, "\n")
 
-	if len(relevantActualEventIDs) != len(expectedEventIDs) {
-		t.Fatalf("expected %d events in timeline (got %d)\nActual events ('+' = found expected items):\n%s\nExpected events ('?' = missing expected items):\n%s",
-			len(expectedEventIDs), len(relevantActualEventIDs), actualDiffString, expectedDiffString,
-		)
-	}
-
-	for i, eventID := range relevantActualEventIDs {
-		if eventID != expectedEventIDs[i] {
-			t.Fatalf("expected event ID %s (got %s) at index %d\nActual events ('+' = found expected items):\n%s\nExpected events ('?' = missing expected items):\n%s",
-				expectedEventIDs[i], eventID, i, actualDiffString, expectedDiffString,
-			)
-		}
-	}
+	return fmt.Sprintf(
+		"Actual events ('+' = found expected items):\n%s\nExpected events ('?' = missing expected items):\n%s",
+		actualDiffString,
+		expectedDiffString,
+	)
 }
