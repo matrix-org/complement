@@ -90,6 +90,7 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				} else {
 					newRoomID = alice.MustUpgradeRoom(t, roomID, "11")
 				}
+				t.Logf("Upgraded room %s to %s", roomID, newRoomID)
 
 				// Alice2 joins the new room
 				alice2.MustJoinRoom(t, newRoomID, nil)
@@ -192,6 +193,7 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				} else {
 					newRoomID = alice.MustUpgradeRoom(t, roomID, "11")
 				}
+				t.Logf("Upgraded room %s to %s", roomID, newRoomID)
 
 				// Ensure that the remote server sees the tombstone in the old room before
 				// joining the new room (avoid races and the client woudn't know where to go
@@ -254,6 +256,12 @@ func mustManualUpgradeRoom(t *testing.T, c *client.CSAPI, oldRoomID string, newR
 	newRoomID := c.MustCreateRoom(t, map[string]interface{}{
 		"preset":       "public_chat",
 		"room_version": newRoomVersion,
+		"creation_content": map[string]interface{}{
+			// Specify the old room as the predecessor
+			"predecessor": map[string]interface{}{
+				"room_id": oldRoomID,
+			},
+		},
 	})
 
 	// Send the m.room.tombstone event to the old room
