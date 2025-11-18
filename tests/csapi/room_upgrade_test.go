@@ -43,15 +43,15 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			t.Run(upgradeDescritorPrefix+"upgrading a room carries over existing push rules for local users", func(t *testing.T) {
 				t.Parallel()
 
-				// Start a sync loop
-				_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
-				_, alice2Since := alice2.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
-
 				// FIXME: We have to skip this test on Synapse until
 				// https://github.com/element-hq/synapse/issues/19199 is resolved.
 				if useManualRoomUpgrade {
 					runtime.SkipIf(t, runtime.Synapse)
 				}
+
+				// Start a sync loop
+				_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+				_, alice2Since := alice2.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 				// Create a room
 				roomID := alice.MustCreateRoom(t, map[string]interface{}{
