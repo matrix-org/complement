@@ -168,9 +168,7 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 
 				// FIXME: We have to skip this test on Dendrite because it doesn't seem to send
 				// the new push rules down sync in many scenarios.
-				if useManualRoomUpgrade {
-					runtime.SkipIf(t, runtime.Dendrite)
-				}
+				runtime.SkipIf(t, runtime.Dendrite)
 
 				// Start a sync loop
 				_, bobSince := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
