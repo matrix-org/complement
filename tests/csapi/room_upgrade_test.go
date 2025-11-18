@@ -43,6 +43,10 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			t.Run(upgradeDescritorPrefix+"upgrading a room carries over existing push rules for local users", func(t *testing.T) {
 				t.Parallel()
 
+				// Start a sync loop
+				_, aliceSince := alice.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+				_, alice2Since := alice2.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+
 				// FIXME: We have to skip this test on Synapse until
 				// https://github.com/element-hq/synapse/issues/19199 is resolved.
 				if useManualRoomUpgrade {
@@ -69,9 +73,18 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				}, "", "")
 
 				// Sanity check the push rules are in the expected state before the upgrade
-				for _, client := range []*client.CSAPI{alice, alice2} {
-					t.Logf("Checking push rules (before upgrade) for %s", client.UserID)
-					pushRulesBefore := client.GetAllPushRules(t)
+				for _, clientTokenPair := range []struct {
+					*client.CSAPI
+					*string
+				}{{alice, &aliceSince}, {alice2, &alice2Since}} {
+					userClient := clientTokenPair.CSAPI
+					sinceToken := clientTokenPair.string
+					t.Logf("Checking push rules (before upgrade) for %s", userClient.UserID)
+					// Wait until the new push rules show up in /sync
+					*sinceToken = userClient.MustSyncUntil(t, client.SyncReq{Since: *sinceToken}, syncGlobalAccountDataHasPushRuleForRoomID(roomID))
+
+					// Verify that the push rules are as expected
+					pushRulesBefore := userClient.GetAllPushRules(t)
 					must.MatchGJSON(t, pushRulesBefore,
 						match.JSONCheckOff("global.room",
 							[]interface{}{
@@ -99,9 +112,21 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				alice2.MustJoinRoom(t, newRoomID, nil)
 
 				// Sanity check the push rules are in the expected state after the upgrade
-				for _, client := range []*client.CSAPI{alice, alice2} {
-					t.Logf("Checking push rules (after upgrade) for %s", client.UserID)
-					pushRulesAfter := client.GetAllPushRules(t)
+				for _, clientTokenPair := range []struct {
+					*client.CSAPI
+					*string
+				}{{alice, &aliceSince}, {alice2, &alice2Since}} {
+					userClient := clientTokenPair.CSAPI
+					sinceToken := clientTokenPair.string
+					t.Logf("Checking push rules (after upgrade) for %s", userClient.UserID)
+					// Wait until the new push rules show up in /sync
+					*sinceToken = userClient.MustSyncUntil(t, client.SyncReq{Since: *sinceToken},
+						syncGlobalAccountDataHasPushRuleForRoomID(roomID),
+						syncGlobalAccountDataHasPushRuleForRoomID(newRoomID),
+					)
+
+					// Verify that the push rules are as expected
+					pushRulesAfter := userClient.GetAllPushRules(t)
 					must.MatchGJSON(t, pushRulesAfter,
 						match.JSONCheckOff("global.room",
 							[]interface{}{
@@ -126,6 +151,7 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 
 				// Start a sync loop
 				_, bobSince := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
+				_, bob2Since := bob2.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
 
 				// Alice create a room
 				roomID := alice.MustCreateRoom(t, map[string]interface{}{
@@ -168,9 +194,18 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				}, "", "")
 
 				// Sanity check the push rules are in the expected state before the upgrade
-				for _, client := range []*client.CSAPI{bob, bob2} {
-					t.Logf("Checking push rules (before upgrade) for %s", client.UserID)
-					pushRulesBefore := client.GetAllPushRules(t)
+				for _, clientTokenPair := range []struct {
+					*client.CSAPI
+					*string
+				}{{bob, &bobSince}, {bob2, &bob2Since}} {
+					userClient := clientTokenPair.CSAPI
+					sinceToken := clientTokenPair.string
+					t.Logf("Checking push rules (before upgrade) for %s", userClient.UserID)
+					// Wait until the new push rules show up in /sync
+					*sinceToken = userClient.MustSyncUntil(t, client.SyncReq{Since: *sinceToken}, syncGlobalAccountDataHasPushRuleForRoomID(roomID))
+
+					// Verify that the push rules are as expected
+					pushRulesBefore := userClient.GetAllPushRules(t)
 					must.MatchGJSON(t, pushRulesBefore,
 						match.JSONCheckOff("global.room",
 							[]interface{}{
@@ -226,9 +261,21 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				)
 
 				// Sanity check the push rules are in the expected state after the upgrade
-				for _, client := range []*client.CSAPI{bob, bob2} {
-					pushRulesAfter := client.GetAllPushRules(t)
-					t.Logf("Checking push rules (after upgrade) for %s", client.UserID)
+				for _, clientTokenPair := range []struct {
+					*client.CSAPI
+					*string
+				}{{bob, &bobSince}, {bob2, &bob2Since}} {
+					userClient := clientTokenPair.CSAPI
+					sinceToken := clientTokenPair.string
+					t.Logf("Checking push rules (after upgrade) for %s", userClient.UserID)
+					// Wait until the new push rules show up in /sync
+					*sinceToken = userClient.MustSyncUntil(t, client.SyncReq{Since: *sinceToken},
+						syncGlobalAccountDataHasPushRuleForRoomID(roomID),
+						syncGlobalAccountDataHasPushRuleForRoomID(newRoomID),
+					)
+
+					// Verify that the push rules are as expected
+					pushRulesAfter := userClient.GetAllPushRules(t)
 					must.MatchGJSON(t, pushRulesAfter,
 						match.JSONCheckOff("global.room",
 							[]interface{}{
@@ -270,4 +317,29 @@ func mustManualUpgradeRoom(t *testing.T, c *client.CSAPI, oldRoomID string, newR
 	}))
 
 	return newRoomID
+}
+
+// syncGlobalAccountDataHasPushRuleForRoomID waits for the global account data to
+// include a push rule for the given room ID
+func syncGlobalAccountDataHasPushRuleForRoomID(roomID string) client.SyncCheckOpt {
+	return client.SyncGlobalAccountDataHas(func(globalAccountDataEvent gjson.Result) bool {
+		if globalAccountDataEvent.Get("type").Str != "m.push_rules" {
+			return false
+		}
+		pushRules := globalAccountDataEvent
+
+		matcher := match.JSONCheckOff("content.global.room",
+			[]interface{}{
+				roomID,
+			},
+			match.CheckOffAllowUnwanted(),
+			match.CheckOffMapper(func(r gjson.Result) interface{} { return r.Get("rule_id").Str }),
+		)
+
+		if err := matcher(pushRules); err != nil {
+			return false
+		}
+
+		return true
+	})
 }
