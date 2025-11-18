@@ -574,7 +574,6 @@ func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expe
 
 	relevantActualEventIDs := filterEventIDs(t, actualEventIDs, expectedEventIDs)
 	// Put them in chronological order to match the expected list
-	// slices.Reverse(relevantActualEvents)
 	slices.Reverse(relevantActualEventIDs)
 
 	expectedLines := make([]string, len(expectedEventIDs))
