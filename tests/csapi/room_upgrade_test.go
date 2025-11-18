@@ -61,16 +61,12 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				alice2.MustJoinRoom(t, roomID, nil)
 
 				// Add some push rules
-				alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", roomID},
-					client.WithJSONBody(t, map[string]interface{}{
-						"actions": []string{"dont_notify"},
-					}),
-				)
-				alice2.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", roomID},
-					client.WithJSONBody(t, map[string]interface{}{
-						"actions": []string{"dont_notify"},
-					}),
-				)
+				alice.SetPushRule(t, "global", "room", roomID, map[string]interface{}{
+					"actions": []string{"dont_notify"},
+				}, "", "")
+				alice2.SetPushRule(t, "global", "room", roomID, map[string]interface{}{
+					"actions": []string{"dont_notify"},
+				}, "", "")
 
 				// Sanity check the push rules are in the expected state before the upgrade
 				for _, client := range []*client.CSAPI{alice, alice2} {
@@ -164,16 +160,12 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				)
 
 				// Add some push rules
-				bob.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", roomID},
-					client.WithJSONBody(t, map[string]interface{}{
-						"actions": []string{"dont_notify"},
-					}),
-				)
-				bob2.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "pushrules", "global", "room", roomID},
-					client.WithJSONBody(t, map[string]interface{}{
-						"actions": []string{"dont_notify"},
-					}),
-				)
+				bob.SetPushRule(t, "global", "room", roomID, map[string]interface{}{
+					"actions": []string{"dont_notify"},
+				}, "", "")
+				bob2.SetPushRule(t, "global", "room", roomID, map[string]interface{}{
+					"actions": []string{"dont_notify"},
+				}, "", "")
 
 				// Sanity check the push rules are in the expected state before the upgrade
 				for _, client := range []*client.CSAPI{bob, bob2} {
