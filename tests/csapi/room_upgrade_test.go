@@ -8,6 +8,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 )
@@ -41,6 +42,12 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			// from the old room to the new room at the time of upgrade.
 			t.Run(upgradeDescritorPrefix+"upgrading a room carries over existing push rules for local users", func(t *testing.T) {
 				t.Parallel()
+
+				// FIXME: We have to skip this test on Synapse until
+				// https://github.com/element-hq/synapse/issues/19199 is resolved.
+				if useManualRoomUpgrade {
+					runtime.SkipIf(t, runtime.Synapse)
+				}
 
 				// Create a room
 				roomID := alice.MustCreateRoom(t, map[string]interface{}{
