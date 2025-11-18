@@ -421,7 +421,7 @@ func _sendAndTestMessageHistory(
 	}
 
 	// Keep paginating backwards until we reach the start of the room
-	actualEventIDs := make(
+	reverseChronologicalActualEventIDs := make(
 		[]string,
 		0,
 		// This is a minimum capacity (there will be more events)
@@ -443,7 +443,7 @@ func _sendAndTestMessageHistory(
 		)
 		messagesResBody := client.ParseJSON(t, messagesRes)
 		actualEventIDsFromRequest := extractEventIDsFromMessagesResponse(t, messagesResBody)
-		actualEventIDs = append(actualEventIDs, actualEventIDsFromRequest...)
+		reverseChronologicalActualEventIDs = append(reverseChronologicalActualEventIDs, actualEventIDsFromRequest...)
 
 		// Make it easy to understand what each `/messages` request returned
 		relevantActualEventIDsFromRequest := filterEventIDs(t, actualEventIDsFromRequest, eventIDs)
@@ -474,8 +474,12 @@ func _sendAndTestMessageHistory(
 		}
 	}
 
+	// Put them in chronological order to match the expected list
+	chronologicalActualEventIds := slices.Clone(reverseChronologicalActualEventIDs)
+	slices.Reverse(chronologicalActualEventIds)
+
 	// Assert timeline order
-	assertMessagesInTimelineInOrder(t, actualEventIDs, eventIDs)
+	assertMessagesInTimelineInOrder(t, chronologicalActualEventIds, eventIDs)
 }
 
 func sendMessageDrafts(
@@ -566,15 +570,10 @@ func filterEventIDs(t *testing.T, actualEventIDs []string, expectedEventIDs []st
 
 // assertMessagesTimeline asserts all events are in the `/messages` response in the
 // given order. Other unrelated events can be in between.
-//
-// messagesResBody: from a `/messages?dir=b` request (these will be in reverse-chronological order)
-// eventIDs: the list of event IDs in chronological order that we expect to see in the response
 func assertMessagesInTimelineInOrder(t *testing.T, actualEventIDs []string, expectedEventIDs []string) {
 	t.Helper()
 
 	relevantActualEventIDs := filterEventIDs(t, actualEventIDs, expectedEventIDs)
-	// Put them in chronological order to match the expected list
-	slices.Reverse(relevantActualEventIDs)
 
 	expectedLines := make([]string, len(expectedEventIDs))
 	for i, expectedEventID := range expectedEventIDs {
