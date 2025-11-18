@@ -99,6 +99,15 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 					)
 				}
 
+				// Because the push rules can be copied over as part of the "upgrade", we need a
+				// sync token just before so we can check since that point.
+				//
+				// Note: In this test, this is redundant because we don't sync after the upgrade
+				// until our check happens but I'm just keeping the shape similar to other test
+				// below.
+				aliceSinceBeforeUpgrade := aliceSince
+				alice2SinceBeforeUpgrade := alice2Since
+
 				// Upgrade the room
 				var newRoomID string
 				if useManualRoomUpgrade {
@@ -115,7 +124,11 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				for _, clientTokenPair := range []struct {
 					*client.CSAPI
 					*string
-				}{{alice, &aliceSince}, {alice2, &alice2Since}} {
+				}{
+					// Since the upgrade, wait until the new push rules show up in /sync
+					{alice, &aliceSinceBeforeUpgrade},
+					{alice2, &alice2SinceBeforeUpgrade},
+				} {
 					userClient := clientTokenPair.CSAPI
 					sinceToken := clientTokenPair.string
 					t.Logf("Checking push rules (after upgrade) for %s", userClient.UserID)
@@ -220,6 +233,11 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 					)
 				}
 
+				// Because the push rules can be copied over as part of the "upgrade", we need a
+				// sync token just before so we can check since that point.
+				bobSinceBeforeUpgrade := bobSince
+				bob2SinceBeforeUpgrade := bob2Since
+
 				// Upgrade the room
 				var newRoomID string
 				if useManualRoomUpgrade {
@@ -264,7 +282,11 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				for _, clientTokenPair := range []struct {
 					*client.CSAPI
 					*string
-				}{{bob, &bobSince}, {bob2, &bob2Since}} {
+				}{
+					// Since the upgrade, wait until the new push rules show up in /sync
+					{bob, &bobSinceBeforeUpgrade},
+					{bob2, &bob2SinceBeforeUpgrade},
+				} {
 					userClient := clientTokenPair.CSAPI
 					sinceToken := clientTokenPair.string
 					t.Logf("Checking push rules (after upgrade) for %s", userClient.UserID)
