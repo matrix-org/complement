@@ -28,6 +28,13 @@ const (
 	DelayedEventActionSend    = "send"
 )
 
+type DelayedEventStatus string
+
+const (
+	statusScheduled DelayedEventStatus = "scheduled"
+	statusFinalised DelayedEventStatus = "finalised"
+)
+
 // TODO: Test pagination of `GET /_matrix/client/v1/delayed_events` once
 // it is implemented in a homeserver.
 
@@ -50,7 +57,7 @@ func TestDelayedEvents(t *testing.T) {
 	user2.MustJoinRoom(t, roomID, nil)
 
 	t.Run("delayed events are empty on startup", func(t *testing.T) {
-		matchDelayedEvents(t, user, 0)
+		matchDelayedEvents(t, user, statusScheduled, 0)
 	})
 
 	t.Run("delayed event lookups are authenticated", func(t *testing.T) {
@@ -100,14 +107,14 @@ func TestDelayedEvents(t *testing.T) {
 		}
 
 		countExpected = 0
-		matchDelayedEvents(t, user, numEvents)
+		matchDelayedEvents(t, user, statusScheduled, numEvents)
 
 		t.Run("cannot get delayed events of another user", func(t *testing.T) {
-			matchDelayedEvents(t, user2, 0)
+			matchDelayedEvents(t, user2, statusScheduled, 0)
 		})
 
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, 0)
+		matchDelayedEvents(t, user, statusScheduled, 0)
 		queryParams := url.Values{}
 		queryParams.Set("dir", "f")
 		queryParams.Set("from", token)
@@ -149,12 +156,12 @@ func TestDelayedEvents(t *testing.T) {
 			getDelayQueryParam("900"),
 		)
 
-		matchDelayedEvents(t, user, 1)
+		matchDelayedEvents(t, user, statusScheduled, 1)
 
 		res = getDelayedEvents(t, user)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
-				match.JSONArrayEach("delayed_events", func(val gjson.Result) error {
+				match.JSONArrayEach(string(statusScheduled), func(val gjson.Result) error {
 					content := val.Get("content").Map()
 					if l := len(content); l != 1 {
 						return fmt.Errorf("wrong number of content fields: expected 1, got %d", l)
@@ -172,7 +179,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, 0)
+		matchDelayedEvents(t, user, statusScheduled, 0)
 		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -244,7 +251,7 @@ func TestDelayedEvents(t *testing.T) {
 		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
 
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, 1)
+		matchDelayedEvents(t, user, statusScheduled, 1)
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
@@ -256,7 +263,7 @@ func TestDelayedEvents(t *testing.T) {
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionCancel),
 			client.WithJSONBody(t, map[string]interface{}{}),
 		)
-		matchDelayedEvents(t, user, 0)
+		matchDelayedEvents(t, user, statusScheduled, 0)
 
 		time.Sleep(1 * time.Second)
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
@@ -286,7 +293,7 @@ func TestDelayedEvents(t *testing.T) {
 		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
 
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, 1)
+		matchDelayedEvents(t, user, statusScheduled, 1)
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
@@ -298,7 +305,7 @@ func TestDelayedEvents(t *testing.T) {
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionSend),
 			client.WithJSONBody(t, map[string]interface{}{}),
 		)
-		matchDelayedEvents(t, user, 0)
+		matchDelayedEvents(t, user, statusScheduled, 0)
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -328,7 +335,7 @@ func TestDelayedEvents(t *testing.T) {
 		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
 
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, 1)
+		matchDelayedEvents(t, user, statusScheduled, 1)
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
@@ -342,14 +349,14 @@ func TestDelayedEvents(t *testing.T) {
 		)
 
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, 1)
+		matchDelayedEvents(t, user, statusScheduled, 1)
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 		})
 
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, 0)
+		matchDelayedEvents(t, user, statusScheduled, 0)
 		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -376,7 +383,7 @@ func TestDelayedEvents(t *testing.T) {
 			}),
 			getDelayQueryParam("900"),
 		)
-		matchDelayedEvents(t, user, 1)
+		matchDelayedEvents(t, user, statusScheduled, 1)
 
 		user.MustDo(
 			t,
@@ -386,7 +393,7 @@ func TestDelayedEvents(t *testing.T) {
 				setterKey: "manual",
 			}),
 		)
-		matchDelayedEvents(t, user, 1)
+		matchDelayedEvents(t, user, statusScheduled, 1)
 
 		time.Sleep(1 * time.Second)
 		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
@@ -415,7 +422,7 @@ func TestDelayedEvents(t *testing.T) {
 			}),
 			getDelayQueryParam("900"),
 		)
-		matchDelayedEvents(t, user, 1)
+		matchDelayedEvents(t, user, statusScheduled, 1)
 
 		setterExpected := "manual"
 		user2.MustDo(
@@ -426,7 +433,7 @@ func TestDelayedEvents(t *testing.T) {
 				setterKey: setterExpected,
 			}),
 		)
-		matchDelayedEvents(t, user, 0)
+		matchDelayedEvents(t, user, statusScheduled, 0)
 
 		time.Sleep(1 * time.Second)
 		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
@@ -460,17 +467,17 @@ func TestDelayedEvents(t *testing.T) {
 			client.WithJSONBody(t, map[string]interface{}{}),
 			getDelayQueryParam("9900"),
 		)
-		matchDelayedEvents(t, user, 2)
+		matchDelayedEvents(t, user, statusScheduled, 2)
 
 		deployment.StopServer(t, hsName)
 		time.Sleep(1 * time.Second)
 		deployment.StartServer(t, hsName)
 
-		matchDelayedEvents(t, user, 1)
+		matchDelayedEvents(t, user, statusScheduled, 1)
 		user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey1))
 
 		time.Sleep(9 * time.Second)
-		matchDelayedEvents(t, user, 0)
+		matchDelayedEvents(t, user, statusScheduled, 0)
 		user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey2))
 	})
 }
@@ -502,20 +509,23 @@ func getDelayedEvents(t *testing.T, user *client.CSAPI) *http.Response {
 	return user.MustDo(t, "GET", getPathForDelayedEvents())
 }
 
-// Checks if the number of delayed events match the given number. This will
-// retry to handle replication lag.
-func matchDelayedEvents(t *testing.T, user *client.CSAPI, wantNumber int) {
+// Checks if the number of scheduled or finalised delayed events match the given number.
+// This will retry to handle replication lag.
+func matchDelayedEvents(t *testing.T, user *client.CSAPI, status DelayedEventStatus, wantNumber int) {
 	t.Helper()
 
 	// We need to retry this as replication can sometimes lag.
 	user.MustDo(t, "GET", getPathForDelayedEvents(),
+		client.WithQueries(url.Values{
+			"status": []string{string(status)},
+		}),
 		client.WithRetryUntil(
 			500*time.Millisecond,
 			func(res *http.Response) bool {
 				_, err := should.MatchResponse(res, match.HTTPResponse{
 					StatusCode: 200,
 					JSON: []match.JSON{
-						match.JSONKeyArrayOfSize("delayed_events", wantNumber),
+						match.JSONKeyArrayOfSize(string(status), wantNumber),
 					},
 				})
 				if err != nil {
@@ -529,11 +539,13 @@ func matchDelayedEvents(t *testing.T, user *client.CSAPI, wantNumber int) {
 }
 
 func cleanupDelayedEvents(t *testing.T, user *client.CSAPI) {
-	t.Helper()
 	res := getDelayedEvents(t, user)
 	defer res.Body.Close()
 	body := must.ParseJSON(t, res.Body)
-	for _, delayedEvent := range body.Get("delayed_events").Array() {
+	numFinalised := len(body.Get(string(statusFinalised)).Array())
+	numScheduled := 0
+	for _, delayedEvent := range body.Get(string(statusScheduled)).Array() {
+		numScheduled++
 		delayID := delayedEvent.Get("delay_id").String()
 		user.MustDo(
 			t,
@@ -543,5 +555,6 @@ func cleanupDelayedEvents(t *testing.T, user *client.CSAPI) {
 		)
 	}
 
-	matchDelayedEvents(t, user, 0)
+	matchDelayedEvents(t, user, statusScheduled, 0)
+	matchDelayedEvents(t, user, statusFinalised, numScheduled+numFinalised)
 }
