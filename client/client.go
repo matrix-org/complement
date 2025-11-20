@@ -174,6 +174,31 @@ func (c *CSAPI) CreateRoom(t ct.TestLike, body map[string]interface{}) *http.Res
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, body))
 }
 
+// MustUpgradeRoom upgrades a room to the newVersion. Fails the test on error. Returns the new room ID.
+func (c *CSAPI) MustUpgradeRoom(t ct.TestLike, roomID string, newVersion string) string {
+	t.Helper()
+	res := c.UpgradeRoom(t, roomID, newVersion)
+	mustRespond2xx(t, res)
+	resBody := ParseJSON(t, res)
+	return GetJSONFieldStr(t, resBody, "replacement_room")
+}
+
+// UpgradeRoom upgrades a room to the newVersion
+func (c *CSAPI) UpgradeRoom(t ct.TestLike, roomID string, newVersion string) *http.Response {
+	t.Helper()
+	// Ensure we don't call create a room (upgrade creates a new room) from the same user
+	// in parallel, else we might try to make 2 rooms in the same millisecond (same
+	// `origin_server_ts`), causing v12 rooms to get the same room ID thus failing the
+	// test.
+	c.createRoomMutex.Lock()
+	defer c.createRoomMutex.Unlock()
+	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"},
+		WithJSONBody(t, map[string]string{
+			"new_version": newVersion,
+		}),
+	)
+}
+
 // MustJoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
 //
 // Args:
@@ -212,6 +237,21 @@ func (c *CSAPI) JoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []spec
 		t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias},
 		WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
 	)
+}
+
+// MustAwaitPartialStateJoinCompletion waits until the joined room is no longer partial-stated
+func (c *CSAPI) MustAwaitPartialStateJoinCompletion(t ct.TestLike, room_id string) {
+	t.Helper()
+
+	// Use a `/members` request to wait for the room to be un-partial stated.
+	// We avoid using `/sync`, as it only waits (or used to wait) for full state at
+	// particular events, rather than the whole room.
+	c.MustDo(
+		t,
+		"GET",
+		[]string{"_matrix", "client", "v3", "rooms", room_id, "members"},
+	)
+	t.Logf("%s's partial state join to %s completed.", c.UserID, room_id)
 }
 
 // MustLeaveRoom leaves the room ID, else fails the test.
