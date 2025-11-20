@@ -32,15 +32,15 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 
 	t.Run("parallel", func(t *testing.T) {
 		for _, useManualRoomUpgrade := range []bool{true, false} {
-			upgradeDescritorPrefix := ""
+			upgradeDescriptorPrefix := ""
 			if useManualRoomUpgrade {
-				upgradeDescritorPrefix = "manually "
+				upgradeDescriptorPrefix = "manually "
 			}
 
 			// When a homeserver becomes aware of a room upgrade (upgrade is done on local
 			// homeserver), it should copy over any existing push rules for all of its local users
 			// from the old room to the new room at the time of upgrade.
-			t.Run(upgradeDescritorPrefix+"upgrading a room carries over existing push rules for local users", func(t *testing.T) {
+			t.Run(upgradeDescriptorPrefix+"upgrading a room carries over existing push rules for local users", func(t *testing.T) {
 				t.Parallel()
 
 				// FIXME: We have to skip this test on Dendrite because it doesn't seem to send
@@ -163,7 +163,7 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			// When a homeserver becomes aware of a room upgrade (upgrade is done on remote
 			// homeserver), it should copy over any existing push rules for all of its local users
 			// from the old room to the new room at the time of upgrade.
-			t.Run("joining a remote "+upgradeDescritorPrefix+"upgraded room carries over existing push rules", func(t *testing.T) {
+			t.Run("joining a remote "+upgradeDescriptorPrefix+"upgraded room carries over existing push rules", func(t *testing.T) {
 				t.Parallel()
 
 				// FIXME: We have to skip this test on Dendrite because it doesn't seem to send
