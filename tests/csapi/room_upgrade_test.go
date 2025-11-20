@@ -13,6 +13,13 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// When a homeserver becomes aware of a room upgrade, it should copy over any existing
+// push rules for all of its local users from the old room.
+//
+// This behavior is not explained in the [Matrix
+// Spec](https://spec.matrix.org/v1.16/client-server-api/#server-behaviour-19) but
+// perhaps that just needs a clarification/MSC to document the state of things. Synapse
+// and Dendrite do this for example.
 func TestPushRuleRoomUpgrade(t *testing.T) {
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
