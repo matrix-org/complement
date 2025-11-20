@@ -107,7 +107,7 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 				// sync token just before so we can check since that point.
 				//
 				// Note: In this test, this is redundant because we don't sync after the upgrade
-				// until our check happens but I'm just keeping the shape similar to other test
+				// until our check happens but I'm just keeping the shape similar to other tests
 				// below.
 				aliceSinceBeforeUpgrade := aliceSince
 				alice2SinceBeforeUpgrade := alice2Since
