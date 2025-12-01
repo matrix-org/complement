@@ -458,6 +458,13 @@ func _sendAndTestMessageHistory(
 			firstEventIndex, lastEventIndex,
 		)
 
+		// Keep paginating until we reach the start of the room (no `end` property is
+		// returned).
+		//
+		// > Note that an empty `chunk` does not necessarily imply that no more events are
+		// > available. Clients should continue to paginate until no `end` property is returned.
+		// >
+		// > https://spec.matrix.org/v1.16/client-server-api/#get_matrixclientv3roomsroomidmessages
 		endTokenRes := gjson.GetBytes(messagesResBody, "end")
 		// "`end`: If no further events are available (either because we have reached the
 		// start of the timeline, or because the user does not have permission to see
@@ -466,12 +473,6 @@ func _sendAndTestMessageHistory(
 			break
 		}
 		fromToken = endTokenRes.Str
-
-		// Or if we don't see any more events, we will assume that we reached the
-		// start of the room. No more to paginate.
-		if len(actualEventIDsFromRequest) == 0 {
-			break
-		}
 	}
 
 	// Put them in chronological order to match the expected list
