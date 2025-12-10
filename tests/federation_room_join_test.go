@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/internal"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
@@ -296,18 +298,34 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 	})
 }
 
+func VersionRequestHandler(s *federation.Server, w http.ResponseWriter, req *http.Request) {
+	// Send it
+}
+
 // This test checks that users cannot circumvent the auth checks via send_join.
 func TestBannedUserCannotSendJoin(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
 	srv := federation.NewServer(t, deployment,
+		federation.HandleVersionRequests(),
 		federation.HandleKeyRequests(),
 		federation.HandleTransactionRequests(nil, nil),
 	)
 	cancel := srv.Listen()
 	origin := srv.ServerName()
 	defer cancel()
+
+	// XXX: Sanity check that the server is listening and responding (at-least from the host perspective)
+	splitPieces := strings.SplitN(string(srv.ServerName()), ":", 2)
+	port := splitPieces[1]
+	res, err := http.Get("https://localhost:" + port + "/_matrix/federation/v1/version")
+	if err != nil {
+		t.Fatalf("Failed to GET: %s", err)
+	}
+	defer internal.CloseIO(res.Body, "server response body")
+	resBody, err := io.ReadAll(res.Body)
+	t.Logf("asdf request %d %s", res.StatusCode, resBody)
 
 	fedClient := srv.FederationClient(deployment)
 

@@ -15,6 +15,26 @@ import (
 	"github.com/matrix-org/util"
 )
 
+// HandleVersionRequests is an option which makes the server process `/_matrix/federation/v1/version` requests.
+func HandleVersionRequests() func(*Server) {
+	return func(srv *Server) {
+		mux := srv.mux.PathPrefix("/_matrix/federation/v1").Subrouter()
+
+		handlerFn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			w.WriteHeader(200)
+			b, _ := json.Marshal(map[string]interface{}{
+				"server": map[string]interface{}{
+					"name":    "complement-federation-test-server",
+					"version": "0.1.0",
+				},
+			})
+			w.Write(b)
+		})
+
+		mux.Handle("/version", handlerFn).Methods("GET")
+	}
+}
+
 // EXPERIMENTAL
 // MakeJoinRequestsHandler is the http.Handler implementation for the make_join part of
 // HandleMakeSendJoinRequests.
