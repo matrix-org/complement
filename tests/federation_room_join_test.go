@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -319,7 +320,13 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 	// XXX: Sanity check that the server is listening and responding (at-least from the host perspective)
 	splitPieces := strings.SplitN(string(srv.ServerName()), ":", 2)
 	port := splitPieces[1]
-	res, err := http.Get("https://localhost:" + port + "/_matrix/federation/v1/version")
+	// Ignore HTTPS/TLS verification for localhost
+	httpTransport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	httpClient := &http.Client{Transport: httpTransport}
+	// Make the request
+	res, err := httpClient.Get("https://localhost:" + port + "/_matrix/federation/v1/version")
 	if err != nil {
 		t.Fatalf("Failed to GET: %s", err)
 	}
