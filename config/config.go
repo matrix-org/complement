@@ -55,9 +55,9 @@ type Complement struct {
 	// Name: COMPLEMENT_CONTAINER_CPUS
 	// Default: 0
 	// Description: The number of CPU cores available for the container to use (can be
-	// fractional like 0.5). This is passed to Docker as the `--cpus` argument. If 0, no
-	// limit is set and the container can use all available host CPUs. This is useful to
-	// mimic a resource-constrained environment, like a CI environment.
+	// fractional like 0.5). This is passed to Docker as the `--cpus`/`NanoCPUs` argument.
+	// If 0, no limit is set and the container can use all available host CPUs. This is
+	// useful to mimic a resource-constrained environment, like a CI environment.
 	ContainerCPUCores float64
 	// Name: COMPLEMENT_KEEP_BLUEPRINTS
 	// Description: A list of space separated blueprint names to not clean up after running. For example,
