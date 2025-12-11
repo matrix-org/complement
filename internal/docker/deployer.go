@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -375,6 +376,11 @@ func deployImage(
 		log.Printf("Sharing %v host environment variables with container", env)
 	}
 
+	// Number of microseconds per CPU period.
+	constrainedCPUPeriod := int64(100000)
+	// Number of cores to constrain the container to (can be fractional).
+	constrainedCPUCores := float64(0.5)
+
 	body, err := docker.ContainerCreate(ctx, &container.Config{
 		Image: imageID,
 		Env:   env,
@@ -399,6 +405,11 @@ func deployImage(
 		PublishAllPorts: true,
 		ExtraHosts:      extraHosts,
 		Mounts:          mounts,
+		// https://docs.docker.com/engine/containers/resource_constraints/
+		Resources: container.Resources{
+			CPUPeriod: constrainedCPUPeriod,
+			CPUQuota:  int64(math.Floor(constrainedCPUCores * float64(constrainedCPUPeriod))),
+		},
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
 			networkName: {
