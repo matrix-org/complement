@@ -52,6 +52,13 @@ type Complement struct {
 	// starting the container. Responsiveness is detected by `HEALTHCHECK` being healthy *and*
 	// the `/versions` endpoint returning 200 OK.
 	SpawnHSTimeout time.Duration
+	// Name: COMPLEMENT_CONTAINER_CPUS
+	// Default: 0
+	// Description: The number of CPU cores available for the container to use (can be
+	// fractional like 0.5). This is passed to Docker as the `--cpus` argument. If 0, no
+	// limit is set and the container can use all available host CPUs. This is useful to
+	// mimic a resource-constrained environment, like a CI environment.
+	ContainerCPUCores float64
 	// Name: COMPLEMENT_KEEP_BLUEPRINTS
 	// Description: A list of space separated blueprint names to not clean up after running. For example,
 	// `one_to_one_room alice` would not delete the homeserver images for the blueprints `alice` and
@@ -145,6 +152,7 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 		// each iteration had a 50ms sleep between tries so the timeout is 50 * iteration ms
 		cfg.SpawnHSTimeout = time.Duration(50*parseEnvWithDefault("COMPLEMENT_VERSION_CHECK_ITERATIONS", 100)) * time.Millisecond
 	}
+	cfg.ContainerCPUCores, _ = strconv.ParseFloat(os.Getenv("COMPLEMENT_CONTAINER_CPUS"), 64)
 	cfg.KeepBlueprints = strings.Split(os.Getenv("COMPLEMENT_KEEP_BLUEPRINTS"), " ")
 	var err error
 	hostMounts := os.Getenv("COMPLEMENT_HOST_MOUNTS")
