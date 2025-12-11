@@ -401,6 +401,10 @@ func deployImage(
 		Mounts:          mounts,
 		// https://docs.docker.com/engine/containers/resource_constraints/
 		Resources: container.Resources{
+			// The number of CPU cores in 1e9 increments
+			//
+			// `NanoCPUs` is the option that is "Applicable to all platforms" instead of
+			// `CPUPeriod`/`CPUQuota` (Unix only) or `CPUCount`/`CPUPercent` (Windows only).
 			NanoCPUs: int64(cfg.ContainerCPUCores * 1e9),
 		},
 	}, &network.NetworkingConfig{
