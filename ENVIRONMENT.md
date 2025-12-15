@@ -22,7 +22,7 @@ The number of CPU cores available for the container to use (can be fractional li
 - Default: 0
 
 #### `COMPLEMENT_CONTAINER_MEMORY`
-The maximum amount of memory the container can use. This is passed to Docker as the `--memory`/`Memory` argument. If 0, no limit is set and the container can use all available host memory. This is useful to mimic a resource-constrained environment, like a CI environment.  
+The maximum amount of memory the container can use (ex. "1GB"). Valid units are "B", (decimal: "KB", "MB", "GB, "TB, "PB"), (binary: "KiB", "MiB", "GiB", "TiB", "PiB") or no units (bytes) (case-insensitive). The number of bytes is passed to Docker as the `--memory`/`Memory` argument. If 0, no limit is set and the container can use all available host memory. This is useful to mimic a resource-constrained environment, like a CI environment.  
 - Type: `int64`
 - Default: 0
 

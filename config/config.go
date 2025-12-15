@@ -62,7 +62,9 @@ type Complement struct {
 	ContainerCPUCores float64
 	// Name: COMPLEMENT_CONTAINER_MEMORY
 	// Default: 0
-	// Description: The maximum amount of memory the container can use. This is passed to
+	// Description: The maximum amount of memory the container can use (ex. "1GB"). Valid units are
+	// "B", (decimal: "KB", "MB", "GB, "TB, "PB"), (binary: "KiB", "MiB", "GiB", "TiB",
+	// "PiB") or no units (bytes) (case-insensitive). The number of bytes is passed to
 	// Docker as the `--memory`/`Memory` argument. If 0, no limit is set and the container
 	// can use all available host memory. This is useful to mimic a resource-constrained
 	// environment, like a CI environment.
