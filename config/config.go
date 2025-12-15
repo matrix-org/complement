@@ -326,6 +326,8 @@ func parseByteSizeString(inputString string) (int64, error) {
 }
 
 // intPow calculates n to the mth power. Since the result is an int, it is assumed that m is a positive power
+//
+// via https://stackoverflow.com/questions/64108933/how-to-use-math-pow-with-integers-in-go/66429580#66429580
 func intPow(n, m int64) int64 {
 	if m == 0 {
 		return 1
