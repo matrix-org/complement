@@ -62,12 +62,13 @@ type Complement struct {
 	ContainerCPUCores float64
 	// Name: COMPLEMENT_CONTAINER_MEMORY
 	// Default: 0
-	// Description: The maximum amount of memory the container can use (ex. "1GB"). Valid units are
-	// "B", (decimal: "KB", "MB", "GB, "TB, "PB"), (binary: "KiB", "MiB", "GiB", "TiB",
-	// "PiB") or no units (bytes) (case-insensitive). The number of bytes is passed to
-	// Docker as the `--memory`/`Memory` argument. If 0, no limit is set and the container
-	// can use all available host memory. This is useful to mimic a resource-constrained
-	// environment, like a CI environment.
+	// Description: The maximum amount of memory the container can use (ex. "1GB"). Valid
+	// units are "B", (decimal: "KB", "MB", "GB, "TB, "PB"), (binary: "KiB", "MiB", "GiB",
+	// "TiB", "PiB") or no units (bytes) (case-insensitive). We also support "K", "M", "G"
+	// as per Docker's CLI. The number of bytes is passed to Docker as the
+	// `--memory`/`Memory` argument. If 0, no limit is set and the container can use all
+	// available host memory. This is useful to mimic a resource-constrained environment,
+	// like a CI environment.
 	ContainerMemoryBytes int64
 	// Name: COMPLEMENT_KEEP_BLUEPRINTS
 	// Description: A list of space separated blueprint names to not clean up after running. For example,
@@ -254,7 +255,8 @@ func parseEnvWithDefault(key string, def int) int {
 // string does not match one of the valid units or is an invalid integer.
 //
 // Valid units are "B", (decimal: "KB", "MB", "GB, "TB, "PB"), (binary: "KiB", "MiB",
-// "GiB", "TiB", "PiB") or no units (bytes).
+// "GiB", "TiB", "PiB") or no units (bytes). We also support "K", "M", "G" as per
+// Docker's CLI.
 func parseByteSizeString(inputString string) (int64, error) {
 	// Strip spaces and normalize to lowercase
 	normalizedString := strings.TrimSpace(strings.ToLower(inputString))
@@ -273,6 +275,10 @@ func parseByteSizeString(inputString string) (int64, error) {
 		"mib": intPow(1024, 2),
 		"gib": intPow(1024, 3),
 		"tib": intPow(1024, 4),
+		// These are also supported to match Docker's CLI
+		"k": 1024,
+		"m": intPow(1024, 2),
+		"g": intPow(1024, 3),
 	}
 	availableUnitsSorted := make([]string, 0, len(unitToByteMultiplierMap))
 	for unit := range unitToByteMultiplierMap {
