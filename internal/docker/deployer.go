@@ -401,11 +401,15 @@ func deployImage(
 		Mounts:          mounts,
 		// https://docs.docker.com/engine/containers/resource_constraints/
 		Resources: container.Resources{
+			// Constrain the the number of CPU cores this container can use
+			//
 			// The number of CPU cores in 1e9 increments
 			//
 			// `NanoCPUs` is the option that is "Applicable to all platforms" instead of
 			// `CPUPeriod`/`CPUQuota` (Unix only) or `CPUCount`/`CPUPercent` (Windows only).
 			NanoCPUs: int64(cfg.ContainerCPUCores * 1e9),
+			// Constrain the maximum memory the container can use
+			Memory: cfg.ContainerMemoryBytes,
 		},
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
@@ -423,7 +427,19 @@ func deployImage(
 
 	containerID := body.ID
 	if cfg.DebugLoggingEnabled {
-		log.Printf("%s: Created container '%s' using image '%s' on network '%s'", contextStr, containerID, imageID, networkName)
+		constraintStrings := []string{}
+		if cfg.ContainerCPUCores > 0 {
+			constraintStrings = append(constraintStrings, fmt.Sprintf("%.1f CPU cores", cfg.ContainerCPUCores))
+		}
+		if cfg.ContainerMemoryBytes > 0 {
+			constraintStrings = append(constraintStrings, fmt.Sprintf("%d bytes of memory", cfg.ContainerMemoryBytes))
+		}
+		constrainedResourcesDisplayString := ""
+		if len(constraintStrings) > 0 {
+			constrainedResourcesDisplayString = fmt.Sprintf("(%s)", strings.Join(constraintStrings, ", "))
+		}
+
+		log.Printf("%s: Created container '%s' using image '%s' on network '%s' %s", contextStr, containerID, imageID, networkName, constrainedResourcesDisplayString)
 	}
 	stubDeployment := &HomeserverDeployment{
 		ContainerID: containerID,

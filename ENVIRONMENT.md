@@ -21,6 +21,11 @@ The number of CPU cores available for the container to use (can be fractional li
 - Type: `float64`
 - Default: 0
 
+#### `COMPLEMENT_CONTAINER_MEMORY`
+The maximum amount of memory the container can use. This is passed to Docker as the `--memory`/`Memory` argument. If 0, no limit is set and the container can use all available host memory. This is useful to mimic a resource-constrained environment, like a CI environment.  
+- Type: `int64`
+- Default: 0
+
 #### `COMPLEMENT_DEBUG`
 If 1, prints out more verbose logging such as HTTP request/response bodies.  
 - Type: `bool`

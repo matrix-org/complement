@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -59,6 +60,13 @@ type Complement struct {
 	// If 0, no limit is set and the container can use all available host CPUs. This is
 	// useful to mimic a resource-constrained environment, like a CI environment.
 	ContainerCPUCores float64
+	// Name: COMPLEMENT_CONTAINER_MEMORY
+	// Default: 0
+	// Description: The maximum amount of memory the container can use. This is passed to
+	// Docker as the `--memory`/`Memory` argument. If 0, no limit is set and the container
+	// can use all available host memory. This is useful to mimic a resource-constrained
+	// environment, like a CI environment.
+	ContainerMemoryBytes int64
 	// Name: COMPLEMENT_KEEP_BLUEPRINTS
 	// Description: A list of space separated blueprint names to not clean up after running. For example,
 	// `one_to_one_room alice` would not delete the homeserver images for the blueprints `alice` and
@@ -153,8 +161,12 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 		cfg.SpawnHSTimeout = time.Duration(50*parseEnvWithDefault("COMPLEMENT_VERSION_CHECK_ITERATIONS", 100)) * time.Millisecond
 	}
 	cfg.ContainerCPUCores, _ = strconv.ParseFloat(os.Getenv("COMPLEMENT_CONTAINER_CPUS"), 64)
+	parsedMemoryBytes, err := parseByteSizeString(os.Getenv("COMPLEMENT_CONTAINER_MEMORY"))
+	if err != nil {
+		panic("COMPLEMENT_CONTAINER_MEMORY parse error: " + err.Error())
+	}
+	cfg.ContainerMemoryBytes = parsedMemoryBytes
 	cfg.KeepBlueprints = strings.Split(os.Getenv("COMPLEMENT_KEEP_BLUEPRINTS"), " ")
-	var err error
 	hostMounts := os.Getenv("COMPLEMENT_HOST_MOUNTS")
 	if hostMounts != "" {
 		cfg.HostMounts, err = newHostMounts(strings.Split(hostMounts, ";"))
@@ -233,6 +245,101 @@ func parseEnvWithDefault(key string, def int) int {
 		return i
 	}
 	return def
+}
+
+// parseByteSizeString parses a byte size string (case insensitive) like "512MB"
+// or "2GB" into bytes. If the string is empty, 0 is returned. Returns an error if the
+// string does not match one of the valid units or is an invalid integer.
+//
+// Valid units are "B", (decimal: "KB", "MB", "GB, "TB, "PB"), (binary: "KiB", "MiB",
+// "GiB", "TiB", "PiB") or no units (bytes).
+func parseByteSizeString(inputString string) (int64, error) {
+	// Strip spaces and normalize to lowercase
+	normalizedString := strings.TrimSpace(strings.ToLower(inputString))
+	if normalizedString == "" {
+		return 0, nil
+	}
+	unitToByteMultiplierMap := map[string]int64{
+		// No unit (bytes)
+		"":    1,
+		"b":   1,
+		"kb":  intPow(10, 3),
+		"mb":  intPow(10, 6),
+		"gb":  intPow(10, 9),
+		"tb":  intPow(10, 12),
+		"kib": 1024,
+		"mib": intPow(1024, 2),
+		"gib": intPow(1024, 3),
+		"tib": intPow(1024, 4),
+	}
+	availableUnitsSorted := make([]string, 0, len(unitToByteMultiplierMap))
+	for unit := range unitToByteMultiplierMap {
+		availableUnitsSorted = append(availableUnitsSorted, unit)
+	}
+	// Sort units by length descending so that longer units are matched first
+	// (e.g "mib" before "b")
+	sort.Slice(availableUnitsSorted, func(i, j int) bool {
+		return len(availableUnitsSorted[i]) > len(availableUnitsSorted[j])
+	})
+
+	// Find the number part of the string and the unit used
+	numberPart := ""
+	byteUnit := ""
+	byteMultiplier := int64(0)
+	for _, unit := range availableUnitsSorted {
+		if strings.HasSuffix(normalizedString, unit) {
+			byteUnit = unit
+			// Handle the case where there is a space between the number and the unit (e.g "512 MB")
+			numberPart = strings.TrimSpace(normalizedString[:len(normalizedString)-len(unit)])
+			byteMultiplier = unitToByteMultiplierMap[unit]
+			break
+		}
+	}
+
+	// Failed to find a valid unit
+	if byteUnit == "" {
+		return 0, fmt.Errorf("parseByteSizeString: invalid byte unit used in string: %s (supported units: %s)",
+			inputString,
+			strings.Join(availableUnitsSorted, ", "),
+		)
+	}
+	// Assert to sanity check our logic above is sound
+	if byteMultiplier == 0 {
+		panic(fmt.Sprintf(
+			"parseByteSizeString: byteMultiplier is unexpectedly 0 for unit: %s. "+
+				"This is probably a problem with the function itself.", byteUnit,
+		))
+	}
+
+	// Parse the number part as an int64
+	parsedNumber, err := strconv.ParseInt(strings.TrimSpace(numberPart), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parseByteSizeString: failed to parse number part of string: %s (%w)",
+			numberPart,
+			err,
+		)
+	}
+
+	// Calculate the total bytes
+	totalBytes := parsedNumber * byteMultiplier
+	return totalBytes, nil
+}
+
+// intPow calculates n to the mth power. Since the result is an int, it is assumed that m is a positive power
+func intPow(n, m int64) int64 {
+	if m == 0 {
+		return 1
+	}
+
+	if m == 1 {
+		return n
+	}
+
+	result := n
+	for i := int64(2); i <= m; i++ {
+		result *= n
+	}
+	return result
 }
 
 func newHostMounts(mounts []string) ([]HostMount, error) {
