@@ -432,6 +432,7 @@ func deployImage(
 			constraintStrings = append(constraintStrings, fmt.Sprintf("%.1f CPU cores", cfg.ContainerCPUCores))
 		}
 		if cfg.ContainerMemoryBytes > 0 {
+			// TODO: It would be nice to pretty print this in MB/GB etc.
 			constraintStrings = append(constraintStrings, fmt.Sprintf("%d bytes of memory", cfg.ContainerMemoryBytes))
 		}
 		constrainedResourcesDisplayString := ""
