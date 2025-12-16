@@ -30,7 +30,7 @@ func TestUnbanViaInvite(t *testing.T) {
 	bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, client.WithJSONBody(t, map[string]interface{}{
 		"user_id": alice.UserID,
 	}))
-	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncBannedFrom(alice.UserID, roomID))
 
 	// Unban Alice
 	bob.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "unban"}, client.WithJSONBody(t, map[string]interface{}{

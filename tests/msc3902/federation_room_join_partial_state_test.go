@@ -3963,9 +3963,7 @@ func TestPartialStateJoin(t *testing.T) {
 			aliceNextBatch = alice.MustSyncUntil(
 				t,
 				client.SyncReq{Since: aliceNextBatch, Filter: buildLazyLoadingSyncFilter(nil)},
-				// TODO: introduce a SyncBannedFrom which checks the membership of the
-				// leave event
-				client.SyncLeftFrom(alice.UserID, serverRoom.RoomID),
+				client.SyncBannedFrom(alice.UserID, serverRoom.RoomID),
 			)
 
 			t.Log("Alice tries to rejoin...")

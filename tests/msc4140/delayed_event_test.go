@@ -20,6 +20,14 @@ import (
 const hsName = "hs1"
 const eventType = "com.example.test"
 
+type DelayedEventAction string
+
+const (
+	DelayedEventActionCancel  = "cancel"
+	DelayedEventActionRestart = "restart"
+	DelayedEventActionSend    = "send"
+)
+
 // TODO: Test pagination of `GET /_matrix/client/v1/delayed_events` once
 // it is implemented in a homeserver.
 
@@ -29,6 +37,7 @@ func TestDelayedEvents(t *testing.T) {
 
 	user := deployment.Register(t, hsName, helpers.RegistrationOpts{})
 	user2 := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	unauthedClient := deployment.UnauthenticatedClient(t, hsName)
 
 	roomID := user.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
@@ -42,6 +51,13 @@ func TestDelayedEvents(t *testing.T) {
 
 	t.Run("delayed events are empty on startup", func(t *testing.T) {
 		matchDelayedEvents(t, user, 0)
+	})
+
+	t.Run("delayed event lookups are authenticated", func(t *testing.T) {
+		res := unauthedClient.Do(t, "GET", getPathForDelayedEvents())
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 401,
+		})
 	})
 
 	t.Run("delayed message events are sent on timeout", func(t *testing.T) {
@@ -165,66 +181,42 @@ func TestDelayedEvents(t *testing.T) {
 		})
 	})
 
-	t.Run("cannot update a delayed event without a delay ID", func(t *testing.T) {
-		res := user.Do(t, "POST", append(getPathForUpdateDelayedEvents(), ""))
+	t.Run("cannot update a delayed event without an action", func(t *testing.T) {
+		res := unauthedClient.Do(
+			t,
+			"POST",
+			append(getPathForDelayedEvents(), "abc"),
+			client.WithJSONBody(t, map[string]interface{}{}),
+		)
+		// TODO: specify failure as 404 when/if Synapse removes the action-in-body version of this endpoint
+		must.MatchFailure(t, res)
+	})
+
+	t.Run("cannot update a delayed event with an invalid action", func(t *testing.T) {
+		res := unauthedClient.Do(
+			t,
+			"POST",
+			append(getPathForDelayedEvents(), "abc", "oops"),
+			client.WithJSONBody(t, map[string]interface{}{}),
+		)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 		})
 	})
 
-	t.Run("cannot update a delayed event without a request body", func(t *testing.T) {
-		res := user.Do(t, "POST", append(getPathForUpdateDelayedEvents(), "abc"))
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 400,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("errcode", "M_NOT_JSON"),
-			},
-		})
-	})
-
-	t.Run("cannot update a delayed event without an action", func(t *testing.T) {
-		res := user.Do(
-			t,
-			"POST",
-			append(getPathForUpdateDelayedEvents(), "abc"),
-			client.WithJSONBody(t, map[string]interface{}{}),
-		)
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 400,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("errcode", "M_MISSING_PARAM"),
-			},
-		})
-	})
-
-	t.Run("cannot update a delayed event with an invalid action", func(t *testing.T) {
-		res := user.Do(
-			t,
-			"POST",
-			append(getPathForUpdateDelayedEvents(), "abc"),
-			client.WithJSONBody(t, map[string]interface{}{
-				"action": "oops",
-			}),
-		)
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 400,
-			JSON: []match.JSON{
-				match.JSONKeyEqual("errcode", "M_INVALID_PARAM"),
-			},
-		})
-	})
-
 	t.Run("parallel", func(t *testing.T) {
-		for _, action := range []string{"cancel", "restart", "send"} {
+		for _, action := range []DelayedEventAction{
+			DelayedEventActionCancel,
+			DelayedEventActionRestart,
+			DelayedEventActionSend,
+		} {
 			t.Run(fmt.Sprintf("cannot %s a delayed event without a matching delay ID", action), func(t *testing.T) {
 				t.Parallel()
-				res := user.Do(
+				res := unauthedClient.Do(
 					t,
 					"POST",
-					append(getPathForUpdateDelayedEvents(), "abc"),
-					client.WithJSONBody(t, map[string]interface{}{
-						"action": action,
-					}),
+					getPathForUpdateDelayedEvent("abc", action),
+					client.WithJSONBody(t, map[string]interface{}{}),
 				)
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 404,
@@ -258,13 +250,11 @@ func TestDelayedEvents(t *testing.T) {
 			StatusCode: 404,
 		})
 
-		user.MustDo(
+		unauthedClient.MustDo(
 			t,
 			"POST",
-			append(getPathForUpdateDelayedEvents(), delayID),
-			client.WithJSONBody(t, map[string]interface{}{
-				"action": "cancel",
-			}),
+			getPathForUpdateDelayedEvent(delayID, DelayedEventActionCancel),
+			client.WithJSONBody(t, map[string]interface{}{}),
 		)
 		matchDelayedEvents(t, user, 0)
 
@@ -302,13 +292,11 @@ func TestDelayedEvents(t *testing.T) {
 			StatusCode: 404,
 		})
 
-		user.MustDo(
+		unauthedClient.MustDo(
 			t,
 			"POST",
-			append(getPathForUpdateDelayedEvents(), delayID),
-			client.WithJSONBody(t, map[string]interface{}{
-				"action": "send",
-			}),
+			getPathForUpdateDelayedEvent(delayID, DelayedEventActionSend),
+			client.WithJSONBody(t, map[string]interface{}{}),
 		)
 		matchDelayedEvents(t, user, 0)
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
@@ -346,13 +334,11 @@ func TestDelayedEvents(t *testing.T) {
 			StatusCode: 404,
 		})
 
-		user.MustDo(
+		unauthedClient.MustDo(
 			t,
 			"POST",
-			append(getPathForUpdateDelayedEvents(), delayID),
-			client.WithJSONBody(t, map[string]interface{}{
-				"action": "restart",
-			}),
+			getPathForUpdateDelayedEvent(delayID, DelayedEventActionRestart),
+			client.WithJSONBody(t, map[string]interface{}{}),
 		)
 
 		time.Sleep(1 * time.Second)
@@ -489,8 +475,12 @@ func TestDelayedEvents(t *testing.T) {
 	})
 }
 
-func getPathForUpdateDelayedEvents() []string {
+func getPathForDelayedEvents() []string {
 	return []string{"_matrix", "client", "unstable", "org.matrix.msc4140", "delayed_events"}
+}
+
+func getPathForUpdateDelayedEvent(delayId string, action DelayedEventAction) []string {
+	return append(getPathForDelayedEvents(), delayId, string(action))
 }
 
 func getPathForSend(roomID string, eventType string, txnId string) []string {
@@ -509,7 +499,7 @@ func getDelayQueryParam(delayStr string) client.RequestOpt {
 
 func getDelayedEvents(t *testing.T, user *client.CSAPI) *http.Response {
 	t.Helper()
-	return user.MustDo(t, "GET", getPathForUpdateDelayedEvents())
+	return user.MustDo(t, "GET", getPathForDelayedEvents())
 }
 
 // Checks if the number of delayed events match the given number. This will
@@ -518,7 +508,7 @@ func matchDelayedEvents(t *testing.T, user *client.CSAPI, wantNumber int) {
 	t.Helper()
 
 	// We need to retry this as replication can sometimes lag.
-	user.MustDo(t, "GET", getPathForUpdateDelayedEvents(),
+	user.MustDo(t, "GET", getPathForDelayedEvents(),
 		client.WithRetryUntil(
 			500*time.Millisecond,
 			func(res *http.Response) bool {
@@ -548,10 +538,8 @@ func cleanupDelayedEvents(t *testing.T, user *client.CSAPI) {
 		user.MustDo(
 			t,
 			"POST",
-			append(getPathForUpdateDelayedEvents(), delayID),
-			client.WithJSONBody(t, map[string]interface{}{
-				"action": "cancel",
-			}),
+			getPathForUpdateDelayedEvent(delayID, DelayedEventActionCancel),
+			client.WithJSONBody(t, map[string]interface{}{}),
 		)
 	}
 

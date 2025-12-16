@@ -3,6 +3,7 @@ package csapi_tests
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -491,7 +492,7 @@ func TestSyncTimelineGap(t *testing.T) {
 			Type:   "m.room.message",
 			Sender: charlie,
 			Content: map[string]interface{}{
-				"body":    "Remote message",
+				"body":    "Remote message " + strconv.Itoa(i),
 				"msgtype": "m.text",
 			},
 		})

@@ -12,6 +12,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/matrix-org/complement/internal"
 )
 
 // LoadSyncData loads sync data from disk or by doing a /sync request
@@ -75,7 +77,14 @@ func doRequest(httpCli *http.Client, req *http.Request, token string) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
-	defer res.Body.Close()
+	defer internal.CloseIO(
+		res.Body,
+		fmt.Sprintf(
+			"doRequest: response body from %s %s",
+			res.Request.Method,
+			res.Request.URL.String(),
+		),
+	)
 	if res.StatusCode != 200 {
 		return nil, fmt.Errorf("response returned %s", res.Status)
 	}
