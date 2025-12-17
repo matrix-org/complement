@@ -41,26 +41,26 @@ func TestJumpToDateEndpoint(t *testing.T) {
 	as := deployment.AppServiceUser(t, "hs1", asUserID)
 
 	t.Run("parallel", func(t *testing.T) {
-		t.Run("should find event after given timestmap", func(t *testing.T) {
+		t.Run("should find event after given timestamp", func(t *testing.T) {
 			t.Parallel()
 			roomID, eventA, _ := createTestRoom(t, alice)
 			mustCheckEventisReturnedForTime(t, alice, roomID, eventA.BeforeTimestamp, "f", eventA.EventID)
 		})
 
-		t.Run("should find event before given timestmap", func(t *testing.T) {
+		t.Run("should find event before given timestamp", func(t *testing.T) {
 			t.Parallel()
 			roomID, _, eventB := createTestRoom(t, alice)
 			mustCheckEventisReturnedForTime(t, alice, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 		})
 
-		t.Run("should find nothing before the earliest timestmap", func(t *testing.T) {
+		t.Run("should find nothing before the earliest timestamp", func(t *testing.T) {
 			t.Parallel()
 			timeBeforeRoomCreation := time.Now()
 			roomID, _, _ := createTestRoom(t, alice)
 			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeRoomCreation, "b", "")
 		})
 
-		t.Run("should find nothing after the latest timestmap", func(t *testing.T) {
+		t.Run("should find nothing after the latest timestamp", func(t *testing.T) {
 			t.Parallel()
 			roomID, _, eventB := createTestRoom(t, alice)
 			mustCheckEventisReturnedForTime(t, alice, roomID, eventB.AfterTimestamp, "f", "")
@@ -88,7 +88,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeMessageCreation, "b", messageIDWithSameTime2)
 		})
 
-		t.Run("should find next event topologically after given timestmap when all message timestamps are the same", func(t *testing.T) {
+		t.Run("should find next event topologically after given timestamp when all message timestamps are the same", func(t *testing.T) {
 			t.Parallel()
 			roomID, _, _ := createTestRoom(t, alice)
 

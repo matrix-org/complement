@@ -52,7 +52,7 @@ func TestInviteFromIgnoredUsersDoesNotAppearInSync(t *testing.T) {
 	// Alice waits to see that the ignore was successful.
 	sinceJoinedAndIgnored := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncGlobalAccountDataHas(
 		func(ev gjson.Result) bool {
-			t.Logf(ev.Raw + "\n")
+			t.Logf("%s\n", ev.Raw)
 			return ev.Get("type").Str == "m.ignored_user_list" &&
 				ev.Get("content.ignored_users."+client.GjsonEscape(bob.UserID)).Exists()
 		},

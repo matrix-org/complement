@@ -140,24 +140,87 @@ for an example of how to do this correctly.
 
 To get started developing Complement tests, see [the onboarding documentation](ONBOARDING.md).
 
-### Build tags
+### Build tags (test blacklisting)
 
-Complement uses build tags to include or exclude tests for each homeserver. Build tags are comments at the top of the file that look
-like:
-```go
-// +build msc2403
-```
-We have tags for MSCs (the above is in `msc2403_test.go`) as well as general blacklists for a homeserver implementation e.g Dendrite,
-which has the name `dendrite_blacklist`. These are implemented as inverted tags such that specifying the tag results in the file not
-being picked up by `go test`. For example, `apidoc_presence_test.go` has:
+Complement uses build tags to exclude tests for each homeserver implementation.
+Build tags are comments at the top of the file that look like:
+
 ```go
 // +build !dendrite_blacklist
 ```
-and all Dendrite tests run with `-tags="dendrite_blacklist"` to cause this file to be skipped. You can run tests with build tags like this:
+
+These are implemented as inverted tags, such that specifying the tag results in
+the file not being picked up by `go test`. This serves as a way to exclude
+known-broken tests per implementation.
+
+For example, `apidoc_presence_test.go` has:
+
+```go
+// +build !dendrite_blacklist
 ```
-COMPLEMENT_BASE_IMAGE=complement-synapse:latest go test -v -tags="synapse_blacklist,msc2403" ./tests/...
+
+and all Dendrite tests run with `-tags="dendrite_blacklist"` to cause this file
+to be skipped. You can run tests with build tags like this:
+
 ```
-This runs Complement with a Synapse HS and ignores tests which Synapse doesn't implement, and includes tests for MSC2403.
+COMPLEMENT_BASE_IMAGE=complement-synapse:latest go test -v -tags="synapse_blacklist" ./tests/...
+```
+
+This runs Complement with a Synapse HS and ignores tests which Synapse doesn't implement.
+
+The currently known blacklist tags are:
+
+* `synapse_blacklist`
+* `dendrite_blacklist`
+* `conduit_blacklist`
+* `conduwuit_blacklist`
+
+### Writing tests for unstable MSCs
+
+Complement is frequently used to test homeserver implementations of unstable
+MSCs. As these features/changes often become stable eventually and for
+convenience, this repo accepts such tests.
+
+Tests for a given MSC should be placed in a new directory under `tests/`. For
+example, to write tests for MSC9999, create a directory at `tests/msc9999`.
+
+This creates a new go "package", and tests contained within will not be run
+unless explicitly noted. A package directory should contain the following
+files:
+
+```
+tests/msc9999
+├── main_test.go
+└── msc9999_test.go
+```
+
+where `main_test.go` sets up Complement and indicates that this is a package
+containing tests:
+
+```go
+package tests
+
+import (
+    "testing"
+
+    "github.com/matrix-org/complement"
+)
+
+func TestMain(m *testing.M) {
+    complement.TestMain(m, "msc9999")
+}
+```
+
+and `msc9999_test.go` contains your actual tests. See existing `tests/msc*`
+directories for examples.
+
+You can create additional files to separate and organise logical chunks of
+tests. Just be sure each file is named `*_test.go` for `go test` to find it.
+
+Once an MSC is accepted, the tests should be migrated out of the `msc*`
+directory, as the MSC is now considered stable. Consider adding the tests to
+the blacklist of other homeserver implementations (see above section) if they
+don't yet implement the new changes described by the MSC.
 
 ## Why 'Complement'?
 
@@ -189,7 +252,7 @@ update-ca-certificates
 
 ## Sytest parity
 
-As of 10 February 2023:
+As of 29 October 2025:
 ```
 $ go build ./cmd/sytest-coverage
 $ ./sytest-coverage -v
@@ -444,7 +507,13 @@ $ ./sytest-coverage -v
     ✓ Can get rooms/{roomId}/members
 
 30rooms/60version_upgrade 0/19 tests
-30rooms/70publicroomslist 0/5 tests
+30rooms/70publicroomslist 2/5 tests
+    × Asking for a remote rooms list, but supplying the local server's name, returns the local rooms list
+    × Can get remote public room list
+    × Can paginate public room list
+    ✓ Can search public room list
+    ✓ Name/topic keys are correct
+
 31sync/01filter 2/2 tests
     ✓ Can create filter
     ✓ Can download filter
@@ -644,5 +713,5 @@ $ ./sytest-coverage -v
 90jira/SYN-516 0/1 tests
 90jira/SYN-627 0/1 tests
 
-TOTAL: 220/610 tests converted
+TOTAL: 222/610 tests converted
 ```
