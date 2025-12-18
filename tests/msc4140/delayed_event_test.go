@@ -456,11 +456,20 @@ func TestDelayedEvents(t *testing.T) {
 			getDelayQueryParam("900"),
 		)
 
-		// Because we're stopping and starting servers here, it could take up
-		// `deployment.GetConfig().SpawnHSTimeout` for the server to start up again. We
-		// account for this by scheduling many delayed events at short intervals (we chose
-		// 10 seconds because that's what the test naively chose before). Then whenever the
-		// servers comes back, we can just check until it decrements by 1.
+		// Previously, this was naively using a single delayed event with a 10 second delay.
+		// But because we're stopping and starting servers here, it could take up
+		// `deployment.GetConfig().SpawnHSTimeout` for the server to start up again so by
+		// the time the server is back up, the delayed event may have already been sent
+		// invalidating our assertions below which expect some delayed events to still be
+		// pending and then see one of them be sent after the server is back up.
+		//
+		// We could account for this by setting the delayed event delay to be longer than
+		// `deployment.GetConfig().SpawnHSTimeout` but that would make the test suite take
+		// longer to run in all cases even for homeservers that are quick to restart.
+		//
+		// We instead account for this by scheduling many delayed events at short intervals
+		// (we chose 10 seconds because that's what the test naively chose before). Then
+		// whenever the servers comes back, we can just check until it decrements by 1.
 		//
 		// We add 1 to the number of intervals to ensure that we have at least one interval
 		// to check against no matter how things are configured.
