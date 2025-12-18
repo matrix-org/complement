@@ -448,6 +448,10 @@ func TestDelayedEvents(t *testing.T) {
 		stateKey1 := "1"
 		stateKey2 := "2"
 
+		numberOfDelayedEvents := 0
+
+		// Send an initial delayed event that will be ready to send as soon as the server
+		// comes back up.
 		user.MustDo(
 			t,
 			"PUT",
@@ -455,17 +459,20 @@ func TestDelayedEvents(t *testing.T) {
 			client.WithJSONBody(t, map[string]interface{}{}),
 			getDelayQueryParam("900"),
 		)
+		numberOfDelayedEvents++
 
 		// Previously, this was naively using a single delayed event with a 10 second delay.
 		// But because we're stopping and starting servers here, it could take up
-		// `deployment.GetConfig().SpawnHSTimeout` for the server to start up again so by
-		// the time the server is back up, the delayed event may have already been sent
-		// invalidating our assertions below which expect some delayed events to still be
-		// pending and then see one of them be sent after the server is back up.
+		// `deployment.GetConfig().SpawnHSTimeout` (defaults to 30 seconds) for the server
+		// to start up again so by the time the server is back up, the delayed event may
+		// have already been sent invalidating our assertions below (which expect some
+		// delayed events to still be pending and then see one of them be sent after the
+		// server is back up).
 		//
 		// We could account for this by setting the delayed event delay to be longer than
 		// `deployment.GetConfig().SpawnHSTimeout` but that would make the test suite take
-		// longer to run in all cases even for homeservers that are quick to restart.
+		// longer to run in all cases even for homeservers that are quick to restart because
+		// we have to wait for that large delay.
 		//
 		// We instead account for this by scheduling many delayed events at short intervals
 		// (we chose 10 seconds because that's what the test naively chose before). Then
@@ -483,13 +490,15 @@ func TestDelayedEvents(t *testing.T) {
 				t,
 				"PUT",
 				// Avoid clashing state keys as that would cancel previous delayed events on the
-				// same key.
-				getPathForState(roomID, eventType, fmt.Sprintf("%d", i+1)),
+				// same key (start at 2).
+				getPathForState(roomID, eventType, fmt.Sprintf("%d", i+2)),
 				client.WithJSONBody(t, map[string]interface{}{}),
 				getDelayQueryParam(fmt.Sprintf("%d", delay.Milliseconds())),
 			)
+			numberOfDelayedEvents++
 		}
-		matchDelayedEvents(t, user, delayedEventsNumberEqual(numberOf10SecondIntervals))
+		// We expect all of the delayed events to be scheduled and not sent yet.
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(numberOfDelayedEvents))
 
 		// Restart the server and wait until it's back up.
 		deployment.StopServer(t, hsName)
@@ -504,8 +513,9 @@ func TestDelayedEvents(t *testing.T) {
 			// We should see at-least one less than we had before the restart (the first
 			// delayed event should have been sent). Other delayed events may have been sent
 			// by the time the server actually came back up.
-			delayedEventsNumberLessThan(numberOf10SecondIntervals-1),
+			delayedEventsNumberLessThan(numberOfDelayedEvents-1),
 		)
+		// Capture whatever number of delayed events are remaining after the server restart.
 		remainingDelayedEventCount := countDelayedEvents(t, delayedEventResponse)
 		// Sanity check that the room state was updated correctly with the delayed events
 		// that were sent.
@@ -594,31 +604,31 @@ func delayedEventsNumberEqual(wantNumber int) delayedEventsCheckOpt {
 
 // delayedEventsNumberLessThan returns a check option that checks if the number of delayed events
 // is greater than the given number.
-func delayedEventsNumberGreaterThan(minNumber int) delayedEventsCheckOpt {
+func delayedEventsNumberGreaterThan(target int) delayedEventsCheckOpt {
 	return func(res *http.Response) error {
 		count, err := countDelayedEventsInternal(res)
 		if err != nil {
-			return fmt.Errorf("delayedEventsNumberGreaterThan(%d): %s", minNumber, err)
+			return fmt.Errorf("delayedEventsNumberGreaterThan(%d): %s", target, err)
 		}
-		if count > minNumber {
+		if count > target {
 			return nil
 		}
-		return fmt.Errorf("delayedEventsNumberGreaterThan(%d): got %d", minNumber, count)
+		return fmt.Errorf("delayedEventsNumberGreaterThan(%d): got %d", target, count)
 	}
 }
 
 // delayedEventsNumberLessThan returns a check option that checks if the number of delayed events
 // is less than the given number.
-func delayedEventsNumberLessThan(maxNumber int) delayedEventsCheckOpt {
+func delayedEventsNumberLessThan(target int) delayedEventsCheckOpt {
 	return func(res *http.Response) error {
 		count, err := countDelayedEventsInternal(res)
 		if err != nil {
-			return fmt.Errorf("delayedEventsNumberLessThan(%d): %s", maxNumber, err)
+			return fmt.Errorf("delayedEventsNumberLessThan(%d): %s", target, err)
 		}
-		if count < maxNumber {
+		if count < target {
 			return nil
 		}
-		return fmt.Errorf("delayedEventsNumberLessThan(%d): got %d", maxNumber, count)
+		return fmt.Errorf("delayedEventsNumberLessThan(%d): got %d", target, count)
 	}
 }
 
