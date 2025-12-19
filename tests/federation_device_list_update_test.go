@@ -206,7 +206,14 @@ func TestDeviceListsUpdateOverFederationOnRoomJoin(t *testing.T) {
 	bob := srv.UserID("complement_bob")
 	roomVer := gomatrixserverlib.RoomVersion("10")
 	initalEvents := federation.InitialRoomEvents(roomVer, bob)
-	room := srv.MustMakeRoom(t, roomVer, initalEvents)
+	room := srv.MustMakeRoom(t, roomVer, append(initalEvents, federation.Event{
+		Type:     "m.room.encryption",
+		StateKey: b.Ptr(""),
+		Sender:   bob,
+		Content: map[string]interface{}{
+			"algorithm": "m.megolm.v1.aes-sha2",
+		},
+	}))
 
 	alice.MustJoinRoom(t, room.RoomID, []spec.ServerName{srv.ServerName()})
 	alice.SendEventSynced(t, room.RoomID, b.Event{
