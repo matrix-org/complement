@@ -453,6 +453,7 @@ func TestDelayedEvents(t *testing.T) {
 			client.WithJSONBody(t, map[string]interface{}{}),
 			getDelayQueryParam("900"),
 		)
+		beforeScheduleStateTimestamp2 := time.Now()
 		user.MustDo(
 			t,
 			"PUT",
@@ -465,6 +466,15 @@ func TestDelayedEvents(t *testing.T) {
 		deployment.StopServer(t, hsName)
 		time.Sleep(1 * time.Second)
 		deployment.StartServer(t, hsName)
+
+		// The rest of the test assumes the second delayed event (10 second delay) still
+		// hasn't been sent yet.
+		if time.Now().Sub(beforeScheduleStateTimestamp2) > 10*time.Second {
+			t.Fatalf(
+				"Test took too long to run, cannot guarantee delayed event timings. " +
+					"More than 10 seconds elapsed between scheduling the delayed event and now when we're about to check for it.",
+			)
+		}
 
 		matchDelayedEvents(t, user, 1)
 		user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey1))
