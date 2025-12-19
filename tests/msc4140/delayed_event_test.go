@@ -467,7 +467,7 @@ func TestDelayedEvents(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		deployment.StartServer(t, hsName)
 
-		// The rest of the test assumes the second delayed event (10 second delay) still has
+		// The rest of the test assumes the second delayed event (10 second delay) still
 		// hasn't been sent yet.
 		if time.Now().Sub(beforeScheduleStateTimestamp2) > 10*time.Second {
 			t.Fatalf(
