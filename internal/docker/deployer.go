@@ -348,7 +348,7 @@ func deployImage(
 		// interact with a complement-controlled test server.
 		// Note: this feature of docker landed in Docker 20.10,
 		// see https://github.com/moby/moby/pull/40007
-		extraHosts = []string{"host.docker.internal:host-gateway"}
+		extraHosts = []string{fmt.Sprintf("%s:host-gateway", cfg.HostnameRunningComplement)}
 	}
 
 	for _, m := range cfg.HostMounts {
