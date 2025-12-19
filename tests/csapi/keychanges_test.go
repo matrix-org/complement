@@ -32,7 +32,18 @@ func TestKeyChangesLocal(t *testing.T) {
 		bobDeviceKeys, bobOTKs := bob.MustGenerateOneTimeKeys(t, 1)
 		bob.MustUploadKeys(t, bobDeviceKeys, bobOTKs)
 
-		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		bob.MustJoinRoom(t, roomID, []spec.ServerName{})
 		nextBatch1 := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
@@ -45,7 +56,7 @@ func TestKeyChangesLocal(t *testing.T) {
 			"password": password,
 		})
 		// Create a new device by logging in
-		res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "r0", "login"}, reqBody)
+		res := unauthedClient.MustDo(t, "POST", []string{"_matrix", "client", "v3", "login"}, reqBody)
 		loginResp := must.ParseJSON(t, res.Body)
 		unauthedClient.AccessToken = must.GetJSONFieldStr(t, loginResp, "access_token")
 		unauthedClient.DeviceID = must.GetJSONFieldStr(t, loginResp, "device_id")
