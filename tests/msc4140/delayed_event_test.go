@@ -462,7 +462,7 @@ func TestDelayedEvents(t *testing.T) {
 		numberOfDelayedEvents++
 
 		// Previously, this was naively using a single delayed event with a 10 second delay.
-		// But because we're stopping and starting servers here, it could take up
+		// But because we're stopping and starting servers here, it could take up to
 		// `deployment.GetConfig().SpawnHSTimeout` (defaults to 30 seconds) for the server
 		// to start up again so by the time the server is back up, the delayed event may
 		// have already been sent invalidating our assertions below (which expect some
