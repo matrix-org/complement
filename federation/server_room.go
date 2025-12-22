@@ -71,7 +71,8 @@ type ServerRoom struct {
 	TimelineMutex      sync.RWMutex
 	ForwardExtremities []string
 	Depth              int64
-	waiters            map[string][]*helpers.Waiter // room ID -> []Waiter
+	waitersEvent       map[string][]*helpers.Waiter // event ID -> []Waiter
+	waitersMembership  map[string][]*helpers.Waiter // userID -> []Waiter
 	waitersMu          *sync.Mutex
 }
 
@@ -82,7 +83,8 @@ func NewServerRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *Server
 		Version:            roomVer,
 		State:              make(map[string]gomatrixserverlib.PDU),
 		ForwardExtremities: make([]string, 0),
-		waiters:            make(map[string][]*helpers.Waiter),
+		waitersEvent:       make(map[string][]*helpers.Waiter),
+		waitersMembership:  make(map[string][]*helpers.Waiter),
 		waitersMu:          &sync.Mutex{},
 	}
 	room.ServerRoomImpl = &ServerRoomImplDefault{}
@@ -107,10 +109,15 @@ func (r *ServerRoom) AddEvent(ev gomatrixserverlib.PDU) {
 	// inform waiters
 	r.waitersMu.Lock()
 	defer r.waitersMu.Unlock()
-	for _, w := range r.waiters[ev.EventID()] {
+	for _, w := range r.waitersEvent[ev.EventID()] {
 		w.Finish()
 	}
-	delete(r.waiters, ev.EventID()) // clear the waiters
+	if ev.Type() == "m.room.member" {
+		for _, w := range r.waitersMembership[*ev.StateKey()] {
+			w.Finish()
+		}
+	}
+	delete(r.waitersEvent, ev.EventID()) // clear the waiters
 }
 
 // WaiterForEvent creates a Waiter which waits until the given event ID is added to the room.
@@ -128,7 +135,7 @@ func (r *ServerRoom) WaiterForEvent(eventID string) *helpers.Waiter {
 	defer r.TimelineMutex.Unlock()
 	w := helpers.NewWaiter()
 	r.waitersMu.Lock()
-	r.waiters[eventID] = append(r.waiters[eventID], w)
+	r.waitersEvent[eventID] = append(r.waitersEvent[eventID], w)
 	r.waitersMu.Unlock()
 	// check if the event is already there and if so immediately end the wait
 	for _, ev := range r.Timeline {
@@ -136,6 +143,21 @@ func (r *ServerRoom) WaiterForEvent(eventID string) *helpers.Waiter {
 			w.Finish()
 			break
 		}
+	}
+	return w
+}
+
+func (r *ServerRoom) WaiterForMembershipEvent(userID string) *helpers.Waiter {
+	// We need to lock the state so we can check for it at the end
+	r.StateMutex.Lock()
+	defer r.StateMutex.Unlock()
+	w := helpers.NewWaiter()
+	r.waitersMu.Lock()
+	r.waitersMembership[userID] = append(r.waitersMembership[userID], w)
+	r.waitersMu.Unlock()
+	tuple := fmt.Sprintf("m.room.member\x1f%s", userID)
+	if _, found := r.State[tuple]; found {
+		w.Finish()
 	}
 	return w
 }
