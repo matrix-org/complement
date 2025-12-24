@@ -163,11 +163,7 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 		// each iteration had a 50ms sleep between tries so the timeout is 50 * iteration ms
 		cfg.SpawnHSTimeout = time.Duration(50*parseEnvWithDefault("COMPLEMENT_VERSION_CHECK_ITERATIONS", 100)) * time.Millisecond
 	}
-	parsedCPUCores, err := strconv.ParseFloat(os.Getenv("COMPLEMENT_CONTAINER_CPU_CORES"), 64)
-	if err != nil {
-		panic("COMPLEMENT_CONTAINER_CPU_CORES parse error: " + err.Error())
-	}
-	cfg.ContainerCPUCores = parsedCPUCores
+	cfg.ContainerCPUCores = parseEnvAsFloatWithDefault("COMPLEMENT_CONTAINER_CPU_CORES", 0)
 	parsedMemoryBytes, err := parseByteSizeString(os.Getenv("COMPLEMENT_CONTAINER_MEMORY"))
 	if err != nil {
 		panic("COMPLEMENT_CONTAINER_MEMORY parse error: " + err.Error())
@@ -241,17 +237,30 @@ func (c *Complement) CAPrivateKeyBytes() ([]byte, error) {
 	return caKey.Bytes(), err
 }
 
-func parseEnvWithDefault(key string, def int) int {
-	s := os.Getenv(key)
-	if s != "" {
-		i, err := strconv.Atoi(s)
-		if err != nil {
-			// Don't bother trying to report it
-			return def
-		}
-		return i
+func parseEnvWithDefault(key string, defaultValue int) int {
+	inputString := os.Getenv(key)
+	if inputString == "" {
+		return defaultValue
 	}
-	return def
+
+	parsedNumber, err := strconv.Atoi(inputString)
+	if err != nil {
+		panic(key + " parse error: " + err.Error())
+	}
+	return parsedNumber
+}
+
+func parseEnvAsFloatWithDefault(key string, defaultValue float64) float64 {
+	inputString := os.Getenv(key)
+	if inputString == "" {
+		return defaultValue
+	}
+
+	parsedNumber, err := strconv.ParseFloat(inputString, 64)
+	if err != nil {
+		panic(key + " parse error: " + err.Error())
+	}
+	return parsedNumber
 }
 
 // parseByteSizeString parses a byte size string (case insensitive) like "512MB"
