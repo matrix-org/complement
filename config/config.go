@@ -53,7 +53,7 @@ type Complement struct {
 	// starting the container. Responsiveness is detected by `HEALTHCHECK` being healthy *and*
 	// the `/versions` endpoint returning 200 OK.
 	SpawnHSTimeout time.Duration
-	// Name: COMPLEMENT_CONTAINER_CPUS
+	// Name: COMPLEMENT_CONTAINER_CPU_CORES
 	// Default: 0
 	// Description: The number of CPU cores available for the container to use (can be
 	// fractional like 0.5). This is passed to Docker as the `--cpus`/`NanoCPUs` argument.
@@ -163,9 +163,9 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 		// each iteration had a 50ms sleep between tries so the timeout is 50 * iteration ms
 		cfg.SpawnHSTimeout = time.Duration(50*parseEnvWithDefault("COMPLEMENT_VERSION_CHECK_ITERATIONS", 100)) * time.Millisecond
 	}
-	parsedCPUCores, err := strconv.ParseFloat(os.Getenv("COMPLEMENT_CONTAINER_CPUS"), 64)
+	parsedCPUCores, err := strconv.ParseFloat(os.Getenv("COMPLEMENT_CONTAINER_CPU_CORES"), 64)
 	if err != nil {
-		panic("COMPLEMENT_CONTAINER_CPUS parse error: " + err.Error())
+		panic("COMPLEMENT_CONTAINER_CPU_CORES parse error: " + err.Error())
 	}
 	cfg.ContainerCPUCores = parsedCPUCores
 	parsedMemoryBytes, err := parseByteSizeString(os.Getenv("COMPLEMENT_CONTAINER_MEMORY"))

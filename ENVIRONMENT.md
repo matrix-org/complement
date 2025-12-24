@@ -16,7 +16,7 @@ If 1, always prints the Homeserver container logs even on success. When used wit
 This allows you to override the base image used for a particular named homeserver. For example, `COMPLEMENT_BASE_IMAGE_HS1=complement-dendrite:latest` would use `complement-dendrite:latest` for the `hs1` homeserver in blueprints, but not any other homeserver (e.g `hs2`). This matching is case-insensitive. This allows Complement to test how different homeserver implementations work with each other.  
 - Type: `map[string]string`
 
-#### `COMPLEMENT_CONTAINER_CPUS`
+#### `COMPLEMENT_CONTAINER_CPU_CORES`
 The number of CPU cores available for the container to use (can be fractional like 0.5). This is passed to Docker as the `--cpus`/`NanoCPUs` argument. If 0, no limit is set and the container can use all available host CPUs. This is useful to mimic a resource-constrained environment, like a CI environment.  
 - Type: `float64`
 - Default: 0
