@@ -163,7 +163,11 @@ func NewConfigFromEnvVars(pkgNamespace, baseImageURI string) *Complement {
 		// each iteration had a 50ms sleep between tries so the timeout is 50 * iteration ms
 		cfg.SpawnHSTimeout = time.Duration(50*parseEnvWithDefault("COMPLEMENT_VERSION_CHECK_ITERATIONS", 100)) * time.Millisecond
 	}
-	cfg.ContainerCPUCores, _ = strconv.ParseFloat(os.Getenv("COMPLEMENT_CONTAINER_CPUS"), 64)
+	parsedCPUCores, err := strconv.ParseFloat(os.Getenv("COMPLEMENT_CONTAINER_CPUS"), 64)
+	if err != nil {
+		panic("COMPLEMENT_CONTAINER_CPUS parse error: " + err.Error())
+	}
+	cfg.ContainerCPUCores = parsedCPUCores
 	parsedMemoryBytes, err := parseByteSizeString(os.Getenv("COMPLEMENT_CONTAINER_MEMORY"))
 	if err != nil {
 		panic("COMPLEMENT_CONTAINER_MEMORY parse error: " + err.Error())
