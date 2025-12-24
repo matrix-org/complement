@@ -50,10 +50,6 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			t.Run(upgradeDescriptorPrefix+"upgrading a room carries over existing push rules for local users", func(t *testing.T) {
 				t.Parallel()
 
-				// FIXME: We have to skip this test on Dendrite because it doesn't seem to send
-				// the new push rules down sync in many scenarios.
-				runtime.SkipIf(t, runtime.Dendrite)
-
 				// FIXME: We have to skip this test on Synapse until
 				// https://github.com/element-hq/synapse/issues/19199 is resolved.
 				if useManualRoomUpgrade {
@@ -172,10 +168,6 @@ func TestPushRuleRoomUpgrade(t *testing.T) {
 			// from the old room to the new room at the time of upgrade.
 			t.Run("joining a remote "+upgradeDescriptorPrefix+"upgraded room carries over existing push rules", func(t *testing.T) {
 				t.Parallel()
-
-				// FIXME: We have to skip this test on Dendrite because it doesn't seem to send
-				// the new push rules down sync in many scenarios.
-				runtime.SkipIf(t, runtime.Dendrite)
 
 				// Start a sync loop
 				_, bobSince := bob.MustSync(t, client.SyncReq{TimeoutMillis: "0"})
