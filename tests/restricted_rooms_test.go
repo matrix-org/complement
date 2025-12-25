@@ -446,3 +446,77 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 		return true
 	}))
 }
+
+// A server will attempt to perform a local join to a room with creators (v12),
+// using a creator as the authorising user, but falling back to power levels if
+// an appropriate creator cannot be found.
+//
+// ref: https://github.com/element-hq/synapse/issues/19120
+func TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T) {
+	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "12", "restricted")
+}
+
+func doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T, roomVersion string, joinRule string) {
+	deployment := complement.Deploy(t, 2)
+	defer deployment.Destroy(t)
+	// Create the room
+	alice, allowed_room, room := setupRestrictedRoom(t, deployment, roomVersion, joinRule)
+	// Create two users on the other homeserver.
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+
+	// Bob joins the allowed room.
+	bob.JoinRoom(t, allowed_room, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
+	// Bob joins the restricted room. This join should go remotely
+	// and consequently be authorised by Alice as she is the only
+	// member.
+	bob.JoinRoom(t, room, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
+	// Ensure the join was authorised by alice
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, room, func(ev gjson.Result) bool {
+		must.MatchGJSON(t, ev,
+			match.JSONKeyEqual("content.join_authorised_via_users_server", alice.UserID),
+		)
+		return true
+	}))
+
+	// Alice restricts the invite power level to moderators and promotes Bob to
+	// moderator.
+	state_key := ""
+	alice.SendEventSynced(t, room, b.Event{
+		Type:     "m.room.power_levels",
+		StateKey: &state_key,
+		Content: map[string]interface{}{
+			"invite": 50,
+			"users": map[string]interface{}{
+				bob.UserID: 50,
+			},
+		},
+	})
+
+	// Charlie joins the allowed room.
+	charlie.JoinRoom(t, allowed_room, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
+	// Charlie attempts to join the restricted room.
+	// hs2 should attempt to find a creator to authorise the room join,
+	// but can't as the only creator is remote. It should then fall back
+	// to checking the power levels for a user that can authorise the join.
+	// The end result should be that charlie is allowed to join.
+	charlie.JoinRoom(t, room, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs2"),
+	})
+
+	// Ensure the join was authorised by bob. The join should not be
+	// authorised by alice as hs2 should not have attempted a remote
+	// join given bob is a local user that can authorise the join.
+	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, room, func(ev gjson.Result) bool {
+		must.MatchGJSON(t, ev,
+			match.JSONKeyEqual("content.join_authorised_via_users_server", bob.UserID),
+		)
+		return true
+	}))
+}
