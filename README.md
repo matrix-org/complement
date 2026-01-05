@@ -36,7 +36,7 @@ To solve this, you will need to configure your firewall to allow such requests.
 If you are using [ufw](https://code.launchpad.net/ufw), this can be done with:
 
 ```sh
-sudo ufw allow in on br-+
+sudo ufw allow in on br-+ comment "(from Matrix Complement testing) Allow traffic from custom Docker networks to the host machine (host.docker.internal)"
 ```
 
 ### Running using Podman
