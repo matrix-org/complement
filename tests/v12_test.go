@@ -1357,39 +1357,54 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 	return eventIDs
 }
 
-func TestMSC4311FullCreateEventOnStrippedState(t *testing.T) {
+func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
-	deployment := complement.Deploy(t, 2)
+	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+		federation.HandleEventRequests(),
+	)
+	srv.UnexpectedRequestsAreErrors = false
+	cancel := srv.Listen()
+	defer cancel()
+
+	// Alice will invite Bob. Bob's server should receive full PDUs in `invite_room_state`.
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
-	local := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "local"})
-	remote := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "remote"})
+	bob := srv.UserID("bob")
+
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"room_version": roomVersion12,
 		"preset":       "public_chat",
 	})
-	for _, target := range []*client.CSAPI{local, remote} {
-		t.Logf("checking %s", target.UserID)
-		alice.MustInviteRoom(t, roomID, target.UserID)
-		resp, _ := target.MustSync(t, client.SyncReq{})
-		inviteState := resp.Get(
-			fmt.Sprintf("rooms.invite.%s.invite_state.events", client.GjsonEscape(roomID)),
-		)
-		must.NotEqual(t, len(inviteState.Array()), 0, "no events in invite_state")
-		// find the create event
-		found := false
-		for _, ev := range inviteState.Array() {
-			if ev.Get("type").Str == spec.MRoomCreate {
-				found = true
-				// we should have extra fields
-				must.MatchGJSON(t, ev,
-					match.JSONKeyPresent("origin_server_ts"),
-				)
+	srv.Mux().HandleFunc("/_matrix/federation/v2/invite/{roomID}/{eventID}", srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+		if pathParams["roomID"] != roomID {
+			t.Errorf("Received /invite_room_state for the wrong room: %s", roomID)
+			return util.JSONResponse{
+				Code: 400,
+				JSON: "wrong room",
 			}
 		}
-		if !found {
-			ct.Errorf(t, "failed to find create event in invite_state")
+		inviteRoomState := gjson.ParseBytes(fr.Content()).Get("invite_room_state").Array()
+		for _, ev := range inviteRoomState {
+			// should have extra fields
+			must.MatchGJSON(t, ev, match.JSONKeyPresent("origin_server_ts"))
 		}
-	}
-
+		invite := []byte(gjson.ParseBytes(fr.Content()).Get("event").Raw)
+		signed, err := gomatrixserverlib.SignJSON(string(srv.ServerName()), srv.KeyID, srv.Priv, invite)
+		if err != nil {
+			t.Fatalf("failed to sign invite: %s", err)
+		}
+		return util.JSONResponse{
+			Code: 200,
+			JSON: struct {
+				Event any `json:"event"`
+			}{
+				Event: signed,
+			},
+		}
+	}))
+	alice.MustInviteRoom(t, roomID, bob)
 }
