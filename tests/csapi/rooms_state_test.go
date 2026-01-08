@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 )
 
@@ -46,13 +47,10 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 		t.Run("Room creation reports m.room.member to myself", func(t *testing.T) {
 			t.Parallel()
 
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.member" {
-					return false
-				}
-				must.Equal(t, ev.Get("sender").Str, alice.UserID, "wrong sender")
-				must.Equal(t, ev.Get("state_key").Str, alice.UserID, "wrong state_key")
-				must.Equal(t, ev.Get("content").Get("membership").Str, "join", "wrong content.membership")
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID, func(ev gjson.Result) bool {
+				must.MatchGJSON(t, ev,
+					match.JSONKeyEqual("sender", alice.UserID),
+				)
 				return true
 			}))
 		})

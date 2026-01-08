@@ -79,16 +79,7 @@ func TestRoomMembers(t *testing.T) {
 				},
 			})
 
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-				roomID,
-				func(ev gjson.Result) bool {
-					if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
-						return false
-					}
-					must.Equal(t, ev.Get("content").Get("membership").Str, "join", "Bob failed to join the room")
-					return true
-				},
-			))
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 		})
 		// sytest: Test that we can be reinvited to a room we created
 		t.Run("Test that we can be reinvited to a room we created", func(t *testing.T) {
@@ -122,14 +113,7 @@ func TestRoomMembers(t *testing.T) {
 			alice.MustLeaveRoom(t, roomID)
 
 			// Wait until alice has left the room
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(
-				roomID,
-				func(ev gjson.Result) bool {
-					return ev.Get("type").Str == "m.room.member" &&
-						ev.Get("content.membership").Str == "leave" &&
-						ev.Get("state_key").Str == alice.UserID
-				},
-			))
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncLeftFrom(alice.UserID, roomID))
 
 			bob.MustInviteRoom(t, roomID, alice.UserID)
 			since := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(alice.UserID, roomID))
@@ -203,12 +187,7 @@ func TestRoomMembers(t *testing.T) {
 			})
 			res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "ban"}, banBody)
 			must.MatchResponse(t, res, match.HTTPResponse{StatusCode: 200})
-			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-				if ev.Get("type").Str != "m.room.member" || ev.Get("state_key").Str != bob.UserID {
-					return false
-				}
-				return ev.Get("content.membership").Str == "ban"
-			}))
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncBannedFrom(bob.UserID, roomID))
 			// verify bob is banned
 			content := alice.MustGetStateEventContent(t, roomID, "m.room.member", bob.UserID)
 			must.MatchGJSON(t, content, match.JSONKeyEqual("membership", "ban"))

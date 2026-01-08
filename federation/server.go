@@ -3,6 +3,7 @@
 package federation
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -12,6 +13,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -32,6 +34,7 @@ import (
 
 	"github.com/matrix-org/complement/config"
 	"github.com/matrix-org/complement/ct"
+	"github.com/matrix-org/complement/internal"
 )
 
 // Subset of Deployment used in federation
@@ -278,6 +281,9 @@ func (s *Server) SendFederationRequest(
 // DoFederationRequest signs and sends an arbitrary federation request from this server, and returns the response.
 //
 // The requests will be routed according to the deployment map in `deployment`.
+//
+// The caller does not need to worry about closing the returned `http.Response.Body` as
+// this is handled automatically.
 func (s *Server) DoFederationRequest(
 	ctx context.Context,
 	t ct.TestLike,
@@ -297,12 +303,25 @@ func (s *Server) DoFederationRequest(
 
 	var resp *http.Response
 	resp, err = httpClient.DoHTTPRequest(ctx, httpReq)
+	defer internal.CloseIO(resp.Body, "DoFederationRequest: federation response body")
 
 	if httpError, ok := err.(gomatrix.HTTPError); ok {
 		t.Logf("[SSAPI] %s %s%s => error(%d): %s (%s)", req.Method(), req.Destination(), req.RequestURI(), httpError.Code, err, time.Since(start))
 	} else if err == nil {
 		t.Logf("[SSAPI] %s %s%s => %d (%s)", req.Method(), req.Destination(), req.RequestURI(), resp.StatusCode, time.Since(start))
 	}
+
+	// Make a copy of the response body so that downstream callers can read it multiple
+	// times if needed and don't need to worry about closing it.
+	var respBody []byte
+	if resp.Body != nil {
+		respBody, err = io.ReadAll(resp.Body)
+		if err != nil {
+			ct.Fatalf(t, "CSAPI.Do failed to read response body for RetryUntil check: %s", err)
+		}
+		resp.Body = io.NopCloser(bytes.NewBuffer(respBody))
+	}
+
 	return resp, err
 }
 
