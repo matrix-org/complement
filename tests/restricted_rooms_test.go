@@ -447,11 +447,18 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 	}))
 }
 
-// A server will attempt to perform a local join to a room with creators (v12),
-// using a creator as the authorising user, but falling back to power levels if
-// an appropriate creator cannot be found.
+// A homeserver should be able to do a local join (when someone else from the same
+// homeserver is already joined to the room) to a room using any local user who has
+// invite power levels.
 //
-// ref: https://github.com/element-hq/synapse/issues/19120
+// In the test case, there are no local room creators on hs2, so hs2 will need to use
+// one of the local people listed in the power levels who can invite. While hs2, could
+// do another remote join to get charlie in the room, we assert it was a local join by
+// checking the `join_authorised_via_users_server` (homeservers should prefer a local
+// join).
+//
+// This is a regression test for Synapse as it previously only looked for local room
+// creators in v12 rooms, https://github.com/element-hq/synapse/issues/19120
 func TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T) {
 	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "12", "restricted")
 }
