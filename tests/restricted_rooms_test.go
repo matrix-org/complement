@@ -461,6 +461,7 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 // creators in v12 rooms, https://github.com/element-hq/synapse/issues/19120
 func TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T) {
 	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "12", "restricted")
+	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "11", "restricted")
 }
 
 func doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T, roomVersion string, joinRule string) {
