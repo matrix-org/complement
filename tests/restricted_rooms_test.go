@@ -481,7 +481,7 @@ func doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T, roomV
 		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 	})
 	// Bob joins the restricted room. This join should go remotely
-	// and consequently be authorised by Alice as she is the only
+	// and consequently be authorised by Alice (on hs1) as she is the only
 	// member.
 	bob.JoinRoom(t, room, []spec.ServerName{
 		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
@@ -497,26 +497,42 @@ func doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T, roomV
 	// Alice restricts the invite power level to moderators and promotes Bob to
 	// moderator.
 	state_key := ""
-	alice.SendEventSynced(t, room, b.Event{
-		Type:     "m.room.power_levels",
-		StateKey: &state_key,
-		Content: map[string]interface{}{
-			"invite": 50,
-			"users": map[string]interface{}{
-				bob.UserID: 50,
+	if roomVersion == "12" {
+		// Alice is a creator and cannot appear in the power levels
+		alice.SendEventSynced(t, room, b.Event{
+			Type:     "m.room.power_levels",
+			StateKey: &state_key,
+			Content: map[string]interface{}{
+				"invite": 50,
+				"users": map[string]interface{}{
+					bob.UserID: 50,
+				},
 			},
-		},
-	})
+		})
+	} else {
+		// rooms <v12 need alice to be in the power levels to retain power
+		alice.SendEventSynced(t, room, b.Event{
+			Type:     "m.room.power_levels",
+			StateKey: &state_key,
+			Content: map[string]interface{}{
+				"invite": 50,
+				"users": map[string]interface{}{
+					alice.UserID: 100,
+					bob.UserID:   50,
+				},
+			},
+		})
+	}
 
 	// Charlie joins the allowed room.
 	charlie.JoinRoom(t, allowed_room, []spec.ServerName{
 		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 	})
 	// Charlie attempts to join the restricted room.
-	// hs2 should attempt to find a creator to authorise the room join,
-	// but can't as the only creator is remote. It should then fall back
-	// to checking the power levels for a user that can authorise the join.
-	// The end result should be that charlie is allowed to join.
+	// hs2 should use bob to authorise the join as he is a local user with
+	// invite power levels.
+	// If the server did not correctly detect that bob could issue an invite,
+	// this join would instead be a remote join authorised via @alice:hs1.
 	charlie.JoinRoom(t, room, []spec.ServerName{
 		deployment.GetFullyQualifiedHomeserverName(t, "hs2"),
 	})
