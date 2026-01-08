@@ -459,8 +459,11 @@ func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, j
 //
 // This is a regression test for Synapse as it previously only looked for local room
 // creators in v12 rooms, https://github.com/element-hq/synapse/issues/19120
-func TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T) {
+func TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12(t *testing.T) {
 	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "12", "restricted")
+}
+
+func TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11(t *testing.T) {
 	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "11", "restricted")
 }
 
