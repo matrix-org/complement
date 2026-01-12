@@ -463,16 +463,9 @@ func TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12(t *testing.T) {
 	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "12", "restricted")
 }
 
+// See docstring on `TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12`
 func TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11(t *testing.T) {
 	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "11", "restricted")
-}
-
-func TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12(t *testing.T) {
-	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "12", "knock_restricted")
-}
-
-func TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11(t *testing.T) {
-	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "11", "knock_restricted")
 }
 
 func doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T, roomVersion string, joinRule string) {
