@@ -15,6 +15,8 @@ import (
 	"github.com/matrix-org/complement/runtime"
 )
 
+const pngContentType = "image/png"
+
 func TestAsyncUpload(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // Dendrite doesn't support async uploads
 
@@ -23,16 +25,16 @@ func TestAsyncUpload(t *testing.T) {
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
-	var mxcURI, mediaID string
 	t.Run("Create media", func(t *testing.T) {
-		mxcURI = alice.CreateMedia(t)
-		parts := strings.Split(mxcURI, "/")
-		mediaID = parts[len(parts)-1]
+		alice.CreateMedia(t)
 	})
 
-	origin, mediaID := client.SplitMxc(mxcURI)
-
 	t.Run("Not yet uploaded", func(t *testing.T) {
+		mxcURI := alice.CreateMedia(t)
+		parts := strings.Split(mxcURI, "/")
+		mediaID := parts[len(parts)-1]
+		origin, mediaID := client.SplitMxc(mxcURI)
+
 		// Check that the media is not yet uploaded
 		res := alice.Do(t, "GET", []string{"_matrix", "media", "v3", "download", origin, mediaID})
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -44,13 +46,23 @@ func TestAsyncUpload(t *testing.T) {
 		})
 	})
 
-	wantContentType := "image/png"
 
 	t.Run("Upload media", func(t *testing.T) {
-		alice.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", wantContentType)
+		mxcURI := alice.CreateMedia(t)
+		parts := strings.Split(mxcURI, "/")
+		mediaID := parts[len(parts)-1]
+		origin, mediaID := client.SplitMxc(mxcURI)
+
+		alice.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", pngContentType)
 	})
 
 	t.Run("Cannot upload to a media ID that has already been uploaded to", func(t *testing.T) {
+		mxcURI := alice.CreateMedia(t)
+		parts := strings.Split(mxcURI, "/")
+		mediaID := parts[len(parts)-1]
+		origin, mediaID := client.SplitMxc(mxcURI)
+		alice.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", pngContentType)
+
 		res := alice.Do(t, "PUT", []string{"_matrix", "media", "v3", "upload", origin, mediaID})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusConflict,
@@ -62,22 +74,34 @@ func TestAsyncUpload(t *testing.T) {
 	})
 
 	t.Run("Download media", func(t *testing.T) {
+		mxcURI := alice.CreateMedia(t)
+		parts := strings.Split(mxcURI, "/")
+		mediaID := parts[len(parts)-1]
+		origin, mediaID := client.SplitMxc(mxcURI)
+		alice.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", pngContentType)
+
 		content, contentType := alice.DownloadContentAuthenticated(t, mxcURI)
 		if !bytes.Equal(data.MatrixPng, content) {
 			t.Fatalf("uploaded and downloaded content doesn't match: want %v\ngot\n%v", data.MatrixPng, content)
 		}
-		if contentType != wantContentType {
-			t.Fatalf("expected contentType to be %s, got %s", wantContentType, contentType)
+		if contentType != pngContentType {
+			t.Fatalf("expected contentType to be %s, got %s", pngContentType, contentType)
 		}
 	})
 
 	t.Run("Download media over _matrix/client/v1/media/download", func(t *testing.T) {
+		mxcURI := alice.CreateMedia(t)
+		parts := strings.Split(mxcURI, "/")
+		mediaID := parts[len(parts)-1]
+		origin, mediaID := client.SplitMxc(mxcURI)
+		alice.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", pngContentType)
+
 		content, contentType := alice.DownloadContentAuthenticated(t, mxcURI)
 		if !bytes.Equal(data.MatrixPng, content) {
 			t.Fatalf("uploaded and downloaded content doesn't match: want %v\ngot\n%v", data.MatrixPng, content)
 		}
-		if contentType != wantContentType {
-			t.Fatalf("expected contentType to be %s, got %s", wantContentType, contentType)
+		if contentType != pngContentType {
+			t.Fatalf("expected contentType to be %s, got %s", pngContentType, contentType)
 		}
 	})
 }
