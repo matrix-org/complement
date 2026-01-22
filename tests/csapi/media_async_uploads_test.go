@@ -74,8 +74,11 @@ func TestAsyncUpload(t *testing.T) {
 		})
 	})
 
-	// TODO: This is the same as the test below (both us authenticated media). Previously
-	// this was testing unauthenticated vs authenticated media (see
+	// TODO: This is the same as the test below (both use authenticated media). Previously
+	// this was testing unauthenticated vs authenticated media. We should resolve this by
+	// removing one of these tests or ideally, keeping both authenticated and
+	// unauthenticated tests and just gate it behind some homeserver check for
+	// unauthenticated media support (see
 	// https://github.com/matrix-org/complement/pull/746#discussion_r2718904066)
 	t.Run("Download media", func(t *testing.T) {
 		mxcURI := asyncUploadMedia(t, alice)
