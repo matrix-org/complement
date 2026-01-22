@@ -8,6 +8,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/internal/data"
 	"github.com/matrix-org/complement/match"
@@ -46,7 +47,6 @@ func TestAsyncUpload(t *testing.T) {
 		})
 	})
 
-
 	t.Run("Upload media", func(t *testing.T) {
 		mxcURI := alice.CreateMedia(t)
 		parts := strings.Split(mxcURI, "/")
@@ -57,12 +57,13 @@ func TestAsyncUpload(t *testing.T) {
 	})
 
 	t.Run("Cannot upload to a media ID that has already been uploaded to", func(t *testing.T) {
-		mxcURI := alice.CreateMedia(t)
+		// First upload some media that we can conflict with
+		mxcURI := asyncUploadMedia(t, alice)
 		parts := strings.Split(mxcURI, "/")
 		mediaID := parts[len(parts)-1]
 		origin, mediaID := client.SplitMxc(mxcURI)
-		alice.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", pngContentType)
 
+		// Then try upload again using the same `mediaID`
 		res := alice.Do(t, "PUT", []string{"_matrix", "media", "v3", "upload", origin, mediaID})
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: http.StatusConflict,
@@ -74,11 +75,7 @@ func TestAsyncUpload(t *testing.T) {
 	})
 
 	t.Run("Download media", func(t *testing.T) {
-		mxcURI := alice.CreateMedia(t)
-		parts := strings.Split(mxcURI, "/")
-		mediaID := parts[len(parts)-1]
-		origin, mediaID := client.SplitMxc(mxcURI)
-		alice.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", pngContentType)
+		mxcURI := asyncUploadMedia(t, alice)
 
 		content, contentType := alice.DownloadContentAuthenticated(t, mxcURI)
 		if !bytes.Equal(data.MatrixPng, content) {
@@ -90,11 +87,7 @@ func TestAsyncUpload(t *testing.T) {
 	})
 
 	t.Run("Download media over _matrix/client/v1/media/download", func(t *testing.T) {
-		mxcURI := alice.CreateMedia(t)
-		parts := strings.Split(mxcURI, "/")
-		mediaID := parts[len(parts)-1]
-		origin, mediaID := client.SplitMxc(mxcURI)
-		alice.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", pngContentType)
+		mxcURI := asyncUploadMedia(t, alice)
 
 		content, contentType := alice.DownloadContentAuthenticated(t, mxcURI)
 		if !bytes.Equal(data.MatrixPng, content) {
@@ -104,4 +97,19 @@ func TestAsyncUpload(t *testing.T) {
 			t.Fatalf("expected contentType to be %s, got %s", pngContentType, contentType)
 		}
 	})
+}
+
+func asyncUploadMedia(
+	t ct.TestLike,
+	matrixClient *client.CSAPI,
+) string {
+	t.Helper()
+
+	mxcURI := matrixClient.CreateMedia(t)
+	parts := strings.Split(mxcURI, "/")
+	mediaID := parts[len(parts)-1]
+	origin, mediaID := client.SplitMxc(mxcURI)
+	matrixClient.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", pngContentType)
+
+	return mxcURI
 }
