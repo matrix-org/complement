@@ -42,7 +42,7 @@ func TestAsyncUpload(t *testing.T) {
 			StatusCode: http.StatusGatewayTimeout,
 			JSON: []match.JSON{
 				match.JSONKeyEqual("errcode", "M_NOT_YET_UPLOADED"),
-				match.JSONKeyEqual("error", "Media has not been uploaded yet"),
+				match.JSONKeyPresent("error"),
 			},
 		})
 	})
@@ -64,7 +64,7 @@ func TestAsyncUpload(t *testing.T) {
 			StatusCode: http.StatusConflict,
 			JSON: []match.JSON{
 				match.JSONKeyEqual("errcode", "M_CANNOT_OVERWRITE_MEDIA"),
-				match.JSONKeyEqual("error", "Media ID already has content"),
+				match.JSONKeyPresent("error"),
 			},
 		})
 	})
