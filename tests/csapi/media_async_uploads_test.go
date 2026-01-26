@@ -48,12 +48,7 @@ func TestAsyncUpload(t *testing.T) {
 	})
 
 	t.Run("Upload media", func(t *testing.T) {
-		mxcURI := alice.CreateMedia(t)
-		parts := strings.Split(mxcURI, "/")
-		mediaID := parts[len(parts)-1]
-		origin, mediaID := client.SplitMxc(mxcURI)
-
-		alice.UploadMediaAsync(t, origin, mediaID, data.MatrixPng, "test.png", pngContentType)
+		_ = asyncUploadMedia(t, alice)
 	})
 
 	t.Run("Cannot upload to a media ID that has already been uploaded to", func(t *testing.T) {
