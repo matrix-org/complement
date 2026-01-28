@@ -663,6 +663,36 @@ func TestMSC4291RoomIDAsHashOfCreateEvent(t *testing.T) {
 	assertCreateEventIsRoomID(t, alice, roomID)
 }
 
+func TestComplementCanCreateValidV12Rooms(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+		federation.HandleEventRequests(),
+	)
+	srv.UnexpectedRequestsAreErrors = false
+	cancel := srv.Listen()
+	defer cancel()
+	bob := srv.UserID("bob")
+	srvRoom := srv.MustMakeRoom(t, roomVersion12, federation.InitialRoomEvents(roomVersion12, bob))
+	alice.MustJoinRoom(t, srvRoom.RoomID, []spec.ServerName{srv.ServerName()})
+
+	msg := srv.MustCreateEvent(t, srvRoom, federation.Event{
+		Type:   "m.room.message",
+		Sender: bob,
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Hello world",
+		},
+	})
+	srvRoom.AddEvent(msg)
+	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{msg.JSON()}, nil)
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(srvRoom.RoomID, msg.EventID()))
+}
+
 func TestMSC4291RoomIDAsHashOfCreateEvent_AuthEventsOmitsCreateEvent(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)

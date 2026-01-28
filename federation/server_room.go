@@ -302,7 +302,7 @@ func (r *ServerRoom) GetEventInTimeline(eventID string) (gomatrixserverlib.PDU, 
 	return nil, false
 }
 
-func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLevelContent) {
+func initialPowerLevelsContent(ver gomatrixserverlib.IRoomVersion, roomCreator string) (c gomatrixserverlib.PowerLevelContent) {
 	c.Defaults()
 	c.Events = map[string]int64{
 		"m.room.name":               50,
@@ -312,14 +312,18 @@ func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLev
 		"m.room.avatar":             50,
 		"m.room.aliases":            0, // anyone can publish aliases by default. Has to be 0 else state_default is used.
 	}
-	c.Users = map[string]int64{roomCreator: 100}
+	if ver.PrivilegedCreators() {
+		c.Users = map[string]int64{}
+	} else {
+		c.Users = map[string]int64{roomCreator: 100}
+	}
 	return c
 }
 
 // InitialRoomEvents returns the initial set of events that get created when making a room.
 func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []Event {
 	// need to serialise/deserialise to get map[string]interface{} annoyingly
-	plContent := initialPowerLevelsContent(creator)
+	plContent := initialPowerLevelsContent(gomatrixserverlib.MustGetRoomVersion(roomVer), creator)
 	plBytes, _ := json.Marshal(plContent)
 	var plContentMap map[string]interface{}
 	json.Unmarshal(plBytes, &plContentMap)
@@ -441,6 +445,7 @@ func (i *ServerRoomImplDefault) ProtoEventCreator(room *ServerRoom, ev Event) (*
 		PrevEvents: prevEvents,
 		AuthEvents: ev.AuthEvents,
 		Redacts:    ev.Redacts,
+		Version:    gomatrixserverlib.MustGetRoomVersion(room.Version),
 	}
 	if err := proto.SetContent(ev.Content); err != nil {
 		return nil, fmt.Errorf("EventCreator: failed to marshal event content: %s - %+v", err, ev.Content)
@@ -453,6 +458,9 @@ func (i *ServerRoomImplDefault) ProtoEventCreator(room *ServerRoom, ev Event) (*
 		stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(&proto)
 		if err != nil {
 			return nil, fmt.Errorf("EventCreator: failed to work out auth_events : %s", err)
+		}
+		if proto.Version.DomainlessRoomIDs() {
+			stateNeeded.Create = false
 		}
 		proto.AuthEvents = room.AuthEvents(stateNeeded)
 	}
