@@ -450,8 +450,10 @@ func (i *ServerRoomImplDefault) ProtoEventCreator(room *ServerRoom, ev Event) (*
 	if err := proto.SetContent(ev.Content); err != nil {
 		return nil, fmt.Errorf("EventCreator: failed to marshal event content: %s - %+v", err, ev.Content)
 	}
-	if err := proto.SetUnsigned(ev.Content); err != nil {
-		return nil, fmt.Errorf("EventCreator: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
+	if len(ev.Unsigned) > 0 {
+		if err := proto.SetUnsigned(ev.Unsigned); err != nil {
+			return nil, fmt.Errorf("EventCreator: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
+		}
 	}
 	if proto.AuthEvents == nil {
 		var stateNeeded gomatrixserverlib.StateNeeded
