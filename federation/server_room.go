@@ -10,6 +10,7 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
+	"github.com/matrix-org/util"
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/ct"
@@ -335,6 +336,11 @@ func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []
 			Content: map[string]interface{}{
 				"creator":      creator,
 				"room_version": roomVer,
+				// We have to add randomness to the create event, else if you create 2x v12+ rooms in the same millisecond
+				// they will get the same room ID, clobbering internal data structures and causing extremely confusing
+				// behaviour. By adding this entropy, we ensure that even if rooms are created in the same millisecond, their
+				// hashes will not be the same.
+				"complement_entropy": util.RandomString(18),
 			},
 		},
 		{
