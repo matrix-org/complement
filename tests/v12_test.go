@@ -29,55 +29,6 @@ var maxCanonicalJSONInt = math.Pow(2, 53) - 1
 
 const roomVersion12 = "12"
 
-var V12ServerRoom = federation.ServerRoomImplCustom{
-	ProtoEventCreatorFn: Protov12EventCreator,
-}
-
-// Override how Complement makes proto events so we can conditionally disable/enable the inclusion of the create event
-// depending on whether we're running in combined mode or not.
-// Complement also doesn't set the room version correctly on the ProtoEvent as this was a new addition to GMSL.
-func Protov12EventCreator(def federation.ServerRoomImpl, room *federation.ServerRoom, ev federation.Event) (*gomatrixserverlib.ProtoEvent, error) {
-	var prevEvents interface{}
-	if ev.PrevEvents != nil {
-		// We deliberately want to set the prev events.
-		prevEvents = ev.PrevEvents
-	} else {
-		// No other prev events were supplied so we'll just
-		// use the forward extremities of the room, which is
-		// the usual behaviour.
-		prevEvents = room.ForwardExtremities
-	}
-	proto := gomatrixserverlib.ProtoEvent{
-		SenderID:   ev.Sender,
-		Depth:      int64(room.Depth + 1), // depth starts at 1
-		Type:       ev.Type,
-		StateKey:   ev.StateKey,
-		RoomID:     room.RoomID,
-		PrevEvents: prevEvents,
-		AuthEvents: ev.AuthEvents,
-		Redacts:    ev.Redacts,
-		Version:    gomatrixserverlib.MustGetRoomVersion(room.Version),
-	}
-	if err := proto.SetContent(ev.Content); err != nil {
-		return nil, fmt.Errorf("EventCreator: failed to marshal event content: %s - %+v", err, ev.Content)
-	}
-	if err := proto.SetUnsigned(ev.Content); err != nil {
-		return nil, fmt.Errorf("EventCreator: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
-	}
-	if proto.AuthEvents == nil {
-		var stateNeeded gomatrixserverlib.StateNeeded
-		// this does the right thing for v12
-		stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(&proto)
-		if err != nil {
-			return nil, fmt.Errorf("EventCreator: failed to work out auth_events : %s", err)
-		}
-		// we never include the create event if the HS supports MSC4291
-		stateNeeded.Create = false
-		proto.AuthEvents = room.AuthEvents(stateNeeded)
-	}
-	return &proto, nil
-}
-
 // Test that the creator can kick an admin created both via
 // trusted_private_chat and by explicit promotion, including beyond PL100.
 // Also checks the creator isn't in the PL event.
@@ -246,7 +197,7 @@ func TestMSC4289PrivilegedRoomCreators(t *testing.T) {
 			"room_version": roomVersion12,
 			"preset":       "public_chat",
 		})
-		room := srv.MustJoinRoom(t, deployment, "hs1", roomID, bob, federation.WithRoomOpts(federation.WithImpl(&V12ServerRoom)))
+		room := srv.MustJoinRoom(t, deployment, "hs1", roomID, bob)
 		plEventID := alice.SendEventSynced(t, roomID, b.Event{
 			Type:     spec.MRoomPowerLevels,
 			StateKey: b.Ptr(""),
@@ -663,6 +614,36 @@ func TestMSC4291RoomIDAsHashOfCreateEvent(t *testing.T) {
 	assertCreateEventIsRoomID(t, alice, roomID)
 }
 
+func TestComplementCanCreateValidV12Rooms(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+		federation.HandleEventRequests(),
+	)
+	srv.UnexpectedRequestsAreErrors = false
+	cancel := srv.Listen()
+	defer cancel()
+	bob := srv.UserID("bob")
+	srvRoom := srv.MustMakeRoom(t, roomVersion12, federation.InitialRoomEvents(roomVersion12, bob))
+	alice.MustJoinRoom(t, srvRoom.RoomID, []spec.ServerName{srv.ServerName()})
+
+	msg := srv.MustCreateEvent(t, srvRoom, federation.Event{
+		Type:   "m.room.message",
+		Sender: bob,
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Hello world",
+		},
+	})
+	srvRoom.AddEvent(msg)
+	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{msg.JSON()}, nil)
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(srvRoom.RoomID, msg.EventID()))
+}
+
 func TestMSC4291RoomIDAsHashOfCreateEvent_AuthEventsOmitsCreateEvent(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
@@ -683,7 +664,7 @@ func TestMSC4291RoomIDAsHashOfCreateEvent_AuthEventsOmitsCreateEvent(t *testing.
 	defer cancel()
 	bob := srv.UserID("bob")
 
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, bob, federation.WithRoomOpts(federation.WithImpl(&V12ServerRoom)))
+	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, bob)
 
 	createEvent := room.CurrentState(spec.MRoomCreate, "")
 	if createEvent == nil {
@@ -954,7 +935,7 @@ func TestMSC4297StateResolutionV2_1_starts_from_empty_set(t *testing.T) {
 		"preset":       "public_chat",
 	})
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie, federation.WithRoomOpts(federation.WithImpl(&V12ServerRoom)))
+	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
 	joinRulePublic := room.CurrentState(spec.MRoomJoinRules, "")
 	aliceJoin := room.CurrentState(spec.MRoomMember, alice.UserID)
 	synchronisationEventID := bob.SendEventSynced(t, room.RoomID, b.Event{
@@ -1150,7 +1131,7 @@ func TestMSC4297StateResolutionV2_1_includes_conflicted_subgraph(t *testing.T) {
 	})
 	alice.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
-	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie, federation.WithRoomOpts(federation.WithImpl(&V12ServerRoom)))
+	room := srv.MustJoinRoom(t, deployment, "hs1", roomID, charlie)
 	firstPowerLevelEvent := room.CurrentState(spec.MRoomPowerLevels, "")
 	alice.SendEventSynced(t, roomID, b.Event{
 		Type:     spec.MRoomPowerLevels,
