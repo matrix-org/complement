@@ -186,6 +186,7 @@ func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersi
 	// to re-use the same port as a previous one, which
 	//  * reduces noise when searching through logs and
 	//  * prevents homeservers from getting confused when multiple test cases re-use the same homeserver deployment.
+	// This value is temporary for domainless room IDs and will be replaced with the create event ID.
 	roomID := fmt.Sprintf("!%d-%s:%s", len(s.rooms), util.RandomString(18), s.serverName)
 	room := NewServerRoom(roomVer, roomID)
 	for _, opt := range opts {
