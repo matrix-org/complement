@@ -149,6 +149,7 @@ func TestSync(t *testing.T) {
 			res, _ := alice.MustSync(t, client.SyncReq{Filter: filterID, Since: nextBatch, FullState: true})
 			checkJoinFieldsExist(t, res, roomID)
 		})
+
 		// sytest: Newly joined room is included in an incremental sync
 		t.Run("Newly joined room is included in an incremental sync", func(t *testing.T) {
 			t.Parallel()
