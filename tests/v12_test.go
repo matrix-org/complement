@@ -52,6 +52,26 @@ func TestMSC4289PrivilegedRoomCreators(t *testing.T) {
 		)
 	}
 
+	t.Run("Room creator can re-join room after everyone left", func(t *testing.T) {
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"room_version": roomVersion12,
+		})
+		alice.MustLeaveRoom(t, roomID)
+		alice.MustJoinRoom(t, roomID, nil)
+	})
+
+	t.Run("Additional room creator can re-join room after everyone left", func(t *testing.T) {
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"room_version": roomVersion12,
+			"creation_content": map[string]any{
+				"additional_creators": []string{bob.UserID},
+			},
+		})
+		alice.MustLeaveRoom(t, roomID)
+		bob.MustLeaveRoom(t, roomID)
+		bob.MustJoinRoom(t, roomID, nil)
+	})
+
 	t.Run("PL event is missing creator in users map", func(t *testing.T) {
 		roomID := alice.MustCreateRoom(t, map[string]interface{}{
 			"room_version": roomVersion12,
