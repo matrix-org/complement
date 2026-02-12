@@ -21,6 +21,9 @@ func TestSync(t *testing.T) {
 	t.Run("parallel", func(t *testing.T) {
 		// When lazy-loading room members is enabled, the `state_after` in an initial sync
 		// request should include membership from every `sender` in the `timeline`
+		//
+		// We're specifically testing the scenario where a new "DM" is created and the other person
+		// joins without speaking yet.
 		t.Run("Initial sync with lazy-loading room members -> `state_after` includes all members from timeline", func(t *testing.T) {
 				t.Parallel()
 
