@@ -28,8 +28,14 @@ func TestSync(t *testing.T) {
 				t.Parallel()
 
 				// Alice creates a room
-				roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "trusted_private_chat"})
 				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
+
+				// Alice invites Bob
+				alice.MustInviteRoom(t, roomID, bob.UserID)
+
+				// Bob must get the invite
+				bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 				// Bob joins the room
 				bob.MustJoinRoom(t, roomID, nil)
