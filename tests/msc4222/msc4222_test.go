@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/should"
 	"github.com/tidwall/gjson"
 )
 
@@ -153,10 +154,21 @@ func TestSync(t *testing.T) {
 					sendersFromTimeline[event.Get("sender").Str] = struct{}{}
 				}
 				// We expect to see timeline events from alice and bob
-				must.ContainSubset(t,
+				expectedSendersFromTimeline := []string{ alice.UserID, bob.UserID }
+				err := should.ContainSubset(
 					slices.Collect(maps.Keys(sendersFromTimeline)),
-					[]string{ alice.UserID, bob.UserID },
+					expectedSendersFromTimeline,
 				)
+				if err != nil {
+					t.Fatalf(
+						"Expected to see timeline events from (%s) but only saw %s. " +
+						"Got error: %s. join part of the sync response: %s",
+						expectedSendersFromTimeline,
+						slices.Collect(maps.Keys(sendersFromTimeline)),
+						err.Error(),
+						res,
+					)
+				}
 
 				// Collect the `m.room.membership` from `state_after`
 				//
@@ -182,11 +194,20 @@ func TestSync(t *testing.T) {
 				}
 				// We should see membership state from every `sender` in the `timeline` (alice
 				// and bob).
-				must.ContainSubset(t,
+				err = should.ContainSubset(
 					slices.Collect(maps.Keys(membershipFromState)),
 					slices.Collect(maps.Keys(sendersFromTimeline)),
 				)
-
+				if err != nil {
+					t.Fatalf(
+						"Expected to see membership state (%s) from every sender in the timeline (%s). " +
+						"Got error: %s. join part of the sync response: %s",
+						slices.Collect(maps.Keys(membershipFromState)),
+						slices.Collect(maps.Keys(sendersFromTimeline)),
+						err.Error(),
+						res,
+					)
+				}
 		})
 	})
 }
