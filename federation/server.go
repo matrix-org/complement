@@ -180,17 +180,34 @@ func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersi
 	if !s.listening {
 		ct.Fatalf(s.t, "MustMakeRoom() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room ID. Ensure you Listen() first!")
 	}
+
 	// Generate a unique room ID, prefixed with an incrementing counter.
 	// This ensures that room IDs are not re-used across tests, even if a Complement server happens
 	// to re-use the same port as a previous one, which
 	//  * reduces noise when searching through logs and
 	//  * prevents homeservers from getting confused when multiple test cases re-use the same homeserver deployment.
+	// This value is temporary for domainless room IDs and will be replaced with the create event ID.
 	roomID := fmt.Sprintf("!%d-%s:%s", len(s.rooms), util.RandomString(18), s.serverName)
-	t.Logf("Creating room %s with version %s", roomID, roomVer)
 	room := NewServerRoom(roomVer, roomID)
 	for _, opt := range opts {
+		// let the caller replace the room impl before we try to create events
 		opt(room)
 	}
+
+	iRoomVer := gomatrixserverlib.MustGetRoomVersion(roomVer)
+	if iRoomVer.DomainlessRoomIDs() {
+		if len(events) == 0 || events[0].Type != spec.MRoomCreate {
+			ct.Fatalf(s.t, "MustMakeRoom: room version %s requires the create event as an initial event but it wasn't found", roomVer)
+		}
+		room.RoomID = ""
+		// build and sign the create event to work out the room ID
+		createEvent := s.MustCreateEvent(t, room, events[0])
+		events = events[1:]
+		room.RoomID = "!" + createEvent.EventID()[1:]
+		room.AddEvent(createEvent)
+	}
+
+	t.Logf("Creating room %s with version %s", room.RoomID, roomVer)
 
 	// sign all these events
 	for _, ev := range events {
