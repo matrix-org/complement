@@ -27,6 +27,9 @@ func TestMSC4242FederationSimple(t *testing.T) {
 		"preset":       "public_chat",
 	})
 	// ensure we are verifying current state by walking the state dag by creating no-op state dag changes.
+	// The number of changes is unimportant, what's important is that we are lengthening the auth chain
+	// for alice, thus the 'current state' is alice's 5th display name change, and the server must
+	// verify this by walking the state DAG.
 	changeDisplayName(t, alice, "alice", 5)
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
 	eventID := bob.SendEventSynced(t, roomID, b.Event{
@@ -43,18 +46,4 @@ func changeDisplayName(t *testing.T, cli *client.CSAPI, prefix string, numTimes 
 	for i := 0; i < numTimes; i++ {
 		cli.MustSetDisplayName(t, fmt.Sprintf("%s %d", prefix, i))
 	}
-}
-
-func sendTextMessages(t *testing.T, cli *client.CSAPI, roomID, prefix string, numTimes int) (eventIDs []string) {
-	for i := 0; i < numTimes; i++ {
-		// we need to send these synced to reduce the chance of self-forking as that would break /get_missing_events assertions.
-		eventIDs = append(eventIDs, cli.SendEventSynced(t, roomID, b.Event{
-			Type: "m.room.message",
-			Content: map[string]any{
-				"msgtype": "m.text",
-				"body":    fmt.Sprintf("sendTextMessages %s %d", prefix, i),
-			},
-		}))
-	}
-	return
 }

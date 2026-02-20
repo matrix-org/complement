@@ -11,6 +11,7 @@ import (
 
 	set "github.com/deckarep/golang-set"
 	"github.com/matrix-org/complement"
+	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
@@ -197,6 +198,7 @@ func TestMSC4242SendJoinSJ01Inbound(t *testing.T) {
 	)
 	must.Equal(t, len(sendJoinResp.StateEvents), 0, "/send_join response included events under 'state'")
 	must.Equal(t, len(sendJoinResp.AuthEvents), 0, "/send_join response included events under 'auth_chain'")
+	must.Equal(t, len(sendJoinResp.ServersInRoom), 0, "/send_join response included events under 'servers_in_room'")
 
 	wantStateEventTypes := set.NewSetFromSlice(
 		[]interface{}{
@@ -749,4 +751,18 @@ func TestMSC4242OnSendJoinSJ04(t *testing.T) {
 			}
 		})
 	}
+}
+
+func sendTextMessages(t *testing.T, cli *client.CSAPI, roomID, prefix string, numTimes int) (eventIDs []string) {
+	for i := 0; i < numTimes; i++ {
+		// we need to send these synced to reduce the chance of self-forking as that would break /get_missing_events assertions.
+		eventIDs = append(eventIDs, cli.SendEventSynced(t, roomID, b.Event{
+			Type: "m.room.message",
+			Content: map[string]any{
+				"msgtype": "m.text",
+				"body":    fmt.Sprintf("sendTextMessages %s %d", prefix, i),
+			},
+		}))
+	}
+	return
 }

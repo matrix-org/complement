@@ -13,6 +13,7 @@ type FaultyEventTestCase struct {
 	GenerateEvents func(t ct.TestLike, srv *federation.Server, room *federation.ServerRoom, sender string) []gomatrixserverlib.PDU
 }
 
+// arbitrary dummy state event type for tests
 const faultyStateEventType = "faulty.state.event"
 
 // faultyEventTestCases are all the ways you can create faulty events.
@@ -203,6 +204,8 @@ var faultyEventTestCases = []FaultyEventTestCase{
 				},
 				PrevStateEvents: []string{rejectedEvent.EventID()},
 			})
+			// This event is also valid and even references another valid event but
+			// it is rejected because it references rejected events 2 events ago.
 			bobName := mustCreateEvent(t, srv, room, MSC4242Event{
 				Event: federation.Event{
 					Type:     spec.MRoomName,

@@ -291,9 +291,11 @@ func TestGraph(t *testing.T) {
 }
 
 type Graph struct {
-	stateGraph     map[string][]string
-	eventGraph     map[string][]string
-	events         map[string]gomatrixserverlib.PDU
+	stateGraph map[string][]string
+	eventGraph map[string][]string
+	events     map[string]gomatrixserverlib.PDU
+	// If true, walks the graph induced by prev_events instead of prev_state_events
+	// Used for testing normal /get_missing_events behaviour
 	WalkPrevEvents bool
 }
 

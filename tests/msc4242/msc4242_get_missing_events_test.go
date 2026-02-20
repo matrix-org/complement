@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
@@ -78,6 +79,9 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 		}
 		return eventsToSend
 	}
+	// Repeatedly calls /get_missing_events on hs1 starting from fromEvent, in batches of batchSize.
+	// If stateDAG is set, asks the server to walk the state DAG.
+	// Asserts that events are returned (over multiple requests) in the order provided by eventIDsPerRequest.
 	assertGetMissingEventsRecursively := func(
 		name string, roomID string, fromEvent gomatrixserverlib.PDU, batchSize int, stateDAG bool, eventIDsPerRequest []string,
 	) {
@@ -87,14 +91,14 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 			sg.WalkPrevEvents = true
 		}
 		sg.Update([]gomatrixserverlib.PDU{fromEvent})
-		i := 0
+		startIndex := 0
 		backwardsExtremities := []gomatrixserverlib.PDU{fromEvent}
 		for {
-			j := i + batchSize
-			if j > len(eventIDsPerRequest) {
-				j = len(eventIDsPerRequest)
+			endIndex := startIndex + batchSize
+			if endIndex > len(eventIDsPerRequest) {
+				endIndex = len(eventIDsPerRequest)
 			}
-			wantEventIDs := eventIDsPerRequest[i:j]
+			wantEventIDs := eventIDsPerRequest[startIndex:endIndex]
 			resp, err := srv.FederationClient(deployment).LookupMissingEvents(
 				context.Background(), spec.ServerName(srv.ServerName()), "hs1", roomID, fclient.MissingEvents{
 					Limit:          batchSize,
@@ -111,15 +115,15 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 				// as state dag requests.
 				slices.Reverse(got)
 			}
-			t.Logf("assertGetMissingEvents i=%d j=%d got=%v", i, j, got)
+			t.Logf("assertGetMissingEvents startIndex=%d endIndex=%d gotEventIDs=%v", startIndex, endIndex, got)
 			if !slices.Equal(got, wantEventIDs) {
 				ct.Errorf(t, "failed to see correct event IDs in test '%s'. \nGot  %v \nWant %v", name, got, wantEventIDs)
 				return
 			}
-			if j == len(eventIDsPerRequest) {
+			if endIndex == len(eventIDsPerRequest) {
 				break // we got to the end of the events
 			}
-			i += batchSize // next batch plz
+			startIndex += batchSize // next batch plz
 
 			// figure out the new backwards extremities
 			sg.Update(pdus)
@@ -128,9 +132,10 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 	}
 
 	testCases := []struct {
-		testCode              string
-		name                  string
-		generateEventsToWalk  func(room *federation.ServerRoom) (events []gomatrixserverlib.PDU)
+		testCode             string
+		name                 string
+		generateEventsToWalk func(room *federation.ServerRoom) (events []gomatrixserverlib.PDU)
+		// Expected order of events we expect to see as from /get_missing_events as we paginate
 		wantWalkOrder         func(room *federation.ServerRoom, initialEvents, generatedEvents []gomatrixserverlib.PDU) (eventIDs []string)
 		getMissingEventsLimit int
 		walkStateDAG          bool
@@ -349,7 +354,9 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, sentinel.EventID()))
 
-			assertGetMissingEventsRecursively(tc.name, room.RoomID, sentinel, tc.getMissingEventsLimit, tc.walkStateDAG, wantEventIDs)
+			assertGetMissingEventsRecursively(
+				tc.name, room.RoomID, sentinel, tc.getMissingEventsLimit, tc.walkStateDAG, wantEventIDs,
+			)
 		})
 	}
 }
@@ -371,16 +378,6 @@ func TestMSC4242GetMissingEventsOutbound(t *testing.T) {
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := srv.UserID("bob")
-	linearRoom := srv.MustMakeRoom(t, roomVersion,
-		federation.InitialRoomEvents(roomVersion, bob),
-		federation.WithImpl(ServerRoomImplStateDAG(t, srv)),
-	)
-	forkRoom := srv.MustMakeRoom(t, roomVersion,
-		federation.InitialRoomEvents(roomVersion, bob),
-		federation.WithImpl(ServerRoomImplStateDAG(t, srv, WithDontCheckForwardExtremities())),
-	)
-	alice.MustJoinRoom(t, linearRoom.RoomID, []spec.ServerName{srv.ServerName()})
-	alice.MustJoinRoom(t, forkRoom.RoomID, []spec.ServerName{srv.ServerName()})
 
 	var getMissingEventsHandler func(w http.ResponseWriter, req *http.Request)
 	srv.Mux().HandleFunc("/_matrix/federation/v1/get_missing_events/{roomID}", func(w http.ResponseWriter, req *http.Request) {
@@ -388,6 +385,13 @@ func TestMSC4242GetMissingEventsOutbound(t *testing.T) {
 	})
 
 	t.Run("GME01A-Outbound: can walk linear graphs", func(t *testing.T) {
+		linearRoom := srv.MustMakeRoom(t, roomVersion,
+			federation.InitialRoomEvents(roomVersion, bob),
+			federation.WithImpl(ServerRoomImplStateDAG(t, srv)),
+		)
+		alice.MustJoinRoom(t, linearRoom.RoomID, []spec.ServerName{srv.ServerName()})
+		// Generate enough state events to cause repeated calls to /get_missing_events to build
+		// confidence that the server has implemented recursive walking.
 		linearEvents := generateDisplayNameChanges(t, srv, linearRoom, bob, 80, true)
 		lastEventInTxn := linearEvents[len(linearEvents)-1]
 		prevLastEvent := linearEvents[len(linearEvents)-2]
@@ -474,6 +478,14 @@ func TestMSC4242GetMissingEventsOutbound(t *testing.T) {
 	t.Run("GME01B-Outbound: can walk forked graphs", func(t *testing.T) {
 		numForks := 10
 		numEventsPerFork := 3
+		forkRoom := srv.MustMakeRoom(t, roomVersion,
+			federation.InitialRoomEvents(roomVersion, bob),
+			federation.WithImpl(ServerRoomImplStateDAG(t, srv, WithDontCheckForwardExtremities())),
+		)
+		alice.MustJoinRoom(t, forkRoom.RoomID, []spec.ServerName{srv.ServerName()})
+		// TODO: wait a bit to ensure we have the join event. Ideally we'd use WaiterForEvent but that expects
+		// us to know the event ID of the join event, which the /join endpoint does not provide :(
+		time.Sleep(time.Second)
 		aliceJoinEventID := forkRoom.CurrentState(spec.MRoomMember, alice.UserID).EventID()
 		// create 10 strands
 		var forkEvents []gomatrixserverlib.PDU
@@ -730,7 +742,7 @@ func TestMSC4242GetMissingEventsFaultyEvents(t *testing.T) {
 	//   |            /                  \
 	//   |           /                    \
 	//   |      BOB_BAN_DORIS            DORIS_SET_ROOM_NAME
-	//   |         (ok)                      (soft-fail)
+	//   |         (ok)                      (rollback)
 	//   |            \                   /
 	//   |             \                 /
 	//   |              BOB_SET_TOPIC (ok)
@@ -740,8 +752,7 @@ func TestMSC4242GetMissingEventsFaultyEvents(t *testing.T) {
 	//   (rejected, a prev_state_event is rejected)
 	// CHARLIE SET_ROOM_NAME is rejected because charlie didn't join.
 	// BOB_PROFILE is rejected because it is hanging off a rejected event.
-	// DORIS_SET_ROOM_NAME soft fails because there is a concurrent ban.
-	// Technically it isn't soft-fail, it's just state res but you get the idea.
+	// DORIS_SET_ROOM_NAME state rollbacks because there is a concurrent ban.
 	aliceJoin := room.CurrentState(spec.MRoomMember, alice.UserID)
 	t.Logf("aliceJoin => %v", aliceJoin.EventID())
 	charlieSetRoomName := mustCreateEvent(t, srv, room, MSC4242Event{
