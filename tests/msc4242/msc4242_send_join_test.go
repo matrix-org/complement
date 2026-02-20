@@ -181,7 +181,7 @@ func TestMSC4242SendJoinSJ01Inbound(t *testing.T) {
 	// the join event should have the same prev_state_events as the last message in the room
 	lastEvent := roomSyncData.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.events.@reverse.0")
 	must.Equal(t, lastEvent.Exists(), true, "last timeline entry for room does not exist")
-	expectedJoinprevStateEvents := prevStateEvents(t, lastEvent)
+	expectedJoinPrevStateEvents := prevStateEvents(t, lastEvent)
 	bob := srv.UserID("bob")
 	_, sendJoinResp := MustJoinRoom(t, srv, deployment, spec.ServerName("hs1"), roomID, bob)
 	joinEvent, err := roomVer.NewEventFromTrustedJSON(sendJoinResp.Event, false)
@@ -194,7 +194,7 @@ func TestMSC4242SendJoinSJ01Inbound(t *testing.T) {
 	must.MatchJSONBytes(t, sendJoinResp.Event,
 		match.JSONKeyMissing("auth_events"),
 		match.JSONKeyPresent("prev_state_events"),
-		prevStateEventsMatcher("prev_state_events", expectedJoinprevStateEvents),
+		prevStateEventsMatcher("prev_state_events", expectedJoinPrevStateEvents),
 	)
 	must.Equal(t, len(sendJoinResp.StateEvents), 0, "/send_join response included events under 'state'")
 	must.Equal(t, len(sendJoinResp.AuthEvents), 0, "/send_join response included events under 'auth_chain'")
@@ -341,7 +341,7 @@ func TestMSC4242SendJoinFasterSJ03Inbound(t *testing.T) {
 	// the join event should have the same prev_state_events as the last message in the room
 	lastEvent := roomSyncData.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.events.@reverse.0")
 	must.Equal(t, lastEvent.Exists(), true, "last timeline entry for room does not exist")
-	expectedJoinprevStateEvents := prevStateEvents(t, lastEvent)
+	expectedJoinPrevStateEvents := prevStateEvents(t, lastEvent)
 	bob := srv.UserID("bob")
 	timelineLimit := 4
 	sendJoinResp := mustJoinPartialRoom(t, srv, deployment, spec.ServerName("hs1"), roomID, bob, timelineLimit)
@@ -358,7 +358,7 @@ func TestMSC4242SendJoinFasterSJ03Inbound(t *testing.T) {
 	must.MatchJSONBytes(t, sendJoinResp.Event,
 		match.JSONKeyMissing("auth_events"),
 		match.JSONKeyPresent("prev_state_events"),
-		prevStateEventsMatcher("prev_state_events", expectedJoinprevStateEvents),
+		prevStateEventsMatcher("prev_state_events", expectedJoinPrevStateEvents),
 	)
 	must.Equal(t, len(sendJoinResp.StateEvents), 0, "/send_join response included events under 'state'")
 	must.Equal(t, len(sendJoinResp.AuthEvents), 0, "/send_join response included events under 'auth_chain'")

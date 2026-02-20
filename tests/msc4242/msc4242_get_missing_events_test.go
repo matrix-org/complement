@@ -83,7 +83,7 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 	// If stateDAG is set, asks the server to walk the state DAG.
 	// Asserts that events are returned (over multiple requests) in the order provided by eventIDsPerRequest.
 	assertGetMissingEventsRecursively := func(
-		name string, roomID string, fromEvent gomatrixserverlib.PDU, batchSize int, stateDAG bool, eventIDsPerRequest []string,
+		name string, roomID string, fromEvent gomatrixserverlib.PDU, getMissingEventsLimit int, stateDAG bool, eventIDsPerRequest []string,
 	) {
 		t.Helper()
 		sg := NewStateGraph()
@@ -94,14 +94,16 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 		startIndex := 0
 		backwardsExtremities := []gomatrixserverlib.PDU{fromEvent}
 		for {
-			endIndex := startIndex + batchSize
+			endIndex := startIndex + getMissingEventsLimit
 			if endIndex > len(eventIDsPerRequest) {
 				endIndex = len(eventIDsPerRequest)
 			}
 			wantEventIDs := eventIDsPerRequest[startIndex:endIndex]
 			resp, err := srv.FederationClient(deployment).LookupMissingEvents(
-				context.Background(), spec.ServerName(srv.ServerName()), "hs1", roomID, fclient.MissingEvents{
-					Limit:          batchSize,
+				context.Background(), spec.ServerName(srv.ServerName()),
+				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				roomID, fclient.MissingEvents{
+					Limit:          getMissingEventsLimit,
 					EarliestEvents: []string{},
 					LatestEvents:   AsEventIDs(t, backwardsExtremities),
 					StateDAG:       stateDAG,
@@ -123,7 +125,7 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 			if endIndex == len(eventIDsPerRequest) {
 				break // we got to the end of the events
 			}
-			startIndex += batchSize // next batch plz
+			startIndex += getMissingEventsLimit // next batch plz
 
 			// figure out the new backwards extremities
 			sg.Update(pdus)
@@ -350,7 +352,7 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 			eventsToSend = append(eventsToSend, sentinel)
 			t.Logf("%s SENTINEL %v", sentinel.EventID(), string(sentinel.JSON()))
 
-			srv.MustSendTransaction(t, deployment, "hs1", AsEventJSONs(eventsToSend), nil)
+			srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), AsEventJSONs(eventsToSend), nil)
 
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, sentinel.EventID()))
 
@@ -443,7 +445,7 @@ func TestMSC4242GetMissingEventsOutbound(t *testing.T) {
 		}
 
 		// send the last event, which should cause the homeserver to ask for earlier events, which we will return in a linear order
-		srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{
+		srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{
 			lastEventInTxn.JSON(),
 		}, nil)
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(linearRoom.RoomID, lastEventInTxn.EventID()))
@@ -573,7 +575,7 @@ func TestMSC4242GetMissingEventsOutbound(t *testing.T) {
 		}
 
 		// send the last event, which should cause the homeserver to ask for earlier events
-		srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{
+		srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{
 			latestEvent.JSON(),
 		}, nil)
 		alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(forkRoom.RoomID, latestEvent.EventID()))
@@ -614,7 +616,7 @@ func TestMSC4242GetMissingEventsBadInputs(t *testing.T) {
 	})
 	room.AddEvent(msg)
 
-	srv.MustSendTransaction(t, deployment, "hs1", AsEventJSONs([]gomatrixserverlib.PDU{msg}), nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), AsEventJSONs([]gomatrixserverlib.PDU{msg}), nil)
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(room.RoomID, msg.EventID()))
 
 	testCases := []struct {
@@ -647,7 +649,8 @@ func TestMSC4242GetMissingEventsBadInputs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.testCode, func(t *testing.T) {
 			resp, err := srv.FederationClient(deployment).LookupMissingEvents(
-				context.Background(), spec.ServerName(srv.ServerName()), "hs1", room.RoomID, tc.req, roomVersion,
+				context.Background(), spec.ServerName(srv.ServerName()), deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				room.RoomID, tc.req, roomVersion,
 			)
 			must.NotError(t, "failed to send /gme request", err)
 			gotEvents := resp.Events.TrustedEvents(roomVersion, false)
@@ -855,13 +858,13 @@ func TestMSC4242GetMissingEventsFaultyEvents(t *testing.T) {
 	firstBatch := []gomatrixserverlib.PDU{
 		charlieSetRoomName, dorisJoin, bobProfile, bobBanDoris,
 	}
-	srv.MustSendTransaction(t, deployment, "hs1", AsEventJSONs(firstBatch), nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), AsEventJSONs(firstBatch), nil)
 	since := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(room.RoomID, bobBanDoris.EventID()))
 	// now send the rest
 	secondBatch := []gomatrixserverlib.PDU{
 		dorisSetRoomName, bobSetTopic, bobSetRoomName,
 	}
-	srv.MustSendTransaction(t, deployment, "hs1", AsEventJSONs(secondBatch), nil)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), AsEventJSONs(secondBatch), nil)
 	alice.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncTimelineHasEventID(room.RoomID, bobSetTopic.EventID()))
 
 	// /get_missing_events strictly defines the ordering walked when there are multiple prev_state_events, and it
@@ -932,7 +935,7 @@ func TestMSC4242GetMissingEventsFaultyEvents(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.testCode, func(t *testing.T) {
 			resp, err := srv.FederationClient(deployment).LookupMissingEvents(
-				context.Background(), spec.ServerName(srv.ServerName()), "hs1", room.RoomID, tc.req, roomVersion,
+				context.Background(), spec.ServerName(srv.ServerName()), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), room.RoomID, tc.req, roomVersion,
 			)
 			must.NotError(t, "failed to send /gme request", err)
 			gotEvents := resp.Events.TrustedEvents(roomVersion, false)
@@ -1123,8 +1126,9 @@ func TestMSC4242GetMissingEventsFillingStateDAGFails(t *testing.T) {
 			generatedEvents := []gomatrixserverlib.PDU{
 				eventA, eventB, eventC, eventD, eventE,
 			}
-			for _, ev := range generatedEvents {
-				t.Logf("%s %s (prev_state_events=%v)", ev.Type(), ev.EventID(), ev.PrevStateEventIDs())
+			generatedEventLabels := []string{"A", "B", "C", "D", "E"}
+			for i, ev := range generatedEvents {
+				t.Logf("Event %s: %s %s (prev_state_events=%v)", generatedEventLabels[i], ev.Type(), ev.EventID(), ev.PrevStateEventIDs())
 			}
 
 			var hitGetMissingEvents atomic.Bool
@@ -1163,10 +1167,10 @@ func TestMSC4242GetMissingEventsFillingStateDAGFails(t *testing.T) {
 				}
 			}
 			// send E
-			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{eventE.JSON()}, nil)
+			srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{eventE.JSON()}, nil)
 
 			// send the sentinel to confirm it has processed the event which should have been rejected.
-			srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{sentinel.JSON()}, nil)
+			srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{sentinel.JSON()}, nil)
 			hasSentinel := client.SyncTimelineHasEventID(room.RoomID, sentinel.EventID())
 			hasLastEvent := client.SyncTimelineHasEventID(room.RoomID, eventE.EventID())
 			alice.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
