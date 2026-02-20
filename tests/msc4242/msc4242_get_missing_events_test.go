@@ -107,7 +107,7 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 					StateDAG:       stateDAG,
 				}, roomVersion,
 			)
-			must.NotError(t, "failed to send /gme request", err)
+			must.NotError(t, "failed to send /get_missing_events request", err)
 			pdus := resp.Events.TrustedEvents(roomVersion, false)
 			got := AsEventIDs(t, pdus)
 			if !stateDAG {
@@ -408,14 +408,14 @@ func TestMSC4242GetMissingEventsOutbound(t *testing.T) {
 				// as the event in the txn has unknown prev_events, we will also receive /get_missing_events queries for the normal graph.
 				// Just return the penultimate event to keep it happy.
 				resp.Events = gomatrixserverlib.EventJSONs{prevLastEvent.JSON()}
-				t.Logf("Complement responding to /get_missing_events with 1 event")
+				t.Logf("Complement responding to /get_missing_events (normal DAG) with 1 event to keep the server happy")
 				w.WriteHeader(200)
 				if err := json.NewEncoder(w).Encode(&resp); err != nil {
 					ct.Errorf(t, "failed to encode response body: %s", err)
 				}
 				return
 			}
-			// we expect a single latest_event, which we will use to find the index in linearEvents to start returning events from
+			// we expect a single latest_event (because the graph is linear), which we will use to find the index in linearEvents to start returning events from
 			// in reverse chronological order.
 			must.Equal(t, len(body.LatestEvents), 1, fmt.Sprintf("expected 1 latest_event, got %v", body.LatestEvents))
 			from := body.LatestEvents[0]
@@ -433,7 +433,7 @@ func TestMSC4242GetMissingEventsOutbound(t *testing.T) {
 				}
 			}
 			if len(resp.Events) == 0 {
-				ct.Errorf(t, "returning 0 events to /get_missing_events for latest_events: %v", body.LatestEvents)
+				ct.Errorf(t, "returning 0 events to /get_missing_events (state DAG) for latest_events: %v", body.LatestEvents)
 			}
 			t.Logf("Complement responding to /get_missing_events (state DAG) with %d events", len(resp.Events))
 			w.WriteHeader(200)
@@ -550,7 +550,7 @@ func TestMSC4242GetMissingEventsOutbound(t *testing.T) {
 				// this should be the unifying event, so return the last event in each fork
 				if len(body.LatestEvents) == 1 && body.LatestEvents[0] == latestEvent.EventID() {
 					resp.Events = gomatrixserverlib.NewEventJSONsFromEvents([]gomatrixserverlib.PDU{unifyingEvent})
-					t.Logf("Complement responding to /get_missing_events with 1 event")
+					t.Logf("Complement responding to /get_missing_events (normal DAG) with 1 event")
 					w.WriteHeader(200)
 					if err := json.NewEncoder(w).Encode(&resp); err != nil {
 						ct.Errorf(t, "failed to encode response body: %s", err)
@@ -749,7 +749,7 @@ func TestMSC4242GetMissingEventsFaultyEvents(t *testing.T) {
 	//   |                  /
 	//   |                 /
 	//   BOB_SET_ROOM_NAME
-	//   (rejected, a prev_state_event is rejected)
+	//    (rejected, a prev_state_event is rejected)
 	// CHARLIE SET_ROOM_NAME is rejected because charlie didn't join.
 	// BOB_PROFILE is rejected because it is hanging off a rejected event.
 	// DORIS_SET_ROOM_NAME state rollbacks because there is a concurrent ban.
@@ -1139,7 +1139,7 @@ func TestMSC4242GetMissingEventsFillingStateDAGFails(t *testing.T) {
 				}
 				if !body.StateDAG {
 					must.Equal(t, slices.Equal(body.LatestEvents, []string{eventE.EventID()}), true, fmt.Sprintf(
-						"unexpected latest events for non-state dag request: %v", body.LatestEvents,
+						"unexpected latest events (expected event E) for non-state dag request: %v", body.LatestEvents,
 					))
 					var resp fclient.RespMissingEvents
 					resp.Events = gomatrixserverlib.NewEventJSONsFromEvents([]gomatrixserverlib.PDU{
@@ -1152,7 +1152,7 @@ func TestMSC4242GetMissingEventsFillingStateDAGFails(t *testing.T) {
 					return
 				}
 				must.Equal(t, slices.Equal(body.LatestEvents, []string{eventD.EventID()}), true, fmt.Sprintf(
-					"unexpected latest events for non-state dag request: %v", body.LatestEvents,
+					"unexpected latest events (expected event D) for non-state dag request: %v", body.LatestEvents,
 				))
 				// defer to the test case
 				hitGetMissingEvents.Store(true)

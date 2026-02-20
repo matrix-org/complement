@@ -144,7 +144,7 @@ var faultyEventTestCases = []FaultyEventTestCase{
 						Sender:   charlie,
 						StateKey: &empty,
 						Content: map[string]interface{}{
-							"info": "I should be rejected charlie is not in the room",
+							"info": "I should be rejected because charlie is not in the room",
 						},
 					},
 					PrevStateEvents: []string{
