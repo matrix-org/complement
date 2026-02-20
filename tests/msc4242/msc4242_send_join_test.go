@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
@@ -129,6 +130,7 @@ func TestMSC4242SendJoinMalformedResponseSJ00(t *testing.T) {
 	}
 }
 
+// if the state DAG is valid and connected, accept.
 func TestMSC4242SendJoinSJ01Outbound(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
@@ -152,6 +154,7 @@ func TestMSC4242SendJoinSJ01Outbound(t *testing.T) {
 	alice.MustJoinRoom(t, room.RoomID, []spec.ServerName{srv.ServerName()})
 }
 
+// if the state DAG is valid and connected, accept.
 func TestMSC4242SendJoinSJ01Inbound(t *testing.T) {
 	roomVer := gomatrixserverlib.MustGetRoomVersion(roomVersion)
 	deployment := complement.Deploy(t, 1)
@@ -172,6 +175,9 @@ func TestMSC4242SendJoinSJ01Inbound(t *testing.T) {
 		"room_version": roomVersion,
 		"preset":       "public_chat",
 	})
+	// add a few events to the state dag and normal dag.
+	// We change display name for alice to ensure we have a lengthy auth chain,
+	// rather than just 1 event per state tuple.
 	changeDisplayName(t, alice, "alice", 5)
 	sendTextMessages(t, alice, roomID, "before_join", 5)
 	roomSyncData, _ := alice.MustSync(t, client.SyncReq{
@@ -180,13 +186,13 @@ func TestMSC4242SendJoinSJ01Inbound(t *testing.T) {
 
 	// the join event should have the same prev_state_events as the last message in the room
 	lastEvent := roomSyncData.Get("rooms.join." + client.GjsonEscape(roomID) + ".timeline.events.@reverse.0")
+	// make sure there is a last timeline event
 	must.Equal(t, lastEvent.Exists(), true, "last timeline entry for room does not exist")
 	expectedJoinPrevStateEvents := prevStateEvents(t, lastEvent)
 	bob := srv.UserID("bob")
 	_, sendJoinResp := MustJoinRoom(t, srv, deployment, spec.ServerName("hs1"), roomID, bob)
-	joinEvent, err := roomVer.NewEventFromTrustedJSON(sendJoinResp.Event, false)
+	_, err := roomVer.NewEventFromTrustedJSON(sendJoinResp.Event, false)
 	must.NotError(t, "failed to load join event", err)
-	stateDAG := make(map[string][]string) // event_id => prev_state_events
 	// Specifically tests that:
 	//  - the state DAG is returned and is connected
 	//  - the state dag for all room state is included
@@ -204,7 +210,7 @@ func TestMSC4242SendJoinSJ01Inbound(t *testing.T) {
 		[]interface{}{
 			[2]string{"m.room.create", ""},
 			[2]string{spec.MRoomMember, alice.UserID},
-			// NB: Bob is NOT part of this as his join is the 'Event' in the send_join response
+			// NB: Bob is NOT part of this as his join is the 'Event' in the send_join response (implied part of the state)
 			[2]string{"m.room.power_levels", ""},
 			[2]string{"m.room.join_rules", ""},
 			[2]string{"m.room.history_visibility", ""},
@@ -229,22 +235,30 @@ func TestMSC4242SendJoinSJ01Inbound(t *testing.T) {
 		t.Logf("Event ID %s", stateEvent.EventID())
 		t.Logf("%s", string(stateEvent.JSON()))
 		knownEventIDs.Add(stateEvent.EventID())
-		stateDAG[stateEvent.EventID()] = prevStateEvents
+	}
+	// The room ID is the create event ID in v12+
+	createEventID := "$" + roomID[1:]
+	// ensure the create evnet is in both known event IDs and all known prev state events. This ensures that the state DAG
+	// we've been told about does connect to the same create event we expect.
+	if !knownEventIDs.Contains(createEventID) {
+		ct.Fatalf(t, "Create event ID %s was not returned in the state_dag", createEventID)
+	}
+	if !allKnownPrevStateEvents.Contains(createEventID) {
+		ct.Fatalf(t, "Create event ID %s was never referenced as a prev_state_events", createEventID)
 	}
 
 	must.Equal(t, wantStateEventTypes.Cardinality(), 0, fmt.Sprintf("did not see all room state: missing %v", wantStateEventTypes.String()))
 
 	// Include the prev state events of the join event itself as that is what we care about
-	joinEventprevStateEvents := prevStateEvents(t, gjson.ParseBytes(sendJoinResp.Event))
-	for _, pae := range joinEventprevStateEvents {
+	joinEventPrevStateEvents := prevStateEvents(t, gjson.ParseBytes(sendJoinResp.Event))
+	for _, pae := range joinEventPrevStateEvents {
 		allKnownPrevStateEvents.Add(pae)
 	}
-	stateDAG[joinEvent.EventID()] = joinEventprevStateEvents
 
 	t.Logf("known event IDs: %v", knownEventIDs.String())
 	t.Logf("all known prev state events: %v", allKnownPrevStateEvents.String())
 	// we expect 10 known prev state events:
-	// - the initial set from room creation (create,join,pl,join_rules, his vis)
+	// - the initial set from room creation (create,join,power_levels,join_rules,history_visibility)
 	// - 5x profile changes
 	must.Equal(t, allKnownPrevStateEvents.Cardinality(), 10, "unexpected number of unique prev_state_events")
 	// these 9 must be all present in the known event IDs, i.e it's a subset.
@@ -268,9 +282,8 @@ func TestMSC4242SendJoinSJ02InvalidStateDAG(t *testing.T) {
 	cancel := srv.Listen()
 	defer cancel()
 	bob := srv.UserID("bob")
-	testCases := faultyEventTestCases
-	var mu sync.Mutex
-	for _, tc := range testCases {
+	var mu sync.Mutex // protects faultyEvents
+	for _, tc := range faultyEventTestCases {
 		t.Logf("SJ02%s: %s", tc.CodeSuffix, tc.Name)
 		var faultyEvents []gomatrixserverlib.PDU
 		room := srv.MustMakeRoom(t, roomVersion,
@@ -333,7 +346,8 @@ func TestMSC4242SendJoinFasterSJ03Inbound(t *testing.T) {
 	changeDisplayName(t, alice, "final", 1)
 	textEventIDs := sendTextMessages(t, alice, roomID, "before_join", 5)
 	t.Logf("sent messages: %v", textEventIDs)
-	// we must sync with LL members enabled.
+	// we must sync with LL members enabled in order for the homeserver to be able to join via partial state,
+	// as asking for all members causes the join to block waiting for all members
 	roomSyncData, _ := alice.MustSync(t, client.SyncReq{
 		Filter: `{"event_format":"federation","room":{"state":{"lazy_load_members":true},"timeline":{"lazy_load_members":true,"limit":50}}}`,
 	})
