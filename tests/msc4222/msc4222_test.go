@@ -35,7 +35,7 @@ func TestSync(t *testing.T) {
 				// Bob joins the room
 				bob.MustJoinRoom(t, roomID, nil)
 
-				// Make double sure that bob is joined to the room
+				// Wait for Bob's join to be seen by Alice's sync (this is not necessarily instant)
 				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 				// Ensure `state_after` looks correct
@@ -71,7 +71,7 @@ func TestSync(t *testing.T) {
 				// Bob joins the room
 				bob.MustJoinRoom(t, roomID, nil)
 
-				// Make double sure that bob is joined to the room
+				// Wait for Bob's join to be seen by Alice's sync (this is not necessarily instant)
 				alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
 
 				// Ensure `state_after` looks correct
