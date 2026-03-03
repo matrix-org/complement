@@ -65,7 +65,7 @@ func TestSync(t *testing.T) {
 				// Alice invites Bob
 				alice.MustInviteRoom(t, roomID, bob.UserID)
 
-				// Bob must get the invite
+				// Wait for Bob to get the invite
 				bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 
 				// Bob joins the room
