@@ -58,7 +58,7 @@ func TestJson(t *testing.T) {
 			}
 
 			for i, testCase := range testCases {
-				res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy", fmt.Sprintf("invalidval-%d", i)}, client.WithJSONBody(t, testCase))
+				res := alice.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy", fmt.Sprintf("invalidval-%d", i)}, client.WithJSONBody(t, testCase))
 
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,
