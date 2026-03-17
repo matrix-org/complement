@@ -39,7 +39,7 @@ func TestSendAndFetchMessage(t *testing.T) {
 	_, token := alice.MustSync(t, client.SyncReq{})
 
 	// first use the send endpoint
-	alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", strconv.FormatInt(time.Now().UnixNano(), 10, 64)}, client.WithJSONBody(t, map[string]interface{}{
+	alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", strconv.FormatInt(time.Now().UnixNano(), 10)}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    testMessage,
 	}))
