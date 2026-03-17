@@ -1,7 +1,6 @@
 package csapi_tests
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -35,8 +34,8 @@ func TestJson(t *testing.T) {
 				[]byte(`{"body": 1.1}`),
 			}
 
-			for i, testCase := range testCases {
-				res := alice.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy", fmt.Sprintf("invalidnum-%d", i)}, client.WithJSONBody(t, testCase))
+			for _, testCase := range testCases {
+				res := alice.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy", helpers.GetTxnID("TestJson-InvalidNum")}, client.WithJSONBody(t, testCase))
 
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,
@@ -57,8 +56,8 @@ func TestJson(t *testing.T) {
 				[]byte(`{"body": NaN}`),
 			}
 
-			for i, testCase := range testCases {
-				res := alice.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy", fmt.Sprintf("invalidval-%d", i)}, client.WithJSONBody(t, testCase))
+			for _, testCase := range testCases {
+				res := alice.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy", helpers.GetTxnID("TestJson-InvalidVal")}, client.WithJSONBody(t, testCase))
 
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -253,16 +252,6 @@ type eventTime struct {
 	AfterTimestamp  time.Time
 }
 
-var txnCounter int64 = 0
-
-func getTxnID(prefix string) (txnID string) {
-	txnId := fmt.Sprintf("%s-%d", prefix, atomic.LoadInt64(&txnCounter))
-
-	atomic.AddInt64(&txnCounter, 1)
-
-	return txnId
-}
-
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
 	t.Helper()
 
@@ -305,7 +294,7 @@ func sendMessageWithTimestamp(t *testing.T, as *client.CSAPI, c *client.CSAPI, r
 	//
 	// We can't use as.SendEventSynced(...) because application services can't use
 	// the /sync API.
-	sendRes := as.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
+	sendRes := as.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", helpers.GetTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
 		"body":    message,
 		"msgtype": "m.text",
 	}), client.WithQueries(url.Values{
