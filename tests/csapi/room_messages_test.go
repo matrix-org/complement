@@ -22,7 +22,6 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
-// sytest: PUT /rooms/:room_id/send/:event_type/:txn_id sends a message
 // sytest: GET /rooms/:room_id/messages returns a message
 func TestSendAndFetchMessage(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // flakey
