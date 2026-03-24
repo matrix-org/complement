@@ -600,19 +600,32 @@ func TestEventBetweenMakeJoinAndSendJoinIsNotLost(t *testing.T) {
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 	)
+	// After send_join, hs1 will start sending us federation transactions via
+	// /_matrix/federation/v1/send/{txnID}. Since we handle /send manually
+	// below, any other requests (e.g. key fetches) that arrive unexpectedly
+	// should be tolerated rather than treated as test failures.
 	srv.UnexpectedRequestsAreErrors = false
 
-	// Custom /send handler: the Complement server won't be in the room until
-	// send_join completes, so we can't use HandleTransactionRequests (which
-	// requires the room in srv.rooms). Instead we parse the raw transaction.
+	// Custom /send handler: hs1 will push new room events to us via federation
+	// transactions once we've joined. We use a raw handler because the
+	// Complement server is not fully in the room until send_join completes, so
+	// we can't use HandleTransactionRequests (which requires the room in
+	// srv.rooms). Instead we parse the raw transaction body ourselves.
 	srv.Mux().Handle("/_matrix/federation/v1/send/{transactionID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		body, _ := io.ReadAll(req.Body)
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body in /send handler: %v", err)
+			return
+		}
 		txn := gjson.ParseBytes(body)
 		txn.Get("pdus").ForEach(func(_, pdu gjson.Result) bool {
 			eventID := pdu.Get("event_id").String()
 			eventType := pdu.Get("type").String()
 			t.Logf("Received PDU via /send: type=%s id=%s", eventType, eventID)
 
+			// messageEventID is set after make_join but before send_join.
+			// Transactions can arrive before that window, so skip PDUs that
+			// arrive before we know which event to look for.
 			if messageEventID == "" {
 				return true
 			}
@@ -623,8 +636,12 @@ func TestEventBetweenMakeJoinAndSendJoinIsNotLost(t *testing.T) {
 				return true
 			}
 
-			// Check if this event's prev_events reference the message
-			// (e.g. a dummy event tying the forward extremities together).
+			// Check if this event's prev_events directly reference the message
+			// (e.g. a dummy event tying the two forward extremities together).
+			// If so, the joining server can backfill from that event and will
+			// discover the message. We only check one level of prev_events:
+			// if the reference is deeper in the DAG the joining server can
+			// still reach the message through backfill.
 			pdu.Get("prev_events").ForEach(func(_, prevEvent gjson.Result) bool {
 				if prevEvent.String() == messageEventID {
 					messageDiscoverableWaiter.Finish()
@@ -636,6 +653,9 @@ func TestEventBetweenMakeJoinAndSendJoinIsNotLost(t *testing.T) {
 			return true
 		})
 		w.WriteHeader(200)
+		// Respond with an empty PDU error map, which is the federation /send
+		// success response format: each key would be a PDU ID whose processing
+		// failed; an empty object means all PDUs were accepted.
 		w.Write([]byte(`{"pdus":{}}`))
 	})).Methods("PUT")
 
