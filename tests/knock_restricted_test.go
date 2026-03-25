@@ -79,3 +79,13 @@ func TestRestrictedRoomsRemoteJoinLocalUserInMSC3787Room(t *testing.T) {
 func TestRestrictedRoomsRemoteJoinFailOverInMSC3787Room(t *testing.T) {
 	doTestRestrictedRoomsRemoteJoinFailOver(t, roomVersion, joinRule)
 }
+
+// See docstring on `TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12`
+func TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12(t *testing.T) {
+	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "12", "knock_restricted")
+}
+
+// See docstring on `TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12`
+func TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11(t *testing.T) {
+	doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t, "11", "knock_restricted")
+}

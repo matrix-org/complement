@@ -39,6 +39,9 @@ type SyncReq struct {
 	// since will be returned.
 	// By default, this is false.
 	FullState bool
+	// Controls whether to set MSC422 `use_state_after` request parameter to get
+	// `state_after` in the reponse (alternative to `state`).
+	UseStateAfter bool
 	// Controls whether the client is automatically marked as online by polling this API. If this
 	// parameter is omitted then the client is automatically marked as online when it uses this API.
 	// Otherwise if the parameter is set to “offline” then the client is not marked as being online
@@ -172,6 +175,13 @@ func (c *CSAPI) Sync(t ct.TestLike, syncReq SyncReq) (gjson.Result, *http.Respon
 	}
 	if syncReq.FullState {
 		query["full_state"] = []string{"true"}
+	}
+	if syncReq.UseStateAfter {
+		// The spec is already stabilized
+		query["use_state_after"] = []string{"true"}
+		// FIXME: Some implementations haven't stabilized yet (Synapse) so we'll keep this
+		// here until then.
+		query["org.matrix.msc4222.use_state_after"] = []string{"true"}
 	}
 	if syncReq.SetPresence != "" {
 		query["set_presence"] = []string{syncReq.SetPresence}

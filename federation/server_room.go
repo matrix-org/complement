@@ -10,6 +10,7 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
+	"github.com/matrix-org/util"
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/ct"
@@ -302,7 +303,7 @@ func (r *ServerRoom) GetEventInTimeline(eventID string) (gomatrixserverlib.PDU, 
 	return nil, false
 }
 
-func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLevelContent) {
+func initialPowerLevelsContent(ver gomatrixserverlib.IRoomVersion, roomCreator string) (c gomatrixserverlib.PowerLevelContent) {
 	c.Defaults()
 	c.Events = map[string]int64{
 		"m.room.name":               50,
@@ -312,14 +313,18 @@ func initialPowerLevelsContent(roomCreator string) (c gomatrixserverlib.PowerLev
 		"m.room.avatar":             50,
 		"m.room.aliases":            0, // anyone can publish aliases by default. Has to be 0 else state_default is used.
 	}
-	c.Users = map[string]int64{roomCreator: 100}
+	if ver.PrivilegedCreators() {
+		c.Users = map[string]int64{}
+	} else {
+		c.Users = map[string]int64{roomCreator: 100}
+	}
 	return c
 }
 
 // InitialRoomEvents returns the initial set of events that get created when making a room.
 func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []Event {
 	// need to serialise/deserialise to get map[string]interface{} annoyingly
-	plContent := initialPowerLevelsContent(creator)
+	plContent := initialPowerLevelsContent(gomatrixserverlib.MustGetRoomVersion(roomVer), creator)
 	plBytes, _ := json.Marshal(plContent)
 	var plContentMap map[string]interface{}
 	json.Unmarshal(plBytes, &plContentMap)
@@ -331,6 +336,11 @@ func InitialRoomEvents(roomVer gomatrixserverlib.RoomVersion, creator string) []
 			Content: map[string]interface{}{
 				"creator":      creator,
 				"room_version": roomVer,
+				// We have to add randomness to the create event, else if you create 2x v12+ rooms in the same millisecond
+				// they will get the same room ID, clobbering internal data structures and causing extremely confusing
+				// behaviour. By adding this entropy, we ensure that even if rooms are created in the same millisecond, their
+				// hashes will not be the same.
+				"complement_entropy": util.RandomString(18),
 			},
 		},
 		{
@@ -441,18 +451,24 @@ func (i *ServerRoomImplDefault) ProtoEventCreator(room *ServerRoom, ev Event) (*
 		PrevEvents: prevEvents,
 		AuthEvents: ev.AuthEvents,
 		Redacts:    ev.Redacts,
+		Version:    gomatrixserverlib.MustGetRoomVersion(room.Version),
 	}
 	if err := proto.SetContent(ev.Content); err != nil {
 		return nil, fmt.Errorf("EventCreator: failed to marshal event content: %s - %+v", err, ev.Content)
 	}
-	if err := proto.SetUnsigned(ev.Content); err != nil {
-		return nil, fmt.Errorf("EventCreator: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
+	if len(ev.Unsigned) > 0 {
+		if err := proto.SetUnsigned(ev.Unsigned); err != nil {
+			return nil, fmt.Errorf("EventCreator: failed to marshal event unsigned: %s - %+v", err, ev.Unsigned)
+		}
 	}
 	if proto.AuthEvents == nil {
 		var stateNeeded gomatrixserverlib.StateNeeded
 		stateNeeded, err := gomatrixserverlib.StateNeededForProtoEvent(&proto)
 		if err != nil {
 			return nil, fmt.Errorf("EventCreator: failed to work out auth_events : %s", err)
+		}
+		if proto.Version.DomainlessRoomIDs() {
+			stateNeeded.Create = false
 		}
 		proto.AuthEvents = room.AuthEvents(stateNeeded)
 	}

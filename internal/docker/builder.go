@@ -32,13 +32,6 @@ import (
 	"github.com/matrix-org/complement/internal/instruction"
 )
 
-var (
-	// HostnameRunningDocker is the hostname of the docker daemon from the perspective of Complement.
-	HostnameRunningDocker = "localhost"
-	// HostnameRunningComplement is the hostname of Complement from the perspective of a Homeserver.
-	HostnameRunningComplement = "host.docker.internal"
-)
-
 const complementLabel = "complement_context"
 
 type Builder struct {
