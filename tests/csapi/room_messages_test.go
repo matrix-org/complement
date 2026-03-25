@@ -432,6 +432,8 @@ func TestRoomMessagesGaps(t *testing.T) {
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{
 		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 	})
+	// We `MustAwaitPartialStateJoinCompletion` because it's important that we have
+	// consistent event ordering and gaps to assert against
 	bob.MustAwaitPartialStateJoinCompletion(t, roomID)
 	aliceSince = alice.MustSyncUntil(t, client.SyncReq{Since: aliceSince}, client.SyncJoinedTo(bob.UserID, roomID))
 	bobSince = bob.MustSyncUntil(t, client.SyncReq{Since: bobSince}, client.SyncJoinedTo(bob.UserID, roomID))
