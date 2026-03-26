@@ -210,13 +210,25 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
 					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 				})
+				// After Charlie's homeserver finds the event, it "should try to backfill this
+				// event" (per the spec,
+				// https://spec.matrix.org/v1.17/server-server-api/#get_matrixfederationv1timestamp_to_eventroomid)
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 
-				// Get a pagination token from eventB
+				// And then "clients can call /rooms/{roomId}/context/{eventId} to obtain a
+				// pagination token to retrieve the events around the returned event." (per the
+				// spec, https://spec.matrix.org/v1.17/client-server-api/#get_matrixclientv1roomsroomidtimestamp_to_event).
+				//
+				// Get a pagination token that represents the position just *before* eventB
 				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID},
 					client.WithContentType("application/json"), client.WithQueries(url.Values{
 						"limit": []string{"0"},
 					}),
+					// Retry as the worker backfilling and persisting the event isn't necessarily
+					// the same as the worker serving `/context`
+					client.WithRetryUntil(remoteCharlie.SyncUntilTimeout, func(res *http.Response) bool {
+						return res.StatusCode == 200
+					}))
 				)
 				contextResResBody := client.ParseJSON(t, contextRes)
 				// Remember: Tokens are positions between events.
@@ -224,6 +236,8 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				//          start   end
 				//          |       |
 				// [A] <--  ▼  [B]  ▼  <--- [remoteCharlie join]
+				//
+				// "start" is the token that represents the position just *before* eventB
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "start")
 
 				// Paginate backwards seamlessly from the `/context` request
@@ -252,13 +266,25 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
 					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 				})
+				// After Charlie's homeserver finds the event, it "should try to backfill this
+				// event" (per the spec,
+				// https://spec.matrix.org/v1.17/server-server-api/#get_matrixfederationv1timestamp_to_eventroomid)
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 
-				// Get a pagination token from eventB
+				// And then "clients can call /rooms/{roomId}/context/{eventId} to obtain a
+				// pagination token to retrieve the events around the returned event." (per the
+				// spec, https://spec.matrix.org/v1.17/client-server-api/#get_matrixclientv1roomsroomidtimestamp_to_event).
+				//
+				// Get a pagination token that represents the position just *after* eventB
 				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID},
 					client.WithContentType("application/json"), client.WithQueries(url.Values{
 						"limit": []string{"0"},
 					}),
+					// Retry as the worker backfilling and persisting the event isn't necessarily
+					// the same as the worker serving `/context`
+					client.WithRetryUntil(remoteCharlie.SyncUntilTimeout, func(res *http.Response) bool {
+						return res.StatusCode == 200
+					}))
 				)
 				contextResResBody := client.ParseJSON(t, contextRes)
 				// Remember: Tokens are positions between events. Normally, you would use the
@@ -269,6 +295,8 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				//          start   end
 				//          |       |
 				// [A] <--  ▼  [B]  ▼  <--- [remoteCharlie join]
+				//
+				// "end" is the token that represents the position just *after* eventB
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
 
 				// Paginate backwards
