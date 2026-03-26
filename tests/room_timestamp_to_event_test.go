@@ -204,7 +204,49 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, timeBeforeRoomCreation, "b", importedEventID)
 			})
 
-			t.Run("can paginate after getting remote event from timestamp to event endpoint", func(t *testing.T) {
+			t.Run("can paginate backwards after getting remote event from timestamp to event endpoint (start)", func(t *testing.T) {
+				t.Parallel()
+				roomID, eventA, eventB := createTestRoom(t, alice)
+				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
+				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
+
+				// Get a pagination token from eventB
+				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID},
+					client.WithContentType("application/json"), client.WithQueries(url.Values{
+						"limit": []string{"0"},
+					}),
+				)
+				contextResResBody := client.ParseJSON(t, contextRes)
+				// Remember: Tokens are positions between events.
+				//
+				//          start   end
+				//          |       |
+				// [A] <--  ▼  [B]  ▼  <--- [remoteCharlie join]
+				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "start")
+
+				// Paginate backwards seamlessly from the `/context` request
+				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
+					client.WithContentType("application/json"),
+					client.WithQueries(url.Values{
+						"dir":   []string{"b"},
+						"limit": []string{"100"},
+						"from":  []string{paginationToken},
+					}),
+				)
+
+				// Make sure A is visible
+				must.MatchResponse(t, messagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONCheckOff("chunk", []interface{}{eventA.EventID}, match.CheckOffMapper(func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						}), match.CheckOffAllowUnwanted()),
+					},
+				})
+			})
+
+			t.Run("can paginate backwards after getting remote event from timestamp to event endpoint (end)", func(t *testing.T) {
 				t.Parallel()
 				roomID, eventA, eventB := createTestRoom(t, alice)
 				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
@@ -228,13 +270,6 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				//          |       |
 				// [A] <--  ▼  [B]  ▼  <--- [remoteCharlie join]
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
-
-				// Hit `/messages` until `eventA` has been backfilled and replicated across
-				// workers (the worker persisting events isn't necessarily the same as the worker
-				// serving `/messages`)
-				fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
-					return ev.Get("event_id").Str == eventA.EventID
-				})
 
 				// Paginate backwards
 				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
