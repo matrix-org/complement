@@ -387,7 +387,10 @@ func TestMessagesOverFederation(t *testing.T) {
 	})
 }
 
-const gapsField = "org.matrix.msc3871.gaps"
+const (
+	gapsField = "org.matrix.msc3871.gaps"
+	gapsFieldGjsonEscaped = "org\\.matrix\\.msc3871\\.gaps"
+)
 
 func TestRoomMessagesGaps(t *testing.T) {
 	deployment := complement.Deploy(t, 3)
@@ -592,7 +595,7 @@ func TestRoomMessagesGaps(t *testing.T) {
 	t.Logf("Before backfill (expecting gaps) %s", messagesResBody)
 
 	// We should see some gaps
-	gapsRes := gjson.GetBytes(messagesResBody, gapsField)
+	gapsRes := gjson.GetBytes(messagesResBody, gapsFieldGjsonEscaped)
 	if !gapsRes.Exists() {
 		t.Fatalf("missing key '%s' in JSON response", gapsField)
 	}
@@ -651,7 +654,7 @@ func TestRoomMessagesGaps(t *testing.T) {
 	t.Logf("After backfill (expecting *no* gaps) %s", messagesResBody)
 
 	// We shouldn't see any gaps anymore
-	gapsRes = gjson.GetBytes(messagesResBody, gapsField)
+	gapsRes = gjson.GetBytes(messagesResBody, gapsFieldGjsonEscaped)
 	// The gaps array could be empty (or omitted entirely)
 	if gapsRes.Exists() {
 		gaps = gapsRes.Array()
