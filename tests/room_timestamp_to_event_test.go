@@ -213,10 +213,20 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 
 				// Get a pagination token from eventB
-				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"limit": []string{"0"},
-				}))
+				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID},
+					client.WithContentType("application/json"), client.WithQueries(url.Values{
+						"limit": []string{"0"},
+					}),
+				)
 				contextResResBody := client.ParseJSON(t, contextRes)
+				// Remember: Tokens are positions between events. Normally, you would use the
+				// `start` token to paginate backwards with but for the sake of the test we want
+				// to paginate `/messages` and want see both A and B in the response; so we use
+				// the `end` token. The `end` token comes after B.
+				//
+				//          start   end
+				//          |       |
+				// [A] <--  ▼  [B]  ▼  <--- [remoteCharlie join]
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
 
 				// Hit `/messages` until `eventA` has been backfilled and replicated across
@@ -226,12 +236,15 @@ func TestJumpToDateEndpoint(t *testing.T) {
 					return ev.Get("event_id").Str == eventA.EventID
 				})
 
-				// Paginate backwards from eventB
-				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"dir":   []string{"b"},
-					"limit": []string{"100"},
-					"from":  []string{paginationToken},
-				}))
+				// Paginate backwards from the point after eventB
+				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
+					client.WithContentType("application/json"),
+					client.WithQueries(url.Values{
+						"dir":   []string{"b"},
+						"limit": []string{"100"},
+						"from":  []string{paginationToken},
+					}),
+				)
 
 				// Make sure both messages are visible
 				must.MatchResponse(t, messagesRes, match.HTTPResponse{
