@@ -221,8 +221,8 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				contextResResBody := client.ParseJSON(t, contextRes)
 				// Remember: Tokens are positions between events. Normally, you would use the
 				// `start` token to paginate backwards with but for the sake of the test we want
-				// paginate `/messages` and want see both A and B in the response; so we use the
-				// `end` token. The `end` token comes after B.
+				// to paginate `/messages` and want see both A and B in the response; so we use
+				// the `end` token. The `end` token comes after B.
 				//
 				//          start   end
 				//          |       |
