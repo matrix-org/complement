@@ -236,7 +236,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 					return ev.Get("event_id").Str == eventA.EventID
 				})
 
-				// Paginate backwards
+				// Paginate backwards from the point after eventB
 				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
 					client.WithContentType("application/json"),
 					client.WithQueries(url.Values{
