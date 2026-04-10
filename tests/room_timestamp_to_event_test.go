@@ -240,7 +240,8 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				// "start" is the token that represents the position just *before* eventB
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "start")
 
-				// Paginate backwards seamlessly from the `/context` request
+				// Paginate backwards seamlessly from the `/context` request (start, point
+				// before eventB)
 				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
 					client.WithContentType("application/json"),
 					client.WithQueries(url.Values{
@@ -299,7 +300,8 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				// "end" is the token that represents the position just *after* eventB
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
 
-				// Paginate backwards
+				// Paginate backwards seamlessly from the `/context` request (end, point after
+				// eventB)
 				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
 					client.WithContentType("application/json"),
 					client.WithQueries(url.Values{
