@@ -6,7 +6,7 @@ version: 2
 # open-pull-requests-limit to 10 (from the default of 5) to better ensure we
 # don't continuously grow a backlog of updates.
 updates:
-    package-ecosystem: "gomod"
+  - package-ecosystem: "gomod"
     directory: "/"
     open-pull-requests-limit: 10
     schedule:
