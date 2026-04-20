@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -510,8 +509,7 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 	// room.
 	//
 	// So this test is essentially skipped for any default room v11 or higher.
-	verNum, _ := strconv.Atoi(string(ver))
-	if verNum >= 11 {
+	if gomatrixserverlib.MustGetRoomVersion(ver).StrictEventByteLimits() {
 		ver = gomatrixserverlib.RoomVersion("10")
 	}
 	charlie := srv.UserID("charlie")

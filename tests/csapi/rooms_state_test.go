@@ -4,7 +4,6 @@
 package csapi_tests
 
 import (
-	"strconv"
 	"testing"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib"
 )
 
 func TestRoomCreationReportsEventsToMyself(t *testing.T) {
@@ -28,7 +28,6 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 		Password:        "bobpassword",
 	})
 	defaultVer := alice.GetDefaultRoomVersion(t)
-	defaultVerN, _ := strconv.Atoi(string(defaultVer))
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	t.Run("parallel", func(t *testing.T) {
@@ -42,7 +41,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 				}
 				must.Equal(t, ev.Get("sender").Str, alice.UserID, "wrong sender")
 				// The creator field was removed in room version 11 (MSC4239).
-				if defaultVerN < 11 {
+				if gomatrixserverlib.MustGetRoomVersion(defaultVer).CreatorInCreateEvent() {
 					must.Equal(t, ev.Get("content").Get("creator").Str, alice.UserID, "wrong content.creator")
 				}
 				return true
