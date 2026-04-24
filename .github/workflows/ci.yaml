@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3 # Checkout complement
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: "Run internal Complement tests"
@@ -56,7 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3 # Checkout complement
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
