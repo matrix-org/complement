@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -594,7 +595,9 @@ func TestEventBetweenMakeJoinAndSendJoinIsNotLost(t *testing.T) {
 	// After send_join, we wait for hs1 to send us either:
 	//  - the message event itself, or
 	//  - any event whose prev_events reference the message (e.g. a dummy event)
-	var messageEventID string
+	// atomic.Value is used because messageEventID is written on the main goroutine
+	// and read on the HTTP handler goroutine, with no other synchronization.
+	var messageEventID atomic.Value
 	messageDiscoverableWaiter := helpers.NewWaiter()
 
 	srv := federation.NewServer(t, deployment,
@@ -613,10 +616,7 @@ func TestEventBetweenMakeJoinAndSendJoinIsNotLost(t *testing.T) {
 	// srv.rooms). Instead we parse the raw transaction body ourselves.
 	srv.Mux().Handle("/_matrix/federation/v1/send/{transactionID}", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("failed to read request body in /send handler: %v", err)
-			return
-		}
+		must.NotError(t, "failed to read request body in /send handler: %v", err)
 		txn := gjson.ParseBytes(body)
 		txn.Get("pdus").ForEach(func(_, pdu gjson.Result) bool {
 			eventID := pdu.Get("event_id").String()
@@ -626,24 +626,27 @@ func TestEventBetweenMakeJoinAndSendJoinIsNotLost(t *testing.T) {
 			// messageEventID is set after make_join but before send_join.
 			// Transactions can arrive before that window, so skip PDUs that
 			// arrive before we know which event to look for.
-			if messageEventID == "" {
+			msgID, _ := messageEventID.Load().(string)
+			if msgID == "" {
 				return true
 			}
 
 			// Check if this IS the message event (server pushed it directly).
-			if eventID == messageEventID {
+			if eventID == msgID {
 				messageDiscoverableWaiter.Finish()
 				return true
 			}
 
-			// Check if this event's prev_events directly reference the message
-			// (e.g. a dummy event tying the two forward extremities together).
-			// If so, the joining server can backfill from that event and will
-			// discover the message. We only check one level of prev_events:
-			// if the reference is deeper in the DAG the joining server can
-			// still reach the message through backfill.
+			// Check if this event's prev_events directly reference the message (e.g. a dummy
+			// event tying the two forward extremities together). If so, the joining server
+			// can backfill from that event and will discover the message.
+			//
+			// XXX: We only check one level of prev_events: if the reference is deeper in the
+			// DAG, it's valid and the joining server can still reach the message through
+			// backfill but our checks don't account for that yet (feel free to edit this
+			// assertion if you run into this)
 			pdu.Get("prev_events").ForEach(func(_, prevEvent gjson.Result) bool {
-				if prevEvent.String() == messageEventID {
+				if prevEvent.String() == msgID {
 					messageDiscoverableWaiter.Finish()
 					return false
 				}
@@ -683,14 +686,14 @@ func TestEventBetweenMakeJoinAndSendJoinIsNotLost(t *testing.T) {
 	// Step 2: Alice sends a message on hs1. This advances the DAG past the
 	// point captured by make_join's prev_events. The Complement server is not
 	// yet in the room, so it won't receive this event via normal federation.
-	messageEventID = alice.SendEventSynced(t, roomID, b.Event{
+	messageEventID.Store(alice.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "Message sent between make_join and send_join",
 		},
-	})
-	t.Logf("Alice sent message %s between make_join and send_join", messageEventID)
+	}))
+	t.Logf("Alice sent message %s between make_join and send_join", messageEventID.Load())
 
 	// Step 3: Build and sign the join event, then send_join.
 	// The join event's prev_events are from step 1 (before the message),
@@ -716,7 +719,7 @@ func TestEventBetweenMakeJoinAndSendJoinIsNotLost(t *testing.T) {
 	messageDiscoverableWaiter.Waitf(t, 5*time.Second,
 		"Timed out waiting for message event %s to become discoverable — "+
 			"the event sent between make_join and send_join was lost to the "+
-			"joining server", messageEventID,
+			"joining server", messageEventID.Load(),
 	)
 }
 
