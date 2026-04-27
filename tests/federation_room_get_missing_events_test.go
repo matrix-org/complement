@@ -497,6 +497,21 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 	}).Methods("POST")
 
 	ver := alice.GetDefaultRoomVersion(t)
+	// This test crafts a "bad" event which state_key is 280 bytes but only 70
+	// codepoints.
+	//
+	// Room version 11 in Synapse switched from using codepoints to using
+	// bytes. Which means the 280-byte state_key would be rejected immediately.
+	// Use room version 10 in that case so the codepoint-based limit is in effect.
+	//
+	// Since upgrading a room (for example from v10 to v11) won't carry the event
+	// (a new room is created), we don't have to worry about v10 room events in a v11
+	// room.
+	//
+	// So this test is essentially skipped for any default room v11 or higher.
+	if gomatrixserverlib.MustGetRoomVersion(ver).StrictEventByteLimits() {
+		ver = gomatrixserverlib.RoomVersion("10")
+	}
 	charlie := srv.UserID("charlie")
 	room := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, charlie))
 	roomAlias := srv.MakeAliasMapping("flibble", room.RoomID)
