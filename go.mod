@@ -7,7 +7,7 @@ require (
 	github.com/docker/go-connections v0.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/matrix-org/gomatrix v0.0.0-20220926102614-ceba4d9f7530
-	github.com/matrix-org/gomatrixserverlib v0.0.0-20250813150445-9f5070a65744
+	github.com/matrix-org/gomatrixserverlib v0.0.0-20260202113659-20c9de33969e
 	github.com/matrix-org/util v0.0.0-20221111132719-399730281e66
 	github.com/sirupsen/logrus v1.9.4
 	github.com/tidwall/gjson v1.18.0
@@ -30,6 +30,7 @@ require (
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
+	github.com/deckarep/golang-set v1.8.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
