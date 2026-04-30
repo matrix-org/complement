@@ -30,6 +30,16 @@ const (
 	DelayedEventActionSend    = "send"
 )
 
+// A filter for `/sync` that excludes timeline events.
+//
+// This is useful if you want to see `state` in the `/sync` response without the pesky
+// de-duplication with `timeline` that traditional `/sync` does.
+const NoTimelineSyncFilter = `{
+		"room": {
+			"timeline": { "limit": 0 }
+	}
+}`
+
 // TODO: Test pagination of `GET /_matrix/client/v1/delayed_events` once
 // it is implemented in a homeserver.
 
@@ -371,11 +381,6 @@ func TestDelayedEvents(t *testing.T) {
 
 		numberOfDelayedEvents := 0
 
-		// Start a sync loop (initial sync)
-		since := user.MustSyncUntil(
-			t, client.SyncReq{},
-		)
-
 		// Send an initial delayed event that will be ready to send as soon as the server
 		// comes back up.
 		user.MustDo(
@@ -445,7 +450,7 @@ func TestDelayedEvents(t *testing.T) {
 		remainingDelayedEventCount := countDelayedEvents(t, delayedEventResponse)
 		// Sanity check that the room state was updated correctly with the delayed events
 		// that were sent.
-		since = user.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+		user.MustSyncUntil(t, client.SyncReq{Filter: NoTimelineSyncFilter}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
 			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey1
 		}))
 
@@ -459,7 +464,7 @@ func TestDelayedEvents(t *testing.T) {
 		// FIXME: Ideally, we'd check specifically for the last one that was sent but it
 		// will be a bit of a juggle and fiddly to get this right so for now we just check
 		// one.
-		since = user.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+		user.MustSyncUntil(t, client.SyncReq{Filter: NoTimelineSyncFilter}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
 			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey2
 		}))
 	})
