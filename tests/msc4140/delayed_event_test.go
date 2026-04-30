@@ -72,6 +72,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 	})
 
+	// FIXME: Too much mixing of tests that should be more independent
 	t.Run("delayed message events are sent on timeout", func(t *testing.T) {
 		var res *http.Response
 		var countExpected uint64
