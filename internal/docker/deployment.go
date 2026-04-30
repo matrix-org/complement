@@ -105,13 +105,13 @@ func (d *Deployment) Register(t ct.TestLike, hsName string, opts helpers.Registr
 		ct.Fatalf(t, "Deployment.Register - HS name '%s' not found", hsName)
 		return nil
 	}
-	client := &client.CSAPI{
+	client := client.NewCSAPI(client.CSAPIOpts{
 		BaseURL:          dep.BaseURL,
 		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 		Password:         opts.Password,
-	}
+	})
 	// Appending a slice is not thread-safe. Protect the write with a mutex.
 	dep.CSAPIClientsMutex.Lock()
 	dep.CSAPIClients = append(dep.CSAPIClients, client)
@@ -155,13 +155,13 @@ func (d *Deployment) Login(t ct.TestLike, hsName string, existing *client.CSAPI,
 	if err != nil {
 		ct.Fatalf(t, "Deployment.Login: existing CSAPI client has invalid user ID '%s', cannot login as this user: %s", existing.UserID, err)
 	}
-	c := &client.CSAPI{
+	c := client.NewCSAPI(client.CSAPIOpts{
 		BaseURL:          dep.BaseURL,
 		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
 		Password:         existing.Password,
-	}
+	})
 	if opts.Password != "" {
 		c.Password = opts.Password
 	}
@@ -197,12 +197,12 @@ func (d *Deployment) UnauthenticatedClient(t ct.TestLike, hsName string) *client
 		ct.Fatalf(t, "Deployment.Client - HS name '%s' not found", hsName)
 		return nil
 	}
-	client := &client.CSAPI{
+	client := client.NewCSAPI(client.CSAPIOpts{
 		BaseURL:          dep.BaseURL,
 		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
-	}
+	})
 	// Appending a slice is not thread-safe. Protect the write with a mutex.
 	dep.CSAPIClientsMutex.Lock()
 	dep.CSAPIClients = append(dep.CSAPIClients, client)
@@ -230,7 +230,7 @@ func (d *Deployment) AppServiceUser(t ct.TestLike, hsName, appServiceUserID stri
 	if deviceID == "" && appServiceUserID != "" {
 		t.Logf("WARNING: Deployment.Client - HS name '%s' - user ID '%s' - deviceID not found", hsName, appServiceUserID)
 	}
-	client := &client.CSAPI{
+	client := client.NewCSAPI(client.CSAPIOpts{
 		UserID:           appServiceUserID,
 		AccessToken:      token,
 		DeviceID:         deviceID,
@@ -238,7 +238,7 @@ func (d *Deployment) AppServiceUser(t ct.TestLike, hsName, appServiceUserID stri
 		Client:           client.NewLoggedClient(t, hsName, nil),
 		SyncUntilTimeout: 5 * time.Second,
 		Debug:            d.Deployer.debugLogging,
-	}
+	})
 	// Appending a slice is not thread-safe. Protect the write with a mutex.
 	dep.CSAPIClientsMutex.Lock()
 	dep.CSAPIClients = append(dep.CSAPIClients, client)

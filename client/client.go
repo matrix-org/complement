@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/ct"
+	"github.com/matrix-org/complement/internal"
 )
 
 type ctxKey string
@@ -48,6 +50,19 @@ type retryUntilParams struct {
 // See functions starting with `With...` in this package for more info.
 type RequestOpt func(req *http.Request)
 
+type CSAPIOpts struct {
+	UserID      string
+	AccessToken string
+	DeviceID    string
+	Password    string // if provided
+	BaseURL     string
+	Client      *http.Client
+	// how long are we willing to wait for MustSyncUntil.... calls
+	SyncUntilTimeout time.Duration
+	// True to enable verbose logging
+	Debug bool
+}
+
 type CSAPI struct {
 	UserID      string
 	AccessToken string
@@ -60,7 +75,22 @@ type CSAPI struct {
 	// True to enable verbose logging
 	Debug bool
 
-	txnID int64
+	txnID           int64
+	createRoomMutex *sync.Mutex
+}
+
+func NewCSAPI(opts CSAPIOpts) *CSAPI {
+	return &CSAPI{
+		UserID:           opts.UserID,
+		AccessToken:      opts.AccessToken,
+		DeviceID:         opts.DeviceID,
+		Password:         opts.Password,
+		BaseURL:          opts.BaseURL,
+		Client:           opts.Client,
+		SyncUntilTimeout: opts.SyncUntilTimeout,
+		Debug:            opts.Debug,
+		createRoomMutex:  &sync.Mutex{},
+	}
 }
 
 // CreateMedia creates an MXC URI for asynchronous media uploads.
@@ -137,7 +167,36 @@ func (c *CSAPI) MustCreateRoom(t ct.TestLike, reqBody map[string]interface{}) st
 // CreateRoom creates a room with an optional HTTP request body.
 func (c *CSAPI) CreateRoom(t ct.TestLike, body map[string]interface{}) *http.Response {
 	t.Helper()
+	// Ensure we don't call /createRoom from the same user in parallel, else we might try to make
+	// 2 rooms in the same millisecond (same `origin_server_ts`), causing v12 rooms to get the same room ID thus failing the test.
+	c.createRoomMutex.Lock()
+	defer c.createRoomMutex.Unlock()
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "createRoom"}, WithJSONBody(t, body))
+}
+
+// MustUpgradeRoom upgrades a room to the newVersion. Fails the test on error. Returns the new room ID.
+func (c *CSAPI) MustUpgradeRoom(t ct.TestLike, roomID string, newVersion string) string {
+	t.Helper()
+	res := c.UpgradeRoom(t, roomID, newVersion)
+	mustRespond2xx(t, res)
+	resBody := ParseJSON(t, res)
+	return GetJSONFieldStr(t, resBody, "replacement_room")
+}
+
+// UpgradeRoom upgrades a room to the newVersion
+func (c *CSAPI) UpgradeRoom(t ct.TestLike, roomID string, newVersion string) *http.Response {
+	t.Helper()
+	// Ensure we don't call create a room (upgrade creates a new room) from the same user
+	// in parallel, else we might try to make 2 rooms in the same millisecond (same
+	// `origin_server_ts`), causing v12 rooms to get the same room ID thus failing the
+	// test.
+	c.createRoomMutex.Lock()
+	defer c.createRoomMutex.Unlock()
+	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "upgrade"},
+		WithJSONBody(t, map[string]string{
+			"new_version": newVersion,
+		}),
+	)
 }
 
 // MustJoinRoom joins the room ID or alias given, else fails the test. Returns the room ID.
@@ -178,6 +237,21 @@ func (c *CSAPI) JoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []spec
 		t, "POST", []string{"_matrix", "client", "v3", "join", roomIDOrAlias},
 		WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
 	)
+}
+
+// MustAwaitPartialStateJoinCompletion waits until the joined room is no longer partial-stated
+func (c *CSAPI) MustAwaitPartialStateJoinCompletion(t ct.TestLike, room_id string) {
+	t.Helper()
+
+	// Use a `/members` request to wait for the room to be un-partial stated.
+	// We avoid using `/sync`, as it only waits (or used to wait) for full state at
+	// particular events, rather than the whole room.
+	c.MustDo(
+		t,
+		"GET",
+		[]string{"_matrix", "client", "v3", "rooms", room_id, "members"},
+	)
+	t.Logf("%s's partial state join to %s completed.", c.UserID, room_id)
 }
 
 // MustLeaveRoom leaves the room ID, else fails the test.
@@ -385,7 +459,7 @@ func (c *CSAPI) SendRedaction(t ct.TestLike, roomID string, content map[string]i
 	return c.Do(t, "PUT", paths, WithJSONBody(t, content))
 }
 
-// MustGetStateEvent returns the event content for the given state event. Fails the test if the state event does not exist.
+// MustGetStateEventContent returns the event content for the given state event. Fails the test if the state event does not exist.
 func (c *CSAPI) MustGetStateEventContent(t ct.TestLike, roomID, eventType, stateKey string) (content gjson.Result) {
 	t.Helper()
 	res := c.GetStateEventContent(t, roomID, eventType, stateKey)
@@ -394,10 +468,25 @@ func (c *CSAPI) MustGetStateEventContent(t ct.TestLike, roomID, eventType, state
 	return gjson.ParseBytes(body)
 }
 
-// GetStateEvent returns the event content for the given state event. Use this form to detect absence via 404.
+// GetStateEventContent returns the event content for the given state event. Use this form to detect absence via 404.
 func (c *CSAPI) GetStateEventContent(t ct.TestLike, roomID, eventType, stateKey string) *http.Response {
 	t.Helper()
 	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, stateKey})
+}
+
+// MustGetEvent returns the event content for the given state event. Fails the test if the state event does not exist.
+func (c *CSAPI) MustGetEvent(t ct.TestLike, roomID, eventID string) (eventJson gjson.Result) {
+	t.Helper()
+	res := c.GetEvent(t, roomID, eventID)
+	mustRespond2xx(t, res)
+	body := ParseJSON(t, res)
+	return gjson.ParseBytes(body)
+}
+
+// GetEvent returns the event JSON. Use this form to detect absence via 404.
+func (c *CSAPI) GetEvent(t ct.TestLike, roomID, eventID string) *http.Response {
+	t.Helper()
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "event", eventID})
 }
 
 // MustSendTyping marks this user as typing until the timeout is reached. If isTyping is false, timeout is ignored.
@@ -635,6 +724,9 @@ func (c *CSAPI) MustDo(t ct.TestLike, method string, paths []string, opts ...Req
 //			match.JSONKeyEqual("errcode", "M_INVALID_USERNAME"),
 //		},
 //	})
+//
+// The caller does not need to worry about closing the returned `http.Response.Body` as
+// this is handled automatically.
 func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...RequestOpt) *http.Response {
 	t.Helper()
 	escapedPaths := make([]string, len(paths))
@@ -683,6 +775,30 @@ func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...Request
 		if err != nil {
 			ct.Fatalf(t, "CSAPI.Do response returned error: %s", err)
 		}
+		// `defer` is function scoped but it's okay that we only clean up all requests at
+		// the end. To also be clear, `defer` arguments are evaluated at the time of the
+		// `defer` statement so we are only closing the original response body here. Our new
+		// response body will be untouched.
+		defer internal.CloseIO(
+			res.Body,
+			fmt.Sprintf(
+				"CSAPI.Do: response body from %s %s",
+				res.Request.Method,
+				res.Request.URL.String(),
+			),
+		)
+
+		// Make a copy of the response body so that downstream callers can read it multiple
+		// times if needed and don't need to worry about closing it.
+		var resBody []byte
+		if res.Body != nil {
+			resBody, err = io.ReadAll(res.Body)
+			if err != nil {
+				ct.Fatalf(t, "CSAPI.Do failed to read response body for RetryUntil check: %s", err)
+			}
+			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
+		}
+
 		// debug log the response
 		if c.Debug && res != nil {
 			var dump []byte
@@ -692,19 +808,12 @@ func (c *CSAPI) Do(t ct.TestLike, method string, paths []string, opts ...Request
 			}
 			t.Logf("%s", string(dump))
 		}
+
 		if retryUntil == nil || retryUntil.timeout == 0 {
 			return res // don't retry
 		}
 
-		// check the condition, make a copy of the response body first in case the check consumes it
-		var resBody []byte
-		if res.Body != nil {
-			resBody, err = io.ReadAll(res.Body)
-			if err != nil {
-				ct.Fatalf(t, "CSAPI.Do failed to read response body for RetryUntil check: %s", err)
-			}
-			res.Body = io.NopCloser(bytes.NewBuffer(resBody))
-		}
+		// check the condition
 		if retryUntil.untilFn(res) {
 			// remake the response and return
 			res.Body = io.NopCloser(bytes.NewBuffer(resBody))

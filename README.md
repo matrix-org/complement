@@ -36,7 +36,7 @@ To solve this, you will need to configure your firewall to allow such requests.
 If you are using [ufw](https://code.launchpad.net/ufw), this can be done with:
 
 ```sh
-sudo ufw allow in on br-+
+sudo ufw allow in on br-+ comment "(from Matrix Complement testing) Allow traffic from custom Docker networks to the host machine (host.docker.internal)"
 ```
 
 ### Running using Podman
@@ -96,6 +96,7 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 
 - The Dockerfile must `EXPOSE 8008` and `EXPOSE 8448` for client and federation traffic respectively.
 - The homeserver should run and listen on these ports.
+- The homeserver should listen on plain HTTP for client traffic and HTTPS for federation traffic. See [Complement PKI](#Complement-PKI) below.
 - The homeserver should become healthy within `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS` if a `HEALTHCHECK` is specified in the Dockerfile.
 - The homeserver needs to `200 OK` requests to `GET /_matrix/client/versions`.
 - The homeserver needs to manage its own storage within the image.
@@ -252,7 +253,7 @@ update-ca-certificates
 
 ## Sytest parity
 
-As of 10 February 2023:
+As of 29 October 2025:
 ```
 $ go build ./cmd/sytest-coverage
 $ ./sytest-coverage -v
@@ -507,7 +508,13 @@ $ ./sytest-coverage -v
     ✓ Can get rooms/{roomId}/members
 
 30rooms/60version_upgrade 0/19 tests
-30rooms/70publicroomslist 0/5 tests
+30rooms/70publicroomslist 2/5 tests
+    × Asking for a remote rooms list, but supplying the local server's name, returns the local rooms list
+    × Can get remote public room list
+    × Can paginate public room list
+    ✓ Can search public room list
+    ✓ Name/topic keys are correct
+
 31sync/01filter 2/2 tests
     ✓ Can create filter
     ✓ Can download filter
@@ -707,5 +714,5 @@ $ ./sytest-coverage -v
 90jira/SYN-516 0/1 tests
 90jira/SYN-627 0/1 tests
 
-TOTAL: 220/610 tests converted
+TOTAL: 222/610 tests converted
 ```

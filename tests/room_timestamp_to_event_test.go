@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -214,10 +213,20 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 
 				// Get a pagination token from eventB
-				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"limit": []string{"0"},
-				}))
+				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID},
+					client.WithContentType("application/json"), client.WithQueries(url.Values{
+						"limit": []string{"0"},
+					}),
+				)
 				contextResResBody := client.ParseJSON(t, contextRes)
+				// Remember: Tokens are positions between events. Normally, you would use the
+				// `start` token to paginate backwards with but for the sake of the test we want
+				// to paginate `/messages` and want see both A and B in the response; so we use
+				// the `end` token. The `end` token comes after B.
+				//
+				//          start   end
+				//          |       |
+				// [A] <--  ▼  [B]  ▼  <--- [remoteCharlie join]
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
 
 				// Hit `/messages` until `eventA` has been backfilled and replicated across
@@ -227,12 +236,15 @@ func TestJumpToDateEndpoint(t *testing.T) {
 					return ev.Get("event_id").Str == eventA.EventID
 				})
 
-				// Paginate backwards from eventB
-				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"dir":   []string{"b"},
-					"limit": []string{"100"},
-					"from":  []string{paginationToken},
-				}))
+				// Paginate backwards from the point after eventB
+				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
+					client.WithContentType("application/json"),
+					client.WithQueries(url.Values{
+						"dir":   []string{"b"},
+						"limit": []string{"100"},
+						"from":  []string{paginationToken},
+					}),
+				)
 
 				// Make sure both messages are visible
 				must.MatchResponse(t, messagesRes, match.HTTPResponse{
@@ -251,16 +263,6 @@ type eventTime struct {
 	EventID         string
 	BeforeTimestamp time.Time
 	AfterTimestamp  time.Time
-}
-
-var txnCounter int64 = 0
-
-func getTxnID(prefix string) (txnID string) {
-	txnId := fmt.Sprintf("%s-%d", prefix, atomic.LoadInt64(&txnCounter))
-
-	atomic.AddInt64(&txnCounter, 1)
-
-	return txnId
 }
 
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
@@ -305,7 +307,7 @@ func sendMessageWithTimestamp(t *testing.T, as *client.CSAPI, c *client.CSAPI, r
 	//
 	// We can't use as.SendEventSynced(...) because application services can't use
 	// the /sync API.
-	sendRes := as.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
+	sendRes := as.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", helpers.GetTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
 		"body":    message,
 		"msgtype": "m.text",
 	}), client.WithQueries(url.Values{

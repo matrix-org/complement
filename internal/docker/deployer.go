@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
+	"github.com/matrix-org/complement/internal"
 	complementRuntime "github.com/matrix-org/complement/runtime"
 
 	"github.com/docker/docker/api/types/container"
@@ -347,7 +348,7 @@ func deployImage(
 		// interact with a complement-controlled test server.
 		// Note: this feature of docker landed in Docker 20.10,
 		// see https://github.com/moby/moby/pull/40007
-		extraHosts = []string{"host.docker.internal:host-gateway"}
+		extraHosts = []string{fmt.Sprintf("%s:host-gateway", cfg.HostnameRunningComplement)}
 	}
 
 	for _, m := range cfg.HostMounts {
@@ -398,6 +399,18 @@ func deployImage(
 		PublishAllPorts: true,
 		ExtraHosts:      extraHosts,
 		Mounts:          mounts,
+		// https://docs.docker.com/engine/containers/resource_constraints/
+		Resources: container.Resources{
+			// Constrain the the number of CPU cores this container can use
+			//
+			// The number of CPU cores in 1e9 increments
+			//
+			// `NanoCPUs` is the option that is "Applicable to all platforms" instead of
+			// `CPUPeriod`/`CPUQuota` (Unix only) or `CPUCount`/`CPUPercent` (Windows only).
+			NanoCPUs: int64(cfg.ContainerCPUCores * 1e9),
+			// Constrain the maximum memory the container can use
+			Memory: cfg.ContainerMemoryBytes,
+		},
 	}, &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
 			networkName: {
@@ -414,7 +427,20 @@ func deployImage(
 
 	containerID := body.ID
 	if cfg.DebugLoggingEnabled {
-		log.Printf("%s: Created container '%s' using image '%s' on network '%s'", contextStr, containerID, imageID, networkName)
+		constraintStrings := []string{}
+		if cfg.ContainerCPUCores > 0 {
+			constraintStrings = append(constraintStrings, fmt.Sprintf("%.1f CPU cores", cfg.ContainerCPUCores))
+		}
+		if cfg.ContainerMemoryBytes > 0 {
+			// TODO: It would be nice to pretty print this in MB/GB etc.
+			constraintStrings = append(constraintStrings, fmt.Sprintf("%d bytes of memory", cfg.ContainerMemoryBytes))
+		}
+		constrainedResourcesDisplayString := ""
+		if len(constraintStrings) > 0 {
+			constrainedResourcesDisplayString = fmt.Sprintf("(%s)", strings.Join(constraintStrings, ", "))
+		}
+
+		log.Printf("%s: Created container '%s' using image '%s' on network '%s' %s", contextStr, containerID, imageID, networkName, constrainedResourcesDisplayString)
 	}
 	stubDeployment := &HomeserverDeployment{
 		ContainerID: containerID,
@@ -668,6 +694,7 @@ func waitForContainer(ctx context.Context, docker *client.Client, hsDep *Homeser
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
+		defer internal.CloseIO(res.Body, "waitForContainer: version response body")
 		if res.StatusCode != 200 {
 			lastErr = fmt.Errorf("GET %s => HTTP %s", versionsURL, res.Status)
 			time.Sleep(50 * time.Millisecond)
