@@ -445,7 +445,7 @@ func TestDelayedEvents(t *testing.T) {
 		remainingDelayedEventCount := countDelayedEvents(t, delayedEventResponse)
 		// Sanity check that the room state was updated correctly with the delayed events
 		// that were sent.
-		since = user.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
+		since = user.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey1
 		}))
 
@@ -459,7 +459,7 @@ func TestDelayedEvents(t *testing.T) {
 		// FIXME: Ideally, we'd check specifically for the last one that was sent but it
 		// will be a bit of a juggle and fiddly to get this right so for now we just check
 		// one.
-		since = user.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
+		since = user.MustSyncUntil(t, client.SyncReq{Since: since}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
 			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey2
 		}))
 	})
