@@ -149,6 +149,7 @@ func TestDelayedEvents(t *testing.T) {
 
 		stateKey := "to_send_on_timeout"
 
+		// Schedule a delayed event
 		setterKey := "setter"
 		setterExpected := "on_timeout"
 		user.MustDo(
@@ -161,8 +162,11 @@ func TestDelayedEvents(t *testing.T) {
 			getDelayQueryParam("900"),
 		)
 
+		// Ensure that a delayed event is now scheduled
 		matchDelayedEvents(t, user, delayedEventsNumberEqual(1))
-
+		// And includes the correct content
+		//
+		// FIXME: This assertion seems superfluous to this test and should be it's own test
 		res = getDelayedEvents(t, user)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -178,19 +182,29 @@ func TestDelayedEvents(t *testing.T) {
 				}),
 			},
 		})
+
+		// Sanity check that the room state hasn't changed yet
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 		})
 
+		// Wait one second which will cause the delayed state event to be sent
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
+
+		// Check for the state change from the delayed state event
+		user.MustSyncUntil(t, client.SyncReq{Filter: NoTimelineSyncFilter}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey
+		}))
+		// Make sure the state looks as expected after
 		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyEqual(setterKey, setterExpected),
 			},
 		})
+		// No more delayed events
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
 	})
 
 	t.Run("cannot update a delayed event without an action", func(t *testing.T) {
