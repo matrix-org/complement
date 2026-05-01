@@ -18,6 +18,7 @@ import (
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/complement/should"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
@@ -1338,41 +1339,61 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 	return eventIDs
 }
 
+// Alice will invite Bob. Bob's server should receive full PDUs in `invite_room_state`.
 func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
+
+	// Alice creates a room
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
+		"room_version": roomVersion12,
+		"preset":       "public_chat",
+	})
+
+	// Create an engineered homeserver that will listen for the invite and assert
+	inviteWaiter := helpers.NewWaiter()
 	srv := federation.NewServer(t, deployment,
 		federation.HandleKeyRequests(),
 		federation.HandleMakeSendJoinRequests(),
 		federation.HandleTransactionRequests(nil, nil),
 		federation.HandleEventRequests(),
 	)
-	srv.UnexpectedRequestsAreErrors = false
-	cancel := srv.Listen()
-	defer cancel()
-
-	// Alice will invite Bob. Bob's server should receive full PDUs in `invite_room_state`.
-	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
-	bob := srv.UserID("bob")
-
-	roomID := alice.MustCreateRoom(t, map[string]interface{}{
-		"room_version": roomVersion12,
-		"preset":       "public_chat",
-	})
+	// FIXME: Ideally, we'd use `federation.HandleInviteRequests(...)` but it doesn't
+	// allow us to access the `invite_room_state` yet and requires a bit more refactoring,
+	// see https://github.com/matrix-org/complement/pull/796#discussion_r2278442857
 	srv.Mux().HandleFunc("/_matrix/federation/v2/invite/{roomID}/{eventID}", srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
-		if pathParams["roomID"] != roomID {
-			t.Errorf("Received /invite_room_state for the wrong room: %s", roomID)
+		t.Logf("Received invite over federation %s",
+			string(fr.Content()),
+		)
+
+		// Invites for an unexpected rooms is an error
+		roomIDFromURL := pathParams["roomID"]
+		if roomIDFromURL != roomID {
+			t.Errorf("Received invite for unexpected room: %s (expected %s)", roomIDFromURL, roomID)
 			return util.JSONResponse{
 				Code: 400,
-				JSON: "wrong room",
+				JSON: "unexpected wrong room",
 			}
 		}
-		inviteRoomState := gjson.ParseBytes(fr.Content()).Get("invite_room_state").Array()
-		for _, ev := range inviteRoomState {
-			// should have extra fields
-			must.MatchGJSON(t, ev, match.JSONKeyPresent("origin_server_ts"))
-		}
+
+		// Check to make sure the `invite_room_state` includes full PDUs (the main MSC4311
+		// behavior we're trying to test)
+		inviteRequest := gjson.ParseBytes(fr.Content())
+		must.MatchGJSON(t, inviteRequest,
+			JSONArraySome("invite_room_state", func(event gjson.Result) error {
+				// MSC4311 also mandates that `m.room.create` event is required
+				return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
+			}),
+			match.JSONArrayEach("invite_room_state", func(event gjson.Result) error {
+				// Each event should have extra fields `origin_server_ts` that indicate we're
+				// seeing a full PDU and not just a "stripped state event"
+				return should.MatchGJSON(event, match.JSONKeyPresent("origin_server_ts"))
+			}),
+		)
+		inviteWaiter.Finish()
+
 		invite := []byte(gjson.ParseBytes(fr.Content()).Get("event").Raw)
 		signed, err := gomatrixserverlib.SignJSON(string(srv.ServerName()), srv.KeyID, srv.Priv, invite)
 		if err != nil {
@@ -1387,5 +1408,48 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 			},
 		}
 	}))
+	// Synapse seems to send `/_matrix/federation/v1/query/profile` requests to us for
+	// some reason.
+	srv.UnexpectedRequestsAreErrors = false
+	cancel := srv.Listen()
+	defer cancel()
+
+	// Alice invites bob
+	bob := srv.UserID("bob")
 	alice.MustInviteRoom(t, roomID, bob)
+
+	// Wait for the invite to go over federation and be validated
+	inviteWaiter.Wait(t, 5*time.Second)
+}
+
+
+// JSONArraySome returns a matcher which will check that `wantKey` is an array then
+// loops over each item calling `fn`. If `fn` returns nil, the matcher is satisifed,
+// iterating stops and we return.
+//
+// Will fail if the array is empty and the check never runs
+func JSONArraySome(wantKey string, fn func(gjson.Result) error) match.JSON {
+	return func(body gjson.Result) error {
+		if wantKey != "" {
+			body = body.Get(wantKey)
+		}
+
+		if !body.Exists() {
+			return fmt.Errorf("JSONArraySome: missing key '%s'", wantKey)
+		}
+		if !body.IsArray() {
+			return fmt.Errorf("JSONArraySome: key '%s' is not an array", wantKey)
+		}
+		var satisifed bool = false
+		body.ForEach(func(_, val gjson.Result) bool {
+			err := fn(val)
+			satisifed = err != nil
+			// Stop iterating when we find a non-error
+			return !satisifed
+		})
+		if !satisifed {
+			return fmt.Errorf("JSONArraySome('%s'): unable to find item that satisfies check", wantKey)
+		}
+		return nil
+	}
 }
