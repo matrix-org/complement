@@ -30,6 +30,16 @@ const (
 	DelayedEventActionSend    = "send"
 )
 
+// A filter for `/sync` that excludes timeline events.
+//
+// This is useful if you want to see `state` in the `/sync` response without the pesky
+// de-duplication with `timeline` that traditional `/sync` does.
+const NoTimelineSyncFilter = `{
+		"room": {
+			"timeline": { "limit": 0 }
+	}
+}`
+
 // TODO: Test pagination of `GET /_matrix/client/v1/delayed_events` once
 // it is implemented in a homeserver.
 
@@ -62,6 +72,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 	})
 
+	// FIXME: Too much mixing of tests that should be more independent
 	t.Run("delayed message events are sent on timeout", func(t *testing.T) {
 		var res *http.Response
 		var countExpected uint64
@@ -139,6 +150,7 @@ func TestDelayedEvents(t *testing.T) {
 
 		stateKey := "to_send_on_timeout"
 
+		// Schedule a delayed event
 		setterKey := "setter"
 		setterExpected := "on_timeout"
 		user.MustDo(
@@ -151,8 +163,11 @@ func TestDelayedEvents(t *testing.T) {
 			getDelayQueryParam("900"),
 		)
 
+		// Ensure that a delayed event is now scheduled
 		matchDelayedEvents(t, user, delayedEventsNumberEqual(1))
-
+		// And includes the correct content
+		//
+		// FIXME: This assertion seems superfluous to this test and should be it's own test
 		res = getDelayedEvents(t, user)
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
@@ -168,19 +183,30 @@ func TestDelayedEvents(t *testing.T) {
 				}),
 			},
 		})
+
+		// Sanity check that the room state hasn't changed yet
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 		})
 
+		// Wait one second which will cause the delayed state event to be sent
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
+
+		// Check for the state change from the delayed state event (using `MustSyncUntil` to
+		// account for any processing or worker replication delays)
+		user.MustSyncUntil(t, client.SyncReq{Filter: NoTimelineSyncFilter}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey
+		}))
+		// Make sure the state looks as expected after
 		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyEqual(setterKey, setterExpected),
 			},
 		})
+		// No more delayed events
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
 	})
 
 	t.Run("cannot update a delayed event without an action", func(t *testing.T) {
@@ -232,6 +258,7 @@ func TestDelayedEvents(t *testing.T) {
 
 		stateKey := "to_never_send"
 
+		// Schedule a delayed event
 		setterKey := "setter"
 		setterExpected := "none"
 		res = user.MustDo(
@@ -245,22 +272,33 @@ func TestDelayedEvents(t *testing.T) {
 		)
 		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
 
+		// Wait a bit but not long enough for the delayed state event to be sent
 		time.Sleep(1 * time.Second)
+		// We should still see the scheduled delayed event (hasn't been sent yet)
 		matchDelayedEvents(t, user, delayedEventsNumberEqual(1))
+
+		// Sanity check that the room state hasn't changed
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 		})
 
+		// Cancel the delayed event
 		unauthedClient.MustDo(
 			t,
 			"POST",
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionCancel),
 			client.WithJSONBody(t, map[string]interface{}{}),
 		)
+		// No more delayed events
 		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
 
+		// Sanity check that the previously scheduled delayed event doesn't end up being sent anyway
+		//
+		// Wait another second which would cause the previously scheduled delayed to be sent
+		// as we've waited a total of 2s now (> 1.5s delay)
 		time.Sleep(1 * time.Second)
+		// Sanity check that the room state hasn't changed
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
@@ -274,6 +312,7 @@ func TestDelayedEvents(t *testing.T) {
 
 		stateKey := "to_send_on_request"
 
+		// Schedule a delayed event
 		setterKey := "setter"
 		setterExpected := "on_send"
 		res = user.MustDo(
@@ -287,26 +326,39 @@ func TestDelayedEvents(t *testing.T) {
 		)
 		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
 
+		// Wait a bit but not long enough for the delayed state event to be sent
 		time.Sleep(1 * time.Second)
+		// We should still see the scheduled delayed event (hasn't been sent yet)
 		matchDelayedEvents(t, user, delayedEventsNumberEqual(1))
+
+		// Sanity check that the room state hasn't changed yet
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 		})
 
+		// Force the delayed event to be sent immediately
 		unauthedClient.MustDo(
 			t,
 			"POST",
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionSend),
 			client.WithJSONBody(t, map[string]interface{}{}),
 		)
-		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
-		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
+
+		// Check for the state change from the delayed state event (using `MustSyncUntil` to
+		// account for any processing or worker replication delays)
+		user.MustSyncUntil(t, client.SyncReq{Filter: NoTimelineSyncFilter}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey
+		}))
+		// Make sure the state looks as expected after
+		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyEqual(setterKey, setterExpected),
 			},
 		})
+		// No more delayed events
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
 	})
 
 	t.Run("delayed state events can be restarted", func(t *testing.T) {
@@ -316,6 +368,7 @@ func TestDelayedEvents(t *testing.T) {
 
 		defer cleanupDelayedEvents(t, user)
 
+		// Schedule a delayed event
 		setterKey := "setter"
 		setterExpected := "on_timeout"
 		res = user.MustDo(
@@ -329,13 +382,18 @@ func TestDelayedEvents(t *testing.T) {
 		)
 		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
 
+		// Wait a bit but not long enough for the delayed state event to be sent
 		time.Sleep(1 * time.Second)
+		// We should still see the scheduled delayed event (hasn't been sent yet)
 		matchDelayedEvents(t, user, delayedEventsNumberEqual(1))
+
+		// Sanity check that the room state hasn't changed yet
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 		})
 
+		// Restart the timer on the delayed event
 		unauthedClient.MustDo(
 			t,
 			"POST",
@@ -343,21 +401,37 @@ func TestDelayedEvents(t *testing.T) {
 			client.WithJSONBody(t, map[string]interface{}{}),
 		)
 
+		// Wait a bit but not long enough for the delayed state event to be sent
 		time.Sleep(1 * time.Second)
+		// We should still see the scheduled delayed event (hasn't been sent yet)
 		matchDelayedEvents(t, user, delayedEventsNumberEqual(1))
+
+		// Sanity check that the room state hasn't changed yet
 		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 404,
 		})
 
+		// Wait one second which will cause the delayed state event to be sent
 		time.Sleep(1 * time.Second)
-		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
+		
+		// Wait one second which will cause the delayed state event to be sent
+		time.Sleep(1 * time.Second)
+
+		// Check for the state change from the delayed state event (using `MustSyncUntil` to
+		// account for any processing or worker replication delays)
+		user.MustSyncUntil(t, client.SyncReq{Filter: NoTimelineSyncFilter}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey
+		}))
+		// Make sure the state looks as expected after
 		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
 		must.MatchResponse(t, res, match.HTTPResponse{
 			JSON: []match.JSON{
 				match.JSONKeyEqual(setterKey, setterExpected),
 			},
 		})
+		// No more delayed events
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
 	})
 
 	t.Run("delayed state events are kept on server restart", func(t *testing.T) {
@@ -439,8 +513,11 @@ func TestDelayedEvents(t *testing.T) {
 		// Capture whatever number of delayed events are remaining after the server restart.
 		remainingDelayedEventCount := countDelayedEvents(t, delayedEventResponse)
 		// Sanity check that the room state was updated correctly with the delayed events
-		// that were sent.
-		user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey1))
+		// that were sent. (using `MustSyncUntil` to account for any processing or worker
+		// replication delays)
+		user.MustSyncUntil(t, client.SyncReq{Filter: NoTimelineSyncFilter}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey1
+		}))
 
 		// Wait until we see another delayed event being sent (ensure things resumed and are continuing).
 		time.Sleep(10 * time.Second)
@@ -448,11 +525,15 @@ func TestDelayedEvents(t *testing.T) {
 			delayedEventsNumberLessThan(remainingDelayedEventCount),
 		)
 		// Sanity check that the other delayed events also updated the room state correctly.
+		// (using `MustSyncUntil` to account for any processing or worker replication
+		// delays)
 		//
 		// FIXME: Ideally, we'd check specifically for the last one that was sent but it
 		// will be a bit of a juggle and fiddly to get this right so for now we just check
 		// one.
-		user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey2))
+		user.MustSyncUntil(t, client.SyncReq{Filter: NoTimelineSyncFilter}, client.SyncStateHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey2
+		}))
 	})
 }
 
@@ -577,6 +658,8 @@ func matchDelayedEvents(t *testing.T, user *client.CSAPI, checks ...delayedEvent
 	)
 }
 
+// FIXME: Instead of using `cleanupDelayedEvents`, each test should just use their own
+// room
 func cleanupDelayedEvents(t *testing.T, user *client.CSAPI) {
 	t.Helper()
 	res := getDelayedEvents(t, user)
