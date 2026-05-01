@@ -9,6 +9,7 @@ package tests
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"testing"
@@ -228,7 +229,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 					// the same as the worker serving `/context`
 					client.WithRetryUntil(remoteCharlie.SyncUntilTimeout, func(res *http.Response) bool {
 						return res.StatusCode == 200
-					}))
+					}),
 				)
 				contextResResBody := client.ParseJSON(t, contextRes)
 				// Remember: Tokens are positions between events.
@@ -285,7 +286,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 					// the same as the worker serving `/context`
 					client.WithRetryUntil(remoteCharlie.SyncUntilTimeout, func(res *http.Response) bool {
 						return res.StatusCode == 200
-					}))
+					}),
 				)
 				contextResResBody := client.ParseJSON(t, contextRes)
 				// Remember: Tokens are positions between events. Normally, you would use the
