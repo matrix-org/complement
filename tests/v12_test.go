@@ -1395,17 +1395,30 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 		)
 		inviteWaiter.Finish()
 
-		invite := []byte(gjson.ParseBytes(fr.Content()).Get("event").Raw)
-		signed, err := gomatrixserverlib.SignJSON(string(srv.ServerName()), srv.KeyID, srv.Priv, invite)
-		if err != nil {
-			t.Fatalf("failed to sign invite: %s", err)
+		// Craft a response that we can return
+		rawRoomVersion := inviteRequest.Get("room_version").Raw
+		rawInviteEventJson := inviteRequest.Get("event").Raw
+
+		var roomVersion gomatrixserverlib.RoomVersion
+		if err := json.Unmarshal([]byte(rawRoomVersion), &roomVersion); err != nil {
+			t.Fatalf("failed to parse room version: %s", err)
 		}
+		verImpl, err := gomatrixserverlib.GetRoomVersion(roomVersion)
+		if err != nil {
+			t.Fatalf("failed to get room version: %s", err)
+		}
+		inviteEvent, err := verImpl.NewEventFromUntrustedJSON([]byte(rawInviteEventJson))
+		if err != nil {
+			t.Fatalf("failed to parse invite event: %s", err)
+		}
+		signedInvite := inviteEvent.Sign(string(srv.ServerName()), srv.KeyID, srv.Priv)
+
 		return util.JSONResponse{
 			Code: 200,
 			JSON: struct {
 				Event any `json:"event"`
 			}{
-				Event: signed,
+				Event: signedInvite,
 			},
 		}
 	}))
