@@ -1339,7 +1339,8 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 	return eventIDs
 }
 
-// Alice will invite Bob. Bob's server should receive full PDUs in `invite_room_state`.
+// Alice will invite Bob. Bob's server should receive full PDUs in `invite_room_state`
+// according to MSC4311
 func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
 	deployment := complement.Deploy(t, 1)
@@ -1421,6 +1422,8 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 	// Wait for the invite to go over federation and be validated
 	inviteWaiter.Wait(t, 5*time.Second)
 }
+
+// TODO: Test `knock_room_state` according to MSC4311
 
 
 // JSONArraySome returns a matcher which will check that `wantKey` is an array then
