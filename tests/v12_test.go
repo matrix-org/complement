@@ -1343,6 +1343,8 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 // `invite_state`/`knock_state` (stripped state) in `/sync responses. And in under the
 // `unsigned` `invite_room_state`/`knock_room_state` on `m.room.member` events. We're
 // testing the client API which should still use stripped state event format.
+//
+// TODO: Test `knock_state` and `knock_room_state`
 func TestMSC4311CreateEventInStrippedStateClientApi(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
 	deployment := complement.Deploy(t, 2)
@@ -1363,21 +1365,34 @@ func TestMSC4311CreateEventInStrippedStateClientApi(t *testing.T) {
 		alice.MustInviteRoom(t, roomID, target.UserID)
 
 		// Make a `/sync` request so we can check `invite_state`
-		syncRes, _ := target.MustSync(t, client.SyncReq{})
-		syncInviteStateJSONFieldKey := fmt.Sprintf("rooms.invite.%s.invite_state.events", client.GjsonEscape(roomID))
-		must.MatchGJSON(t, syncRes,
-			JSONArraySome(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
-				// MSC4311 mandates that `m.room.create` event is required in `invite_state`
-				return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
-			}),
-			match.JSONArrayEach(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
-				// Each event should be using the "stripped state event" format; and *not* have
-				// extra fields like `origin_server_ts` as those indicate that we're seeing a
-				// full PDU and not just a "stripped state event".
-				return should.MatchGJSON(event, match.JSONKeyMissing("origin_server_ts"))
-			}),
-		)
+		target.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+			// Sync until the target sees the invite
+			if err := client.SyncInvitedTo(target.UserID, roomID)(clientUserID, topLevelSyncJSON); err != nil {
+				return err
+			}
 
+			// Then assert that we see the proper `invite_state`
+			syncInviteStateJSONFieldKey := fmt.Sprintf("rooms.invite.%s.invite_state.events", client.GjsonEscape(roomID))
+			err := should.MatchGJSON(topLevelSyncJSON,
+				JSONArraySome(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
+					// MSC4311 mandates that `m.room.create` event is required in `invite_state`
+					return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
+				}),
+				match.JSONArrayEach(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
+					// Each event should be using the "stripped state event" format; and *not* have
+					// extra fields like `origin_server_ts` as those indicate that we're seeing a
+					// full PDU and not just a "stripped state event".
+					return should.MatchGJSON(event, match.JSONKeyMissing("origin_server_ts"))
+				}),
+			)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		// TODO: Check the `m.room.member` `invite_room_state`
 	}
 }
 
@@ -1385,6 +1400,8 @@ func TestMSC4311CreateEventInStrippedStateClientApi(t *testing.T) {
 // Alice will invite Bob. Bob's server should receive full PDUs in
 // `invite_room_state`/`knock_room_state` (stripped state) over the federation API's
 // according to MSC4311.
+//
+// TODO: Test `knock_room_state`
 func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
 	deployment := complement.Deploy(t, 1)
