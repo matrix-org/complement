@@ -1350,7 +1350,7 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 // this (or adjusting Synapse).
 //
 // TODO: Test `knock_state` and `knock_room_state`
-func TestMSC4311StrippedStateClientApi(t *testing.T) {
+func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
