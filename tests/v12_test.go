@@ -18,6 +18,7 @@ import (
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/runtime"
+	"github.com/matrix-org/complement/should"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
@@ -1338,39 +1339,200 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 	return eventIDs
 }
 
-func TestMSC4311FullCreateEventOnStrippedState(t *testing.T) {
+// MSC4311 mandates that `m.room.create` is a required event in
+// `invite_state`/`knock_state` (stripped state) in `/sync responses.
+//
+// MSC4311 also mentions `unsigned` -> `invite_room_state`/`knock_room_state` on
+// `m.room.member` events but it doesn't seem possible to view this information from the
+// client API's. For example, Synapse doesn't have any API's where it sets
+// [`include_stripped_room_state=True`](https://github.com/element-hq/synapse/blob/6100f6e4f7fb0c72f1ae2802683ebc811c0e3a77/synapse/events/utils.py#L590-L596)
+// when viewing full events. The spec is unclear here so we will hold off on a test for
+// this (or adjusting Synapse).
+//
+// TODO: Test `knock_state` and `knock_room_state`
+func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
+
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
 	local := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "local"})
 	remote := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "remote"})
+
+	t.Run("`invite_state` on `/sync`", func(t *testing.T) {
+		// Alice creates a room
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"room_version": roomVersion12,
+			"preset":       "public_chat",
+		})
+
+		for _, target := range []*client.CSAPI{local, remote} {
+			t.Logf("checking %s", target.UserID)
+			alice.MustInviteRoom(t, roomID, target.UserID)
+
+			// Make a `/sync` request so we can check `invite_state`
+			target.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+				// Sync until the target sees the invite
+				if err := client.SyncInvitedTo(target.UserID, roomID)(clientUserID, topLevelSyncJSON); err != nil {
+					return err
+				}
+
+				// Then assert that we see the proper `invite_state`
+				syncInviteStateJSONFieldKey := fmt.Sprintf("rooms.invite.%s.invite_state.events", client.GjsonEscape(roomID))
+				err := should.MatchGJSON(topLevelSyncJSON,
+					JSONArraySome(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
+						// MSC4311 mandates that `m.room.create` event is required in `invite_state`
+						return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
+					}),
+					match.JSONArrayEach(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
+						// Each event should be using the "stripped state event" format; and *not* have
+						// extra fields like `origin_server_ts` as those indicate that we're seeing a
+						// full PDU and not just a "stripped state event".
+						return should.MatchGJSON(event, match.JSONKeyMissing("origin_server_ts"))
+					}),
+				)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			})
+
+		}
+	})
+}
+
+
+// Alice will invite Bob. Bob's server should receive full PDUs in
+// `invite_room_state`/`knock_room_state` (stripped state) over the federation API's
+// according to MSC4311.
+//
+// TODO: Test `knock_room_state`
+func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
+	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	// Alice creates a room
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"room_version": roomVersion12,
 		"preset":       "public_chat",
 	})
-	for _, target := range []*client.CSAPI{local, remote} {
-		t.Logf("checking %s", target.UserID)
-		alice.MustInviteRoom(t, roomID, target.UserID)
-		resp, _ := target.MustSync(t, client.SyncReq{})
-		inviteState := resp.Get(
-			fmt.Sprintf("rooms.invite.%s.invite_state.events", client.GjsonEscape(roomID)),
+
+	// Create an engineered homeserver that will listen for the invite and assert
+	inviteWaiter := helpers.NewWaiter()
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleMakeSendJoinRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+		federation.HandleEventRequests(),
+	)
+	// FIXME: Ideally, we'd use `federation.HandleInviteRequests(...)` but it doesn't
+	// allow us to access the `invite_room_state` yet and requires a bit more refactoring,
+	// see https://github.com/matrix-org/complement/pull/796#discussion_r2278442857
+	srv.Mux().HandleFunc("/_matrix/federation/v2/invite/{roomID}/{eventID}", srv.ValidFederationRequest(t, func(fr *fclient.FederationRequest, pathParams map[string]string) util.JSONResponse {
+		t.Logf("Received invite over federation %s",
+			string(fr.Content()),
 		)
-		must.NotEqual(t, len(inviteState.Array()), 0, "no events in invite_state")
-		// find the create event
-		found := false
-		for _, ev := range inviteState.Array() {
-			if ev.Get("type").Str == spec.MRoomCreate {
-				found = true
-				// we should have extra fields
-				must.MatchGJSON(t, ev,
-					match.JSONKeyPresent("origin_server_ts"),
-				)
+
+		// Invites for an unexpected rooms is an error
+		roomIDFromURL := pathParams["roomID"]
+		if roomIDFromURL != roomID {
+			t.Errorf("Received invite for unexpected room: %s (expected %s)", roomIDFromURL, roomID)
+			return util.JSONResponse{
+				Code: 400,
+				JSON: "unexpected wrong room",
 			}
 		}
-		if !found {
-			ct.Errorf(t, "failed to find create event in invite_state")
-		}
-	}
 
+		// Check to make sure the `invite_room_state` includes full PDUs (the main MSC4311
+		// behavior we're trying to test)
+		inviteRequest := gjson.ParseBytes(fr.Content())
+		must.MatchGJSON(t, inviteRequest,
+			JSONArraySome("invite_room_state", func(event gjson.Result) error {
+				// MSC4311 also mandates that `m.room.create` event is required
+				return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
+			}),
+			match.JSONArrayEach("invite_room_state", func(event gjson.Result) error {
+				// Each event should have extra fields `origin_server_ts` that indicate we're
+				// seeing a full PDU and not just a "stripped state event"
+				return should.MatchGJSON(event, match.JSONKeyPresent("origin_server_ts"))
+			}),
+		)
+		inviteWaiter.Finish()
+
+		// Craft a response that we can return
+		rawRoomVersion := inviteRequest.Get("room_version").Raw
+		rawInviteEventJson := inviteRequest.Get("event").Raw
+
+		var roomVersion gomatrixserverlib.RoomVersion
+		if err := json.Unmarshal([]byte(rawRoomVersion), &roomVersion); err != nil {
+			t.Fatalf("failed to parse room version: %s", err)
+		}
+		verImpl, err := gomatrixserverlib.GetRoomVersion(roomVersion)
+		if err != nil {
+			t.Fatalf("failed to get room version: %s", err)
+		}
+		inviteEvent, err := verImpl.NewEventFromUntrustedJSON([]byte(rawInviteEventJson))
+		if err != nil {
+			t.Fatalf("failed to parse invite event: %s", err)
+		}
+		signedInvite := inviteEvent.Sign(string(srv.ServerName()), srv.KeyID, srv.Priv)
+
+		return util.JSONResponse{
+			Code: 200,
+			JSON: struct {
+				Event gomatrixserverlib.PDU `json:"event"`
+			}{
+				Event: signedInvite,
+			},
+		}
+	}))
+	// Synapse seems to send `/_matrix/federation/v1/query/profile` requests to us for
+	// some reason.
+	srv.UnexpectedRequestsAreErrors = false
+	cancel := srv.Listen()
+	defer cancel()
+
+	// Alice invites bob
+	bob := srv.UserID("bob")
+	alice.MustInviteRoom(t, roomID, bob)
+
+	// Wait for the invite to go over federation and be validated
+	inviteWaiter.Wait(t, 5*time.Second)
+}
+
+// TODO: Test `knock_room_state` according to MSC4311
+
+
+// JSONArraySome returns a matcher which will check that `wantKey` is an array then
+// loops over each item calling `fn`. If `fn` returns nil, the matcher is satisifed,
+// iterating stops and we return.
+//
+// Will fail if the array is empty and the check never runs
+func JSONArraySome(wantKey string, fn func(gjson.Result) error) match.JSON {
+	return func(body gjson.Result) error {
+		if wantKey != "" {
+			body = body.Get(wantKey)
+		}
+
+		if !body.Exists() {
+			return fmt.Errorf("JSONArraySome: missing key '%s'", wantKey)
+		}
+		if !body.IsArray() {
+			return fmt.Errorf("JSONArraySome: key '%s' is not an array", wantKey)
+		}
+		var satisifed bool = false
+		body.ForEach(func(_, val gjson.Result) bool {
+			err := fn(val)
+			satisifed = err != nil
+			// Stop iterating when we find a non-error
+			return !satisifed
+		})
+		if !satisifed {
+			return fmt.Errorf("JSONArraySome('%s'): unable to find item that satisfies check", wantKey)
+		}
+		return nil
+	}
 }
