@@ -1340,9 +1340,14 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 }
 
 // MSC4311 mandates that `m.room.create` is a required event in
-// `invite_state`/`knock_state` (stripped state) in `/sync responses. And in under the
-// `unsigned` `invite_room_state`/`knock_room_state` on `m.room.member` events. We're
-// testing the client API which should still use stripped state event format.
+// `invite_state`/`knock_state` (stripped state) in `/sync responses.
+//
+// MSC4311 also mentions `unsigned` -> `invite_room_state`/`knock_room_state` on
+// `m.room.member` events but it doesn't seem possible to view this information from the
+// client API's. For example, Synapse doesn't have any API's where it sets
+// [`include_stripped_room_state=True`](https://github.com/element-hq/synapse/blob/6100f6e4f7fb0c72f1ae2802683ebc811c0e3a77/synapse/events/utils.py#L590-L596)
+// when viewing full events. The spec is unclear here so we will hold off on a test for
+// this (or adjusting Synapse).
 //
 // TODO: Test `knock_state` and `knock_room_state`
 func TestMSC4311StrippedStateClientApi(t *testing.T) {
@@ -1354,83 +1359,48 @@ func TestMSC4311StrippedStateClientApi(t *testing.T) {
 	local := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "local"})
 	remote := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "remote"})
 
-	t.Run("parallel", func(t *testing.T) {
-		t.Run("`invite_state` on `/sync`", func(t *testing.T) {
-			t.Parallel()
+	t.Run("`invite_state` on `/sync`", func(t *testing.T) {
+		t.Parallel()
 
-			// Alice creates a room
-			roomID := alice.MustCreateRoom(t, map[string]interface{}{
-				"room_version": roomVersion12,
-				"preset":       "public_chat",
-			})
-
-			for _, target := range []*client.CSAPI{local, remote} {
-				t.Logf("checking %s", target.UserID)
-				alice.MustInviteRoom(t, roomID, target.UserID)
-
-				// Make a `/sync` request so we can check `invite_state`
-				target.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
-					// Sync until the target sees the invite
-					if err := client.SyncInvitedTo(target.UserID, roomID)(clientUserID, topLevelSyncJSON); err != nil {
-						return err
-					}
-
-					// Then assert that we see the proper `invite_state`
-					syncInviteStateJSONFieldKey := fmt.Sprintf("rooms.invite.%s.invite_state.events", client.GjsonEscape(roomID))
-					err := should.MatchGJSON(topLevelSyncJSON,
-						JSONArraySome(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
-							// MSC4311 mandates that `m.room.create` event is required in `invite_state`
-							return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
-						}),
-						match.JSONArrayEach(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
-							// Each event should be using the "stripped state event" format; and *not* have
-							// extra fields like `origin_server_ts` as those indicate that we're seeing a
-							// full PDU and not just a "stripped state event".
-							return should.MatchGJSON(event, match.JSONKeyMissing("origin_server_ts"))
-						}),
-					)
-					if err != nil {
-						return err
-					}
-
-					return nil
-				})
-
-			}
+		// Alice creates a room
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"room_version": roomVersion12,
+			"preset":       "public_chat",
 		})
 
-		t.Run("`invite_room_state` on `m.room.member`", func(t *testing.T) {
-			t.Parallel()
+		for _, target := range []*client.CSAPI{local, remote} {
+			t.Logf("checking %s", target.UserID)
+			alice.MustInviteRoom(t, roomID, target.UserID)
 
-			// Alice creates a room
-			roomID := alice.MustCreateRoom(t, map[string]interface{}{
-				"room_version": roomVersion12,
-				"preset":       "public_chat",
-			})
+			// Make a `/sync` request so we can check `invite_state`
+			target.MustSyncUntil(t, client.SyncReq{}, func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+				// Sync until the target sees the invite
+				if err := client.SyncInvitedTo(target.UserID, roomID)(clientUserID, topLevelSyncJSON); err != nil {
+					return err
+				}
 
-			for _, target := range []*client.CSAPI{local, remote} {
-				t.Logf("checking %s", target.UserID)
-				alice.MustInviteRoom(t, roomID, target.UserID)
-
-				// Wait until the invite shows up
-				target.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(target.UserID, roomID))
-
-				// Check the `m.room.membership` event
-				memberInviteContent := alice.MustGetStateEventContent(t, roomID, spec.MRoomMembership, target.UserID)
-				must.MatchGJSON(t, memberInviteContent,
-					JSONArraySome("unsigned.invite_room_state", func(event gjson.Result) error {
-						// MSC4311 mandates that `m.room.create` event is required in `invite_room_state`
+				// Then assert that we see the proper `invite_state`
+				syncInviteStateJSONFieldKey := fmt.Sprintf("rooms.invite.%s.invite_state.events", client.GjsonEscape(roomID))
+				err := should.MatchGJSON(topLevelSyncJSON,
+					JSONArraySome(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
+						// MSC4311 mandates that `m.room.create` event is required in `invite_state`
 						return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
 					}),
-					match.JSONArrayEach("unsigned.invite_room_state", func(event gjson.Result) error {
+					match.JSONArrayEach(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
 						// Each event should be using the "stripped state event" format; and *not* have
 						// extra fields like `origin_server_ts` as those indicate that we're seeing a
 						// full PDU and not just a "stripped state event".
 						return should.MatchGJSON(event, match.JSONKeyMissing("origin_server_ts"))
 					}),
 				)
-			}
-		})
+				if err != nil {
+					return err
+				}
+
+				return nil
+			})
+
+		}
 	})
 }
 
