@@ -1416,7 +1416,7 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 		return util.JSONResponse{
 			Code: 200,
 			JSON: struct {
-				Event any `json:"event"`
+				Event gomatrixserverlib.PDU `json:"event"`
 			}{
 				Event: signedInvite,
 			},
