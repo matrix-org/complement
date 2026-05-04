@@ -1360,8 +1360,6 @@ func TestMSC4311StrippedStateClientApi(t *testing.T) {
 	remote := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "remote"})
 
 	t.Run("`invite_state` on `/sync`", func(t *testing.T) {
-		t.Parallel()
-
 		// Alice creates a room
 		roomID := alice.MustCreateRoom(t, map[string]interface{}{
 			"room_version": roomVersion12,
