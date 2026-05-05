@@ -414,9 +414,6 @@ func TestDelayedEvents(t *testing.T) {
 
 		// Wait one second which will cause the delayed state event to be sent
 		time.Sleep(1 * time.Second)
-		
-		// Wait one second which will cause the delayed state event to be sent
-		time.Sleep(1 * time.Second)
 
 		// Check for the state change from the delayed state event (using `MustSyncUntil` to
 		// account for any processing or worker replication delays)
