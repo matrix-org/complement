@@ -56,6 +56,14 @@ func TestJumpToDateEndpoint(t *testing.T) {
 		t.Run("should find nothing before the earliest timestamp", func(t *testing.T) {
 			t.Parallel()
 			timeBeforeRoomCreation := time.Now()
+			// /timestamp_to_event is millisecond-granular by spec, and the next
+			// call (createTestRoom) writes an m.room.create whose
+			// origin_server_ts can land in the same millisecond as the sample
+			// above. A backward search at that millisecond inclusively returns
+			// the create event when the test wants 404. Pause long enough that
+			// every event the homeserver subsequently stamps is in a strictly
+			// later millisecond. See matrix-org/complement#868.
+			time.Sleep(tsBoundaryGuard)
 			roomID, _, _ := createTestRoom(t, alice)
 			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeRoomCreation, "b", "")
 		})
@@ -331,12 +339,31 @@ type eventTime struct {
 	AfterTimestamp  time.Time
 }
 
+// tsBoundaryGuard is the pause inserted around each time.Now() sample in this
+// file's helpers and subtests so that no homeserver-stamped origin_server_ts
+// can collide with the sample at millisecond granularity. /timestamp_to_event
+// returns the boundary event inclusively (forward picks the earliest event
+// with ts >= query, backward picks the latest with ts <= query), so a shared
+// millisecond between sample and event lets the wrong event win the boundary.
+// 2ms is well above the per-millisecond clock resolution every supported
+// platform exposes and short enough that the cost is invisible compared to a
+// homeserver round-trip. See matrix-org/complement#868.
+const tsBoundaryGuard = 2 * time.Millisecond
+
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
 	t.Helper()
 
 	roomID = c.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
+
+	// MustCreateRoom returns once the homeserver has stamped the full
+	// createRoom state batch (m.room.create through m.room.guest_access);
+	// the trailing state event can share a millisecond with the time.Now()
+	// below. Pausing here pushes the sample past that boundary so a forward
+	// search anchored on timeBeforeEventA cannot land back on the createRoom
+	// state. See matrix-org/complement#868.
+	time.Sleep(tsBoundaryGuard)
 
 	timeBeforeEventA := time.Now()
 	eventAID := c.SendEventSynced(t, roomID, b.Event{
