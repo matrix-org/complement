@@ -504,11 +504,6 @@ func TestOutboundFederationEventSizeGetMissingEvents(t *testing.T) {
 	// bytes. Which means the 280-byte state_key would be rejected immediately.
 	// Use room version 10 in that case so the codepoint-based limit is in effect.
 	//
-	// Since upgrading a room (for example from v10 to v11) won't carry the event
-	// (a new room is created), we don't have to worry about v10 room events in a v11
-	// room.
-	//
-	// So this test is essentially skipped for any default room v11 or higher.
 	if gomatrixserverlib.MustGetRoomVersion(ver).StrictEventByteLimits() {
 		ver = gomatrixserverlib.RoomVersion("10")
 	}
