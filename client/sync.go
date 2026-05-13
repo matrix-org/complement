@@ -232,6 +232,31 @@ func SyncStateHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	}
 }
 
+// Check that the `state_after` section for `roomID` has an event which passes the check function.
+//
+// Note that the `state_after` section of a sync response will not contain the entire
+// state of the room for incremental or `lazy_load_members` syncs.
+func SyncStateAfterHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		// Check the stable field
+		errStable := checkArrayElements(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+".state_after.events", check,
+		)
+		// Check the unstable field
+		//
+		// FIXME: Some implementations haven't stabilized yet (Synapse) so we'll keep this
+		// here until then.
+		errUnstable := checkArrayElements(
+			topLevelSyncJSON, "rooms.join."+GjsonEscape(roomID)+"."+GjsonEscape("org.matrix.msc4222.state_after")+".events", check,
+		)
+		// Valid to find it in either place
+		if errStable == nil || errUnstable == nil {
+			return nil
+		}
+		return fmt.Errorf("SyncStateAfterHas(%s): Tried to check in the stable field: %s - and unstable field: %s", roomID, errStable, errUnstable)
+	}
+}
+
 func SyncEphemeralHas(roomID string, check func(gjson.Result) bool) SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		err := checkArrayElements(
