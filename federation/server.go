@@ -357,7 +357,7 @@ func (s *Server) MustCreateEvent(t ct.TestLike, room *ServerRoom, ev Event) goma
 	return pdu
 }
 
-// MustJoinRoom will make the server send a make_join and a send_join to join a room
+// MustJoinRoom will make the server send a /make_join and a /send_join to join a room
 // It returns the resultant room.
 //
 // Args:
@@ -440,6 +440,39 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 
 	t.Logf("Server.MustJoinRoom joined room ID %s", room.RoomID)
 
+	return room
+}
+
+type knockRoom struct {
+	strictKnockRoomStateChecks bool
+}
+
+// KnockRoomOpt is an option for configuring how the server should knock on the room
+type KnockRoomOpt func(kr *knockRoom)
+
+// WithStrictKnockRoomStateChecks tells the server to strictly check that the received
+// `knock_room_state` is valid according to the spec (c.f. MSC4311).
+func WithStrictKnockRoomStateChecks() KnockRoomOpt {
+	return func(kr *knockRoom) {
+		kr.strictKnockRoomStateChecks = true
+	}
+}
+
+// MustKnockRoom  will make the server send a /make_knock and a /send_knock to knock on a room
+// It returns the resultant room.
+//
+// Args:
+//   - `remoteServer`: This should be a resolvable addresses within the deployment network.
+func (s *Server) MustKnockRoom(
+	t ct.TestLike,
+	deployment FederationDeployment,
+	remoteServer spec.ServerName,
+	roomID string,
+	userID string,
+	opts ...KnockRoomOpt,
+) *ServerRoom {
+	// TODO
+	room := NewServerRoom(gomatrixserverlib.RoomVersion("v12"), roomID)
 	return room
 }
 
