@@ -1462,8 +1462,6 @@ func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 // Alice will invite Bob. Bob's server should receive full PDUs in
 // `invite_room_state`/`knock_room_state` (stripped state) over the federation API's
 // according to MSC4311.
-//
-// TODO: Test `knock_room_state`
 func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
 	deployment := complement.Deploy(t, 1)
