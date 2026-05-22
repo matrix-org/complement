@@ -18,6 +18,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"sync"
@@ -26,6 +27,7 @@ import (
 	"github.com/matrix-org/gomatrix"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
 	"github.com/gorilla/mux"
@@ -35,6 +37,9 @@ import (
 	"github.com/matrix-org/complement/config"
 	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/internal"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/should"
 )
 
 // Subset of Deployment used in federation
@@ -64,8 +69,9 @@ type Server struct {
 
 	directoryHandlerSetup bool
 	aliases               map[string]string
-	rooms                 map[string]*ServerRoom
-	keyRing               *gomatrixserverlib.KeyRing
+	// List of rooms known to this server
+	rooms   map[string]*ServerRoom
+	keyRing *gomatrixserverlib.KeyRing
 }
 
 // EXPERIMENTAL
@@ -471,8 +477,68 @@ func (s *Server) MustKnockRoom(
 	userID string,
 	opts ...KnockRoomOpt,
 ) *ServerRoom {
-	// TODO
-	room := NewServerRoom(gomatrixserverlib.RoomVersion("v12"), roomID)
+	t.Helper()
+	var kr knockRoom
+	for _, opt := range opts {
+		opt(&kr)
+	}
+
+	origin := spec.ServerName(s.serverName)
+	fedClient := s.FederationClient(deployment)
+
+	makeKnockResp, err := fedClient.MakeKnock(context.Background(), origin, remoteServer, roomID, userID, SupportedRoomVersions())
+	if err != nil {
+		ct.Fatalf(t, "MustKnockRoom: make_knock failed: %v", err)
+	}
+
+	verImpl, err := gomatrixserverlib.GetRoomVersion(makeKnockResp.RoomVersion)
+	if err != nil {
+		ct.Fatalf(t, "MustKnockRoom: invalid room version: %v", err)
+	}
+
+	stateKey := userID
+	makeKnockResp.KnockEvent.SenderID = userID
+	makeKnockResp.KnockEvent.StateKey = &stateKey
+
+	eb := verImpl.NewEventBuilderFromProtoEvent(&makeKnockResp.KnockEvent)
+	knockEvent, err := eb.Build(time.Now(), origin, s.KeyID, s.Priv)
+	if err != nil {
+		ct.Fatalf(t, "MustKnockRoom: failed to sign event: %v", err)
+	}
+
+	// FIXME: Use `fedClient.SendKnock()` once it supports full PDU's vs stripped state
+	sendKnockPath := "/_matrix/federation/v1/send_knock/" + url.PathEscape(roomID) + "/" + url.PathEscape(knockEvent.EventID())
+	sendKnockReq := fclient.NewFederationRequest("PUT", origin, remoteServer, sendKnockPath)
+	if err := sendKnockReq.SetContent(knockEvent); err != nil {
+		ct.Fatalf(t, "MustKnockRoom: failed to set send_knock content: %v", err)
+	}
+	var rawResponse json.RawMessage
+	if err := s.SendFederationRequest(context.Background(), t, deployment, sendKnockReq, &rawResponse); err != nil {
+		ct.Fatalf(t, "MustKnockRoom: send_knock failed: %v", err)
+	}
+	knockResponse := gjson.ParseBytes(rawResponse)
+
+	// Strictly check that the received `knock_room_state` is valid according to the spec
+	// (c.f. MSC4311).
+	if kr.strictKnockRoomStateChecks {
+		must.MatchGJSON(t, knockResponse,
+			match.JSONArraySome("knock_room_state", func(event gjson.Result) error {
+				// MSC4311 also mandates that `m.room.create` event is required
+				return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
+			}),
+			match.JSONArrayEach("knock_room_state", func(event gjson.Result) error {
+				// Each event should have extra fields `origin_server_ts` that indicate we're
+				// seeing a full PDU and not just a "stripped state event"
+				return should.MatchGJSON(event, match.JSONKeyPresent("origin_server_ts"))
+			}),
+		)
+	}
+
+	room := NewServerRoom(makeKnockResp.RoomVersion, roomID)
+	s.rooms[room.RoomID] = room
+
+	t.Logf("Server.MustKnockRoom knocked on room ID %s", room.RoomID)
+
 	return room
 }
 

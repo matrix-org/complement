@@ -1381,7 +1381,7 @@ func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 					// Then assert that we see the proper `invite_state`
 					syncInviteStateJSONFieldKey := fmt.Sprintf("rooms.invite.%s.invite_state.events", client.GjsonEscape(roomID))
 					err := should.MatchGJSON(topLevelSyncJSON,
-						JSONArraySome(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
+						match.JSONArraySome(syncInviteStateJSONFieldKey, func(event gjson.Result) error {
 							// MSC4311 mandates that `m.room.create` event is required in `invite_state`
 							return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
 						}),
@@ -1436,7 +1436,7 @@ func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 					// Then assert that we see the proper `knock_state`
 					syncKnockStateJSONFieldKey := fmt.Sprintf("rooms.knock.%s.knock_state.events", client.GjsonEscape(roomID))
 					err := should.MatchGJSON(topLevelSyncJSON,
-						JSONArraySome(syncKnockStateJSONFieldKey, func(event gjson.Result) error {
+						match.JSONArraySome(syncKnockStateJSONFieldKey, func(event gjson.Result) error {
 							// MSC4311 mandates that `m.room.create` event is required in `knock_state`
 							return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
 						}),
@@ -1509,9 +1509,9 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 
 				// Check to make sure the `invite_room_state` includes full PDUs (the main MSC4311
 				// behavior we're trying to test)
-				inviteRequest := gjson.ParseBytes(fr.Content())
-				must.MatchGJSON(t, inviteRequest,
-					JSONArraySome("invite_room_state", func(event gjson.Result) error {
+				inviteResponse := gjson.ParseBytes(fr.Content())
+				must.MatchGJSON(t, inviteResponse,
+					match.JSONArraySome("invite_room_state", func(event gjson.Result) error {
 						// MSC4311 also mandates that `m.room.create` event is required
 						return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
 					}),
@@ -1524,8 +1524,8 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 				inviteWaiter.Finish()
 
 				// Craft a response that we can return
-				rawRoomVersion := inviteRequest.Get("room_version").Raw
-				rawInviteEventJson := inviteRequest.Get("event").Raw
+				rawRoomVersion := inviteResponse.Get("room_version").Raw
+				rawInviteEventJson := inviteResponse.Get("event").Raw
 				// Sign the event
 				var roomVersion gomatrixserverlib.RoomVersion
 				if err := json.Unmarshal([]byte(rawRoomVersion), &roomVersion); err != nil {
@@ -1601,37 +1601,9 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 				// This does the heavy lifting for us
 				federation.WithStrictKnockRoomStateChecks(),
 			)
+
+			// Sanity check bob actually knocked on the room
+			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncKnockedOn(bob, roomID))
 		})
 	})
-}
-
-// JSONArraySome returns a matcher which will check that `wantKey` is an array then
-// loops over each item calling `fn`. If `fn` returns nil, the matcher is satisifed,
-// iterating stops and we return.
-//
-// Will fail if the array is empty and the check never runs
-func JSONArraySome(wantKey string, fn func(gjson.Result) error) match.JSON {
-	return func(body gjson.Result) error {
-		if wantKey != "" {
-			body = body.Get(wantKey)
-		}
-
-		if !body.Exists() {
-			return fmt.Errorf("JSONArraySome: missing key '%s'", wantKey)
-		}
-		if !body.IsArray() {
-			return fmt.Errorf("JSONArraySome: key '%s' is not an array", wantKey)
-		}
-		var satisifed bool = false
-		body.ForEach(func(_, val gjson.Result) bool {
-			err := fn(val)
-			satisifed = err != nil
-			// Stop iterating when we find a non-error
-			return !satisifed
-		})
-		if !satisifed {
-			return fmt.Errorf("JSONArraySome('%s'): unable to find item that satisfies check", wantKey)
-		}
-		return nil
-	}
 }
