@@ -268,14 +268,14 @@ func (c *CSAPI) LeaveRoom(t ct.TestLike, roomID string) *http.Response {
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, WithJSONBody(t, body))
 }
 
-// InviteRoom invites userID to the room ID, else fails the test.
+// MustInviteRoom invites userID to the room ID, else fails the test.
 func (c *CSAPI) MustInviteRoom(t ct.TestLike, roomID string, userID string) {
 	t.Helper()
 	res := c.InviteRoom(t, roomID, userID)
 	mustRespond2xx(t, res)
 }
 
-// InviteRoom invites userID to the room ID, else fails the test.
+// InviteRoom invites userID to the room ID.
 func (c *CSAPI) InviteRoom(t ct.TestLike, roomID string, userID string) *http.Response {
 	t.Helper()
 	// Invite the user to the room
@@ -283,6 +283,39 @@ func (c *CSAPI) InviteRoom(t ct.TestLike, roomID string, userID string) *http.Re
 		"user_id": userID,
 	}
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
+}
+
+// MustKnockRoom will cause userID to knock on the room ID, else fails the test.
+//
+// Args:
+//   - `serverNames`: The list of servers to attempt to knock on the room through.
+//     These should be a resolvable addresses within the deployment network.
+func (c *CSAPI) MustKnockRoom(t ct.TestLike, roomID string, serverNames []spec.ServerName) {
+	t.Helper()
+	res := c.KnockRoom(t, roomID, serverNames)
+	mustRespond2xx(t, res)
+}
+
+// KnockRoom will cause userID to knock on the room ID.
+//
+// Args:
+//   - `serverNames`: The list of servers to attempt to knock on the room through.
+//     These should be a resolvable addresses within the deployment network.
+func (c *CSAPI) KnockRoom(t ct.TestLike, roomID string, serverNames []spec.ServerName) *http.Response {
+	t.Helper()
+	// construct URL query parameters
+	serverNameStrings := make([]string, len(serverNames))
+	for i, serverName := range serverNames {
+		serverNameStrings[i] = string(serverName)
+	}
+	query := url.Values{
+		"via": serverNameStrings,
+	}
+	// User knocks on the room
+	return c.Do(
+		t, "POST", []string{"_matrix", "client", "v3", "knock", roomID},
+		WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
+	)
 }
 
 func (c *CSAPI) MustGetGlobalAccountData(t ct.TestLike, eventType string) *http.Response {
