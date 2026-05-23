@@ -1358,16 +1358,24 @@ func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 	remote := deployment.Register(t, "hs2", helpers.RegistrationOpts{LocalpartSuffix: "remote"})
 
 	t.Run("parallel", func(t *testing.T) {
-		t.Run("`invite_state` on `/sync`", func(t *testing.T) {
-			t.Parallel()
+		for _, testCase := range []struct {
+			label string
+			csapi *client.CSAPI
+		}{
+			{"local", local},
+			{"remote", remote},
+		} {
+			t.Run(fmt.Sprintf("`invite_state` on `/sync` (%s invite)", testCase.label), func(t *testing.T) {
+				t.Parallel()
 
-			// Alice creates a room
-			roomID := alice.MustCreateRoom(t, map[string]interface{}{
-				"room_version": roomVersion12,
-				"preset":       "public_chat",
-			})
+				target := testCase.csapi
 
-			for _, target := range []*client.CSAPI{local, remote} {
+				// Alice creates a room
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{
+					"room_version": roomVersion12,
+					"preset":       "public_chat",
+				})
+
 				t.Logf("checking %s", target.UserID)
 				alice.MustInviteRoom(t, roomID, target.UserID)
 
@@ -1399,28 +1407,36 @@ func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 					return nil
 				})
 
-			}
-		})
+			})
+		}
 
-		t.Run("`knock_state` on `/sync`", func(t *testing.T) {
-			t.Parallel()
+		for _, testCase := range []struct {
+			label string
+			csapi *client.CSAPI
+		}{
+			{"local", local},
+			{"remote", remote},
+		} {
+			t.Run(fmt.Sprintf("`knock_state` on `/sync` (%s knock)", testCase.label), func(t *testing.T) {
+				t.Parallel()
 
-			// Alice creates a room
-			roomID := alice.MustCreateRoom(t, map[string]interface{}{
-				"room_version": roomVersion12,
-				"preset":       "private_chat",
-				"initial_state": []map[string]interface{}{
-					{
-						"type":      "m.room.join_rules",
-						"state_key": "",
-						"content": map[string]interface{}{
-							"join_rule": "knock",
+				target := testCase.csapi
+
+				// Alice creates a room
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{
+					"room_version": roomVersion12,
+					"preset":       "private_chat",
+					"initial_state": []map[string]interface{}{
+						{
+							"type":      "m.room.join_rules",
+							"state_key": "",
+							"content": map[string]interface{}{
+								"join_rule": "knock",
+							},
 						},
 					},
-				},
-			})
+				})
 
-			for _, target := range []*client.CSAPI{local, remote} {
 				t.Logf("checking %s", target.UserID)
 				target.MustKnockRoom(t, roomID, []spec.ServerName{
 					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
@@ -1454,8 +1470,8 @@ func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 					return nil
 				})
 
-			}
-		})
+			})
+		}
 	})
 }
 
