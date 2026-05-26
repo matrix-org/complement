@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -1618,6 +1619,87 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 
 			// Sanity check bob actually knocked on the room
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncKnockedOn(bob, roomID))
+		})
+	})
+}
+
+// Test to make sure your homeserver implementation rejects invites which have
+// invalid `invite_room_state`.
+//
+// > If any of the events are not a PDU, not for the room ID specified, or fail
+// > signature checks, or the `m.room.create` event is missing, the receiving
+// > server MAY respond to invites with a `400 M_MISSING_PARAM` standard Matrix
+// > error (new to the endpoint). For invites to room version 12+ rooms, servers
+// > SHOULD rather than MAY respond to such requests with `400 M_MISSING_PARAM`.
+func TestMSC4311RejectInvalidStrippedStateFederation(t *testing.T) {
+	runtime.SkipIf(t, runtime.Synapse)  // FIXME: Run these tests after 2027-06-01
+	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice"})
+
+	// In these tests, Bob (on engineered homeserver) invites Alice over federation.
+	// Alice's server should reject the invite request because of the (the tested reason)
+	// and should respond with a `400 M_MISSING_PARAM` response.
+	t.Run("parallel", func(t *testing.T) {
+		// TODO: Test events not full PDU's
+
+		// TODO: Test events not from the same room
+
+		// TODO: Test invalid signatures/hashes
+
+		// Test `m.room.create` event missing from `invite_room_state`
+		t.Run("`m.room.create` event missing from `invite_room_state`", func(t *testing.T) {
+			t.Parallel()
+
+			// Create an engineered homeserver that will invite Alice
+			srv := federation.NewServer(t, deployment,
+				federation.HandleKeyRequests(),
+			)
+			cancel := srv.Listen()
+			defer cancel()
+
+			// Bob creates a room
+			roomVersion := gomatrixserverlib.RoomVersion("12")
+			bob := srv.UserID("bob")
+			initalEvents := federation.InitialRoomEvents(roomVersion, bob)
+			room := srv.MustMakeRoom(t, roomVersion, initalEvents)
+
+			// Bob invites Alice to the room
+			//
+			// Create the invite event
+			inviteEvent := srv.MustCreateEvent(t, room, federation.Event{
+				Type:     "m.room.member",
+				StateKey: &alice.UserID,
+				Sender:   bob,
+				Content: map[string]interface{}{
+					"membership": "invite",
+				},
+			})
+			// Send the invite request.
+			//
+			// There is `fclient.NewInviteV2Request(...)` (but it doesn't support full PDU's
+			// yet) and `fedClient.SendInviteV2(...)` but we want to be able to inspect the
+			// HTTP status code and `errcode` of the response.
+			sendInvitePath := "/_matrix/federation/v2/invite/" + url.PathEscape(room.RoomID) + "/" + url.PathEscape(inviteEvent.EventID())
+			sendInviteReq := fclient.NewFederationRequest("PUT", srv.ServerName(), deployment.GetFullyQualifiedHomeserverName(t, "hs1"), sendInvitePath)
+			err := sendInviteReq.SetContent(map[string]interface{}{
+				"event": inviteEvent,
+				// Doesn't include `m.room.create` (the thing we're testing)
+				"invite_room_state": []map[string]interface{}{},
+				"room_version":      roomVersion,
+			})
+			must.NotError(t, "Failed to set invite request body", err)
+			res, err := srv.DoFederationRequest(context.Background(), t, deployment, sendInviteReq)
+			must.NotError(t, "Failed to send federation request for invite", err)
+			// Expect `400 M_MISSING_PARAM` response
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 400,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_MISSING_PARAM"),
+				},
+			})
 		})
 	})
 }
