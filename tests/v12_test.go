@@ -1341,7 +1341,9 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 }
 
 // MSC4311 mandates that `m.room.create` is a required event in
-// `invite_state`/`knock_state` (stripped state) in `/sync responses.
+// `invite_state`/`knock_state` (stripped state) in `/sync responses. MSC4311 applies
+// retroactively to any room versions but we're testing room version 12 as it *SHOULD*
+// be expected and enforced instead of *MAY*.
 //
 // MSC4311 also mentions `invite_room_state`/`knock_room_state` on `m.room.member`
 // events but it doesn't seem possible to view this information from the client API's.
@@ -1479,6 +1481,9 @@ func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 // Alice will invite Bob. Bob's server should receive full PDUs in
 // `invite_room_state`/`knock_room_state` (stripped state) over the federation API's
 // according to MSC4311.
+//
+// MSC4311 applies retroactively to any room versions but we're testing room version 12
+// as it *SHOULD* be expected and enforced instead of *MAY*.
 func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
 	deployment := complement.Deploy(t, 1)
@@ -1631,6 +1636,9 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 // > server MAY respond to invites with a `400 M_MISSING_PARAM` standard Matrix
 // > error (new to the endpoint). For invites to room version 12+ rooms, servers
 // > SHOULD rather than MAY respond to such requests with `400 M_MISSING_PARAM`.
+//
+// MSC4311 applies retroactively to any room versions but we're testing room version 12
+// as it *SHOULD* reject instead of *MAY*.
 func TestMSC4311RejectInvalidStrippedStateFederation(t *testing.T) {
 	runtime.SkipIf(t, runtime.Synapse)  // FIXME: Run these tests after 2027-06-01
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
