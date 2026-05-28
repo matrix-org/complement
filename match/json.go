@@ -328,7 +328,7 @@ func JSONArraySome(wantKey string, fn func(gjson.Result) error) JSON {
 		var satisfied bool = false
 		body.ForEach(func(_, val gjson.Result) bool {
 			err := fn(val)
-			satisfied = err != nil
+			satisfied = err == nil
 			// Stop iterating when we find a non-error
 			return !satisfied
 		})
