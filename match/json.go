@@ -325,14 +325,14 @@ func JSONArraySome(wantKey string, fn func(gjson.Result) error) JSON {
 		if !body.IsArray() {
 			return fmt.Errorf("JSONArraySome: key '%s' is not an array", wantKey)
 		}
-		var satisifed bool = false
+		var satisfied bool = false
 		body.ForEach(func(_, val gjson.Result) bool {
 			err := fn(val)
-			satisifed = err != nil
+			satisfied = err != nil
 			// Stop iterating when we find a non-error
-			return !satisifed
+			return !satisfied
 		})
-		if !satisifed {
+		if !satisfied {
 			return fmt.Errorf("JSONArraySome('%s'): unable to find item that satisfies check", wantKey)
 		}
 		return nil
