@@ -62,7 +62,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			// above. A backward search at that millisecond inclusively returns
 			// the create event when the test wants 404. Pause long enough that
 			// every event the homeserver subsequently stamps is in a strictly
-			// later millisecond. See matrix-org/complement#868.
+			// later millisecond.
 			time.Sleep(tsBoundaryGuard)
 			roomID, _, _ := createTestRoom(t, alice)
 			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeRoomCreation, "b", "")
@@ -83,6 +83,11 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			as.MustJoinRoom(t, roomID, []spec.ServerName{
 				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			})
+
+			// Keep the join in an earlier millisecond than the messages below so
+			// it cannot win the boundary search; the topological tie-break is
+			// what this subtest actually exercises.
+			time.Sleep(tsBoundaryGuard)
 
 			// Send a couple messages with the same timestamp after the other test
 			// messages in the room.
@@ -105,6 +110,11 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			as.MustJoinRoom(t, roomID, []spec.ServerName{
 				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			})
+
+			// Keep the join in an earlier millisecond than the messages below so
+			// it cannot win the boundary search; the topological tie-break is
+			// what this subtest actually exercises.
+			time.Sleep(tsBoundaryGuard)
 
 			// Send a couple messages with the same timestamp after the other test
 			// messages in the room.
@@ -345,10 +355,10 @@ type eventTime struct {
 // returns the boundary event inclusively (forward picks the earliest event
 // with ts >= query, backward picks the latest with ts <= query), so a shared
 // millisecond between sample and event lets the wrong event win the boundary.
-// 2ms is well above the per-millisecond clock resolution every supported
-// platform exposes and short enough that the cost is invisible compared to a
-// homeserver round-trip. See matrix-org/complement#868.
-const tsBoundaryGuard = 2 * time.Millisecond
+// time.Sleep pauses for at least its argument, and adding a whole millisecond
+// to a timestamp always carries it into the next millisecond bucket, so 1ms is
+// enough to separate the sample from every event stamped after the pause.
+const tsBoundaryGuard = 1 * time.Millisecond
 
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
 	t.Helper()
@@ -362,7 +372,7 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 	// the trailing state event can share a millisecond with the time.Now()
 	// below. Pausing here pushes the sample past that boundary so a forward
 	// search anchored on timeBeforeEventA cannot land back on the createRoom
-	// state. See matrix-org/complement#868.
+	// state.
 	time.Sleep(tsBoundaryGuard)
 
 	timeBeforeEventA := time.Now()
@@ -375,6 +385,12 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 	})
 	timeAfterEventA := time.Now()
 
+	// eventB.BeforeTimestamp has to sit in a strictly later millisecond than
+	// eventA, otherwise a forward search anchored there could land back on
+	// eventA at a shared boundary millisecond. Nothing exercises this yet, but
+	// keep the helper honest for callers that eventually will.
+	time.Sleep(tsBoundaryGuard)
+	timeBeforeEventB := time.Now()
 	eventBID := c.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
@@ -385,7 +401,7 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 	timeAfterEventB := time.Now()
 
 	eventA = &eventTime{EventID: eventAID, BeforeTimestamp: timeBeforeEventA, AfterTimestamp: timeAfterEventA}
-	eventB = &eventTime{EventID: eventBID, BeforeTimestamp: timeAfterEventA, AfterTimestamp: timeAfterEventB}
+	eventB = &eventTime{EventID: eventBID, BeforeTimestamp: timeBeforeEventB, AfterTimestamp: timeAfterEventB}
 
 	return roomID, eventA, eventB
 }
