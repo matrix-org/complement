@@ -56,13 +56,8 @@ func TestJumpToDateEndpoint(t *testing.T) {
 		t.Run("should find nothing before the earliest timestamp", func(t *testing.T) {
 			t.Parallel()
 			timeBeforeRoomCreation := time.Now()
-			// /timestamp_to_event is millisecond-granular by spec, and the next
-			// call (createTestRoom) writes an m.room.create whose
-			// origin_server_ts can land in the same millisecond as the sample
-			// above. A backward search at that millisecond inclusively returns
-			// the create event when the test wants 404. Pause long enough that
-			// every event the homeserver subsequently stamps is in a strictly
-			// later millisecond.
+			// Guard so createRoom cannot share this sample's millisecond; a
+			// backward search there would return m.room.create instead of nothing.
 			time.Sleep(tsBoundaryGuard)
 			roomID, _, _ := createTestRoom(t, alice)
 			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeRoomCreation, "b", "")
@@ -84,9 +79,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			})
 
-			// Keep the join in an earlier millisecond than the messages below so
-			// it cannot win the boundary search; the topological tie-break is
-			// what this subtest actually exercises.
+			// Guard so the join cannot share a millisecond with the messages below.
 			time.Sleep(tsBoundaryGuard)
 
 			// Send a couple messages with the same timestamp after the other test
@@ -111,9 +104,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			})
 
-			// Keep the join in an earlier millisecond than the messages below so
-			// it cannot win the boundary search; the topological tie-break is
-			// what this subtest actually exercises.
+			// Guard so the join cannot share a millisecond with the messages below.
 			time.Sleep(tsBoundaryGuard)
 
 			// Send a couple messages with the same timestamp after the other test
@@ -379,6 +370,8 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 		},
 	})
 
+	// timeBeforeEventB doubles as eventA's after-timestamp, so guard it on
+	// both sides to keep it between the two events.
 	time.Sleep(tsBoundaryGuard)
 	timeBeforeEventB := time.Now()
 	time.Sleep(tsBoundaryGuard)
