@@ -141,23 +141,34 @@ func (s *server) WithWaitForLeave(
 	)
 	defer removePDUHandler()
 
-	leaveAction()
-
+	// `WithWaitForLeave` expects the user to be in the room and to leave as a
+	// result of the action, so that the leave arrives as a PDU our handler
+	// matches. Snapshot the membership *before* the action: if the user has
+	// already left, no such PDU is coming, which is a test bug rather than
+	// something to wait for.
 	memberEvent := room.CurrentState("m.room.member", userID)
-	membership := ""
+	membership := "leave"
 	if memberEvent != nil {
 		membership, _ = memberEvent.Membership()
 	}
-	if membership == "leave" {
-		t.Logf("%s has already seen %s leave test room %s.", s.ServerName(), userID, room.RoomID)
-	} else {
-		select {
-		case <-leaveChannel:
-			t.Logf("%s saw %s leave test room %s.", s.ServerName(), userID, room.RoomID)
-			break
-		case <-time.After(1 * time.Second):
-			t.Errorf("%s timed out waiting for %s to leave test room %s.", s.ServerName(), userID, room.RoomID)
-		}
+	alreadyLeft := membership == "leave"
+	if alreadyLeft {
+		t.Errorf("%s: %s had already left test room %s before WithWaitForLeave ran.", s.ServerName(), userID, room.RoomID)
+	}
+
+	leaveAction()
+
+	// Wait on the channel fed by our PDU handler rather than polling
+	// `room.CurrentState`: the room's current state is updated (by
+	// `room.AddEvent`) *before* the PDU callback runs, so returning on a
+	// `CurrentState` check could deregister our handler in the window before
+	// the callback fires, making the (expected) leave look unexpected to
+	// `HandleTransactionRequests`.
+	select {
+	case <-leaveChannel:
+		t.Logf("%s saw %s leave test room %s.", s.ServerName(), userID, room.RoomID)
+	case <-time.After(1 * time.Second):
+		t.Errorf("%s timed out waiting for %s to leave test room %s.", s.ServerName(), userID, room.RoomID)
 	}
 }
 
