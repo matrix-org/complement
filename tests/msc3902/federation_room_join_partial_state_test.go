@@ -153,7 +153,7 @@ func (s *server) WithWaitForLeave(
 	}
 	alreadyLeft := membership == "leave"
 	if alreadyLeft {
-		t.Errorf("%s: %s had already left test room %s before WithWaitForLeave ran.", s.ServerName(), userID, room.RoomID)
+		t.Fatalf("%s: %s had already left test room %s before WithWaitForLeave ran.", s.ServerName(), userID, room.RoomID)
 	}
 
 	leaveAction()
