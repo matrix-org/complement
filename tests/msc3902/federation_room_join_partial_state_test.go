@@ -128,6 +128,10 @@ func (s *server) WithWaitForLeave(
 	t *testing.T, room *federation.ServerRoom, userID string, leaveAction func(),
 ) {
 	leaveChannel := make(chan gomatrixserverlib.PDU, 10)
+
+	// Register a PDU handler to make it so that we 'expect' the leave event
+	// Without this PDU handler being registered, the test fails upon encountering
+	// the unexpected leave event.
 	removePDUHandler := s.AddPDUHandler(
 		func(e gomatrixserverlib.PDU) bool {
 			if membership, _ := e.Membership(); e.Type() == "m.room.member" &&
@@ -141,23 +145,33 @@ func (s *server) WithWaitForLeave(
 	)
 	defer removePDUHandler()
 
+	// HAZARD: Check state _before_ triggering the `leaveAction`.
+	//
+	// If we trigger the `leaveAction` first, it's possible for the leave to proceed quickly enough that
+	// the current state gets updated _before_ we start waiting for the PDU handler to fire,
+	// leading us to remove the PDU handler and trigger the 'unhandled PDU' test failure.
+	memberEvent := room.CurrentState("m.room.member", userID)
+	if memberEvent == nil {
+		// NOTE: despite the test server not having a view of the membership yet, the
+		// `TestPartialStateJoin/Outgoing_device_list_updates/Device_list_updates_reach_newly_joined_servers_in_partial_state_rooms`
+		// test still relies on the `leaveAction` being triggered here.
+		t.Logf("WithWaitForLeave: %s has no membership in room %s, from the perspective of %s.", userID, room.RoomID, s.ServerName())
+	} else {
+		membership, _ := memberEvent.Membership()
+		if membership == "leave" {
+			t.Logf("WithWaitForLeave: %s has already left test room %s, from the perspective of %s.", userID, room.RoomID, s.ServerName())
+			return
+		}
+	}
+
 	leaveAction()
 
-	memberEvent := room.CurrentState("m.room.member", userID)
-	membership := ""
-	if memberEvent != nil {
-		membership, _ = memberEvent.Membership()
-	}
-	if membership == "leave" {
-		t.Logf("%s has already seen %s leave test room %s.", s.ServerName(), userID, room.RoomID)
-	} else {
-		select {
-		case <-leaveChannel:
-			t.Logf("%s saw %s leave test room %s.", s.ServerName(), userID, room.RoomID)
-			break
-		case <-time.After(1 * time.Second):
-			t.Errorf("%s timed out waiting for %s to leave test room %s.", s.ServerName(), userID, room.RoomID)
-		}
+	select {
+	case <-leaveChannel:
+		t.Logf("%s saw %s leave test room %s.", s.ServerName(), userID, room.RoomID)
+		break
+	case <-time.After(1 * time.Second):
+		t.Errorf("%s timed out waiting for %s to leave test room %s.", s.ServerName(), userID, room.RoomID)
 	}
 }
 
@@ -2232,7 +2246,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 		// test that device list updates are sent to the remote homeservers listed in the
 		// `/send_join` response in a room with partial state.
-		t.Run("Device list updates reach all servers in partial state rooms", func(t *testing.T) {
+		t.Run("Device list updates reach all servers in partial state rooms", func(t *testing.T) { // FAILS
 			alice, server1, server2, deviceListUpdateChannel1, deviceListUpdateChannel2, room, cleanup := setupOutgoingDeviceListUpdateTest(t, deployment, "t23alice")
 			defer cleanup()
 

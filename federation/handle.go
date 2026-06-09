@@ -568,6 +568,8 @@ func HandleTransactionRequests(pduCallback func(gomatrixserverlib.PDU), eduCallb
 				// Add this PDU as a success to the response
 				response.PDUs[event.EventID()] = fclient.PDUResult{}
 
+				/////// <--- Interrupted
+
 				// Run the PDU callback function with this event
 				if pduCallback != nil {
 					pduCallback(event)
