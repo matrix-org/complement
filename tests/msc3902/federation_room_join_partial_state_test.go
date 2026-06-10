@@ -123,10 +123,15 @@ func (s *server) AddEDUHandler(eduHandler func(gomatrixserverlib.EDU) bool) func
 	}
 }
 
-// WithWaitForLeave runs the given action and waits for the user to leave the room.
+// WithWaitForLeave runs the given action and, when the resulting leave is
+// expected to reach this server, waits for it. `leaveAction` is always run; the
+// wait is skipped when `user` had already left the room (per their own
+// homeserver, so the action produces no new leave) or when this server isn't in
+// the room (so the leave won't be federated to us).
 func (s *server) WithWaitForLeave(
-	t *testing.T, room *federation.ServerRoom, userID string, leaveAction func(),
+	t *testing.T, room *federation.ServerRoom, user *client.CSAPI, leaveAction func(),
 ) {
+	userID := user.UserID
 	leaveChannel := make(chan gomatrixserverlib.PDU, 10)
 	removePDUHandler := s.AddPDUHandler(
 		func(e gomatrixserverlib.PDU) bool {
@@ -141,35 +146,72 @@ func (s *server) WithWaitForLeave(
 	)
 	defer removePDUHandler()
 
-	// `WithWaitForLeave` expects the user to be in the room and to leave as a
-	// result of the action, so that the leave arrives as a PDU our handler
-	// matches. Snapshot the membership *before* the action: if the user has
-	// already left, no such PDU is coming, which is a test bug rather than
-	// something to wait for.
-	memberEvent := room.CurrentState("m.room.member", userID)
-	membership := "leave"
-	if memberEvent != nil {
-		membership, _ = memberEvent.Membership()
-	}
-	alreadyLeft := membership == "leave"
-	if alreadyLeft {
-		t.Fatalf("%s: %s had already left test room %s before WithWaitForLeave ran.", s.ServerName(), userID, room.RoomID)
-	}
+	// We need to check if the user (on their homeserver) thinks they're in the
+	// room, before performing the `leaveAction` (to avoid races). If they are
+	// in the room we need to wait until the server sees the leave, but if they
+	// aren't no leave event will be sent out.
+	userInRoom := userIsJoinedTo(t, user, room.RoomID)
 
 	leaveAction()
 
-	// Wait on the channel fed by our PDU handler rather than polling
+	if !userInRoom {
+		// The user had already left, so the action produced no new leave and
+		// none is coming: don't wait.
+		t.Logf("%s is not joined to test room %s; not waiting for them to leave.", userID, room.RoomID)
+		return
+	}
+
+	if !s.isInRoom(room) {
+		// The homeserver only federates the leave to servers that are in the
+		// room. If we aren't, no leave PDU is coming to us, so don't block until
+		// the timeout.
+		t.Logf("%s is not in test room %s; not waiting for %s to leave.", s.ServerName(), room.RoomID, userID)
+		return
+	}
+
+	// Otherwise the action triggered the leave, which arrives as a PDU our
+	// handler matches. Wait on its channel rather than polling
 	// `room.CurrentState`: the room's current state is updated (by
 	// `room.AddEvent`) *before* the PDU callback runs, so returning on a
-	// `CurrentState` check could deregister our handler in the window before
-	// the callback fires, making the (expected) leave look unexpected to
-	// `HandleTransactionRequests`.
+	// `CurrentState` check could deregister our handler in the window before the
+	// callback fires, making the (expected) leave look unexpected to
+	// `HandleTransactionRequests`. This returns as soon as the leave arrives; the
+	// timeout is only a ceiling for declaring failure.
 	select {
 	case <-leaveChannel:
 		t.Logf("%s saw %s leave test room %s.", s.ServerName(), userID, room.RoomID)
 	case <-time.After(1 * time.Second):
 		t.Errorf("%s timed out waiting for %s to leave test room %s.", s.ServerName(), userID, room.RoomID)
 	}
+}
+
+// isInRoom reports whether this Complement server has a joined user in the room,
+// according to its own `ServerRoom` view. The server reliably tracks its own
+// users' membership (it created their join/leave events), so this answers "will
+// the homeserver federate events in this room to us?".
+func (s *server) isInRoom(room *federation.ServerRoom) bool {
+	for _, serverInRoom := range room.ServersInRoom() {
+		if serverInRoom == s.ServerName() {
+			return true
+		}
+	}
+	return false
+}
+
+// userIsJoinedTo reports whether the user is currently joined to the room,
+// according to the user's own homeserver. This is the authoritative answer to
+// "will a leave still be sent?", unlike a Complement server's local `ServerRoom`
+// view which may not track the user's membership at all.
+func userIsJoinedTo(t *testing.T, user *client.CSAPI, roomID string) bool {
+	t.Helper()
+	res := user.MustDo(t, "GET", []string{"_matrix", "client", "v3", "joined_rooms"})
+	joinedRooms := gjson.ParseBytes(client.ParseJSON(t, res)).Get("joined_rooms")
+	for _, joinedRoom := range joinedRooms.Array() {
+		if joinedRoom.Str == roomID {
+			return true
+		}
+	}
+	return false
 }
 
 // Wait for the server to receive the event with given event ID.
@@ -2260,7 +2302,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			// @t23alice:hs1 joins the room.
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
-			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
+			defer server2.WithWaitForLeave(t, server2Room, alice, func() { psjResult.Destroy(t) })
 
 			// Both homeservers should receive device list updates.
 			renameDevice(t, alice, "A new device name 1")
@@ -2307,7 +2349,7 @@ func TestPartialStateJoin(t *testing.T) {
 			)
 			// NB: We register the `psjResult.Destroy()` cleanup twice. This is alright because it
 			//     is idempotent. Here we wait for server 2 to observe the leave too.
-			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
+			defer server2.WithWaitForLeave(t, server2Room, alice, func() { psjResult.Destroy(t) })
 			joinEvent := room.CurrentState("m.room.member", server2.UserID("elsie"))
 			server1.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{joinEvent.JSON()}, nil)
 			awaitEventViaSync(t, alice, room.RoomID, joinEvent.EventID(), "")
@@ -2484,7 +2526,7 @@ func TestPartialStateJoin(t *testing.T) {
 			syncToken = awaitEventViaSync(t, alice, partialStateRoom.RoomID, leaveEvent.EventID(), syncToken)
 
 			leaveSharedRoom = func() {
-				server2.WithWaitForLeave(t, server2Room, alice.UserID, func() {
+				server2.WithWaitForLeave(t, server2Room, alice, func() {
 					alice.MustLeaveRoom(t, roomID)
 				})
 			}
@@ -2544,7 +2586,7 @@ func TestPartialStateJoin(t *testing.T) {
 			// @t26alice:hs1 joins the room, followed by @elsie:server2.
 			// @elsie:server2 is kicked with an invalid event.
 			syncToken, server2Room, psjResult := setupIncorrectlyAcceptedKick(t, deployment, alice, server1, server2, deviceListUpdateChannel1, deviceListUpdateChannel2, room)
-			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
+			defer server2.WithWaitForLeave(t, server2Room, alice, func() { psjResult.Destroy(t) })
 
 			// @t26alice:hs1 sends out a device list update which is missed by @elsie:server2.
 			// @elsie:server2 must receive missed device list updates once the partial state join finishes.
@@ -2604,7 +2646,7 @@ func TestPartialStateJoin(t *testing.T) {
 				federation.WithPartialState(),
 			)
 			psjResult := beginPartialStateJoin(t, server1, room, alice)
-			defer server2.WithWaitForLeave(t, server2Room, alice.UserID, func() { psjResult.Destroy(t) })
+			defer server2.WithWaitForLeave(t, server2Room, alice, func() { psjResult.Destroy(t) })
 
 			// @t28alice:hs1 sends out a device list update which is missed by @elsie:server2.
 			// @elsie:server2 must receive missed device list updates once the partial state join finishes.
@@ -3007,7 +3049,7 @@ func TestPartialStateJoin(t *testing.T) {
 				},
 				client.SyncJoinedTo(server.UserID("charlie"), otherRoomID),
 			)
-			defer server.WithWaitForLeave(t, otherRoom, alice.UserID, func() { alice.MustLeaveRoom(t, otherRoomID) })
+			defer server.WithWaitForLeave(t, otherRoom, alice, func() { alice.MustLeaveRoom(t, otherRoomID) })
 
 			// Depending on the homeserver implementation, @t31alice:hs1 must have been told that either:
 			//  * charlie updated their device list, or
@@ -4433,7 +4475,7 @@ func (psj *partialStateJoinResult) Destroy(t *testing.T) {
 	psj.Server.WithWaitForLeave(
 		t,
 		psj.ServerRoom,
-		psj.User.UserID,
+		psj.User,
 		func() { psj.User.MustLeaveRoom(t, psj.ServerRoom.RoomID) },
 	)
 }
