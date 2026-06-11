@@ -199,9 +199,7 @@ func (s *server) isInRoom(room *federation.ServerRoom) bool {
 }
 
 // userIsJoinedTo reports whether the user is currently joined to the room,
-// according to the user's own homeserver. This is the authoritative answer to
-// "will a leave still be sent?", unlike a Complement server's local `ServerRoom`
-// view which may not track the user's membership at all.
+// according to the user's own homeserver.
 func userIsJoinedTo(t *testing.T, user *client.CSAPI, roomID string) bool {
 	t.Helper()
 	res := user.MustDo(t, "GET", []string{"_matrix", "client", "v3", "joined_rooms"})
