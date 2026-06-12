@@ -528,7 +528,61 @@ func (s *Server) Mux() *mux.Router {
 	return s.mux
 }
 
-// Listen for federation server requests - call the returned function to gracefully close the server.
+// Keep track of the ports that we've previously used so that we never use the same port
+// (and therefore the same `server_name`) to two different servers.
+//
+// A `Server` is identified over federation solely by its `server_name` (which looks
+// like `hostname:port` for these Complement engineered homeservers). When the OS recycles a
+// freed port, a new Server could otherwise get a `server_name` that is identical to a
+// previously torn-down one.
+//
+// To explain an actual situation where this becomes a problem: A real homeserver under
+// test (that is participating in a room with the now-dead engineered homeserver) might
+// still try to reach the dead server, but since the `server_name` is the same, it's now
+// hitting the new server unexpectedly (cross-test pollution).
+//
+// This particularly happens when you try to share a `deployment` across many tests and
+// then each test creates a engineered homeservers to interact against.
+//
+// Retiring each port for the lifetime of the process keeps stray requests pointed at a
+// dead port (connection refused) instead of a live, unrelated server.
+var (
+	usedPortsMu sync.Mutex
+	usedPorts   = make(map[int]struct{})
+)
+
+// listenOnUnusedPort listens on an OS-assigned high-numbered port that no federation Server has
+// used before in this process.
+func listenOnUnusedPort(t ct.TestLike) net.Listener {
+	usedPortsMu.Lock()
+	defer usedPortsMu.Unlock()
+
+	// Keep any already-claimed listeners open until we've found a fresh port, otherwise the OS
+	// could keep offering us a port we're about to reject.
+	var rejected []net.Listener
+	defer func() {
+		for _, ln := range rejected {
+			ln.Close()
+		}
+	}()
+
+	for attempt := 0; attempt < 100; attempt++ {
+		ln, err := net.Listen("tcp", ":0") //nolint
+		if err != nil {
+			ct.Fatalf(t, "listenOnUnusedPort: net.Listen failed: %s", err)
+		}
+		port := ln.Addr().(*net.TCPAddr).Port
+		if _, used := usedPorts[port]; used {
+			rejected = append(rejected, ln)
+			continue
+		}
+		usedPorts[port] = struct{}{}
+		return ln
+	}
+	ct.Fatalf(t, "listenOnUnusedPort: could not find an unused port after 100 attempts")
+	return nil
+}
+
 func (s *Server) Listen() (cancel func()) {
 	if s.listening {
 		return
@@ -536,10 +590,7 @@ func (s *Server) Listen() (cancel func()) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	ln, err := net.Listen("tcp", ":0") //nolint
-	if err != nil {
-		ct.Fatalf(s.t, "ListenFederationServer: net.Listen failed: %s", err)
-	}
+	ln := listenOnUnusedPort(s.t)
 	port := ln.Addr().(*net.TCPAddr).Port
 	s.serverName = spec.ServerName(fmt.Sprintf("%s:%d", s.serverName, port))
 	s.listening = true
