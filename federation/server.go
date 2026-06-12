@@ -566,7 +566,24 @@ func listenOnUnusedPort(t ct.TestLike) net.Listener {
 		}
 	}()
 
-	for attempt := 0; attempt < 100; attempt++ {
+	// We try the same number of times as the number of ports that have been previously
+	// used, as the OS could sequentially hand back the same ports and we need to find the
+	// next unused port.
+	max_attempts := len(usedPorts)
+	// Sanity check that we haven't already exhausted the entire port range
+	if max_attempts > 65535 {
+		// If this ever becomes a problem, we can namespace used ports by `deployment` since
+		// that has to be passed into `NewServer(...)` anyway
+		ct.Fatalf(
+			t, "listenOnUnusedPort: We've exhausted the whole port range 0 - 65,535. "+
+				"(see comment here if you run into this)",
+		)
+	}
+
+	for attempt := 0; attempt < max_attempts; attempt++ {
+		// This just gets us an unused port (could be random, could be the next sequential
+		// unused port, we don't know). Ideally, we could ask for the next unused port after
+		// N to avoid a bunch of work.
 		ln, err := net.Listen("tcp", ":0") //nolint
 		if err != nil {
 			ct.Fatalf(t, "listenOnUnusedPort: net.Listen failed: %s", err)
@@ -579,7 +596,7 @@ func listenOnUnusedPort(t ct.TestLike) net.Listener {
 		usedPorts[port] = struct{}{}
 		return ln
 	}
-	ct.Fatalf(t, "listenOnUnusedPort: could not find an unused port after 100 attempts")
+	ct.Fatalf(t, "listenOnUnusedPort: could not find an unused port after %s attempts", max_attempts)
 	return nil
 }
 
