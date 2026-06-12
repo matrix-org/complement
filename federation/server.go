@@ -588,8 +588,8 @@ func listenOnUnusedPort(t ct.TestLike) net.Listener {
 			// As another alternative, we could also wrap-around to the beginning of the port
 			// range again although that is slightly unsound.
 			ct.Fatalf(
-				t, "listenOnUnusedPort: We've exhausted the whole port range 0 - 65,535. "+
-					"(see comment here if you run into this)",
+				t, "listenOnUnusedPort: could not find an unused port in the entire port range (0 - 65535). "+
+					"(see comment here if you run into this). Last error: %s", lastErr,
 			)
 		}
 
@@ -604,7 +604,9 @@ func listenOnUnusedPort(t ct.TestLike) net.Listener {
 
 		return ln
 	}
-	ct.Fatalf(t, "listenOnUnusedPort: could not find an unused port in the entire port range (0 - 65535). Last error: %w", lastErr)
+	// Since we try the entire port range, we don't really expect to get here but we have
+	// it in case there is a programming error above
+	ct.Fatalf(t, "listenOnUnusedPort: Programming error")
 	return nil
 }
 
