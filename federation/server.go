@@ -574,9 +574,10 @@ func listenOnUnusedPort(t ct.TestLike) net.Listener {
 	// sequentially which would mean we would have to probe and hold each listener until
 	// we finally got something new.
 
-	// Try up to 1000 ports
-	attempts := 1000
-	for i := 0; i < attempts; i++ {
+	// Try the whole port range (untested but it's probably fast to do so)
+	max_attempts := 65535
+	var lastErr error
+	for i := 0; i < max_attempts; i++ {
 		port := lastUsedPort + 1
 		if port > 65535 {
 			// If this ever becomes a problem, we can namespace used ports by `deployment` since
@@ -596,13 +597,14 @@ func listenOnUnusedPort(t ct.TestLike) net.Listener {
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		lastUsedPort = port
 		if err != nil {
+			lastErr = err
 			// Port unavailable, skip
 			continue
 		}
 
 		return ln
 	}
-	ct.Fatalf(t, "listenOnUnusedPort: could not find an unused port in the range %s - %s", lastUsedPort-attempts, lastUsedPort)
+	ct.Fatalf(t, "listenOnUnusedPort: could not find an unused port in the entire port range (0 - 65535). Last error: %w", lastErr)
 	return nil
 }
 
