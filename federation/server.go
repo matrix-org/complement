@@ -573,7 +573,9 @@ func listenOnUnusedPort(t ct.TestLike) net.Listener {
 	// Sanity check that we haven't already exhausted the entire port range
 	if max_attempts > 65535 {
 		// If this ever becomes a problem, we can namespace used ports by `deployment` since
-		// that has to be passed into `NewServer(...)` anyway
+		// that has to be passed into `NewServer(...)` anyway and the whole point of this is
+		// that a homeserver from the `deployment` doesn't try to reach out to a previous
+		// engineered homeserver it knows about.
 		ct.Fatalf(
 			t, "listenOnUnusedPort: We've exhausted the whole port range 0 - 65,535. "+
 				"(see comment here if you run into this)",
