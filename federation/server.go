@@ -547,61 +547,62 @@ func (s *Server) Mux() *mux.Router {
 // Retiring each port for the lifetime of the process keeps stray requests pointed at a
 // dead port (connection refused) instead of a live, unrelated server.
 var (
-	usedPortsMu sync.Mutex
-	usedPorts   = make(map[int]struct{})
+	// Use a mutex so only one thread can advance `lastUsedPort` at a time. We don't want
+	// multiple threads clobbering `lastUsedPort`.
+	lastUsedPortMu sync.Mutex
+	// Start at 1024 (1023 + 1) to avoid the priviged ports used by the system
+	//
+	// Since we sequentially try each port, we just need to keep track of the last one we tried
+	lastUsedPort = 1023
 )
 
-// listenOnUnusedPort listens on an OS-assigned high-numbered port that no federation Server has
+// listenOnUnusedPort listens on an unused port that no other federation `Server` has
 // used before in this process.
 func listenOnUnusedPort(t ct.TestLike) net.Listener {
-	usedPortsMu.Lock()
-	defer usedPortsMu.Unlock()
+	lastUsedPortMu.Lock()
+	defer lastUsedPortMu.Unlock()
 
-	// Keep any already-claimed listeners open until we've found a fresh port, otherwise the OS
-	// could keep offering us a port we're about to reject.
-	var rejected []net.Listener
-	defer func() {
-		for _, ln := range rejected {
-			ln.Close()
-		}
-	}()
-
-	// We try the same number of times as the number of ports that have been previously
-	// used, as the OS could sequentially hand back the same ports and we need to find the
-	// next unused port.
+	// We use this sequential port scan strategy over guess and check with an OS-assigned
+	// port (by using `:0`) as it's more efficient. The OS may recycle and re-use freed
+	// ports meaning we could regress to O(n^2) behavior trying to search for each new
+	// port we want to find.
 	//
-	// `+ 1` as we want to find the next one after everything we might have tried before
-	// and it also means we try at-least one time when `len(usedPorts)` is `0`.
-	max_attempts := len(usedPorts) + 1
-	// Sanity check that we haven't already exhausted the entire port range
-	if max_attempts > 65535 {
-		// If this ever becomes a problem, we can namespace used ports by `deployment` since
-		// that has to be passed into `NewServer(...)` anyway and the whole point of this is
-		// that a homeserver from the `deployment` doesn't try to reach out to a previous
-		// engineered homeserver it knows about.
-		ct.Fatalf(
-			t, "listenOnUnusedPort: We've exhausted the whole port range 0 - 65,535. "+
-				"(see comment here if you run into this)",
-		)
-	}
+	// Using `:0` means an unused port is automatically picked for us (could be random,
+	// could be the next sequential unused port, we don't know). Ideally, we could ask for
+	// the next unused port after X to avoid a bunch of work. When using using `:0`, the
+	// pathological case that is O(n^2) is if OS hands back next lowest unused port
+	// sequentially which would mean we would have to probe and hold each listener until
+	// we finally got something new.
 
-	for attempt := 0; attempt < max_attempts; attempt++ {
-		// Using `:0` means an unused port is automatically picked for us (could be random,
-		// could be the next sequential unused port, we don't know). Ideally, we could ask
-		// for the next unused port after X to avoid a bunch of work.
-		ln, err := net.Listen("tcp", ":0") //nolint
-		if err != nil {
-			ct.Fatalf(t, "listenOnUnusedPort: net.Listen failed: %s", err)
+	// Try up to 1000 ports
+	attempts := 1000
+	for i := 0; i < attempts; i++ {
+		port := lastUsedPort + 1
+		if port > 65535 {
+			// If this ever becomes a problem, we can namespace used ports by `deployment` since
+			// that has to be passed into `NewServer(...)` anyway and the whole point of this is
+			// that a homeserver from the `deployment` doesn't try to reach out to a previous
+			// engineered homeserver it knows about.
+			//
+			// As another alternative, we could also wrap-around to the beginning of the port
+			// range again although that is slightly unsound.
+			ct.Fatalf(
+				t, "listenOnUnusedPort: We've exhausted the whole port range 0 - 65,535. "+
+					"(see comment here if you run into this)",
+			)
 		}
-		port := ln.Addr().(*net.TCPAddr).Port
-		if _, used := usedPorts[port]; used {
-			rejected = append(rejected, ln)
+
+		// Check port availability
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		lastUsedPort = port
+		if err != nil {
+			// Port unavailable, skip
 			continue
 		}
-		usedPorts[port] = struct{}{}
+
 		return ln
 	}
-	ct.Fatalf(t, "listenOnUnusedPort: could not find an unused port after %s attempts", max_attempts)
+	ct.Fatalf(t, "listenOnUnusedPort: could not find an unused port in the range %s - %s", lastUsedPort-attempts, lastUsedPort)
 	return nil
 }
 
