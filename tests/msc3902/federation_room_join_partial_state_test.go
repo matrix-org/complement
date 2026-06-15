@@ -147,9 +147,15 @@ func (s *server) WithWaitForLeave(
 	defer removePDUHandler()
 
 	// We need to check if the user (on their homeserver) thinks they're in the
-	// room, before performing the `leaveAction` (to avoid races). If they are
-	// in the room we need to wait until the server sees the leave, but if they
-	// aren't no leave event will be sent out.
+	// room, before performing the `leaveAction` (to avoid races).
+	//
+	// If they are not in the room, then the `leaveAction` will not produce a
+	// new leave event and we should not wait for one.
+	//
+	// If they are in the room then the `leaveAction` will produce a new leave
+	// event. We then need to check if we expect this server receive the leave
+	// event by checking if this server is in the room. If they are, we wait, if
+	// not we can return immediately after the `leaveAction`.
 	userInRoom := userIsJoinedTo(t, user, room.RoomID)
 
 	leaveAction()
