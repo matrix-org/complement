@@ -145,6 +145,17 @@ func TestFederationRoomsInvite(t *testing.T) {
 
 			// bob2 is invited and can reject the invite (leave the room)
 			alice.MustInviteRoom(t, roomID, bob2.UserID)
+			// Wait for bob (a full joined member on hs2) to see the invite event in
+			// his timeline. This ensures hs2 has fully processed the event and
+			// settled any background room-state sync before bob2 tries to leave.
+			// Without this, the invite can arrive at hs2 with a missing prev_event,
+			// putting the room in partial state; bob2.MustLeaveRoom then races the
+			// background state fetch and can fail with "No create event in auth events".
+			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+				return ev.Get("type").Str == "m.room.member" &&
+					ev.Get("state_key").Str == bob2.UserID &&
+					ev.Get("content.membership").Str == "invite"
+			}))
 			bob2.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob2.UserID, roomID))
 			bob2.MustLeaveRoom(t, roomID)
 			// Make sure alice can see bob2 left the room
