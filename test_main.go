@@ -76,12 +76,18 @@ func TestMain(m *testing.M, namespace string, customOpts ...opt) {
 		fmt.Printf("Error: %s", err)
 		os.Exit(1)
 	}
-	exitCode := m.Run()
-	if opts.cleanup != nil {
-		opts.cleanup(testPackage.Config)
+
+	// Run the cleanup functions even on panic.
+	runAndCleanup := func() int {
+		defer testPackage.Cleanup()
+		if opts.cleanup != nil {
+			defer opts.cleanup(testPackage.Config)
+		}
+
+		return m.Run()
 	}
-	testPackage.Cleanup()
-	os.Exit(exitCode)
+
+	os.Exit(runAndCleanup())
 }
 
 // Deploy will deploy the given blueprint or terminate the test.
