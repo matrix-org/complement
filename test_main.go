@@ -78,6 +78,8 @@ func TestMain(m *testing.M, namespace string, customOpts ...opt) {
 	}
 
 	// Run the cleanup functions even on panic.
+	// Note that deferred functions aren't run on `os.Exit`, so we need to put the `defer` calls
+	// inside a new `func()`.
 	runAndCleanup := func() int {
 		defer testPackage.Cleanup()
 		if opts.cleanup != nil {
