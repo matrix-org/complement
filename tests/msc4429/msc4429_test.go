@@ -209,7 +209,7 @@ func getProfileUpdate(res gjson.Result, userID, field string) (gjson.Result, boo
 func assertNoProfileUpdate(t *testing.T, res gjson.Result, userID, field string) {
 	t.Helper()
 	if update, ok := getProfileUpdate(res, userID, field); ok {
-		t.Fatalf("unexpected profile update for %s %s: %s", userID, field, update.Raw)
+		t.Fatalf("expected no profile update for %s %s: %s", userID, field, update.Raw)
 	}
 }
 
