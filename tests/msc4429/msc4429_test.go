@@ -56,8 +56,9 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 	t.Run("No updates without profile_fields filter", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice-nofilter"})
 		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "bob-nofilter"})
+		charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "charlie-nofilter"})
 
-		mustCreateSharedRoom(t, alice, bob)
+		mustCreateSharedRoom(t, alice, bob, charlie)
 
 		// Perform an initial sync to get a since token.
 		_, since := alice.MustSync(t, client.SyncReq{})
@@ -65,9 +66,18 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 		// Bob sets their status.
 		mustSetProfileField(t, bob, "m.status", map[string]interface{}{
 			"text": "away",
+			"emoji": "🟡",
 		})
 
-		// Assert that alice does not receive it in an incremental sync.
+		// Assert that charlie receives bob's profile update in an incremental sync
+		// with the appropriate filter set.
+		filter := mustBuildMSC4429Filter(t, []string{"m.status"})
+		charlie.MustSyncUntil(t, client.SyncReq{Filter: filter}, syncHasProfileUpdate(bob.UserID, "m.status", map[string]interface{}{
+			"text":  "away",
+			"emoji": "🟡",
+		}))
+
+		// Assert that alice does not receive the profile update in an incremental sync.
 		res, _ := alice.MustSync(t, client.SyncReq{Since: since})
 		assertNoProfileUpdate(t, res, bob.UserID, "m.status")
 	})
@@ -155,15 +165,20 @@ func mustBuildMSC4429Filter(t *testing.T, ids []string) string {
 
 // mustCreateSharedRoom creates a shared room between `alice` and `bob` and returns the
 // room ID.
-func mustCreateSharedRoom(t *testing.T, alice *client.CSAPI, bob *client.CSAPI) string {
+func mustCreateSharedRoom(t *testing.T, users ...*client.CSAPI) string {
 	t.Helper()
-	roomID := alice.MustCreateRoom(t, map[string]interface{}{
+
+	// Use one of the users to create the room.
+	roomID := users[0].MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
-	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
-	bob.MustJoinRoom(t, roomID, nil)
-	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
-	bob.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
+
+	// Join all of the given users to the room.
+	for _, user := range users {
+		user.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(user.UserID, roomID))
+		user.MustJoinRoom(t, roomID, nil)
+	}
+
 	return roomID
 }
 
