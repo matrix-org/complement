@@ -65,7 +65,7 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 
 		// Bob sets their status.
 		mustSetProfileField(t, bob, "m.status", map[string]interface{}{
-			"text": "away",
+			"text":  "away",
 			"emoji": "🟡",
 		})
 
@@ -142,6 +142,50 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 			syncHasProfileUpdate(bob.UserID, "m.status", nil),
 		)
 	})
+
+	t.Run("A user leaving the last shared room returns a profile update of null", func(t *testing.T) {
+		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice-leave"})
+		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "bob-leave"})
+
+		roomID := mustCreateSharedRoom(t, alice, bob)
+
+		filter := mustBuildMSC4429Filter(t, []string{"m.status"})
+		since := alice.MustSyncUntil(
+			t,
+			client.SyncReq{Filter: filter},
+			client.SyncJoinedTo(alice.UserID, roomID),
+		)
+
+		// Bob sets a status while Alice and Bob share a room.
+		mustSetProfileField(t, bob, "m.status", map[string]interface{}{
+			"text": "busy",
+		})
+
+		// Alice receives Bob's changed profile field.
+		since = alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: since, Filter: filter},
+			syncHasProfileUpdate(bob.UserID, "m.status", map[string]interface{}{
+				"text": "busy",
+			}),
+		)
+
+		// Bob leaves the only room shared with Alice.
+		bob.MustLeaveRoom(t, roomID)
+
+		// Alice receives a null profile_updates value for Bob. This tells
+		// clients to clear their local cache for Bob's profile.
+		alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: since, Filter: filter},
+			// Check that bob left the room and we get a null profile field for them.
+			//
+			// `MustSyncUntil` will loop until both checks are true. That
+			// doesn't necessarily have to happen in the same sync response.
+			client.SyncLeftFrom(bob.UserID, roomID),
+			syncHasProfileUpdatesNull(bob.UserID),
+		)
+	})
 }
 
 // mustBuildMSC4429Filter builds a filter that can be used to limit the field
@@ -204,6 +248,17 @@ func getProfileUpdate(res gjson.Result, userID, field string) (gjson.Result, boo
 	return gjson.Result{}, false
 }
 
+// getProfileUpdates extracts all profile updates for a given user from a legacy
+// `/sync` response.
+func getProfileUpdates(res gjson.Result, userID string) (gjson.Result, bool) {
+	unstablePath := msc4429UsersUnstable + "." + client.GjsonEscape(userID) + ".profile_updates"
+	unstableRes := res.Get(unstablePath)
+	if unstableRes.Exists() {
+		return unstableRes, true
+	}
+	return gjson.Result{}, false
+}
+
 // assertNoProfileUpdate asserts that a user has not updated a field of their
 // profile in the given legacy /sync response JSON.
 func assertNoProfileUpdate(t *testing.T, res gjson.Result, userID, field string) {
@@ -229,6 +284,21 @@ func syncHasProfileUpdate(userID, field string, expected interface{}) client.Syn
 		}
 		if err := match.JSONKeyEqual("", expected)(update); err != nil {
 			return fmt.Errorf("profile update mismatch for %s %s: %w", userID, field, err)
+		}
+		return nil
+	}
+}
+
+// syncHasProfileUpdatesNull checks whether a sync response contains a null
+// profile_updates value for the given user.
+func syncHasProfileUpdatesNull(userID string) client.SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		updates, ok := getProfileUpdates(topLevelSyncJSON, userID)
+		if !ok {
+			return fmt.Errorf("missing profile updates for %s", userID)
+		}
+		if updates.Type != gjson.Null {
+			return fmt.Errorf("expected a null profile update for %s, got %s", userID, updates.Type)
 		}
 		return nil
 	}
