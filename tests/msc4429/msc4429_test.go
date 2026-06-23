@@ -59,7 +59,7 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 
 		mustCreateSharedRoom(t, alice, bob)
 
-		// No filter = no profile fields returned.
+		// Perform an initial sync to get a since token.
 		_, since := alice.MustSync(t, client.SyncReq{})
 
 		// Bob sets their status.
@@ -67,7 +67,7 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 			"text": "away",
 		})
 
-		// Assert that alice does not receive it.
+		// Assert that alice does not receive it in an incremental sync.
 		res, _ := alice.MustSync(t, client.SyncReq{Since: since})
 		assertNoProfileUpdate(t, res, bob.UserID, "m.status")
 	})
