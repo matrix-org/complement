@@ -11,7 +11,6 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
-	"github.com/matrix-org/complement/must"
 )
 
 const (
@@ -30,27 +29,30 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 
 		mustCreateSharedRoom(t, alice, bob)
 
+		// Bob sets their displayname.
 		bob.MustSetDisplayName(t, "Bob Display")
+		// Bob sets their status.
 		mustSetProfileField(t, bob, "m.status", map[string]interface{}{
 			"text":  "busy",
 			"emoji": "🛑",
 		})
 
-		// Exclude 'displayname'
+		// Alice /sync's, but only asks for "m.status" changes.
+		// Exclude 'displayname'.
 		filter := mustBuildMSC4429Filter(t, []string{"m.status"})
 		res, _ := alice.MustSync(t, client.SyncReq{Filter: filter})
 
-		update, ok := getProfileUpdate(res, bob.UserID, "m.status")
-		if !ok {
-			t.Fatalf("missing m.status profile update for %s in initial sync: %s", bob.UserID, res.Raw)
-		}
-		must.MatchGJSON(t, update, match.JSONKeyEqual("", map[string]interface{}{
+		// We should see the m.status profile update.
+		alice.MustSyncUntil(t, client.SyncReq{Filter: filter}, syncHasProfileUpdate(alice.UserID, "m.status", map[string]interface{}{
 			"text":  "busy",
 			"emoji": "🛑",
 		}))
+
+		// We should NOT see a displayname profile update.
 		assertNoProfileUpdate(t, res, bob.UserID, "displayname")
 	})
 
+	// Receiving profile updates are an opt-in mechanism, according to MSC4429.
 	t.Run("No updates without profile_fields filter", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice-nofilter"})
 		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "bob-nofilter"})
@@ -59,14 +61,18 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 
 		// No filter = no profile fields returned.
 		_, since := alice.MustSync(t, client.SyncReq{})
+
+		// Bob sets their status.
 		mustSetProfileField(t, bob, "m.status", map[string]interface{}{
 			"text": "away",
 		})
 
+		// Assert that alice does not receive it.
 		res, _ := alice.MustSync(t, client.SyncReq{Since: since})
 		assertNoProfileUpdate(t, res, bob.UserID, "m.status")
 	})
 
+	// Check that only the latest update is returned per-user per-field.
 	t.Run("Incremental sync returns the latest update", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice-latest"})
 		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "bob-latest"})
@@ -92,6 +98,7 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 		)
 	})
 
+	// Test that the homeserver informs the client when a profile field is cleared.
 	t.Run("Cleared profile field is returned as null", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice-clear"})
 		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "bob-clear"})
@@ -101,9 +108,12 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 		filter := mustBuildMSC4429Filter(t, []string{"m.status"})
 		_, since := alice.MustSync(t, client.SyncReq{Filter: filter})
 
+		// Bob sets a status.
 		mustSetProfileField(t, bob, "m.status", map[string]interface{}{
 			"text": "busy",
 		})
+
+		// Wait until alice can see the status.
 		since = alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: since, Filter: filter},
@@ -112,7 +122,10 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 			}),
 		)
 
+		// Bob clears their status.
 		mustSetProfileField(t, bob, "m.status", nil)
+
+		// Wait until alice sees the status be set to `null` (nil).
 		alice.MustSyncUntil(
 			t,
 			client.SyncReq{Since: since, Filter: filter},
@@ -176,6 +189,8 @@ func getProfileUpdate(res gjson.Result, userID, field string) (gjson.Result, boo
 	return gjson.Result{}, false
 }
 
+// assertNoProfileUpdate asserts that a user has not updated a field of their
+// profile in the given legacy /sync response JSON.
 func assertNoProfileUpdate(t *testing.T, res gjson.Result, userID, field string) {
 	t.Helper()
 	if update, ok := getProfileUpdate(res, userID, field); ok {
@@ -183,6 +198,8 @@ func assertNoProfileUpdate(t *testing.T, res gjson.Result, userID, field string)
 	}
 }
 
+// syncHasProfileUpdate checks whether a given sync response contains a profile
+// update of the given, expected field and value.
 func syncHasProfileUpdate(userID, field string, expected interface{}) client.SyncCheckOpt {
 	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
 		update, ok := getProfileUpdate(topLevelSyncJSON, userID, field)
