@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	msc4429UsersStable   = "users"
+	// TODO: Support stable prefix once MSC4429 is accepted.
+	// msc4429UsersStable   = "users"
 	msc4429UsersUnstable = "org\\.matrix\\.msc4429\\.users"
 )
 
@@ -167,11 +168,6 @@ func mustSetProfileField(t *testing.T, user *client.CSAPI, field string, value i
 // getProfileUpdate extracts the given profile updates for a given user by field
 // ID from a legacy `/sync` response.
 func getProfileUpdate(res gjson.Result, userID, field string) (gjson.Result, bool) {
-	stablePath := msc4429UsersStable + "." + client.GjsonEscape(userID) + ".profile_updates." + client.GjsonEscape(field)
-	stableRes := res.Get(stablePath)
-	if stableRes.Exists() {
-		return stableRes, true
-	}
 	unstablePath := msc4429UsersUnstable + "." + client.GjsonEscape(userID) + ".profile_updates." + client.GjsonEscape(field)
 	unstableRes := res.Get(unstablePath)
 	if unstableRes.Exists() {
