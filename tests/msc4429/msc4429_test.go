@@ -82,6 +82,45 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 		assertNoProfileUpdate(t, res, bob.UserID, "m.status")
 	})
 
+	t.Run("Widening profile_fields filter does not return old filtered updates", func(t *testing.T) {
+		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice-widen"})
+		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "bob-widen"})
+
+		mustCreateSharedRoom(t, alice, bob)
+
+		madeUpProfileField := "complement.made-up-profile-field"
+
+		// Get a sync token for alice.
+		_, since := alice.MustSync(t, client.SyncReq{})
+
+		// Bob updates their profile with two fields.
+		mustSetProfileField(t, bob, madeUpProfileField, "foo")
+		mustSetProfileField(t, bob, "m.status", map[string]interface{}{
+			"text": "away",
+		})
+
+		// Alice advances their sync token requesting just one of the profile fields.
+		// Widening the filter later must not make this old status update appear.
+		filter := mustBuildMSC4429Filter(t, []string{madeUpProfileField})
+		// We should have only received the `complement.made-up-profile-field` field.
+		since = alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: since, Filter: filter},
+			syncHasProfileUpdateWithoutFields(bob.UserID, madeUpProfileField, "foo", "m.status"),
+		)
+
+		// Bob updates a third profile field.
+		bob.MustSetDisplayName(t, "Bob Widened")
+
+		// Alice should only receive the `displayname` update.`
+		filter = mustBuildMSC4429Filter(t, []string{madeUpProfileField, "m.status", "displayname"})
+		alice.MustSyncUntil(
+			t,
+			client.SyncReq{Since: since, Filter: filter},
+			syncHasProfileUpdateWithoutFields(bob.UserID, "displayname", "Bob Widened", "m.status", madeUpProfileField),
+		)
+	})
+
 	// Check that only the latest update is returned per-user per-field.
 	t.Run("Incremental sync returns the latest update", func(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "alice-latest"})
@@ -285,6 +324,27 @@ func syncHasProfileUpdate(userID, field string, expected interface{}) client.Syn
 		if err := match.JSONKeyEqual("", expected)(update); err != nil {
 			return fmt.Errorf("profile update mismatch for %s %s: %w", userID, field, err)
 		}
+		return nil
+	}
+}
+
+// syncHasProfileUpdateWithoutField checks whether a sync response contains a
+// profile update for one field and does not contain another field for the same
+// user.
+func syncHasProfileUpdateWithoutFields(userID, field string, expected interface{}, withoutFields ...string) client.SyncCheckOpt {
+	return func(clientUserID string, topLevelSyncJSON gjson.Result) error {
+		// Check that we have one field.
+		if err := syncHasProfileUpdate(userID, field, expected)(clientUserID, topLevelSyncJSON); err != nil {
+			return err
+		}
+
+		// But not the `withoutField` fields.
+		for _, fieldName := range withoutFields {
+			if update, ok := getProfileUpdate(topLevelSyncJSON, userID, fieldName); ok {
+				return fmt.Errorf("unexpected profile update for %s %s: %s", userID, fieldName, update.Raw)
+			}
+		}
+
 		return nil
 	}
 }
