@@ -219,8 +219,8 @@ func mustCreateSharedRoom(t *testing.T, users ...*client.CSAPI) string {
 
 	// Join all of the given users to the room.
 	for _, user := range users {
-		user.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(user.UserID, roomID))
 		user.MustJoinRoom(t, roomID, nil)
+		user.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(user.UserID, roomID))
 	}
 
 	return roomID
