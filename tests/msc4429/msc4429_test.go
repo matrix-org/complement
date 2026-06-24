@@ -72,7 +72,7 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 		// Assert that charlie receives bob's profile update in an incremental sync
 		// with the appropriate filter set.
 		filter := mustBuildMSC4429Filter(t, []string{"m.status"})
-		charlie.MustSyncUntil(t, client.SyncReq{Filter: filter}, syncHasProfileUpdate(bob.UserID, "m.status", map[string]interface{}{
+		charlie.MustSyncUntil(t, client.SyncReq{Filter: filter, Since: since}, syncHasProfileUpdate(bob.UserID, "m.status", map[string]interface{}{
 			"text":  "away",
 			"emoji": "🟡",
 		}))
