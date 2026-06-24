@@ -43,7 +43,7 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 		res, _ := alice.MustSync(t, client.SyncReq{Filter: filter})
 
 		// We should see the m.status profile update.
-		alice.MustSyncUntil(t, client.SyncReq{Filter: filter}, syncHasProfileUpdate(alice.UserID, "m.status", map[string]interface{}{
+		alice.MustSyncUntil(t, client.SyncReq{Filter: filter}, syncHasProfileUpdate(bob.UserID, "m.status", map[string]interface{}{
 			"text":  "busy",
 			"emoji": "🛑",
 		}))
