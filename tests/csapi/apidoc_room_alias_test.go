@@ -14,6 +14,7 @@ import (
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/complement/should"
+	"github.com/matrix-org/gomatrixserverlib"
 )
 
 func setRoomAliasResp(t *testing.T, c *client.CSAPI, roomID, roomAlias string) *http.Response {
@@ -192,6 +193,8 @@ func TestRoomDeleteAlias(t *testing.T) {
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
+	defaultRoomVersion := alice.GetDefaultRoomVersion(t)
+
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: Alias creators can delete alias with no ops
 		t.Run("Alias creators can delete alias with no ops", func(t *testing.T) {
@@ -352,14 +355,21 @@ func TestRoomDeleteAlias(t *testing.T) {
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type:     "m.room.power_levels",
 				StateKey: b.Ptr(""),
-				Content: map[string]interface{}{
-					"users": map[string]int64{
-						alice.UserID: 100,
-					},
-					"events": map[string]int64{
-						"m.room.aliases": 50,
-					},
-				},
+				Content: func() map[string]interface{} {
+					content := map[string]interface{}{
+						"events": map[string]int64{
+							"m.room.aliases": 50,
+						},
+						"users": map[string]int64{
+							alice.UserID: 100,
+						},
+					}
+					// Room v12+ prohibits the room creator in the `users` object
+					if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+						delete(content["users"].(map[string]int64), alice.UserID)
+					}
+					return content
+				}(),
 			})
 
 			res := setRoomAliasResp(t, bob, roomID, randomAlias)
@@ -428,12 +438,18 @@ func TestRoomDeleteAlias(t *testing.T) {
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type:     "m.room.power_levels",
 				StateKey: b.Ptr(""),
-				Content: map[string]interface{}{
-					"users": map[string]int64{
-						alice.UserID: 100,
-						bob.UserID:   100,
-					},
-				},
+				Content: func() map[string]interface{} {
+					content := map[string]interface{}{
+						"users": map[string]int64{
+							alice.UserID: 100,
+							bob.UserID:   100,
+						},
+					}
+					if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+						delete(content["users"].(map[string]int64), alice.UserID)
+					}
+					return content
+				}(),
 			})
 
 			res := setRoomAliasResp(t, alice, roomID, randomAlias)
