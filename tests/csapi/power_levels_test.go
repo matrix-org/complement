@@ -12,6 +12,8 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // This test ensures that an authorised (PL 100) user is able to modify the users_default value
@@ -22,30 +24,53 @@ func TestDemotingUsersViaUsersDefault(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	defaultRoomVersion := alice.GetDefaultRoomVersion(t)
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
-		"power_level_content_override": map[string]interface{}{
-			"users_default": 100, // the default is 0
-			"users": map[string]interface{}{
-				alice.UserID: 100,
-			},
-			"events":        map[string]int64{},
-			"notifications": map[string]int64{},
-		},
+		"power_level_content_override": func() map[string]interface{} {
+			power_level_content := map[string]interface{}{
+				"users_default": 100, // the default is 0
+				"users": map[string]int64{
+					alice.UserID: 100,
+					bob.UserID:   100,
+				},
+				"events":        map[string]int64{},
+				"notifications": map[string]int64{},
+			}
+			// Remove the room creator if this is a v12+ room
+			if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+				delete(power_level_content["users"].(map[string]int64), alice.UserID)
+			}
+			return power_level_content
+		}(),
 	})
 
-	alice.SendEventSynced(t, roomID, b.Event{
-		Type:     "m.room.power_levels",
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
+
+	bob.SendEventSynced(t, roomID, b.Event{
+		Type:     spec.MRoomPowerLevels,
 		StateKey: b.Ptr(""),
-		Content: map[string]interface{}{
-			"users_default": 40, // we change the default to 40. We should be able to do this.
-			"users": map[string]interface{}{
-				alice.UserID: 100,
-			},
-			"events":        map[string]int64{},
-			"notifications": map[string]int64{},
-		},
+		Content: func() map[string]interface{} {
+			content := map[string]interface{}{
+				"users_default": 40, // we change the default to 40. We should be able to do this.
+				"users": map[string]int64{
+					alice.UserID: 100,
+					bob.UserID:   100,
+				},
+				"events":        map[string]int64{},
+				"notifications": map[string]int64{},
+			}
+			// Remove the room creator if this is a v12+ room
+			if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+				delete(content["users"].(map[string]int64), alice.UserID)
+			}
+			return content
+		}(),
 	})
 }
 
