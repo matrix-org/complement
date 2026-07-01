@@ -12,6 +12,8 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
 // This test ensures that an authorised (PL 100) user is able to modify the users_default value
@@ -22,30 +24,53 @@ func TestDemotingUsersViaUsersDefault(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	defaultRoomVersion := alice.GetDefaultRoomVersion(t)
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
-		"power_level_content_override": map[string]interface{}{
-			"users_default": 100, // the default is 0
-			"users": map[string]interface{}{
-				alice.UserID: 100,
-			},
-			"events":        map[string]int64{},
-			"notifications": map[string]int64{},
-		},
+		"power_level_content_override": func() map[string]interface{} {
+			power_level_content := map[string]interface{}{
+				"users_default": 100, // the default is 0
+				"users": map[string]int64{
+					alice.UserID: 100,
+					bob.UserID:   100,
+				},
+				"events":        map[string]int64{},
+				"notifications": map[string]int64{},
+			}
+			// Remove the room creator if this is a v12+ room
+			if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+				delete(power_level_content["users"].(map[string]int64), alice.UserID)
+			}
+			return power_level_content
+		}(),
 	})
 
-	alice.SendEventSynced(t, roomID, b.Event{
-		Type:     "m.room.power_levels",
+	bob.MustJoinRoom(t, roomID, []spec.ServerName{
+		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+	})
+
+	bob.SendEventSynced(t, roomID, b.Event{
+		Type:     spec.MRoomPowerLevels,
 		StateKey: b.Ptr(""),
-		Content: map[string]interface{}{
-			"users_default": 40, // we change the default to 40. We should be able to do this.
-			"users": map[string]interface{}{
-				alice.UserID: 100,
-			},
-			"events":        map[string]int64{},
-			"notifications": map[string]int64{},
-		},
+		Content: func() map[string]interface{} {
+			content := map[string]interface{}{
+				"users_default": 40, // we change the default to 40. We should be able to do this.
+				"users": map[string]int64{
+					alice.UserID: 100,
+					bob.UserID:   100,
+				},
+				"events":        map[string]int64{},
+				"notifications": map[string]int64{},
+			}
+			// Remove the room creator if this is a v12+ room
+			if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+				delete(content["users"].(map[string]int64), alice.UserID)
+			}
+			return content
+		}(),
 	})
 }
 
@@ -54,6 +79,8 @@ func TestPowerLevels(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	defaultRoomVersion := alice.GetDefaultRoomVersion(t)
 
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
@@ -65,7 +92,11 @@ func TestPowerLevels(t *testing.T) {
 		// However, for this test, we control the test environment,
 		//  and we will assume the server is sane and give us powerlevels as numbers,
 		//  and if it doesn't, that's an offense worthy of a frown.
-		content := alice.MustGetStateEventContent(t, roomID, "m.room.power_levels", "")
+		// note 2: before v12 the `users` object had to explicitly define the room creator, if they
+		//  should have some power level other than the room's default. Starting with v12, this user
+		//  is to be excluded from the `users` object, as they have an infinite power level that is
+		//  not representable in JSON
+		content := alice.MustGetStateEventContent(t, roomID, spec.MRoomPowerLevels, "")
 		must.MatchGJSON(t, content,
 			match.JSONKeyTypeEqual("ban", gjson.Number),
 			match.JSONKeyTypeEqual("kick", gjson.Number),
@@ -91,13 +122,18 @@ func TestPowerLevels(t *testing.T) {
 			}),
 
 			func(body gjson.Result) error {
-				userDefault := int(body.Get("users_default").Num)
-				thisUser := int(body.Get("users." + client.GjsonEscape(alice.UserID)).Num)
-
-				if thisUser > userDefault {
+				// This key should be missing for room v12+
+				if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+					match.JSONKeyMissing("users." + client.GjsonEscape(alice.UserID))
 					return nil
 				} else {
-					return fmt.Errorf("expected room creator (%d) to have a higher-than-default powerlevel (which is %d)", thisUser, userDefault)
+					userDefault := int(body.Get("users_default").Num)
+					thisUser := int(body.Get("users." + client.GjsonEscape(alice.UserID)).Num)
+					if thisUser > userDefault {
+						return nil
+					} else {
+						return fmt.Errorf("expected room creator (%d) to have a higher-than-default powerlevel (which is %d)", thisUser, userDefault)
+					}
 				}
 			},
 		)
@@ -114,8 +150,13 @@ func TestPowerLevels(t *testing.T) {
 			},
 		}
 
+		// Rooms versioned 12+ do not allow having the room creator in the 'users' object, so just remove it
+		if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+			delete(PLContent["users"].(map[string]interface{}), alice.UserID)
+		}
+
 		eventId := alice.SendEventSynced(t, roomID, b.Event{
-			Type:     "m.room.power_levels",
+			Type:     spec.MRoomPowerLevels,
 			StateKey: b.Ptr(""),
 			Content:  PLContent,
 		})
@@ -137,37 +178,70 @@ func TestPowerLevels(t *testing.T) {
 	t.Run("PUT power_levels should not explode if the old power levels were empty", func(t *testing.T) {
 		// Absence of an "events" key
 		alice.SendEventSynced(t, roomID, b.Event{
-			Type:     "m.room.power_levels",
+			Type:     spec.MRoomPowerLevels,
 			StateKey: b.Ptr(""),
-			Content: map[string]interface{}{
-				"users": map[string]interface{}{
-					alice.UserID: 100,
-				},
-			},
+			Content: func() map[string]interface{} {
+				PLContent := map[string]interface{}{
+					"users": map[string]int64{
+						alice.UserID: 100,
+					},
+				}
+				// Rooms versioned 12+ do not allow having the room creator in the 'users' object, so just remove the
+				// single user so the empty `users` object is present
+				if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+					delete(PLContent["users"].(map[string]int64), alice.UserID)
+				}
+				return PLContent
+			}(),
 		})
 
 		// Absence of a "users" key
 		alice.SendEventSynced(t, roomID, b.Event{
-			Type:     "m.room.power_levels",
+			Type:     spec.MRoomPowerLevels,
 			StateKey: b.Ptr(""),
 			Content:  map[string]interface{}{},
 		})
 
-		// This should give a 403 (not a 500)
-		res := alice.Do(
-			t,
-			"PUT",
-			[]string{"_matrix", "client", "v3", "rooms", roomID, "state", "m.room.power_levels"},
-			client.WithJSONBody(t, map[string]interface{}{
-				"users": map[string]string{},
-			}),
-		)
-		must.MatchResponse(t, res, match.HTTPResponse{
-			StatusCode: 403,
-		})
+		// This part of the test should check that sending a power_levels event fails. As then the previous
+		// power_levels event should not have changed. Depending on the room version, this can be done in one
+		//  of two different ways:
+		if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+			// For rooms with privileged creators(MSC4289), try and send an event with the room creator in the
+			// `users` object, which should be prohibited with a 400 error code. An empty `users` object appears
+			// to be allowed, hence the difference from the below condition for other room versions.
+			res := alice.Do(
+				t,
+				"PUT",
+				[]string{"_matrix", "client", "v3", "rooms", roomID, "state", spec.MRoomPowerLevels},
+				client.WithJSONBody(t, map[string]interface{}{
+					"users": map[string]int64{
+						alice.UserID: 100,
+					},
+				}),
+			)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 400,
+			})
+
+		} else {
+			// Prior to rooms using privileged creators, an empty `users` object would be prohibited and should
+			// give a 403 (not a 500)
+			res := alice.Do(
+				t,
+				"PUT",
+				[]string{"_matrix", "client", "v3", "rooms", roomID, "state", spec.MRoomPowerLevels},
+				client.WithJSONBody(t, map[string]interface{}{
+					"users": map[string]int64{},
+				}),
+			)
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 403,
+			})
+
+		}
 
 		// Test if the old state still exists
-		content := alice.MustGetStateEventContent(t, roomID, "m.room.power_levels", "")
+		content := alice.MustGetStateEventContent(t, roomID, spec.MRoomPowerLevels, "")
 		must.MatchGJSON(t, content, match.JSONKeyMissing("users"))
 	})
 }

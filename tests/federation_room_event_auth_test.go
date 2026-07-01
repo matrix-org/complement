@@ -110,6 +110,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// have Alice create a room, and then join it
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	defaultRoomVersion := alice.GetDefaultRoomVersion(t)
 	testRoomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
@@ -145,12 +146,20 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 		StateKey: &charlie,
 		Sender:   charlie,
 		Content:  map[string]interface{}{"membership": "join", "test": 1},
-		AuthEvents: []string{
-			room.CurrentState("m.room.create", "").EventID(),
-			room.CurrentState("m.room.join_rules", "").EventID(),
-			rejectedEvent.EventID(),
-			charlieMembershipEvent.EventID(),
-		},
+		AuthEvents: func() []string {
+			content := []string{
+				room.CurrentState("m.room.create", "").EventID(),
+				room.CurrentState("m.room.join_rules", "").EventID(),
+				rejectedEvent.EventID(),
+				charlieMembershipEvent.EventID(),
+			}
+			if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).DomainlessRoomIDs() {
+				// Room v12+ (MSC4291) does not allow the create event in the auth_events key. This outlier
+				// is supposed to be invalid, but not for that reason
+				content = content[1:]
+			}
+			return content
+		}(),
 	})
 	// add it to room.Timeline so that HandleEventRequests() can find it, but
 	// don't use room.AddEvent(), because we don't want it to be a forward extremity.
@@ -159,13 +168,19 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// create a regular event which refers to the outlier event in its auth events,
 	// so that the outlier gets pulled in.
-	sentEventAuthEvents := []gomatrixserverlib.PDU{
-		room.CurrentState("m.room.create", ""),
-		room.CurrentState("m.room.join_rules", ""),
-		room.CurrentState("m.room.power_levels", ""),
-		charlieMembershipEvent,
-		outlierEvent,
-	}
+	sentEventAuthEvents := func() []gomatrixserverlib.PDU {
+		content := []gomatrixserverlib.PDU{
+			room.CurrentState("m.room.create", ""),
+			room.CurrentState("m.room.join_rules", ""),
+			room.CurrentState("m.room.power_levels", ""),
+			charlieMembershipEvent,
+			outlierEvent,
+		}
+		if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).DomainlessRoomIDs() {
+			content = content[1:]
+		}
+		return content
+	}()
 	sentEvent1 := srv.MustCreateEvent(t, room, federation.Event{
 		Type:       "m.room.message",
 		Sender:     charlie,
