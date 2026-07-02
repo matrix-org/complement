@@ -24,7 +24,18 @@ func TestFederationKeyUploadQuery(t *testing.T) {
 	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
 
 	// for device lists to be shared between alice and bob they must share a room
-	roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+		"initial_state": []map[string]interface{}{
+			{
+				"type":      "m.room.encryption",
+				"state_key": "",
+				"content": map[string]interface{}{
+					"algorithm": "m.megolm.v1.aes-sha2",
+				},
+			},
+		},
+	})
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{
 		deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 	})

@@ -405,7 +405,18 @@ func TestSync(t *testing.T) {
 				// Regression test for https://github.com/element-hq/synapse/issues/16948
 
 				charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{LocalpartSuffix: "charlie"})
-				roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+				roomID := alice.MustCreateRoom(t, map[string]interface{}{
+					"preset": "public_chat",
+					"initial_state": []map[string]interface{}{
+						{
+							"type":      "m.room.encryption",
+							"state_key": "",
+							"content": map[string]interface{}{
+								"algorithm": "m.megolm.v1.aes-sha2",
+							},
+						},
+					},
+				})
 
 				aliceSyncFilter := `{
 				    "room": {
