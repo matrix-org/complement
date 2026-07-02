@@ -34,7 +34,7 @@ func ParseJSON(t ct.TestLike, b io.ReadCloser) gjson.Result {
 	t.Helper()
 	res, err := should.ParseJSON(b)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 	return res
 }
@@ -45,7 +45,7 @@ func MatchRequest(t ct.TestLike, req *http.Request, m match.HTTPRequest) []byte 
 	t.Helper()
 	res, err := should.MatchRequest(req, m)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 	return res
 }
@@ -55,7 +55,7 @@ func MatchRequest(t ct.TestLike, req *http.Request, m match.HTTPRequest) []byte 
 func MatchSuccess(t ct.TestLike, res *http.Response) {
 	t.Helper()
 	if err := should.MatchSuccess(res); err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 }
 
@@ -64,7 +64,7 @@ func MatchSuccess(t ct.TestLike, res *http.Response) {
 func MatchFailure(t ct.TestLike, res *http.Response) {
 	t.Helper()
 	if err := should.MatchFailure(res); err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 }
 
@@ -74,7 +74,7 @@ func MatchResponse(t ct.TestLike, res *http.Response, m match.HTTPResponse) []by
 	t.Helper()
 	body, err := should.MatchResponse(res, m)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 	return body
 }
@@ -84,7 +84,7 @@ func MatchFederationRequest(t ct.TestLike, fedReq *fclient.FederationRequest, ma
 	t.Helper()
 	err := should.MatchFederationRequest(fedReq)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 }
 
@@ -94,7 +94,7 @@ func MatchGJSON(t ct.TestLike, jsonResult gjson.Result, matchers ...match.JSON) 
 	t.Helper()
 	err := should.MatchGJSON(jsonResult, matchers...)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 }
 
@@ -104,7 +104,7 @@ func MatchJSONBytes(t ct.TestLike, rawJson []byte, matchers ...match.JSON) {
 	t.Helper()
 	err := should.MatchJSONBytes(rawJson, matchers...)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 }
 
@@ -141,7 +141,7 @@ func GetJSONFieldStr(t ct.TestLike, body gjson.Result, wantKey string) string {
 	t.Helper()
 	str, err := should.GetJSONFieldStr(body, wantKey)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 	return str
 }
@@ -152,7 +152,7 @@ func HaveInOrder[V comparable](t ct.TestLike, gots []V, wants []V) {
 	t.Helper()
 	err := should.HaveInOrder(gots, wants)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 }
 
@@ -163,7 +163,7 @@ func ContainSubset[V comparable](t ct.TestLike, larger []V, smaller []V) {
 	t.Helper()
 	err := should.ContainSubset(larger, smaller)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 }
 
@@ -174,7 +174,7 @@ func NotContainSubset[V comparable](t ct.TestLike, larger []V, smaller []V) {
 	t.Helper()
 	err := should.NotContainSubset(larger, smaller)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 }
 
@@ -188,7 +188,7 @@ func CheckOffAll(t ct.TestLike, items []interface{}, wantItems []interface{}) {
 	t.Helper()
 	err := should.CheckOffAll(items, wantItems)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 }
 
@@ -202,7 +202,7 @@ func CheckOffAllAllowUnwanted(t ct.TestLike, items []interface{}, wantItems []in
 	t.Helper()
 	result, err := should.CheckOffAllAllowUnwanted(items, wantItems)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 	return result
 }
@@ -215,7 +215,7 @@ func CheckOff(t ct.TestLike, items []interface{}, wantItem interface{}) []interf
 	t.Helper()
 	result, err := should.CheckOff(items, wantItem)
 	if err != nil {
-		ct.Fatalf(t, err.Error())
+		ct.Fatal(t, err.Error())
 	}
 	return result
 }
