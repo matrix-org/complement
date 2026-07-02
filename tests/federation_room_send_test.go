@@ -250,3 +250,51 @@ func TestNetworkPartitionOrdering(t *testing.T) {
 		},
 	})
 }
+
+// Tests that /sync v2 returns the correct timeline for the following situation _over federation_:
+//   - Alice and Bob in a room.
+//   - Bob leaves the room.
+//   - Alice sends a message.
+//   - Bob joins the room.
+//   - The next sync response should include a timeline which ends with [BOB_LEAVE, ALICE_MSG, BOB_JOIN].
+//
+// In practice, it seems Synapse can respond with [BOB_LEAVE, BOB_JOIN], despite the room being shared history visibility.
+func TestSyncDeliversAllTimelineEventsInSharedHistoryRooms(t *testing.T) {
+	deployment := complement.Deploy(t, 2)
+	defer deployment.Destroy(t)
+
+	// alice and bob in a room
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+	bob := deployment.Register(t, "hs2", helpers.RegistrationOpts{})
+	roomID := alice.MustCreateRoom(t, map[string]interface{}{
+		"preset": "public_chat",
+	})
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+	_, nextBatch := bob.MustSync(t, client.SyncReq{})
+
+	// bob leaves and alice sends a message
+	bob.MustLeaveRoom(t, roomID)
+	eventID := alice.SendEventSynced(t, roomID, b.Event{
+		Type: "m.room.message",
+		Content: map[string]interface{}{
+			"msgtype": "m.text",
+			"body":    "Sent when Bob has left",
+		},
+	})
+	_, nextBatch = bob.MustSync(t, client.SyncReq{Since: nextBatch})
+
+	// bob rejoins and syncs, he should see this message
+	bob.MustJoinRoom(t, roomID, []string{"hs1"})
+	syncResponse, _ := bob.MustSync(t, client.SyncReq{Since: nextBatch})
+	timeline := syncResponse.Get(fmt.Sprintf("rooms.join.%s.timeline.events", client.GjsonEscape(roomID)))
+	t.Logf("timeline => %v", timeline.Raw)
+	timelineArray := timeline.Array()
+	must.NotEqual(t, len(timelineArray), 0, "no timeline for room "+roomID)
+	must.Equal(t, len(timelineArray) >= 3, true, "need at least 3 timeline events for the room")
+	// last event is the join
+	must.MatchGJSON(t, timelineArray[len(timelineArray)-1], match.JSONKeyEqual("content.membership", "join"))
+	// 2nd to last is the message
+	must.MatchGJSON(t, timelineArray[len(timelineArray)-2], match.JSONKeyEqual("event_id", eventID))
+	// 3rd to last is the leave
+	must.MatchGJSON(t, timelineArray[len(timelineArray)-3], match.JSONKeyEqual("content.membership", "leave"))
+}
