@@ -289,7 +289,7 @@ func (c *CSAPI) InviteRoom(t ct.TestLike, roomID string, userID string) *http.Re
 //
 // Args:
 //   - `serverNames`: The list of servers to attempt to knock on the room through.
-//     These should be a resolvable addresses within the deployment network.
+//     These should be a resolvable address within the deployment network.
 func (c *CSAPI) MustKnockRoom(t ct.TestLike, roomID string, serverNames []spec.ServerName) {
 	t.Helper()
 	res := c.KnockRoom(t, roomID, serverNames)
@@ -300,7 +300,7 @@ func (c *CSAPI) MustKnockRoom(t ct.TestLike, roomID string, serverNames []spec.S
 //
 // Args:
 //   - `serverNames`: The list of servers to attempt to knock on the room through.
-//     These should be a resolvable addresses within the deployment network.
+//     These should be a resolvable address within the deployment network.
 func (c *CSAPI) KnockRoom(t ct.TestLike, roomID string, serverNames []spec.ServerName) *http.Response {
 	t.Helper()
 	// construct URL query parameters
