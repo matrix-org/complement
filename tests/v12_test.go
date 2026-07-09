@@ -1341,7 +1341,7 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 }
 
 // MSC4311 mandates that `m.room.create` is a required event in
-// `invite_state`/`knock_state` (stripped state) in `/sync responses. MSC4311 applies
+// `invite_state`/`knock_state` (stripped state) in `/sync` responses. MSC4311 applies
 // retroactively to any room versions but we're testing room version 12 as it *SHOULD*
 // be expected and enforced instead of *MAY*.
 //
