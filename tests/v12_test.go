@@ -1641,7 +1641,7 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 // as it *SHOULD* reject instead of *MAY*.
 func TestMSC4311RejectInvalidStrippedStateFederation(t *testing.T) {
 	// FIXME: Run these tests after 2027-06-01 (to allow some time for the ecosystem to
-	// adapt and support MSC4311).
+	// adapt and support MSC4311), see https://github.com/element-hq/synapse/issues/19943
 	runtime.SkipIf(t, runtime.Synapse)
 	// does not implement it yet
 	runtime.SkipIf(t, runtime.Dendrite)
