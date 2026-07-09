@@ -347,7 +347,7 @@ func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Re
 			} else if membership == "knock" {
 				roomTypeKey = "knock"
 			} else {
-				return fmt.Errorf("syncMembershipIn(%s, %s): unknown membership: %s", roomID, membership, membership)
+				return fmt.Errorf("syncMembershipIn(%s, %s, %s): unknown membership: %s", userID, roomID, membership, membership)
 			}
 		}
 
@@ -363,7 +363,7 @@ func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Re
 			} else if membership == "knock" {
 				stateKey = "knock_state"
 			} else {
-				return fmt.Errorf("syncMembershipIn(%s, %s): unknown membership: %s", roomID, membership, membership)
+				return fmt.Errorf("syncMembershipIn(%s, %s, %s): unknown membership: %s", userID, roomID, membership, membership)
 			}
 		}
 
@@ -399,7 +399,7 @@ func syncMembershipIn(userID, roomID, membership string, checks ...func(gjson.Re
 			}
 		}
 
-		return fmt.Errorf("syncMembershipIn(%s, %s): %s & %s - %s", roomID, membership, firstErr, secondErr, topLevelSyncJSON)
+		return fmt.Errorf("syncMembershipIn(%s, %s, %s): %s & %s - %s", userID, roomID, membership, firstErr, secondErr, topLevelSyncJSON)
 	}
 }
 
