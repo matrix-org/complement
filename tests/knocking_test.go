@@ -303,7 +303,7 @@ func knockingBetweenTwoUsersTest(
 //
 // Args:
 //   - `serverNames`: The list of servers to attempt to knock on the room through.
-//     These should be a resolvable addresses within the deplyment network.
+//     These should be a resolvable address within the deployment network.
 func mustKnockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []spec.ServerName) {
 	knockOnRoomWithStatus(t, c, roomID, reason, serverNames, 200)
 
@@ -317,7 +317,7 @@ func mustKnockOnRoomSynced(t *testing.T, c *client.CSAPI, roomID, reason string,
 //
 // Args:
 //   - `serverNames`: The list of servers to attempt to knock on the room through.
-//     These should be a resolvable addresses within the deployment network.
+//     These should be a resolvable address within the deployment network.
 func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string, serverNames []spec.ServerName, expectedStatus int) {
 	b := []byte("{}")
 	var err error
