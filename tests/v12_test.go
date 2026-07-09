@@ -1640,8 +1640,12 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 // MSC4311 applies retroactively to any room versions but we're testing room version 12
 // as it *SHOULD* reject instead of *MAY*.
 func TestMSC4311RejectInvalidStrippedStateFederation(t *testing.T) {
-	runtime.SkipIf(t, runtime.Synapse)  // FIXME: Run these tests after 2027-06-01
-	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
+	// FIXME: Run these tests after 2027-06-01 (to allow some time for the ecosystem to
+	// adapt and support MSC4311).
+	runtime.SkipIf(t, runtime.Synapse)
+	// does not implement it yet
+	runtime.SkipIf(t, runtime.Dendrite)
+
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
