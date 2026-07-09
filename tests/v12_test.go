@@ -1517,7 +1517,7 @@ func TestMSC4311FullEventsOnStrippedStateFederation(t *testing.T) {
 					string(fr.Content()),
 				)
 
-				// Invites for an unexpected rooms is an error
+				// Invites for an unexpected room is an error
 				roomIDFromURL := pathParams["roomID"]
 				if roomIDFromURL != roomID {
 					t.Errorf("Received invite for unexpected room: %s (expected %s)", roomIDFromURL, roomID)
