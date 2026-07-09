@@ -241,7 +241,7 @@ func (s *Server) FederationClient(deployment FederationDeployment) fclient.Feder
 // for any sent PDUs. Times out after 10 seconds.
 //
 // Args:
-//   - `destination`: This should be a resolvable addresses within the deployment network.
+//   - `destination`: This should be a resolvable address within the deployment network.
 func (s *Server) MustSendTransaction(t ct.TestLike, deployment FederationDeployment, destination spec.ServerName, pdus []json.RawMessage, edus []gomatrixserverlib.EDU) {
 	t.Helper()
 	fedClient := s.FederationClient(deployment)
@@ -361,7 +361,7 @@ func (s *Server) MustCreateEvent(t ct.TestLike, room *ServerRoom, ev Event) goma
 // It returns the resultant room.
 //
 // Args:
-//   - `remoteServer`: This should be a resolvable addresses within the deployment network.
+//   - `remoteServer`: This should be a resolvable address within the deployment network.
 func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string, opts ...JoinRoomOpt) *ServerRoom {
 	t.Helper()
 	var jr joinRoom
@@ -446,7 +446,7 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 // Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
 //
 // Args:
-//   - `remoteServer`: This should be a resolvable addresses within the deployment network.
+//   - `remoteServer`: This should be a resolvable address within the deployment network.
 func (s *Server) MustLeaveRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string) {
 	t.Helper()
 	origin := spec.ServerName(s.serverName)
