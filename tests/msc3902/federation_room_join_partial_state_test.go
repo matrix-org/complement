@@ -4373,8 +4373,6 @@ func beginPartialStateJoin(t *testing.T, server *server, serverRoom *federation.
 
 // Destroy cleans up the resources associated with the join attempt.
 // It is idempotent and must be called once the test is finished.
-// Specifically, it ensures that the partial state join completes and makes the joining user leave
-// the room.
 func (psj *partialStateJoinResult) Destroy(t *testing.T) {
 	if psj.fedStateIdsSendResponseWaiter != nil {
 		psj.fedStateIdsSendResponseWaiter.Finish()
@@ -4383,9 +4381,6 @@ func (psj *partialStateJoinResult) Destroy(t *testing.T) {
 	if psj.fedStateIdsRequestReceivedWaiter != nil {
 		psj.fedStateIdsRequestReceivedWaiter.Finish()
 	}
-
-	// FIXME: Can we remove?
-	awaitPartialStateJoinCompletion(t, psj.ServerRoom, psj.User)
 }
 
 // send a message into the room without letting the homeserver under test know about it.
