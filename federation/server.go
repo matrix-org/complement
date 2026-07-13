@@ -569,7 +569,7 @@ func listenOnUnusedPort(t ct.TestLike) net.Listener {
 	//
 	// Using `:0` means an unused port is automatically picked for us (could be random,
 	// could be the next sequential unused port, we don't know). Ideally, we could ask for
-	// the next unused port after X to avoid a bunch of work. When using using `:0`, the
+	// the next unused port after X to avoid a bunch of work. When using `:0`, the
 	// pathological case that is O(n^2) is if OS hands back next lowest unused port
 	// sequentially which would mean we would have to probe and hold each listener until
 	// we finally got something new.
