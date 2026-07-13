@@ -4374,13 +4374,7 @@ func beginPartialStateJoin(t *testing.T, server *server, serverRoom *federation.
 // Destroy cleans up the resources associated with the join attempt.
 // It is idempotent and must be called once the test is finished.
 func (psj *partialStateJoinResult) Destroy(t *testing.T) {
-	if psj.fedStateIdsSendResponseWaiter != nil {
-		psj.fedStateIdsSendResponseWaiter.Finish()
-	}
-
-	if psj.fedStateIdsRequestReceivedWaiter != nil {
-		psj.fedStateIdsRequestReceivedWaiter.Finish()
-	}
+	// FIXME: This does nothing now. Remove.
 }
 
 // send a message into the room without letting the homeserver under test know about it.
@@ -4436,7 +4430,26 @@ func handleStateIdsRequests(
 				requestReceivedWaiter.Finish()
 			}
 			if sendResponseWaiter != nil {
-				sendResponseWaiter.Waitf(t, 60*time.Second, "Waiting for /state_ids request")
+				select {
+				case <-sendResponseWaiter.Done():
+					// Happy-path now that we're done waiting, continue serving the request now
+				case <-req.Context().Done():
+					// The request was cancelled (the Complement server is probably shutting down)
+					// which means nobody wants this response any more (just bail out without
+					// doing any more work).
+					//
+					// Also as a note: although the cancellation itself happens while the test is
+					// still running, `srv.Close()` cancels any if-flight requests but does not
+					// wait for this goroutine, so by the time we wake up here the test may have
+					// already completed and touching `t` after that panics.
+					return
+				case <-time.After(60 * time.Second):
+					// Sanity check so a wedged test fails loudly instead of blocking forever.
+					t.Fatalf(
+						"Timed out waiting for the test to finish the `sendResponseWaiter` while trying"+
+							"to serve /state_ids response for event %s", queryParams["event_id"],
+					)
+				}
 			}
 			t.Logf("Replying to /state_ids request for event %s", queryParams["event_id"])
 
@@ -4476,7 +4489,27 @@ func handleStateRequests(
 				requestReceivedWaiter.Finish()
 			}
 			if sendResponseWaiter != nil {
-				sendResponseWaiter.Waitf(t, 60*time.Second, "Waiting for /state request")
+
+				select {
+				case <-sendResponseWaiter.Done():
+					// Happy-path now that we're done waiting, continue serving the request now
+				case <-req.Context().Done():
+					// The request was cancelled (the Complement server is probably shutting down)
+					// which means nobody wants this response any more (just bail out without
+					// doing any more work).
+					//
+					// Also as a note: although the cancellation itself happens while the test is
+					// still running, `srv.Close()` cancels any if-flight requests but does not
+					// wait for this goroutine, so by the time we wake up here the test may have
+					// already completed and touching `t` after that panics.
+					return
+				case <-time.After(60 * time.Second):
+					// Sanity check so a wedged test fails loudly instead of blocking forever.
+					t.Fatalf(
+						"Timed out waiting for the test to finish the `sendResponseWaiter` while trying"+
+							"to serve /state response for event %s", queryParams["event_id"],
+					)
+				}
 			}
 
 			t.Logf("Replying to /state request for event %s", queryParams["event_id"])
