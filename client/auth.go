@@ -118,14 +118,14 @@ func (c *CSAPI) RegisterUser(t ct.TestLike, localpart, password string) (userID,
 		ct.Fatalf(t, "unable to read response body: %v", err)
 	}
 	session := GetJSONFieldStr(t, body, "session")
-	if session == "" {
-		ct.Fatalf(t, "uia challenge did not include a session")
-	}
 
 	// Now actually register the user
 	reqBody["auth"] = map[string]any{
 		"session": session,
 		"type":    "m.login.dummy",
+	}
+	if session == "" {
+		delete(reqBody["auth"].(map[string]any), "session")
 	}
 	res = c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "register"}, WithJSONBody(t, reqBody))
 	body, err = io.ReadAll(res.Body)

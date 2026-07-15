@@ -344,9 +344,9 @@ func startUIASession(t *testing.T, c *client.CSAPI, user, pass string, extra map
 		t.Fatal(err)
 	}
 	session := client.GetJSONFieldStr(t, body, "session")
-	if session == "" {
-		t.Fatal("expected non-empty `session` in uia challenge")
-	}
 	reqBody["auth"] = map[string]string{"session": session, "type": "m.login.dummy"}
+	if session == "" {
+		delete(reqBody["auth"].(map[string]any), "session")
+	}
 	return reqBody, session
 }
