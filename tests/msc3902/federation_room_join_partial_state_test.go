@@ -1265,7 +1265,29 @@ func TestPartialStateJoin(t *testing.T) {
 				queryParams := req.URL.Query()
 				t.Logf("Incoming state_ids request for event %s in room %s", queryParams["event_id"], roomID)
 				fedStateIdsRequestReceivedWaiter.Finish()
-				fedStateIdsSendResponseWaiter.Wait(t, 60*time.Second)
+
+				// Wait for `fedStateIdsSendResponseWaiter`
+				select {
+				case <-fedStateIdsSendResponseWaiter.Done():
+					// Happy-path now that we're done waiting, continue serving the request now
+				case <-req.Context().Done():
+					// The request was cancelled (the Complement server is probably shutting down)
+					// which means nobody wants this response any more (just bail out without
+					// doing any more work).
+					//
+					// Also as a note: although the cancellation itself happens while the test is
+					// still running, `srv.Close()` cancels any if-flight requests but does not
+					// wait for this goroutine, so by the time we wake up here the test may have
+					// already completed and touching `t` after that panics.
+					return
+				case <-time.After(60 * time.Second):
+					// Sanity check so a wedged test fails loudly instead of blocking forever.
+					t.Fatalf(
+						"Timed out waiting for the test to finish the `sendResponseWaiter` while trying"+
+							"to serve /state_ids response for event %s", queryParams["event_id"],
+					)
+				}
+
 				t.Logf("Replying to /state_ids request with invalid response")
 
 				w.WriteHeader(200)
