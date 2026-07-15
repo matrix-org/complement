@@ -286,6 +286,23 @@ func TestRegistration(t *testing.T) {
 				},
 			})
 		})
+		// Test that subsequent calls to /_matrix/client/v3/register after receiving a UIA
+		// challenge fail if the session is not provided.
+		t.Run("Registration without a session fails", func(t *testing.T) {
+			t.Parallel()
+			reqBody, session := startUIASession(t, unauthedClient, "auth-requires-session", "sUp3rs3kr1t", nil)
+			if session == "" {
+				t.Skip("Homeserver does not require a session for UIA")
+			}
+			delete(reqBody["auth"].(map[string]any), "session")
+			// Re-send the same request without the session.
+			// Since session is required if it is provided by the homeserver, this should
+			// return an error
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 401,
+			})
+		})
 	})
 }
 
@@ -344,7 +361,7 @@ func startUIASession(t *testing.T, c *client.CSAPI, user, pass string, extra map
 		t.Fatal(err)
 	}
 	session := client.GetJSONFieldStr(t, body, "session")
-	reqBody["auth"] = map[string]string{"session": session, "type": "m.login.dummy"}
+	reqBody["auth"] = map[string]any{"session": session, "type": "m.login.dummy"}
 	if session == "" {
 		delete(reqBody["auth"].(map[string]any), "session")
 	}
