@@ -123,10 +123,13 @@ func TestRegistration(t *testing.T) {
 				`'`,
 			}
 			for _, ch := range specialChars {
-				// CONCERN: Should servers be expected to validate parameters before starting a UIA session?
-				// This test will flake if they do so, since 401 will be returned instead of 400.
-				reqBody, _ := startUIASession(t, unauthedClient, "user-"+ch+"-reject-please", "sUp3rs3kr1t", nil)
+				reqBody := map[string]any{
+					"username": "user-" + ch + "-reject-please",
+					"password": "sUp3rs3kr1t",
+				}
 				res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
+				// N.B. servers are expected to validate request bodies before handling UIA,
+				// so 400 is expected here, not 401.
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,
 					JSON: []match.JSON{
@@ -145,7 +148,8 @@ func TestRegistration(t *testing.T) {
 					match.JSONKeyTypeEqual("user_id", gjson.String),
 				},
 			})
-			reqBody, _ = startUIASession(t, unauthedClient, "post-can-create-a-user-once", "sUp3rs3kr1t", nil)
+			// Since servers validate the request body before handling auth, this returns 400
+			delete(reqBody, "auth")
 			res = unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
@@ -350,7 +354,7 @@ func startUIASession(t *testing.T, c *client.CSAPI, user, pass string, extra map
 		"password": pass,
 	}
 	if extra != nil {
-		maps.Copy(extra, reqBody)
+		maps.Copy(reqBody, extra)
 	}
 	res := c.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 	if res.StatusCode != 401 {
