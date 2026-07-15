@@ -3682,12 +3682,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
 			t.Log("Alice partial-joins her room")
-			psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
-			// At the end of the test, keep Bob in the room. Have him make a /members
-			// call to ensure the resync has completed.
-			//
-			// FIXME: huh?
-			psjResult.User = bob
+			beginPartialStateJoin(t, server, serverRoom, alice)
 
 			t.Log("Alice sees her join")
 			aliceNextBatch := alice.MustSyncUntil(
@@ -3779,12 +3774,7 @@ func TestPartialStateJoin(t *testing.T) {
 
 			serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
 			t.Log("Alice partial-joins her room")
-			psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
-			// At the end of the test, keep Bob in the room. Have him make a /members
-			// call to ensure the resync has completed.
-			//
-			// FIXME: huh?
-			psjResult.User = bob
+			beginPartialStateJoin(t, server, serverRoom, alice)
 
 			t.Log("Alice waits to see her join")
 			aliceNextBatch := alice.MustSyncUntil(
@@ -4280,7 +4270,6 @@ func buildLazyLoadingSyncFilter(timelineOptions map[string]interface{}) string {
 type partialStateJoinResult struct {
 	Server                           *server
 	ServerRoom                       *federation.ServerRoom
-	User                             *client.CSAPI
 	fedStateIdsRequestReceivedWaiter *helpers.Waiter
 	fedStateIdsSendResponseWaiter    *helpers.Waiter
 }
@@ -4297,7 +4286,6 @@ func beginPartialStateJoin(t *testing.T, server *server, serverRoom *federation.
 	result := partialStateJoinResult{
 		Server:     server,
 		ServerRoom: serverRoom,
-		User:       joiningUser,
 	}
 
 	// some things for orchestration
