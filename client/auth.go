@@ -99,19 +99,36 @@ func (c *CSAPI) ConsumeRefreshToken(t ct.TestLike, refreshToken string) (newAcce
 }
 
 // RegisterUser will register the user with given parameters and
-// return user ID, access token and device ID. It fails the test on network error.
+// return user ID, access token and device ID. It fails the test on network error,
+// or if registration fails for another reason (e.g. server has non-dummy requirements).
 func (c *CSAPI) RegisterUser(t ct.TestLike, localpart, password string) (userID, accessToken, deviceID string) {
 	t.Helper()
-	reqBody := map[string]interface{}{
-		"auth": map[string]string{
-			"type": "m.login.dummy",
-		},
+	reqBody := map[string]any{
 		"username": localpart,
 		"password": password,
 	}
-	res := c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "register"}, WithJSONBody(t, reqBody))
+	// First request is expected to receive a UIA challenge
+	res := c.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, WithJSONBody(t, reqBody))
+	if res.StatusCode != 401 {
+		ct.Fatalf(t, "Expected 401 Unauthorized, got %d", res.StatusCode)
+	}
 
 	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		ct.Fatalf(t, "unable to read response body: %v", err)
+	}
+	session := GetJSONFieldStr(t, body, "session")
+	if session == "" {
+		ct.Fatalf(t, "uia challenge did not include a session")
+	}
+
+	// Now actually register the user
+	reqBody["auth"] = map[string]any{
+		"session": session,
+		"type":    "m.login.dummy",
+	}
+	res = c.MustDo(t, "POST", []string{"_matrix", "client", "v3", "register"}, WithJSONBody(t, reqBody))
+	body, err = io.ReadAll(res.Body)
 	if err != nil {
 		ct.Fatalf(t, "unable to read response body: %v", err)
 	}
