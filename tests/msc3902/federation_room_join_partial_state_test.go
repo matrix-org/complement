@@ -4287,7 +4287,7 @@ type partialStateJoinResult struct {
 
 // beginPartialStateJoin has a test user attempt to join the given room.
 //
-// # It returns a partialStateJoinResult
+// It returns a partialStateJoinResult.
 //
 // When this method completes, the /join request will have completed, but the
 // state has not yet been re-synced. To allow the re-sync to proceed, call
