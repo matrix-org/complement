@@ -110,7 +110,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 
 	// have Alice create a room, and then join it
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	defaultRoomVersion := alice.GetDefaultRoomVersion(t)
+
 	testRoomID := alice.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
@@ -153,7 +153,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 				rejectedEvent.EventID(),
 				charlieMembershipEvent.EventID(),
 			}
-			if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).DomainlessRoomIDs() {
+			if gomatrixserverlib.MustGetRoomVersion(room.Version).DomainlessRoomIDs() {
 				// Room v12+ (MSC4291) does not allow the create event in the auth_events key. This outlier
 				// is supposed to be invalid, but not for that reason
 				content = content[1:]
@@ -176,7 +176,7 @@ func TestInboundFederationRejectsEventsWithRejectedAuthEvents(t *testing.T) {
 			charlieMembershipEvent,
 			outlierEvent,
 		}
-		if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).DomainlessRoomIDs() {
+		if gomatrixserverlib.MustGetRoomVersion(room.Version).DomainlessRoomIDs() {
 			content = content[1:]
 		}
 		return content
