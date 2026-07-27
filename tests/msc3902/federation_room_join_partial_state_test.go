@@ -1683,7 +1683,6 @@ func TestPartialStateJoin(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 			LocalpartSuffix: "t16alice",
 		})
-		defaultRoomVersion := alice.GetDefaultRoomVersion(t)
 		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -1701,7 +1700,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// update the users map in the PL event
 		for _, ev := range initialRoomEvents {
 			if ev.Type == "m.room.power_levels" {
-				if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).PrivilegedCreators() {
 					ev.Content["users"] = map[string]int64{derek: 50}
 				} else {
 					ev.Content["users"] = map[string]int64{charlie: 100, derek: 50}
@@ -1736,7 +1735,7 @@ func TestPartialStateJoin(t *testing.T) {
 					serverRoom.CurrentState("m.room.power_levels", ""),
 					derekJoinEvent,
 				}
-				if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).DomainlessRoomIDs() {
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).DomainlessRoomIDs() {
 					content = content[1:]
 				}
 				return content
@@ -1774,7 +1773,6 @@ func TestPartialStateJoin(t *testing.T) {
 		alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 			LocalpartSuffix: "t17alice",
 		})
-		defaultRoomVersion := alice.GetDefaultRoomVersion(t)
 		syncToken := getSyncToken(t, alice)
 		server := createTestServer(t, deployment)
 		cancel := server.Listen()
@@ -1793,7 +1791,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// update the users map in the PL event
 		for _, ev := range initialRoomEvents {
 			if ev.Type == "m.room.power_levels" {
-				if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).PrivilegedCreators() {
 					ev.Content["users"] = map[string]int64{derek: 100, elsie: 50}
 
 				} else {
@@ -1833,7 +1831,7 @@ func TestPartialStateJoin(t *testing.T) {
 					derekJoinEvent,
 					elsieJoinEvent,
 				}
-				if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).DomainlessRoomIDs() {
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).DomainlessRoomIDs() {
 					content = content[1:]
 				}
 				return content
@@ -1858,7 +1856,7 @@ func TestPartialStateJoin(t *testing.T) {
 					serverRoom.CurrentState("m.room.power_levels", ""),
 					elsieJoinEvent,
 				}
-				if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).DomainlessRoomIDs() {
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).DomainlessRoomIDs() {
 					content = content[1:]
 				}
 				return content
