@@ -124,7 +124,7 @@ func TestPowerLevels(t *testing.T) {
 			func(body gjson.Result) error {
 				// This key should be missing for room v12+
 				if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
-					match.JSONKeyMissing("users." + client.GjsonEscape(alice.UserID))
+					must.MatchGJSON(t, body, match.JSONKeyMissing("users." + client.GjsonEscape(alice.UserID)))
 					return nil
 				} else {
 					userDefault := int(body.Get("users_default").Num)
