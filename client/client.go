@@ -203,7 +203,7 @@ func (c *CSAPI) UpgradeRoom(t ct.TestLike, roomID string, newVersion string) *ht
 //
 // Args:
 //   - `serverNames`: The list of servers to attempt to join the room through.
-//     These should be a resolvable addresses within the deployment network.
+//     These should be a resolvable address within the deployment network.
 func (c *CSAPI) MustJoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []spec.ServerName) string {
 	t.Helper()
 	res := c.JoinRoom(t, roomIDOrAlias, serverNames)
@@ -221,7 +221,7 @@ func (c *CSAPI) MustJoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []
 //
 // Args:
 //   - `serverNames`: The list of servers to attempt to join the room through.
-//     These should be a resolvable addresses within the deployment network.
+//     These should be a resolvable address within the deployment network.
 func (c *CSAPI) JoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []spec.ServerName) *http.Response {
 	t.Helper()
 	// construct URL query parameters
