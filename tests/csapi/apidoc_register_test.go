@@ -140,6 +140,10 @@ func TestRegistration(t *testing.T) {
 			}
 		})
 		t.Run("POST /register rejects if user already exists", func(t *testing.T) {
+			// Dendrite: auth is validated before input, meaning the second register request needs to start a fresh
+			// auth session. This conflicts with Synapse, which forbids a second session being started, as it
+			// validates the input before auth. Skip on Dendrite for now.
+			runtime.SkipIf(t, runtime.Dendrite)
 			t.Parallel()
 			reqBody, _ := startUIASession(t, unauthedClient, "post-can-create-a-user-once", "sUp3rs3kr1t", nil)
 			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
@@ -149,8 +153,7 @@ func TestRegistration(t *testing.T) {
 					match.JSONKeyTypeEqual("user_id", gjson.String),
 				},
 			})
-			_, session := startUIASession(t, unauthedClient, "post-can-create-a-user-once", "sUp3rs3kr1t", nil)
-			reqBody["auth"].(map[string]any)["session"] = session
+			delete(reqBody, "auth")
 			res = unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
