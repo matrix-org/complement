@@ -149,8 +149,8 @@ func TestRegistration(t *testing.T) {
 					match.JSONKeyTypeEqual("user_id", gjson.String),
 				},
 			})
-			// Since servers validate the request body before handling auth, this returns 400
-			delete(reqBody, "auth")
+			_, session := startUIASession(t, unauthedClient, "post-can-create-a-user-once", "sUp3rs3kr1t", nil)
+			reqBody["auth"].(map[string]any)["session"] = session
 			res = unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
