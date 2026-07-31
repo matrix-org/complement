@@ -11,6 +11,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
@@ -84,6 +85,7 @@ func TestRoomMembers(t *testing.T) {
 		// sytest: Test that we can be reinvited to a room we created
 		t.Run("Test that we can be reinvited to a room we created", func(t *testing.T) {
 			t.Parallel()
+			defaultRoomVersion := alice.GetDefaultRoomVersion(t)
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"preset": "private_chat",
 			})
@@ -101,13 +103,19 @@ func TestRoomMembers(t *testing.T) {
 			alice.SendEventSynced(t, roomID, b.Event{
 				Type:     "m.room.power_levels",
 				StateKey: &stateKey,
-				Content: map[string]interface{}{
-					"invite": 100,
-					"users": map[string]interface{}{
-						alice.UserID: 100,
-						bob.UserID:   100,
-					},
-				},
+				Content: func() map[string]interface{} {
+					content := map[string]interface{}{
+						"invite": 100,
+						"users": map[string]int64{
+							bob.UserID:   100,
+							alice.UserID: 100,
+						},
+					}
+					if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
+						delete(content["users"].(map[string]int64), alice.UserID)
+					}
+					return content
+				}(),
 			})
 
 			alice.MustLeaveRoom(t, roomID)

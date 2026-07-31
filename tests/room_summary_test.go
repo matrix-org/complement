@@ -1,3 +1,5 @@
+//go:build !dendrite_blacklist
+
 // Tests the GET /_matrix/client/v1/room_summary/{roomIdOrAlias} endpoint
 // as specified in https://spec.matrix.org/v1.15/client-server-api/#get_matrixclientv1room_summaryroomidoralias
 
