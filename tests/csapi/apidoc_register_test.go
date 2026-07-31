@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -293,6 +294,8 @@ func TestRegistration(t *testing.T) {
 		// Test that subsequent calls to /_matrix/client/v3/register after receiving a UIA
 		// challenge fail if the session is not provided.
 		t.Run("Registration without a session fails", func(t *testing.T) {
+			// Many implementations historically did not enforce this requirement strictly
+			runtime.SkipIf(t, runtime.Synapse, runtime.Dendrite, runtime.Conduit)
 			t.Parallel()
 			reqBody, session := startUIASession(t, unauthedClient, "auth-requires-session", "sUp3rs3kr1t", nil)
 			if session == "" {
