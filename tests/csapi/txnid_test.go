@@ -214,8 +214,8 @@ func TestTxnIdempotency(t *testing.T) {
 // TestTxnIdWithRefreshToken tests that when a client refreshes its access token,
 // it still gets back a transaction ID in the sync response and idempotency is respected.
 func TestTxnIdWithRefreshToken(t *testing.T) {
-	// Dendrite and Conduit don't support refresh tokens yet.
-	runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit)
+	// Dendrite, Conduit, and Venator don't support refresh tokens yet.
+	runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit, runtime.Venator)
 
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)

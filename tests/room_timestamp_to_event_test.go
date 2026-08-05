@@ -21,12 +21,15 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 	"golang.org/x/exp/slices"
 )
 
 func TestJumpToDateEndpoint(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.OldDeploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 

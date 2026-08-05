@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -86,6 +87,10 @@ func TestPowerLevels(t *testing.T) {
 
 	// sytest: GET /rooms/:room_id/state/m.room.power_levels can fetch levels
 	t.Run("GET /rooms/:room_id/state/m.room.power_levels can fetch levels", func(t *testing.T) {
+		// Venator skips marshalling default values, which means all of these checks fail:
+		// > MatchJSONBytes key 'ban' missing with input = {}
+		// This is a feature :D
+		runtime.SkipIf(t, runtime.Venator)
 		// Test if the old state still exists
 		// note: before v10 we technically cannot assume that powerlevel integers are json numbers,
 		//  as they can be both strings and numbers.
@@ -124,7 +129,7 @@ func TestPowerLevels(t *testing.T) {
 			func(body gjson.Result) error {
 				// This key should be missing for room v12+
 				if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).PrivilegedCreators() {
-					must.MatchGJSON(t, body, match.JSONKeyMissing("users." + client.GjsonEscape(alice.UserID)))
+					must.MatchGJSON(t, body, match.JSONKeyMissing("users."+client.GjsonEscape(alice.UserID)))
 					return nil
 				} else {
 					userDefault := int(body.Get("users_default").Num)

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/matrix-org/complement"
+	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
@@ -40,6 +41,8 @@ func TestKnocking(t *testing.T) {
 }
 
 func doTestKnocking(t *testing.T, roomVersion string, joinRule string) {
+	// Venator: does not yet implement federation.
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
@@ -361,6 +364,8 @@ func knockOnRoomWithStatus(t *testing.T, c *client.CSAPI, roomID, reason string,
 // representing a knock room. For sanity-checking, this test will also create a public room and ensure it has a
 // 'join_rule' representing a publicly-joinable room.
 func TestKnockRoomsInPublicRoomsDirectory(t *testing.T) {
+	// Venator: does not support room v7 (>=v10 only)
+	runtime.SkipIf(t, runtime.Venator)
 	// v7 is required for knocking
 	doTestKnockRoomsInPublicRoomsDirectory(t, "7", "knock")
 }
@@ -451,6 +456,8 @@ func publishAndCheckRoomJoinRule(t *testing.T, c *client.CSAPI, roomID, expected
 
 // TestCannotSendNonKnockViaSendKnock checks that we cannot submit anything via /send_knock except a knock
 func TestCannotSendNonKnockViaSendKnock(t *testing.T) {
+	// Venator: does not yet implement federation, nor room v7 (>=v10 only)
+	runtime.SkipIf(t, runtime.Venator)
 	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v1/send_knock", "knock",
 		map[string]interface{}{
 			"preset":       "public_chat",

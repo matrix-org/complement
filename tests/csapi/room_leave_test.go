@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -127,6 +128,8 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	// sytest: Can get rooms/{roomId}/state for a departed room (SPEC-216)
 	t.Run("Can get rooms/{roomId}/state for a departed room", func(t *testing.T) {
+		// Venator: rooms are automatically forgotten on leave, so this functionality conflicts
+		runtime.SkipIf(t, runtime.Venator)
 		// Bob gets the old state
 		content := bob.MustGetStateEventContent(t, roomID, madeUpStateKey, "")
 		must.MatchGJSON(t, content, match.JSONKeyEqual("body", beforeMadeUpState))
@@ -138,6 +141,8 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	// sytest: Can get rooms/{roomId}/members for a departed room (SPEC-216)
 	t.Run("Can get rooms/{roomId}/members for a departed room", func(t *testing.T) {
+		// Venator: rooms are automatically forgotten on leave, so this functionality conflicts
+		runtime.SkipIf(t, runtime.Venator)
 		resp := bob.MustDo(
 			t,
 			"GET",
@@ -163,6 +168,8 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	// sytest: Can get rooms/{roomId}/messages for a departed room (SPEC-216)
 	t.Run("Can get rooms/{roomId}/messages for a departed room", func(t *testing.T) {
+		// Venator: rooms are automatically forgotten on leave, so this functionality conflicts
+		runtime.SkipIf(t, runtime.Venator)
 		resp := bob.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(url.Values{
 			"dir":   []string{"b"},
 			"limit": []string{"3"},
@@ -188,6 +195,8 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	// sytest: Can get 'm.room.name' state for a departed room (SPEC-216)
 	t.Run("Can get 'm.room.name' state for a departed room", func(t *testing.T) {
+		// Venator: rooms are automatically forgotten on leave, so this functionality conflicts
+		runtime.SkipIf(t, runtime.Venator)
 		// Bob gets the old name
 		content := bob.MustGetStateEventContent(t, roomID, "m.room.name", "")
 		must.MatchGJSON(t, content, match.JSONKeyEqual("name", beforeRoomName))
@@ -199,6 +208,8 @@ func TestLeftRoomFixture(t *testing.T) {
 
 	// sytest: Getting messages going forward is limited for a departed room (SPEC-216)
 	t.Run("Getting messages going forward is limited for a departed room", func(t *testing.T) {
+		// Venator: rooms are automatically forgotten on leave, so this functionality conflicts
+		runtime.SkipIf(t, runtime.Venator)
 		// TODO: try this with the most recent since token too
 		resp := bob.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithQueries(url.Values{
 			"dir":   []string{"f"},

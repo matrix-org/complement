@@ -43,6 +43,9 @@ func TestMediaFilenames(t *testing.T) {
 				t.Run(fmt.Sprintf("Can download file '%s'", filename), func(t *testing.T) {
 					// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 					runtime.SkipIf(t, runtime.Synapse)
+					// Venator is too young for any media to be available over the unauthenticated API,
+					// and always returns M_NOT_FOUND
+					runtime.SkipIf(t, runtime.Venator)
 					t.Parallel()
 
 					mxcUri := alice.UploadContent(t, data.MatrixPng, filename, "image/png")
@@ -73,6 +76,9 @@ func TestMediaFilenames(t *testing.T) {
 			t.Run("Can download specifying a different ASCII file name", func(t *testing.T) {
 				// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 				runtime.SkipIf(t, runtime.Synapse)
+				// Venator is too young for any media to be available over the unauthenticated API,
+				// and always returns M_NOT_FOUND
+				runtime.SkipIf(t, runtime.Venator)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, asciiFileName, "image/png")
@@ -113,6 +119,9 @@ func TestMediaFilenames(t *testing.T) {
 			t.Run("Can download specifying a different Unicode file name", func(t *testing.T) {
 				// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 				runtime.SkipIf(t, runtime.Synapse)
+				// Venator is too young for any media to be available over the unauthenticated API,
+				// and always returns M_NOT_FOUND
+				runtime.SkipIf(t, runtime.Venator)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
@@ -144,6 +153,9 @@ func TestMediaFilenames(t *testing.T) {
 			t.Run("Can download with Unicode file name locally", func(t *testing.T) {
 				// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 				runtime.SkipIf(t, runtime.Synapse)
+				// Venator is too young for any media to be available over the unauthenticated API,
+				// and always returns M_NOT_FOUND
+				runtime.SkipIf(t, runtime.Venator)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
@@ -171,6 +183,9 @@ func TestMediaFilenames(t *testing.T) {
 			t.Run("Can download with Unicode file name over federation", func(t *testing.T) {
 				// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 				runtime.SkipIf(t, runtime.Synapse)
+				// Venator is too young for any media to be available over the unauthenticated API,
+				// and always returns M_NOT_FOUND. It also doesn't implement federation yet.
+				runtime.SkipIf(t, runtime.Venator)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
@@ -183,6 +198,8 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Can download with Unicode file name over federation via _matrix/client/v1/media/download", func(t *testing.T) {
+				// Venator: doesn't implement federation yet.
+				runtime.SkipIf(t, runtime.Venator)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, unicodeFileName, "image/png")
@@ -195,13 +212,11 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve safe media types as inline", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Conduwuit {
-					// We need to check that this security behaviour is being correctly run in
-					// conduwuit, but since this is not part of the Matrix spec we do not assume
-					// other homeservers are doing so.
-					// Skip Synapse because it no longer allows downloads over the unauthenticated media endpoints by default
-					t.Skip("Skipping test of Content-Disposition header requirements on non-conduwuit homeserver")
-				}
+				// We need to check that this security behaviour is being correctly run in
+				// conduwuit, but since this is not part of the Matrix spec we do not assume
+				// other homeservers are doing so.
+				// Skip Synapse because it no longer allows downloads over the unauthenticated media endpoints by default
+				runtime.SkipUnless(t, runtime.Conduwuit)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, "", "image/png")
@@ -214,12 +229,10 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve safe media types as inline via _matrix/client/v1/media/download", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
-					// We need to check that this security behaviour is being correctly run in
-					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
-					// other homeservers are doing so.
-					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
-				}
+				// We need to check that this security behaviour is being correctly run in
+				// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
+				// other homeservers are doing so.
+				runtime.SkipUnless(t, runtime.Synapse, runtime.Conduwuit)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixPng, "", "image/png")
@@ -232,13 +245,11 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve safe media types with parameters as inline", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Conduwuit {
-					// We need to check that this security behaviour is being correctly run in
-					// conduwuit, but since this is not part of the Matrix spec we do not assume
-					// other homeservers are doing so.
-					// Skip Synapse because it no longer allows downloads over the unauthenticated media endpoints by default
-					t.Skip("Skipping test of Content-Disposition header requirements on non-conduwuit homeserver")
-				}
+				// We need to check that this security behaviour is being correctly run in
+				// conduwuit, but since this is not part of the Matrix spec we do not assume
+				// other homeservers are doing so.
+				// Skip Synapse because it no longer allows downloads over the unauthenticated media endpoints by default
+				runtime.SkipUnless(t, runtime.Conduwuit)
 				t.Parallel()
 
 				// Add parameters and upper-case, which should be parsed as text/plain.
@@ -252,12 +263,10 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve safe media types with parameters as inline via _matrix/client/v1/media/download", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
-					// We need to check that this security behaviour is being correctly run in
-					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
-					// other homeservers are doing so.
-					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
-				}
+				// We need to check that this security behaviour is being correctly run in
+				// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
+				// other homeservers are doing so.
+				runtime.SkipUnless(t, runtime.Synapse, runtime.Conduwuit)
 				t.Parallel()
 
 				// Add parameters and upper-case, which should be parsed as text/plain.
@@ -271,13 +280,11 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve unsafe media types as attachments", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Conduwuit {
-					// We need to check that this security behaviour is being correctly run in
-					// conduwuit, but since this is not part of the Matrix spec we do not assume
-					// other homeservers are doing so.
-					// Skip Synapse because it no longer allows downloads over the unauthenticated media endpoints by default
-					t.Skip("Skipping test of Content-Disposition header requirements on non-conduwuit homeserver")
-				}
+				// We need to check that this security behaviour is being correctly run in
+				// conduwuit, but since this is not part of the Matrix spec we do not assume
+				// other homeservers are doing so.
+				// Skip Synapse because it no longer allows downloads over the unauthenticated media endpoints by default
+				runtime.SkipUnless(t, runtime.Conduwuit)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixSvg, "", "image/svg")
@@ -290,12 +297,10 @@ func TestMediaFilenames(t *testing.T) {
 			})
 
 			t.Run("Will serve unsafe media types as attachments via _matrix/client/v1/media/download", func(t *testing.T) {
-				if runtime.Homeserver != runtime.Synapse && runtime.Homeserver != runtime.Conduwuit {
-					// We need to check that this security behaviour is being correctly run in
-					// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
-					// other homeservers are doing so.
-					t.Skip("Skipping test of Content-Disposition header requirements on non-Synapse and non-conduwuit homeserver")
-				}
+				// We need to check that this security behaviour is being correctly run in
+				// Synapse or conduwuit, but since this is not part of the Matrix spec we do not assume
+				// other homeservers are doing so.
+				runtime.SkipUnless(t, runtime.Synapse, runtime.Conduwuit)
 				t.Parallel()
 
 				mxcUri := alice.UploadContent(t, data.MatrixSvg, "", "image/svg")

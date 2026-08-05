@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"slices"
 
 	"github.com/docker/docker/client"
 	"github.com/matrix-org/complement/ct"
@@ -12,6 +13,7 @@ const (
 	Synapse   = "synapse"
 	Conduit   = "conduit"
 	Conduwuit = "conduwuit"
+	Venator   = "venator"
 )
 
 var Homeserver string
@@ -49,4 +51,20 @@ func SkipIf(t ct.TestLike, hses ...string) {
 			t.Name(), hses,
 		)
 	}
+}
+
+// SkipUnless is the inverse of SkipIf: if the homeserver being tested is not present in the provided set, the test is skipped.
+// This also means running without a blacklist tag will always skip.
+func SkipUnless(t ct.TestLike, hses ...string) {
+	t.Helper()
+	if slices.Contains(hses, Homeserver) {
+		return
+	}
+	if Homeserver == "" {
+		t.Logf(
+			"WARNING: %s called runtime.SkipUnless(%v) but Complement doesn't know which HS is running as it was run without a *_blacklist tag: not executing test.",
+			t.Name(), hses,
+		)
+	}
+	t.Skipf("test only runs on specific homeservers: %v", hses)
 }
