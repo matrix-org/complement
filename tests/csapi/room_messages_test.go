@@ -429,7 +429,18 @@ func _sendAndTestMessageHistory(
 		testCase.numberOfMessagesToSend,
 	)
 	fromToken := ""
-	for {
+	// Guard against a buggy homeserver that never terminates pagination (e.g. it
+	// keeps returning an `end` token, possibly oscillating between a small set of
+	// tokens like `[-1, 1]` -> `[1, -1]` -> ...). Without this, the test would spin
+	// until the overall test timeout (which can be as long as 3600s) instead of
+	// failing fast with a useful error.
+	seenTokens := map[string]bool{fromToken: true}
+	maxIterations := testCase.numberOfMessagesToSend + 1
+	for iteration := 0; ; iteration++ {
+		if iteration >= maxIterations {
+			t.Fatalf("paginated %d times without reaching the start of the room (no `end` token) -- homeserver may be stuck in a pagination loop", iteration)
+		}
+
 		messageQueryParams := url.Values{
 			"dir":   []string{"b"},
 			"limit": []string{strconv.Itoa(testCase.messagesRequestLimit)},
@@ -474,6 +485,11 @@ func _sendAndTestMessageHistory(
 			break
 		}
 		fromToken = endTokenRes.Str
+
+		if seenTokens[fromToken] {
+			t.Fatalf("homeserver returned a pagination token (%s) we've already seen -- it appears to be stuck in loop or repeating elements", fromToken)
+		}
+		seenTokens[fromToken] = true
 	}
 
 	// Put them in chronological order to match the expected list
