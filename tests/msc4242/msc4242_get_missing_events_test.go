@@ -30,7 +30,7 @@ import (
 //    A: Linearly (1 prev_state_event)
 //    B: With multiple parents (>1 prev_state_events)
 //  GME02: Bad inputs
-//    A: Returns nothing if you provide a message event ID.
+//    A: Returns the prev_state_events of the message event if you provide a message event ID.
 //    B: Returns nothing if you provide a bogus event ID.
 //  GME03: Faulty events:
 //    A: it includes soft-failed events when walking.
@@ -277,18 +277,22 @@ func TestMSC4242GetMissingEventsInbound(t *testing.T) {
 			},
 			wantWalkOrder: func(room *federation.ServerRoom, initialEvents, generatedEvents []gomatrixserverlib.PDU) (eventIDs []string) {
 				lookup := map[string]int{"A": 0, "B": 1, "C": 2, "D": 3, "E": 4} // indexes map to generatedEvents
-				// We will first return D,E, the ascii lowest one first
-				if generatedEvents[lookup["D"]].EventID() < generatedEvents[lookup["E"]].EventID() {
-					eventIDs = append(eventIDs, generatedEvents[lookup["D"]].EventID(), generatedEvents[lookup["E"]].EventID())
-					// now we will walk back D first, then E (because the HS sorts latest_events then walks each in turn)
-					eventIDs = append(eventIDs, generatedEvents[lookup["D"]].PrevStateEventIDs()...)
-					eventIDs = append(eventIDs, generatedEvents[lookup["E"]].PrevStateEventIDs()...)
-				} else {
-					eventIDs = append(eventIDs, generatedEvents[lookup["E"]].EventID(), generatedEvents[lookup["D"]].EventID())
-					// now we will walk back E first, then D (because the HS sorts latest_events then walks each in turn)
-					eventIDs = append(eventIDs, generatedEvents[lookup["E"]].PrevStateEventIDs()...)
-					eventIDs = append(eventIDs, generatedEvents[lookup["D"]].PrevStateEventIDs()...)
+				// Events are returned ordered by the number of hops away they are from latest_events,
+				// tie-breaking lexicographically, so each 'layer' of the fork is sorted by event ID.
+				// 1 hop from the sentinel: D,E
+				layer := []string{
+					generatedEvents[lookup["D"]].EventID(), generatedEvents[lookup["E"]].EventID(),
 				}
+				slices.Sort(layer)
+				eventIDs = append(eventIDs, layer...)
+
+				// 1 hop from {D,E}: B,C
+				layer = append(
+					slices.Clone(generatedEvents[lookup["D"]].PrevStateEventIDs()),
+					generatedEvents[lookup["E"]].PrevStateEventIDs()...,
+				)
+				slices.Sort(layer)
+				eventIDs = append(eventIDs, layer...)
 
 				// finally A
 				eventIDs = append(eventIDs, generatedEvents[lookup["A"]].EventID())
@@ -623,15 +627,31 @@ func TestMSC4242GetMissingEventsBadInputs(t *testing.T) {
 		testCode string
 		name     string
 		req      fclient.MissingEvents
+		assert   func(t *testing.T, tc string, gotEvents []gomatrixserverlib.PDU)
 	}{
 		{
 			testCode: "GME02A",
-			name:     "returns nothing for a message event",
+			name:     "returns the prev_state_events for a message event",
 			req: fclient.MissingEvents{
 				Limit:          5,
 				EarliestEvents: []string{},
 				LatestEvents:   []string{msg.EventID()},
 				StateDAG:       true,
+			},
+			// If /get_missing_events is called with state_dag: true and latest_events contains a
+			// message event then the response MUST include the prev_state_events for that message
+			// event, so servers can fill in the state DAG with a single request.
+			assert: func(t *testing.T, tc string, gotEvents []gomatrixserverlib.PDU) {
+				gotEventIDs := AsEventIDs(t, gotEvents)
+				for _, wantEventID := range msg.PrevStateEventIDs() {
+					must.Equal(
+						t, slices.Contains(gotEventIDs, wantEventID), true,
+						fmt.Sprintf(
+							"%s: /get_missing_events did not return prev_state_event %s of the message event, got %v",
+							tc, wantEventID, gotEventIDs,
+						),
+					)
+				}
 			},
 		},
 		{
@@ -643,6 +663,12 @@ func TestMSC4242GetMissingEventsBadInputs(t *testing.T) {
 				LatestEvents:   []string{"$4PRgaFIMcD9z4vzgkUUm0YI5CZHYORUPzWGJac6guAo"},
 				StateDAG:       true,
 			},
+			assert: func(t *testing.T, tc string, gotEvents []gomatrixserverlib.PDU) {
+				must.Equal(
+					t, len(gotEvents), 0,
+					fmt.Sprintf("%s: /get_missing_events returned events: %v", tc, AsEventIDs(t, gotEvents)),
+				)
+			},
 		},
 	}
 
@@ -653,11 +679,7 @@ func TestMSC4242GetMissingEventsBadInputs(t *testing.T) {
 				room.RoomID, tc.req, roomVersion,
 			)
 			must.NotError(t, "failed to send /gme request", err)
-			gotEvents := resp.Events.TrustedEvents(roomVersion, false)
-			must.Equal(
-				t, len(gotEvents), 0,
-				fmt.Sprintf("/get_missing_events returned events for %s: %s", tc.testCode, tc.name),
-			)
+			tc.assert(t, fmt.Sprintf("%s: %s", tc.testCode, tc.name), resp.Events.TrustedEvents(roomVersion, false))
 		})
 	}
 }

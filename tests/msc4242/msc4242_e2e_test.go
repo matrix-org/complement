@@ -13,6 +13,7 @@ import (
 	"github.com/matrix-org/complement/client"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/gomatrixserverlib/spec"
+	"github.com/tidwall/gjson"
 )
 
 // Test that you can join and send messages in MSC4242 rooms.
@@ -30,7 +31,7 @@ func TestMSC4242FederationSimple(t *testing.T) {
 	// The number of changes is unimportant, what's important is that we are lengthening the auth chain
 	// for alice, thus the 'current state' is alice's 5th display name change, and the server must
 	// verify this by walking the state DAG.
-	changeDisplayName(t, alice, "alice", 5)
+	changeDisplayName(t, alice, roomID, "alice", 5)
 	bob.MustJoinRoom(t, roomID, []spec.ServerName{"hs1"})
 	eventID := bob.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
@@ -42,8 +43,18 @@ func TestMSC4242FederationSimple(t *testing.T) {
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(roomID, eventID))
 }
 
-func changeDisplayName(t *testing.T, cli *client.CSAPI, prefix string, numTimes int) {
+// changeDisplayName changes the display name of cli numTimes, waiting for each change to land in
+// roomID before making the next one. Servers may propagate profile changes into rooms
+// asynchronously (Synapse does this in a background task) so if we don't wait, several changes can
+// collapse into a single m.room.member event, shortening the state DAG.
+func changeDisplayName(t *testing.T, cli *client.CSAPI, roomID, prefix string, numTimes int) {
+	t.Helper()
 	for i := 0; i < numTimes; i++ {
-		cli.MustSetDisplayName(t, fmt.Sprintf("%s %d", prefix, i))
+		displayName := fmt.Sprintf("%s %d", prefix, i)
+		cli.MustSetDisplayName(t, displayName)
+		cli.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == "m.room.member" && ev.Get("state_key").Str == cli.UserID &&
+				ev.Get("content.displayname").Str == displayName
+		}))
 	}
 }

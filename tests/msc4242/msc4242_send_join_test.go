@@ -178,7 +178,7 @@ func TestMSC4242SendJoinSJ01Inbound(t *testing.T) {
 	// add a few events to the state dag and normal dag.
 	// We change display name for alice to ensure we have a lengthy auth chain,
 	// rather than just 1 event per state tuple.
-	changeDisplayName(t, alice, "alice", 5)
+	changeDisplayName(t, alice, roomID, "alice", 5)
 	sendTextMessages(t, alice, roomID, "before_join", 5)
 	roomSyncData, _ := alice.MustSync(t, client.SyncReq{
 		Filter: `{"event_format":"federation","room":{"timeline":{"limit":50}}}`,
@@ -342,8 +342,8 @@ func TestMSC4242SendJoinFasterSJ03Inbound(t *testing.T) {
 		"preset":       "public_chat",
 	})
 	charlie.MustJoinRoom(t, roomID, []string{"hs1"})
-	changeDisplayName(t, alice, "alice", 4)
-	changeDisplayName(t, alice, "final", 1)
+	changeDisplayName(t, alice, roomID, "alice", 4)
+	changeDisplayName(t, alice, roomID, "final", 1)
 	textEventIDs := sendTextMessages(t, alice, roomID, "before_join", 5)
 	t.Logf("sent messages: %v", textEventIDs)
 	// we must sync with LL members enabled in order for the homeserver to be able to join via partial state,
