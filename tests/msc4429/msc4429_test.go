@@ -172,7 +172,7 @@ func TestMSC4429ProfileUpdates(t *testing.T) {
 		)
 
 		// Bob clears their status.
-		mustSetProfileField(t, bob, "m.status", nil)
+		mustDeleteProfileField(t, bob, "m.status")
 
 		// Wait until alice sees the status be set to `null` (nil).
 		alice.MustSyncUntil(
@@ -274,6 +274,12 @@ func mustSetProfileField(t *testing.T, user *client.CSAPI, field string, value i
 			field: value,
 		}),
 	)
+}
+
+// mustDeleteProfileField clears the given profile field ID on the given user's profile.
+func mustDeleteProfileField(t *testing.T, user *client.CSAPI, field string) {
+	t.Helper()
+	user.MustDo(t, "DELETE", []string{"_matrix", "client", "v3", "profile", user.UserID, field})
 }
 
 // getProfileUpdate extracts the given profile updates for a given user by field
