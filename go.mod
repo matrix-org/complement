@@ -9,7 +9,7 @@ require (
 	github.com/matrix-org/util v0.0.0-20221111132719-399730281e66
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.1
-	github.com/sirupsen/logrus v1.10.1
+	github.com/sirupsen/logrus v1.10.2
 	github.com/tidwall/gjson v1.19.0
 	github.com/tidwall/sjson v1.2.5
 	golang.org/x/crypto v0.55.0
