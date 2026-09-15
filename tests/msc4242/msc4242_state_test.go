@@ -79,9 +79,14 @@ func TestMSC4242STATE00TemporaryNetworkErrorIsOkay(t *testing.T) {
 	//    .
 	//    D
 	//
-	// We will initially 502 the /get_missing_events (state DAG) request. This will cause
+	// We will initially 404 the /get_missing_events (state DAG) request. This will cause
 	// C to fail to be persisted. We'll then send D which we will then return C in /get_missing_events (no state DAG)
 	// and then return [A,B] in /get_missing_events (state DAG). We should see A,B,C,D in /sync.
+	//
+	// We deliberately fail the first request with a 4xx and not a 5xx: a 5xx puts us into the
+	// receiving server's federation retry backoff (10 mins in Synapse), so it would refuse to
+	// even send the /get_missing_events requests for D, and D would be rejected for having
+	// prev_events it cannot fetch.
 
 	// We want to test what happens if the events in /send are state events as well as if they are message events,
 	// so we'll replay the following code twice
@@ -142,7 +147,7 @@ func TestMSC4242STATE00TemporaryNetworkErrorIsOkay(t *testing.T) {
 			}
 			waiter := helpers.NewWaiter()
 			getMissingEventsStateDAGHandler = func(w http.ResponseWriter, _ *fclient.MissingEvents) {
-				w.WriteHeader(502)
+				w.WriteHeader(404)
 				waiter.Finish()
 			}
 			srv.MustSendTransaction(t, deployment, "hs1", AsEventJSONs([]gomatrixserverlib.PDU{events["C"]}), nil)
