@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"sync"
@@ -28,6 +29,25 @@ type Deployment struct {
 	HS               map[string]*HomeserverDeployment
 	Config           *config.Complement
 	localpartCounter atomic.Int64
+	// HTTP transports used by RoundTripper, keyed by homeserver.
+	// Transports must be reused else we will leak some idle connections over the lifetime of the test run.
+	transports sync.Map
+}
+
+// transportFor returns the (shared) HTTP transport used to talk to the given homeserver.
+func (d *Deployment) transportFor(hsName string) *http.Transport {
+	if t, ok := d.transports.Load(hsName); ok {
+		return t.(*http.Transport)
+	}
+	t, _ := d.transports.LoadOrStore(hsName, &http.Transport{
+		TLSClientConfig: &tls.Config{
+			ServerName:         hsName,
+			InsecureSkipVerify: true,
+		},
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     30 * time.Second,
+	})
+	return t.(*http.Transport)
 }
 
 // HomeserverDeployment represents a running homeserver in a container.
