@@ -315,7 +315,8 @@ func (g *Graph) Update(pdus []gomatrixserverlib.PDU) {
 	}
 }
 
-// GetMissingEvents implements /get_missing_events for the state DAG, including sort ordering
+// GetMissingEvents implements /get_missing_events for the state DAG, including sort ordering.
+// If WalkPrevEvents is set, the graph induced by prev_events is walked instead.
 func (g *Graph) GetMissingEvents(from []string, limit int) (result []gomatrixserverlib.PDU) {
 	queue := make([]string, len(from))
 	seen := make(map[string]bool)
@@ -333,6 +334,9 @@ func (g *Graph) GetMissingEvents(from []string, limit int) (result []gomatrixser
 		}
 		seen[next] = true
 		prevs := g.stateGraph[next]
+		if g.WalkPrevEvents {
+			prevs = g.eventGraph[next]
+		}
 		slices.Sort(prevs)
 		queue = append(queue, prevs...)
 		for _, p := range prevs {
