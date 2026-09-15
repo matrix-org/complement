@@ -12,6 +12,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 
 	"github.com/matrix-org/gomatrixserverlib"
@@ -102,6 +103,8 @@ func TestIsDirectFlagLocal(t *testing.T) {
 // Test that the `is_direct` flag on m.room.member invites propagate to the target user. Users
 // are on different homeservers.
 func TestIsDirectFlagFederation(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 

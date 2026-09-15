@@ -187,6 +187,8 @@ func checkRestrictedRoom(t *testing.T, deployment complement.Deployment, alice *
 
 // Test joining a room with join rules restricted to membership in another room.
 func TestRestrictedRoomsLocalJoin(t *testing.T) {
+	// Venator: does not support room version 8 (>=v10 only)
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
@@ -218,11 +220,15 @@ func TestRestrictedRoomsRemoteJoin(t *testing.T) {
 // A server will do a remote join for a local user if it is unable to to issue
 // joins in a restricted room it is already participating in.
 func TestRestrictedRoomsRemoteJoinLocalUser(t *testing.T) {
+	// Venator: does not support room version 8 (>=v10 only)
+	runtime.SkipIf(t, runtime.Venator)
 	doTestRestrictedRoomsRemoteJoinLocalUser(t, "8", "restricted")
 }
 
 func doTestRestrictedRoomsRemoteJoinLocalUser(t *testing.T, roomVersion string, joinRule string) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2801
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
@@ -331,6 +337,8 @@ func TestRestrictedRoomsRemoteJoinFailOver(t *testing.T) {
 
 func doTestRestrictedRoomsRemoteJoinFailOver(t *testing.T, roomVersion string, joinRule string) {
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/2801
+	// Venator: does not yet implement federation.
+	runtime.SkipIf(t, runtime.Venator)
 
 	deployment := complement.Deploy(t, 3)
 	defer deployment.Destroy(t)
@@ -469,6 +477,8 @@ func TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11(t *testing.T) {
 }
 
 func doTestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevels(t *testing.T, roomVersion string, joinRule string) {
+	// Venator: does not yet implement federation.
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 	// Create the room

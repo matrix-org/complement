@@ -3,15 +3,15 @@ package docker
 import (
 	"strings"
 
-	"github.com/docker/docker/api/types/filters"
+	"github.com/moby/moby/client"
 
 	"github.com/matrix-org/complement/b"
 )
 
 // label returns a filter for the presence of certain labels ("complement_context") or a match of
 // labels ("complement_blueprint=foo").
-func label(labelFilters ...string) filters.Args {
-	f := filters.NewArgs()
+func label(labelFilters ...string) client.Filters {
+	f := client.Filters{}
 	// label=<key> or label=<key>=<value>
 	for _, in := range labelFilters {
 		f.Add("label", in)

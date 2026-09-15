@@ -6,16 +6,24 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   check-signoff:
     if: "github.event_name == 'pull_request'"
-    uses: "matrix-org/backend-meta/.github/workflows/sign-off.yml@v2"
+    permissions:
+      pull-requests: read
+    uses: matrix-org/backend-meta/.github/workflows/sign-off.yml@18beaf3c8e536108bd04d18e6c3dc40ba3931e28 # v2
 
   complement-internal:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v3 # Checkout complement
-      - uses: actions/setup-go@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: "Run internal Complement tests"
@@ -26,8 +34,8 @@ jobs:
           DOCKER_BUILDKIT: 1
         run: |
           mkdir -p homeserver
-          # Latest official dendrite release is still using Debian Stretch as a base, hence the specific commit
-          wget -O - "https://github.com/matrix-org/dendrite/archive/0489d16f95a3d9f1f5bc532e2060bd2482d7b156.tar.gz" | tar -xz --strip-components=1 -C homeserver
+          # Dendrite is unmaintained to just pin to a known working commit
+          wget -O - "https://github.com/element-hq/dendrite/archive/08cac1ccf0a45471132ad24a29e3ec15643675fa.tar.gz" | tar -xz --strip-components=1 -C homeserver
           (cd homeserver && docker build -t complement-dendrite -f build/scripts/Complement.Dockerfile .)
           (cd cmd/homerunner/test && ./test.sh)
 
@@ -35,6 +43,8 @@ jobs:
   complement:
     name: Complement (${{ matrix.homeserver }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false # ensure if synapse fails we keep running dendrite and vice-versa
       matrix:
@@ -42,7 +52,7 @@ jobs:
           - homeserver: Synapse
             repo: element-hq/synapse
             tags: synapse_blacklist
-            packages: ./tests/msc3874 ./tests/msc3902 ./tests/msc4306
+            packages: ./tests/msc3874 ./tests/msc3902 ./tests/msc4306 ./tests/msc4429
             env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1 COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
             timeout: 20m
 
@@ -54,9 +64,11 @@ jobs:
             timeout: 10m
 
     steps:
-      - uses: actions/checkout@v3 # Checkout complement
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
@@ -66,7 +78,7 @@ jobs:
       # servers which listen on random high numbered ports.
       - name: "Install Complement Dependencies"
         run: |
-          go install -v github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+          go install -v github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@v2.5.0
           mkdir .gotestfmt/github -p
           cp .ci/complement_package.gotpl .gotestfmt/github/package.gotpl
           gotestfmt -help

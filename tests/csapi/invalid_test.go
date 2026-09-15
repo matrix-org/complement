@@ -1,3 +1,7 @@
+//go:build !venator_blacklist
+
+// Venator: does not support room version 6 (>=v10 only)
+
 package csapi_tests
 
 import (
@@ -35,7 +39,7 @@ func TestJson(t *testing.T) {
 			}
 
 			for _, testCase := range testCases {
-				res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
+				res := alice.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy", helpers.GetTxnID("TestJson-InvalidNum")}, client.WithJSONBody(t, testCase))
 
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,
@@ -57,7 +61,7 @@ func TestJson(t *testing.T) {
 			}
 
 			for _, testCase := range testCases {
-				res := alice.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy"}, client.WithJSONBody(t, testCase))
+				res := alice.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "complement.dummy", helpers.GetTxnID("TestJson-InvalidVal")}, client.WithJSONBody(t, testCase))
 
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,

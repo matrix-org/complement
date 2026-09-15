@@ -3,6 +3,7 @@ package csapi_tests
 import (
 	"testing"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -126,6 +127,8 @@ func TestDeviceManagement(t *testing.T) {
 
 	// sytest: DELETE /device/{deviceId}
 	t.Run("DELETE /device/{deviceId}", func(t *testing.T) {
+		// Venator: https://github.com/matrix-org/complement/issues/899
+		runtime.SkipIf(t, runtime.Venator)
 		newDeviceID, session2 := createSession(t, deployment, authedClient.UserID, "superuser")
 		session2.MustSync(t, client.SyncReq{})
 
@@ -196,6 +199,8 @@ func TestDeviceManagement(t *testing.T) {
 	})
 	// sytest: DELETE /device/{deviceId} requires UI auth user to match device owner
 	t.Run("DELETE /device/{deviceId} requires UI auth user to match device owner", func(t *testing.T) {
+		// Venator: https://github.com/matrix-org/complement/issues/899
+		runtime.SkipIf(t, runtime.Venator)
 		bob := deployment.Register(t, "hs1", helpers.RegistrationOpts{
 			LocalpartSuffix: "bob",
 			Password:        "bobspassword",

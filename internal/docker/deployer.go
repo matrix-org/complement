@@ -30,14 +30,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/client"
 	"github.com/matrix-org/complement/internal"
 	complementRuntime "github.com/matrix-org/complement/runtime"
+	"github.com/moby/moby/client"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/network"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/image"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/network"
 
 	"github.com/matrix-org/complement/config"
 )
@@ -140,7 +140,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 		HS:            make(map[string]*HomeserverDeployment),
 		Config:        d.config,
 	}
-	images, err := d.Docker.ImageList(ctx, image.ListOptions{
+	images, err := d.Docker.ImageList(ctx, client.ImageListOptions{
 		Filters: label(
 			"complement_pkg="+d.config.PackageNamespace,
 			"complement_blueprint="+blueprintName,
@@ -149,7 +149,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	if err != nil {
 		return nil, fmt.Errorf("Deploy: failed to ImageList: %w", err)
 	}
-	if len(images) == 0 {
+	if len(images.Items) == 0 {
 		return nil, fmt.Errorf("Deploy: No images have been built for blueprint %s", blueprintName)
 	}
 	networkName, err := createNetworkIfNotExists(d.Docker, d.config.PackageNamespace, blueprintName)
@@ -160,7 +160,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	// deploy images in parallel
 	var mu sync.Mutex // protects mutable values like the counter and errors
 	var wg sync.WaitGroup
-	wg.Add(len(images)) // ensure we wait until all images have deployed
+	wg.Add(len(images.Items)) // ensure we wait until all images have deployed
 	deployImg := func(img image.Summary) error {
 		defer wg.Done()
 		mu.Lock()
@@ -197,7 +197,7 @@ func (d *Deployer) Deploy(ctx context.Context, blueprintName string) (*Deploymen
 	}
 
 	var lastErr error
-	for _, img := range images {
+	for _, img := range images.Items {
 		go func(i image.Summary) {
 			err := deployImg(i)
 			if err != nil {
@@ -224,7 +224,7 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName strin
 			// If we want the logs we gracefully stop the containers to allow
 			// the logs to be flushed.
 			oneSecond := 1
-			err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, container.StopOptions{
+			_, err := d.Docker.ContainerStop(context.Background(), hsDep.ContainerID, client.ContainerStopOptions{
 				Timeout: &oneSecond,
 			})
 			if err != nil {
@@ -247,7 +247,7 @@ func (d *Deployer) Destroy(dep *Deployment, printServerLogs bool, testName strin
 			log.Printf("Post test script result: %s", string(result))
 		}
 
-		err = d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, container.RemoveOptions{
+		_, err = d.Docker.ContainerRemove(context.Background(), hsDep.ContainerID, client.ContainerRemoveOptions{
 			Force: true,
 		})
 		if err != nil {
@@ -267,7 +267,7 @@ func (d *Deployer) executePostScript(hsDep *HomeserverDeployment, testName strin
 
 func (d *Deployer) PauseServer(hsDep *HomeserverDeployment) error {
 	ctx := context.Background()
-	err := d.Docker.ContainerPause(ctx, hsDep.ContainerID)
+	_, err := d.Docker.ContainerPause(ctx, hsDep.ContainerID, client.ContainerPauseOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to pause container %s: %s", hsDep.ContainerID, err)
 	}
@@ -276,7 +276,7 @@ func (d *Deployer) PauseServer(hsDep *HomeserverDeployment) error {
 
 func (d *Deployer) UnpauseServer(hsDep *HomeserverDeployment) error {
 	ctx := context.Background()
-	err := d.Docker.ContainerUnpause(ctx, hsDep.ContainerID)
+	_, err := d.Docker.ContainerUnpause(ctx, hsDep.ContainerID, client.ContainerUnpauseOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to unpause container %s: %s", hsDep.ContainerID, err)
 	}
@@ -286,7 +286,7 @@ func (d *Deployer) UnpauseServer(hsDep *HomeserverDeployment) error {
 func (d *Deployer) StopServer(hsDep *HomeserverDeployment) error {
 	ctx := context.Background()
 	secs := int(d.config.SpawnHSTimeout.Seconds())
-	err := d.Docker.ContainerStop(ctx, hsDep.ContainerID, container.StopOptions{
+	_, err := d.Docker.ContainerStop(ctx, hsDep.ContainerID, client.ContainerStopOptions{
 		Timeout: &secs,
 	})
 	if err != nil {
@@ -308,7 +308,7 @@ func (d *Deployer) Restart(hsDep *HomeserverDeployment) error {
 
 func (d *Deployer) StartServer(hsDep *HomeserverDeployment) error {
 	ctx := context.Background()
-	err := d.Docker.ContainerStart(ctx, hsDep.ContainerID, container.StartOptions{})
+	_, err := d.Docker.ContainerStart(ctx, hsDep.ContainerID, client.ContainerStartOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to start container %s: %s", hsDep.ContainerID, err)
 	}
@@ -375,49 +375,55 @@ func deployImage(
 		log.Printf("Sharing %v host environment variables with container", env)
 	}
 
-	body, err := docker.ContainerCreate(ctx, &container.Config{
-		Image: imageID,
-		Env:   env,
-		//Cmd:   d.ImageArgs,
-		Labels: map[string]string{
-			complementLabel:        contextStr,
-			"complement_blueprint": blueprintName,
-			"complement_pkg":       pkgNamespace,
-			"complement_hs_name":   hsName,
-		},
-	}, &container.HostConfig{
-		CapAdd: []string{"NET_ADMIN"}, // TODO : this should be some sort of option
-		// We use `PublishAllPorts` because although Complement only requires the ports 8008
-		// and 8448 to be accessible in the image, other custom out-of-repo tests may use
-		// additional ports that are specific to their own application.
-		//
-		// Ideally, we would only bind to `cfg.HSPortBindingIP` but there isn't a way to
-		// specify the `HostIP` when using `PublishAllPorts`. And although, we could specify
-		// a manual port mapping, it's not compatible with also having `PublishAllPorts` set
-		// to true (we run into `address already in use` errors). Binding to all interfaces
-		// means we're also listening on `cfg.HSPortBindingIP` so it's good enough.
-		PublishAllPorts: true,
-		ExtraHosts:      extraHosts,
-		Mounts:          mounts,
-		// https://docs.docker.com/engine/containers/resource_constraints/
-		Resources: container.Resources{
-			// Constrain the the number of CPU cores this container can use
-			//
-			// The number of CPU cores in 1e9 increments
-			//
-			// `NanoCPUs` is the option that is "Applicable to all platforms" instead of
-			// `CPUPeriod`/`CPUQuota` (Unix only) or `CPUCount`/`CPUPercent` (Windows only).
-			NanoCPUs: int64(cfg.ContainerCPUCores * 1e9),
-			// Constrain the maximum memory the container can use
-			Memory: cfg.ContainerMemoryBytes,
-		},
-	}, &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{
-			networkName: {
-				Aliases: []string{hsName},
+	body, err := docker.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config: &container.Config{
+			Image: imageID,
+			Env:   env,
+			//Cmd:   d.ImageArgs,
+			Labels: map[string]string{
+				complementLabel:        contextStr,
+				"complement_blueprint": blueprintName,
+				"complement_pkg":       pkgNamespace,
+				"complement_hs_name":   hsName,
 			},
 		},
-	}, nil, containerName)
+		HostConfig: &container.HostConfig{
+			CapAdd: []string{"NET_ADMIN"}, // TODO : this should be some sort of option
+			// We use `PublishAllPorts` because although Complement only requires the ports 8008
+			// and 8448 to be accessible in the image, other custom out-of-repo tests may use
+			// additional ports that are specific to their own application.
+			//
+			// Ideally, we would only bind to `cfg.HSPortBindingIP` but there isn't a way to
+			// specify the `HostIP` when using `PublishAllPorts`. And although, we could specify
+			// a manual port mapping, it's not compatible with also having `PublishAllPorts` set
+			// to true (we run into `address already in use` errors). Binding to all interfaces
+			// means we're also listening on `cfg.HSPortBindingIP` so it's good enough.
+			PublishAllPorts: true,
+			ExtraHosts:      extraHosts,
+			Mounts:          mounts,
+			// https://docs.docker.com/engine/containers/resource_constraints/
+			Resources: container.Resources{
+				// Constrain the the number of CPU cores this container can use
+				//
+				// The number of CPU cores in 1e9 increments
+				//
+				// `NanoCPUs` is the option that is "Applicable to all platforms" instead of
+				// `CPUPeriod`/`CPUQuota` (Unix only) or `CPUCount`/`CPUPercent` (Windows only).
+				NanoCPUs: int64(cfg.ContainerCPUCores * 1e9),
+				// Constrain the maximum memory the container can use
+				Memory: cfg.ContainerMemoryBytes,
+			},
+		},
+		NetworkingConfig: &network.NetworkingConfig{
+			EndpointsConfig: map[string]*network.EndpointSettings{
+				networkName: {
+					Aliases: []string{hsName},
+				},
+			},
+		},
+		Platform: nil,
+		Name:     containerName,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("ContainerCreate: %s", err)
 	}
@@ -472,7 +478,7 @@ func deployImage(
 		return stubDeployment, fmt.Errorf("failed to copy CA key to container: %s", err)
 	}
 
-	err = docker.ContainerStart(ctx, containerID, container.StartOptions{})
+	_, err = docker.ContainerStart(ctx, containerID, client.ContainerStartOptions{})
 	if err != nil {
 		return stubDeployment, fmt.Errorf("ContainerStart: %s", err)
 	}
@@ -493,11 +499,11 @@ func deployImage(
 		)
 	}
 
-	inspect, err := docker.ContainerInspect(ctx, containerID)
+	inspect, err := docker.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return stubDeployment, fmt.Errorf("ContainerInspect: %s", err)
 	}
-	for vol := range inspect.Config.Volumes {
+	for vol := range inspect.Container.Config.Volumes {
 		log.Printf(
 			"WARNING: %s has a named VOLUME %s - volumes can lead to unpredictable behaviour due to "+
 				"test pollution. Remove the VOLUME in the Dockerfile to suppress this message.", containerName, vol,
@@ -508,9 +514,9 @@ func deployImage(
 		BaseURL:             baseURL,
 		FedBaseURL:          fedBaseURL,
 		ContainerID:         containerID,
-		AccessTokens:        tokensFromLabels(inspect.Config.Labels),
-		ApplicationServices: asIDToRegistrationFromLabels(inspect.Config.Labels),
-		DeviceIDs:           deviceIDsFromLabels(inspect.Config.Labels),
+		AccessTokens:        tokensFromLabels(inspect.Container.Config.Labels),
+		ApplicationServices: asIDToRegistrationFromLabels(inspect.Container.Config.Labels),
+		DeviceIDs:           deviceIDsFromLabels(inspect.Container.Config.Labels),
 		Network:             networkName,
 	}
 
@@ -543,7 +549,9 @@ func copyToContainer(docker *client.Client, containerID, path string, data []byt
 	tw.Close()
 
 	// Put our new fake file in the container volume
-	err = docker.CopyToContainer(context.Background(), containerID, "/", &buf, container.CopyToContainerOptions{
+	_, err = docker.CopyToContainer(context.Background(), containerID, client.CopyToContainerOptions{
+		DestinationPath:           "/",
+		Content:                   &buf,
 		AllowOverwriteDirWithFile: false,
 	})
 	if err != nil {
@@ -567,12 +575,12 @@ func assertHostnameEqual(inputUrl string, expectedHostname string) error {
 // getHostAccessibleHomeserverURLs returns URLs that are accessible from the host
 // machine (outside the container) for the homeserver's client API and federation API.
 func getHostAccessibleHomeserverURLs(ctx context.Context, docker *client.Client, containerID string, hsPortBindingIP string) (baseURL string, fedBaseURL string, err error) {
-	inspectResponse, err := inspectContainer(ctx, docker, containerID)
+	inspectResult, err := inspectContainer(ctx, docker, containerID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to inspect ports: %w", err)
 	}
 
-	baseURL, fedBaseURL, err = endpoints(inspectResponse.NetworkSettings.Ports, hsPortBindingIP, 8008, 8448)
+	baseURL, fedBaseURL, err = endpoints(inspectResult.Container.NetworkSettings.Ports, hsPortBindingIP, 8008, 8448)
 
 	// Sanity check that the URLs match the expected configured binding IP. It's
 	// also important that we use the canonical publicly accessible hostname for the
@@ -595,15 +603,15 @@ func waitForPorts(ctx context.Context, docker *client.Client, containerID string
 	// We need to hammer the inspect endpoint until the ports show up, they don't appear immediately.
 	inspectStartTime := time.Now()
 	for time.Since(inspectStartTime) < time.Second {
-		inspectResponse, err := inspectContainer(ctx, docker, containerID)
+		inspectResult, err := inspectContainer(ctx, docker, containerID)
 		if inspectionErr, ok := err.(*containerInspectionError); ok && inspectionErr.Fatal {
 			// If the error is fatal, we should not retry.
 			return fmt.Errorf("Fatal inspection error: %s", err)
 		}
 
 		// Check to see if we can see the ports yet
-		_, csPortErr := findPortBinding(inspectResponse.NetworkSettings.Ports, hsPortBindingIP, 8008)
-		_, ssPortErr := findPortBinding(inspectResponse.NetworkSettings.Ports, hsPortBindingIP, 8448)
+		_, csPortErr := findPortBinding(inspectResult.Container.NetworkSettings.Ports, hsPortBindingIP, 8008)
+		_, ssPortErr := findPortBinding(inspectResult.Container.NetworkSettings.Ports, hsPortBindingIP, 8448)
 		if csPortErr == nil && ssPortErr == nil {
 			break
 		}
@@ -630,23 +638,23 @@ func inspectContainer(
 	ctx context.Context,
 	docker *client.Client,
 	containerID string,
-) (inspectResponse container.InspectResponse, err error) {
-	inspectResponse, err = docker.ContainerInspect(ctx, containerID)
+) (inspectResult client.ContainerInspectResult, err error) {
+	inspectResult, err = docker.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
-		return container.InspectResponse{}, &containerInspectionError{
+		return client.ContainerInspectResult{}, &containerInspectionError{
 			msg:   err.Error(),
 			Fatal: false,
 		}
 	}
-	if inspectResponse.State != nil && !inspectResponse.State.Running {
+	if inspectResult.Container.State != nil && !inspectResult.Container.State.Running {
 		// the container exited, bail out with a container ID for logs
-		return container.InspectResponse{}, &containerInspectionError{
-			msg:   fmt.Sprintf("container (%s) is not running, state=%v", containerID, inspectResponse.State.Status),
+		return client.ContainerInspectResult{}, &containerInspectionError{
+			msg:   fmt.Sprintf("container (%s) is not running, state=%v", containerID, inspectResult.Container.State.Status),
 			Fatal: true,
 		}
 	}
 
-	return inspectResponse, nil
+	return inspectResult, nil
 }
 
 // waitForContainer waits until a homeserver deployment is ready to serve requests.
@@ -660,15 +668,15 @@ func waitForContainer(ctx context.Context, docker *client.Client, hsDep *Homeser
 			lastErr = fmt.Errorf("timed out checking for homeserver to be up: %s", lastErr)
 			return
 		}
-		inspect, err := docker.ContainerInspect(ctx, hsDep.ContainerID)
+		inspect, err := docker.ContainerInspect(ctx, hsDep.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
 			lastErr = fmt.Errorf("inspect container %s => error: %s", hsDep.ContainerID, err)
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
-		if inspect.State.Health != nil &&
-			inspect.State.Health.Status != "healthy" {
-			lastErr = fmt.Errorf("inspect container %s => health: %s", hsDep.ContainerID, inspect.State.Health.Status)
+		if inspect.Container.State.Health != nil &&
+			inspect.Container.State.Health.Status != "healthy" {
+			lastErr = fmt.Errorf("inspect container %s => health: %s", hsDep.ContainerID, inspect.Container.State.Health.Status)
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}

@@ -22,7 +22,6 @@ import (
 	"github.com/matrix-org/gomatrixserverlib/spec"
 )
 
-// sytest: POST /rooms/:room_id/send/:event_type sends a message
 // sytest: GET /rooms/:room_id/messages returns a message
 func TestSendAndFetchMessage(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // flakey
@@ -37,8 +36,8 @@ func TestSendAndFetchMessage(t *testing.T) {
 
 	_, token := alice.MustSync(t, client.SyncReq{})
 
-	// first use the non-txn endpoint
-	alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message"}, client.WithJSONBody(t, map[string]interface{}{
+	// first use the send endpoint
+	alice.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", helpers.GetTxnID("TestSendAndFetchMessage")}, client.WithJSONBody(t, map[string]interface{}{
 		"msgtype": "m.text",
 		"body":    testMessage,
 	}))
@@ -243,6 +242,8 @@ type MessagesTestCase struct {
 }
 
 func TestMessagesOverFederation(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 

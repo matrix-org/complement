@@ -6,11 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"maps"
 	"net/http"
 	"net/url"
 	"testing"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -63,14 +66,10 @@ func TestRegistration(t *testing.T) {
 		// sytest: POST /register can create a user
 		t.Run("POST /register can create a user", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
-				"auth": {
-					"type": "m.login.dummy"
-				},
-				"username": "post-can-create-a-user",
-				"password": "sUp3rs3kr1t"
-			}`)))
+			reqBody, _ := startUIASession(t, unauthedClient, "post-can-create-a-user", "sUp3rs3kr1t", nil)
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
 					match.JSONKeyTypeEqual("user_id", gjson.String),
@@ -80,14 +79,10 @@ func TestRegistration(t *testing.T) {
 		// sytest: POST /register downcases capitals in usernames
 		t.Run("POST /register downcases capitals in usernames", func(t *testing.T) {
 			t.Parallel()
-			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
-				"auth": {
-					"type": "m.login.dummy"
-				},
-				"username": "user-UPPER",
-				"password": "sUp3rs3kr1t"
-			}`)))
+			reqBody, _ := startUIASession(t, unauthedClient, "user-UPPER", "sUp3rs3kr1t", nil)
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
 					match.JSONKeyEqual("user_id", "@user-upper:hs1"),
@@ -98,15 +93,10 @@ func TestRegistration(t *testing.T) {
 		t.Run("POST /register returns the same device_id as that in the request", func(t *testing.T) {
 			t.Parallel()
 			deviceID := "my_device_id"
-			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
-				"auth": {
-					"type": "m.login.dummy"
-				},
-				"username": "user-device",
-				"password": "sUp3rs3kr1t",
-				"device_id": "`+deviceID+`"
-			}`)))
+			reqBody, _ := startUIASession(t, unauthedClient, "user-device", deviceID, map[string]any{"device_id": deviceID})
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 200,
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
 					match.JSONKeyEqual("device_id", deviceID),
@@ -134,14 +124,13 @@ func TestRegistration(t *testing.T) {
 				`'`,
 			}
 			for _, ch := range specialChars {
-				res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"},
-					client.WithJSONBody(t, map[string]interface{}{
-						"auth": map[string]string{
-							"type": "m.login.dummy",
-						},
-						"username": "user-" + ch + "-reject-please",
-						"password": "sUp3rs3kr1t",
-					}))
+				reqBody := map[string]any{
+					"username": "user-" + ch + "-reject-please",
+					"password": "sUp3rs3kr1t",
+				}
+				res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
+				// N.B. servers are expected to validate request bodies before handling UIA,
+				// so 400 is expected here, not 401.
 				must.MatchResponse(t, res, match.HTTPResponse{
 					StatusCode: 400,
 					JSON: []match.JSON{
@@ -151,29 +140,26 @@ func TestRegistration(t *testing.T) {
 			}
 		})
 		t.Run("POST /register rejects if user already exists", func(t *testing.T) {
+			// Dendrite: auth is validated before input, meaning the second register request needs to start a fresh
+			// auth session. This conflicts with Synapse, which forbids a second session being started, as it
+			// validates the input before auth. Skip on Dendrite for now.
+			runtime.SkipIf(t, runtime.Dendrite)
 			t.Parallel()
-			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
-				"auth": {
-					"type": "m.login.dummy"
-				},
-				"username": "post-can-create-a-user-once",
-				"password": "sUp3rs3kr1t"
-			}`)))
+			reqBody, _ := startUIASession(t, unauthedClient, "post-can-create-a-user-once", "sUp3rs3kr1t", nil)
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				JSON: []match.JSON{
 					match.JSONKeyTypeEqual("access_token", gjson.String),
 					match.JSONKeyTypeEqual("user_id", gjson.String),
 				},
 			})
-			res = unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithRawBody(json.RawMessage(`{
-				"auth": {
-					"type": "m.login.dummy"
-				},
-				"username": "post-can-create-a-user-once",
-				"password": "anotherSuperSecret"
-			}`)))
+			delete(reqBody, "auth")
+			res = unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
 			must.MatchResponse(t, res, match.HTTPResponse{
 				StatusCode: 400,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_USER_IN_USE"),
+				},
 			})
 		})
 		// sytest: POST /register allows registration of usernames with '$chr'
@@ -308,6 +294,25 @@ func TestRegistration(t *testing.T) {
 				},
 			})
 		})
+		// Test that subsequent calls to /_matrix/client/v3/register after receiving a UIA
+		// challenge fail if the session is not provided.
+		t.Run("Registration without a session fails", func(t *testing.T) {
+			// Many implementations historically did not enforce this requirement strictly
+			runtime.SkipIf(t, runtime.Synapse, runtime.Dendrite, runtime.Conduit)
+			t.Parallel()
+			reqBody, session := startUIASession(t, unauthedClient, "auth-requires-session", "sUp3rs3kr1t", nil)
+			if session == "" {
+				t.Skip("Homeserver does not require a session for UIA")
+			}
+			delete(reqBody["auth"].(map[string]any), "session")
+			// Re-send the same request without the session.
+			// Since session is required if it is provided by the homeserver, this should
+			// return an error
+			res := unauthedClient.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 401,
+			})
+		})
 	})
 }
 
@@ -345,4 +350,30 @@ func registerSharedSecret(t *testing.T, c *client.CSAPI, user, pass string, isAd
 	}
 	resp = c.Do(t, "POST", []string{"_synapse", "admin", "v1", "register"}, client.WithJSONBody(t, reqBody))
 	return resp
+}
+
+// startUIASession starts a UIA session and returns the updated request body,
+// and associated session token, failing the test if the response is not a UIA challenge.
+func startUIASession(t *testing.T, c *client.CSAPI, user, pass string, extra map[string]any) (map[string]any, string) {
+	reqBody := map[string]any{
+		"username": user,
+		"password": pass,
+	}
+	if extra != nil {
+		maps.Copy(reqBody, extra)
+	}
+	res := c.Do(t, "POST", []string{"_matrix", "client", "v3", "register"}, client.WithJSONBody(t, reqBody))
+	if res.StatusCode != 401 {
+		t.Fatalf("expected status code 401 (UIA challenge), got %d", res.StatusCode)
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := client.GetJSONFieldStr(t, body, "session")
+	reqBody["auth"] = map[string]any{"session": session, "type": "m.login.dummy"}
+	if session == "" {
+		delete(reqBody["auth"].(map[string]any), "session")
+	}
+	return reqBody, session
 }

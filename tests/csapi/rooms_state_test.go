@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -15,6 +16,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/gomatrixserverlib"
 )
 
 func TestRoomCreationReportsEventsToMyself(t *testing.T) {
@@ -26,6 +28,7 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 		LocalpartSuffix: "bob",
 		Password:        "bobpassword",
 	})
+	defaultVer := alice.GetDefaultRoomVersion(t)
 	roomID := alice.MustCreateRoom(t, map[string]interface{}{})
 
 	t.Run("parallel", func(t *testing.T) {
@@ -38,7 +41,10 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 					return false
 				}
 				must.Equal(t, ev.Get("sender").Str, alice.UserID, "wrong sender")
-				must.Equal(t, ev.Get("content").Get("creator").Str, alice.UserID, "wrong content.creator")
+				// The creator field was removed in room version 11 (MSC4239).
+				if gomatrixserverlib.MustGetRoomVersion(defaultVer).CreatorInCreateEvent() {
+					must.Equal(t, ev.Get("content").Get("creator").Str, alice.UserID, "wrong content.creator")
+				}
 				return true
 			}))
 		})
@@ -84,6 +90,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 
 		// sytest: Setting state twice is idempotent
 		t.Run("Setting state twice is idempotent", func(t *testing.T) {
+			// Venator: https://github.com/matrix-org/complement/issues/901
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 
 			stateEvent := b.Event{
@@ -104,6 +112,9 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 
 		// sytest: Joining room twice is idempotent
 		t.Run("Joining room twice is idempotent", func(t *testing.T) {
+			// Venator: https://github.com/matrix-org/complement/issues/901
+			// Test passes illegitimately
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 
 			roomID := bob.MustCreateRoom(t, map[string]interface{}{
