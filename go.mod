@@ -3,6 +3,7 @@ module github.com/matrix-org/complement
 go 1.25.0
 
 require (
+	github.com/deckarep/golang-set v1.8.0
 	github.com/gorilla/mux v1.8.1
 	github.com/matrix-org/gomatrix v0.0.0-20220926102614-ceba4d9f7530
 	github.com/matrix-org/gomatrixserverlib v0.0.0-20260716140101-4fe595dc7f58
