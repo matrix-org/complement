@@ -30,7 +30,10 @@ type Deployment struct {
 	Config           *config.Complement
 	localpartCounter atomic.Int64
 	// HTTP transports used by RoundTripper, keyed by homeserver.
-	// Transports must be reused else we will leak some idle connections over the lifetime of the test run.
+	// If we don't re-use transports, tests which speak federation to the homeserver will leak file descriptors (fd)
+	// for a period of time (the IdleConnTimeout) which can then exceed the fd limit on some runtimes e.g. macOS has
+	// a conservative 256 fd limit by default. This manifests as obscure errors like "Invalid request signature"
+	// because the `/key/server` request performed by gomatrixserverlib fails.
 	transports sync.Map
 }
 
@@ -44,8 +47,11 @@ func (d *Deployment) transportFor(hsName string) *http.Transport {
 			ServerName:         hsName,
 			InsecureSkipVerify: true,
 		},
-		MaxIdleConnsPerHost: 10,
-		IdleConnTimeout:     30 * time.Second,
+		// Explicitly set the max idle conns per host to ensure we bound how many file descriptors we use per-server.
+		MaxIdleConnsPerHost: 2,
+		// Set a limit for how long connections can remain idle (and consume file descriptors) for.
+		// By default this is 0 meaning unlimited.
+		IdleConnTimeout: 30 * time.Second,
 	})
 	return t.(*http.Transport)
 }
