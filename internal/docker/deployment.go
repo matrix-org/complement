@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"sync"
@@ -28,6 +29,31 @@ type Deployment struct {
 	HS               map[string]*HomeserverDeployment
 	Config           *config.Complement
 	localpartCounter atomic.Int64
+	// HTTP transports used by RoundTripper, keyed by homeserver.
+	// If we don't re-use transports, tests which speak federation to the homeserver will leak file descriptors (fd)
+	// for a period of time (the IdleConnTimeout) which can then exceed the fd limit on some runtimes e.g. macOS has
+	// a conservative 256 fd limit by default. This manifests as obscure errors like "Invalid request signature"
+	// because the `/key/server` request performed by gomatrixserverlib fails.
+	transports sync.Map
+}
+
+// transportFor returns the (shared) HTTP transport used to talk to the given homeserver.
+func (d *Deployment) transportFor(hsName string) *http.Transport {
+	if t, ok := d.transports.Load(hsName); ok {
+		return t.(*http.Transport)
+	}
+	t, _ := d.transports.LoadOrStore(hsName, &http.Transport{
+		TLSClientConfig: &tls.Config{
+			ServerName:         hsName,
+			InsecureSkipVerify: true,
+		},
+		// Explicitly set the max idle conns per host to ensure we bound how many file descriptors we use per-server.
+		MaxIdleConnsPerHost: 2,
+		// Set a limit for how long connections can remain idle (and consume file descriptors) for.
+		// By default this is 0 meaning unlimited.
+		IdleConnTimeout: 30 * time.Second,
+	})
+	return t.(*http.Transport)
 }
 
 // HomeserverDeployment represents a running homeserver in a container.

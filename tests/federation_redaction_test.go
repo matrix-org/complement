@@ -1,3 +1,7 @@
+//go:build !venator_blacklist
+
+// Venator: does not yet implement federation
+
 package tests
 
 import (

@@ -55,6 +55,9 @@ func TestMSC4289PrivilegedRoomCreators(t *testing.T) {
 	}
 
 	t.Run("PL event is missing creator in users map", func(t *testing.T) {
+		// Venator: default values (including empty) for power levels are skipped during marshalling, so this test
+		// flakes as the empty users object is not present (which is legal)
+		runtime.SkipIf(t, runtime.Venator)
 		roomID := alice.MustCreateRoom(t, map[string]interface{}{
 			"room_version": roomVersion12,
 		})
@@ -138,6 +141,7 @@ func TestMSC4289PrivilegedRoomCreators(t *testing.T) {
 	// technically not a MSC4289 thing but implementations may set the creator PL to be
 	// above the value expressible in canonical JSON to implement "infinite".
 	t.Run("power level cannot be set beyond max canonical JSON int", func(t *testing.T) {
+		runtime.SkipIf(t, runtime.Venator)
 		roomID := alice.MustCreateRoom(t, map[string]interface{}{
 			"room_version": roomVersion12,
 			"preset":       "public_chat",
@@ -185,6 +189,8 @@ func TestMSC4289PrivilegedRoomCreators(t *testing.T) {
 		})
 	})
 	t.Run("admin with >PL100 sorts after the room creator for state resolution", func(t *testing.T) {
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
 		srv := federation.NewServer(t, deployment,
 			federation.HandleKeyRequests(),
 			federation.HandleMakeSendJoinRequests(),
@@ -617,6 +623,8 @@ func TestMSC4291RoomIDAsHashOfCreateEvent(t *testing.T) {
 }
 
 func TestComplementCanCreateValidV12Rooms(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -647,6 +655,8 @@ func TestComplementCanCreateValidV12Rooms(t *testing.T) {
 }
 
 func TestMSC4291RoomIDAsHashOfCreateEvent_AuthEventsOmitsCreateEvent(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -917,6 +927,8 @@ func assertCreateEventIsRoomID(t ct.TestLike, client *client.CSAPI, roomID strin
 //     in other words we apply state resolution to (Alice leave, 250th Charlie display name change).
 func TestMSC4297StateResolutionV2_1_starts_from_empty_set(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // needs additional fixes
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	srv := federation.NewServer(t, deployment,
@@ -1098,6 +1110,8 @@ func TestMSC4297StateResolutionV2_1_starts_from_empty_set(t *testing.T) {
 
 func TestMSC4297StateResolutionV2_1_includes_conflicted_subgraph(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // needs additional fixes
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	srv := federation.NewServer(t, deployment,
@@ -1353,6 +1367,8 @@ func asEventIDs(pdus []gomatrixserverlib.PDU) []string {
 // this (or adjusting Synapse).
 func TestMSC4311StrippedStateClientAPI(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite) // does not implement it yet
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 

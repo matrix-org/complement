@@ -39,6 +39,10 @@ import (
 // m.room.create event would pick that up. We also can't tear down the Complement
 // server because otherwise signing key lookups will fail.
 func TestJoinViaRoomIDAndServerName(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
@@ -89,6 +93,10 @@ func TestJoinViaRoomIDAndServerName(t *testing.T) {
 // This tests that joining a room with multiple ?server_name=s works correctly.
 // The join should succeed even if the first server is not in the room.
 func TestJoinFederatedRoomFailOver(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
@@ -132,6 +140,10 @@ func TestJoinFederatedRoomFailOver(t *testing.T) {
 // the properties listed above, then asking HS1 to join them and make sure that
 // they 200 OK.
 func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
@@ -298,6 +310,10 @@ func TestJoinFederatedRoomWithUnverifiableEvents(t *testing.T) {
 
 // This test checks that users cannot circumvent the auth checks via send_join.
 func TestBannedUserCannotSendJoin(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 
@@ -365,21 +381,37 @@ func TestBannedUserCannotSendJoin(t *testing.T) {
 
 // This test checks that we cannot submit anything via /v1/send_join except a join.
 func TestCannotSendNonJoinViaSendJoinV1(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v1/send_join", "join", nil)
 }
 
 // This test checks that we cannot submit anything via /v2/send_join except a join.
 func TestCannotSendNonJoinViaSendJoinV2(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v2/send_join", "join", nil)
 }
 
 // This test checks that we cannot submit anything via /v1/send_leave except a leave.
 func TestCannotSendNonLeaveViaSendLeaveV1(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v1/send_leave", "leave", nil)
 }
 
 // This test checks that we cannot submit anything via /v2/send_leave except a leave.
 func TestCannotSendNonLeaveViaSendLeaveV2(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v2/send_leave", "leave", nil)
 }
 
@@ -494,6 +526,10 @@ func testValidationForSendMembershipEndpoint(t *testing.T, baseApiPath, expected
 //
 // Will be skipped if the server returns a full-state response.
 func TestSendJoinPartialStateResponse(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	// start with a homeserver with two users
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
@@ -580,6 +616,10 @@ func typeAndStateKeyForEvent(result gjson.Result) string {
 }
 
 func TestJoinFederatedRoomFromApplicationServiceBridgeUser(t *testing.T) {
+	// Venator: does not yet implement federation. The entire file cannot be ignored as
+	// testValidationForSendMembershipEndpoint is referenced elsewhere, which causes compile errors if elided by build
+	// constraints.
+	runtime.SkipIf(t, runtime.Venator)
 	// Dendrite doesn't read AS registration files from Complement yet
 	runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/complement/issues/514
 

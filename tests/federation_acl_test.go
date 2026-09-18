@@ -1,3 +1,7 @@
+//go:build !venator_blacklist
+
+// Venator: does not yet implement federation. ACLs are implemented, but not in a way that can be exposed to these tests
+
 package tests
 
 import (

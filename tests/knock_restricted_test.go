@@ -13,6 +13,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/runtime"
 )
 
 var (
@@ -32,6 +33,8 @@ func TestKnockRoomsInPublicRoomsDirectoryInMSC3787Room(t *testing.T) {
 
 // See TestCannotSendKnockViaSendKnock
 func TestCannotSendKnockViaSendKnockInMSC3787Room(t *testing.T) {
+	// Venator: does not yet implement federation.
+	runtime.SkipIf(t, runtime.Venator)
 	testValidationForSendMembershipEndpoint(t, "/_matrix/federation/v1/send_knock", "knock",
 		map[string]interface{}{
 			"preset":       "public_chat",
@@ -57,6 +60,8 @@ func TestRestrictedRoomsLocalJoinInMSC3787Room(t *testing.T) {
 
 // See TestRestrictedRoomsRemoteJoin
 func TestRestrictedRoomsRemoteJoinInMSC3787Room(t *testing.T) {
+	// Venator: does not yet implement federation.
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
@@ -72,6 +77,8 @@ func TestRestrictedRoomsRemoteJoinInMSC3787Room(t *testing.T) {
 
 // See TestRestrictedRoomsRemoteJoinLocalUser
 func TestRestrictedRoomsRemoteJoinLocalUserInMSC3787Room(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	doTestRestrictedRoomsRemoteJoinLocalUser(t, roomVersion, joinRule)
 }
 

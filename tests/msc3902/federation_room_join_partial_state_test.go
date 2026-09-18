@@ -1632,7 +1632,11 @@ func TestPartialStateJoin(t *testing.T) {
 		// update the users map in the PL event
 		for _, ev := range initialRoomEvents {
 			if ev.Type == "m.room.power_levels" {
-				ev.Content["users"] = map[string]int64{charlie: 100, derek: 50}
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).PrivilegedCreators() {
+					ev.Content["users"] = map[string]int64{derek: 50}
+				} else {
+					ev.Content["users"] = map[string]int64{charlie: 100, derek: 50}
+				}
 			}
 		}
 		serverRoom := server.MustMakeRoom(t, roomVer, initialRoomEvents)
@@ -1656,11 +1660,17 @@ func TestPartialStateJoin(t *testing.T) {
 			Content: map[string]interface{}{
 				"body": "bad state event",
 			},
-			AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
-				serverRoom.CurrentState("m.room.create", ""),
-				serverRoom.CurrentState("m.room.power_levels", ""),
-				derekJoinEvent,
-			}),
+			AuthEvents: serverRoom.EventIDsOrReferences(func() []gomatrixserverlib.PDU {
+				content := []gomatrixserverlib.PDU{
+					serverRoom.CurrentState("m.room.create", ""),
+					serverRoom.CurrentState("m.room.power_levels", ""),
+					derekJoinEvent,
+				}
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).DomainlessRoomIDs() {
+					content = content[1:]
+				}
+				return content
+			}()),
 		})
 		// add to the timeline, but not the state (so that when testReceiveEventDuringPartialStateJoin checks the state,
 		// it doesn't expect to see this)
@@ -1712,7 +1722,13 @@ func TestPartialStateJoin(t *testing.T) {
 		// update the users map in the PL event
 		for _, ev := range initialRoomEvents {
 			if ev.Type == "m.room.power_levels" {
-				ev.Content["users"] = map[string]int64{charlie: 100, derek: 100, elsie: 50}
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).PrivilegedCreators() {
+					ev.Content["users"] = map[string]int64{derek: 100, elsie: 50}
+
+				} else {
+					ev.Content["users"] = map[string]int64{charlie: 100, derek: 100, elsie: 50}
+
+				}
 			}
 		}
 		serverRoom := server.MustMakeRoom(t, roomVer, initialRoomEvents)
@@ -1738,12 +1754,18 @@ func TestPartialStateJoin(t *testing.T) {
 			StateKey: &elsie,
 			Sender:   derek,
 			Content:  map[string]interface{}{"membership": "leave"},
-			AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
-				serverRoom.CurrentState("m.room.create", ""),
-				serverRoom.CurrentState("m.room.power_levels", ""),
-				derekJoinEvent,
-				elsieJoinEvent,
-			}),
+			AuthEvents: serverRoom.EventIDsOrReferences(func() []gomatrixserverlib.PDU {
+				content := []gomatrixserverlib.PDU{
+					serverRoom.CurrentState("m.room.create", ""),
+					serverRoom.CurrentState("m.room.power_levels", ""),
+					derekJoinEvent,
+					elsieJoinEvent,
+				}
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).DomainlessRoomIDs() {
+					content = content[1:]
+				}
+				return content
+			}()),
 		})
 		// add to the timeline, but not the state (so that when testReceiveEventDuringPartialStateJoin checks the state,
 		// it doesn't expect to see this)
@@ -1758,11 +1780,17 @@ func TestPartialStateJoin(t *testing.T) {
 			StateKey: b.Ptr(""),
 			Sender:   elsie,
 			Content:  map[string]interface{}{"body": "rejected state"},
-			AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
-				serverRoom.CurrentState("m.room.create", ""),
-				serverRoom.CurrentState("m.room.power_levels", ""),
-				elsieJoinEvent,
-			}),
+			AuthEvents: serverRoom.EventIDsOrReferences(func() []gomatrixserverlib.PDU {
+				content := []gomatrixserverlib.PDU{
+					serverRoom.CurrentState("m.room.create", ""),
+					serverRoom.CurrentState("m.room.power_levels", ""),
+					elsieJoinEvent,
+				}
+				if gomatrixserverlib.MustGetRoomVersion(roomVer).DomainlessRoomIDs() {
+					content = content[1:]
+				}
+				return content
+			}()),
 		})
 		serverRoom.AddEvent(rejectedStateEvent)
 		t.Logf("elsie created state event %s", rejectedStateEvent.EventID())
@@ -2356,6 +2384,7 @@ func TestPartialStateJoin(t *testing.T) {
 		) (syncToken string, server2Room *federation.ServerRoom, psjResult partialStateJoinResult) {
 			derek := server1.UserID("derek")
 			elsie := server2.UserID("elsie")
+			roomVersion := room.Version
 
 			// The room starts with @charlie:server1 and @derek:server1 in it.
 			// @derek:server1 becomes an admin.
@@ -2402,11 +2431,17 @@ func TestPartialStateJoin(t *testing.T) {
 				StateKey: b.Ptr(elsie),
 				Sender:   derek,
 				Content:  map[string]interface{}{"membership": "leave"},
-				AuthEvents: room.EventIDsOrReferences([]gomatrixserverlib.PDU{
-					room.CurrentState("m.room.create", ""),
-					room.CurrentState("m.room.power_levels", ""),
-					derekJoinEvent,
-				}),
+				AuthEvents: room.EventIDsOrReferences(func() []gomatrixserverlib.PDU {
+					content := []gomatrixserverlib.PDU{
+						room.CurrentState("m.room.create", ""),
+						room.CurrentState("m.room.power_levels", ""),
+						derekJoinEvent,
+					}
+					if gomatrixserverlib.MustGetRoomVersion(roomVersion).DomainlessRoomIDs() {
+						content = content[1:]
+					}
+					return content
+				}()),
 			})
 			room.Timeline = append(room.Timeline, badKickEvent)
 			room.Depth = badKickEvent.Depth()
@@ -3189,11 +3224,17 @@ func TestPartialStateJoin(t *testing.T) {
 				StateKey: b.Ptr(derek),
 				Sender:   fred,
 				Content:  map[string]interface{}{"membership": "ban"},
-				AuthEvents: room.EventIDsOrReferences([]gomatrixserverlib.PDU{
-					room.CurrentState("m.room.create", ""),
-					room.CurrentState("m.room.power_levels", ""),
-					fredJoinEvent,
-				}),
+				AuthEvents: room.EventIDsOrReferences(func() []gomatrixserverlib.PDU {
+					content := []gomatrixserverlib.PDU{
+						room.CurrentState("m.room.create", ""),
+						room.CurrentState("m.room.power_levels", ""),
+						fredJoinEvent,
+					}
+					if gomatrixserverlib.MustGetRoomVersion(room.Version).DomainlessRoomIDs() {
+						content = content[1:]
+					}
+					return content
+				}()),
 			})
 			room.Timeline = append(room.Timeline, badKickEvent)
 			room.Depth = badKickEvent.Depth()
@@ -3813,7 +3854,8 @@ func TestPartialStateJoin(t *testing.T) {
 			cancel := server.Listen()
 			defer cancel()
 
-			serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+			defaultRoomVersion := alice.GetDefaultRoomVersion(t)
+			serverRoom := createTestRoom(t, server, defaultRoomVersion)
 			t.Log("Alice partial-joins her room")
 			psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 
@@ -3830,12 +3872,18 @@ func TestPartialStateJoin(t *testing.T) {
 				StateKey: b.Ptr(alice.UserID),
 				Sender:   server.UserID("charlie"),
 				Content:  map[string]interface{}{"membership": "leave"},
-				AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
-					serverRoom.CurrentState("m.room.create", ""),
-					serverRoom.CurrentState("m.room.power_levels", ""),
-					serverRoom.CurrentState("m.room.member", alice.UserID),
-					serverRoom.CurrentState("m.room.member", server.UserID("charlie")),
-				}),
+				AuthEvents: serverRoom.EventIDsOrReferences(func() []gomatrixserverlib.PDU {
+					content := []gomatrixserverlib.PDU{
+						serverRoom.CurrentState("m.room.create", ""),
+						serverRoom.CurrentState("m.room.power_levels", ""),
+						serverRoom.CurrentState("m.room.member", alice.UserID),
+						serverRoom.CurrentState("m.room.member", server.UserID("charlie")),
+					}
+					if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).DomainlessRoomIDs() {
+						content = content[1:]
+					}
+					return content
+				}()),
 			})
 			serverRoom.AddEvent(kickEvent)
 			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{kickEvent.JSON()}, nil)
@@ -3865,7 +3913,8 @@ func TestPartialStateJoin(t *testing.T) {
 			cancel := server.Listen()
 			defer cancel()
 
-			serverRoom := createTestRoom(t, server, alice.GetDefaultRoomVersion(t))
+			defaultRoomVersion := alice.GetDefaultRoomVersion(t)
+			serverRoom := createTestRoom(t, server, defaultRoomVersion)
 			t.Log("Alice partial-joins her room")
 			psjResult := beginPartialStateJoin(t, server, serverRoom, alice)
 
@@ -3882,12 +3931,18 @@ func TestPartialStateJoin(t *testing.T) {
 				StateKey: b.Ptr(alice.UserID),
 				Sender:   server.UserID("charlie"),
 				Content:  map[string]interface{}{"membership": "ban"},
-				AuthEvents: serverRoom.EventIDsOrReferences([]gomatrixserverlib.PDU{
-					serverRoom.CurrentState("m.room.create", ""),
-					serverRoom.CurrentState("m.room.power_levels", ""),
-					serverRoom.CurrentState("m.room.member", alice.UserID),
-					serverRoom.CurrentState("m.room.member", server.UserID("charlie")),
-				}),
+				AuthEvents: serverRoom.EventIDsOrReferences(func() []gomatrixserverlib.PDU {
+					content := []gomatrixserverlib.PDU{
+						serverRoom.CurrentState("m.room.create", ""),
+						serverRoom.CurrentState("m.room.power_levels", ""),
+						serverRoom.CurrentState("m.room.member", alice.UserID),
+						serverRoom.CurrentState("m.room.member", server.UserID("charlie")),
+					}
+					if gomatrixserverlib.MustGetRoomVersion(defaultRoomVersion).DomainlessRoomIDs() {
+						content = content[1:]
+					}
+					return content
+				}()),
 			})
 			serverRoom.AddEvent(banEvent)
 			server.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{banEvent.JSON()}, nil)

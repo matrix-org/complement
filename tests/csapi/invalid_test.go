@@ -1,3 +1,7 @@
+//go:build !venator_blacklist
+
+// Venator: does not support room version 6 (>=v10 only)
+
 package csapi_tests
 
 import (

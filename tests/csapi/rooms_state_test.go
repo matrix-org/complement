@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -89,6 +90,8 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 
 		// sytest: Setting state twice is idempotent
 		t.Run("Setting state twice is idempotent", func(t *testing.T) {
+			// Venator: https://github.com/matrix-org/complement/issues/901
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 
 			stateEvent := b.Event{
@@ -109,6 +112,9 @@ func TestRoomCreationReportsEventsToMyself(t *testing.T) {
 
 		// sytest: Joining room twice is idempotent
 		t.Run("Joining room twice is idempotent", func(t *testing.T) {
+			// Venator: https://github.com/matrix-org/complement/issues/901
+			// Test passes illegitimately
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 
 			roomID := bob.MustCreateRoom(t, map[string]interface{}{

@@ -20,10 +20,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: "Run internal Complement tests"
@@ -34,8 +34,8 @@ jobs:
           DOCKER_BUILDKIT: 1
         run: |
           mkdir -p homeserver
-          # Latest official dendrite release is still using Debian Stretch as a base, hence the specific commit
-          wget -O - "https://github.com/matrix-org/dendrite/archive/0489d16f95a3d9f1f5bc532e2060bd2482d7b156.tar.gz" | tar -xz --strip-components=1 -C homeserver
+          # Dendrite is unmaintained to just pin to a known working commit
+          wget -O - "https://github.com/element-hq/dendrite/archive/08cac1ccf0a45471132ad24a29e3ec15643675fa.tar.gz" | tar -xz --strip-components=1 -C homeserver
           (cd homeserver && docker build -t complement-dendrite -f build/scripts/Complement.Dockerfile .)
           (cd cmd/homerunner/test && ./test.sh)
 
@@ -52,7 +52,7 @@ jobs:
           - homeserver: Synapse
             repo: element-hq/synapse
             tags: synapse_blacklist
-            packages: ./tests/msc3874 ./tests/msc3902 ./tests/msc4306
+            packages: ./tests/msc3874 ./tests/msc3902 ./tests/msc4306 ./tests/msc4429
             env: "COMPLEMENT_ENABLE_DIRTY_RUNS=1 COMPLEMENT_SHARE_ENV_PREFIX=PASS_ PASS_SYNAPSE_COMPLEMENT_DATABASE=sqlite"
             timeout: 20m
 
@@ -64,11 +64,11 @@ jobs:
             timeout: 10m
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
