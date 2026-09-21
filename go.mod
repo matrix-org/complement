@@ -1,18 +1,18 @@
 module github.com/matrix-org/complement
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/gorilla/mux v1.8.1
 	github.com/matrix-org/gomatrix v0.0.0-20220926102614-ceba4d9f7530
 	github.com/matrix-org/gomatrixserverlib v0.0.0-20260716140101-4fe595dc7f58
 	github.com/matrix-org/util v0.0.0-20221111132719-399730281e66
-	github.com/moby/moby/api v1.55.0
-	github.com/moby/moby/client v0.5.1
+	github.com/moby/moby/api v1.56.0
+	github.com/moby/moby/client v0.6.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/tidwall/gjson v1.19.0
 	github.com/tidwall/sjson v1.2.5
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	gonum.org/v1/plot v0.17.0
 )
