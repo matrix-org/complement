@@ -494,6 +494,250 @@ func TestDelayedEvents(t *testing.T) {
 		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
 	})
 
+	t.Run("delayed events sent on timeout are finalised with their event ID", func(t *testing.T) {
+		defer cleanupDelayedEvents(t, user)
+
+		markerKey := "marker"
+		markerExpected := "finalised_on_timeout"
+		content := map[string]interface{}{
+			markerKey: markerExpected,
+		}
+		res := user.MustDo(
+			t,
+			"PUT",
+			getPathForDelayedEvent(roomID, eventType, "txn-delayed-msg-finalised-timeout"),
+			client.WithJSONBody(t, getDelayedEventBody(900, content)),
+		)
+		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
+
+		// Wait for the delayed event to be sent, and capture the ID it got in the room
+		var eventID string
+		user.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
+			if ev.Get("type").Str != eventType || ev.Get("content."+markerKey).Str != markerExpected {
+				return false
+			}
+			eventID = ev.Get("event_id").Str
+			return true
+		}))
+
+		matchFinalisedDelayedEvent(t, user, delayID,
+			match.JSONKeyEqual("room_id", roomID),
+			match.JSONKeyEqual("type", eventType),
+			match.JSONKeyMissing("state_key"),
+			match.JSONKeyEqual("delay_ms", 900),
+			match.JSONKeyTypeEqual("delayed_since_ts", gjson.Number),
+			match.JSONKeyEqual("content", content),
+			match.JSONKeyEqual("finalised.event_id", eventID),
+			match.JSONKeyMissing("finalised.error"),
+		)
+	})
+
+	t.Run("cancelled delayed events are finalised without an event ID", func(t *testing.T) {
+		var res *http.Response
+
+		defer cleanupDelayedEvents(t, user)
+
+		res = user.MustDo(
+			t,
+			"PUT",
+			getPathForDelayedEvent(roomID, eventType, "txn-delayed-msg-finalised-cancel"),
+			client.WithJSONBody(t, getDelayedEventBody(100000, map[string]interface{}{})),
+		)
+		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
+
+		// A delayed event that is still scheduled is not finalised
+		res = user.MustDo(t, "GET", getPathForLookupDelayedEvent(delayID))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("delay_id", delayID),
+				match.JSONKeyMissing("finalised"),
+			},
+		})
+
+		user.MustDo(
+			t,
+			"POST",
+			getPathForUpdateDelayedEvent(delayID, DelayedEventActionCancel),
+			client.WithJSONBody(t, map[string]interface{}{}),
+		)
+
+		matchFinalisedDelayedEvent(t, user, delayID,
+			match.JSONKeyMissing("finalised.event_id"),
+			match.JSONKeyMissing("finalised.error"),
+		)
+
+		t.Run("cannot look up a finalised delayed event of another user", func(t *testing.T) {
+			res := user2.Do(t, "GET", getPathForLookupDelayedEvent(delayID))
+			must.MatchResponse(t, res, match.HTTPResponse{
+				StatusCode: 404,
+				JSON: []match.JSON{
+					match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
+				},
+			})
+		})
+	})
+
+	t.Run("delayed events that fail to be sent are finalised with an error", func(t *testing.T) {
+		// Use a room of its own, as the sender leaves it before the delayed event is sent
+		failRoomID := user.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"power_level_content_override": map[string]interface{}{
+				"events": map[string]int{
+					eventType: 0,
+				},
+			},
+		})
+		user2.MustJoinRoom(t, failRoomID, nil)
+
+		stateKey := "to_fail_on_timeout"
+		res := user2.MustDo(
+			t,
+			"PUT",
+			getPathForDelayedEvent(failRoomID, eventType, "txn-delayed-state-finalised-failure"),
+			client.WithJSONBody(t, getDelayedStateEventBody(1500, stateKey, map[string]interface{}{})),
+		)
+		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
+
+		// Leave the room so that the delayed event cannot be sent at its scheduled time
+		user2.MustLeaveRoom(t, failRoomID)
+
+		matchFinalisedDelayedEvent(t, user2, delayID,
+			match.JSONKeyEqual("state_key", stateKey),
+			match.JSONKeyTypeEqual("finalised.error.errcode", gjson.String),
+			match.JSONKeyMissing("finalised.event_id"),
+		)
+
+		// Sanity check that the room state hasn't changed
+		res = user.Do(t, "GET", getPathForState(failRoomID, eventType, stateKey))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 404,
+		})
+
+		// A delayed event cancelled due to an error counts as cancelled
+		user2.MustDo(
+			t,
+			"POST",
+			getPathForUpdateDelayedEvent(delayID, DelayedEventActionCancel),
+			client.WithJSONBody(t, map[string]interface{}{}),
+		)
+	})
+
+	for _, tc := range []struct {
+		name            string
+		finalisedBy     DelayedEventAction
+		statusByAction  map[DelayedEventAction]int
+		finalisedChecks []match.JSON
+	}{
+		{
+			name:        "sent",
+			finalisedBy: DelayedEventActionSend,
+			statusByAction: map[DelayedEventAction]int{
+				DelayedEventActionSend:   200,
+				DelayedEventActionCancel: 409,
+				// MSC4140 leaves this case open, MSC4542 proposes a 409
+				DelayedEventActionRestart: 409,
+			},
+			finalisedChecks: []match.JSON{
+				match.JSONKeyTypeEqual("finalised.event_id", gjson.String),
+			},
+		},
+		{
+			name:        "cancelled",
+			finalisedBy: DelayedEventActionCancel,
+			statusByAction: map[DelayedEventAction]int{
+				DelayedEventActionCancel:  200,
+				DelayedEventActionSend:    409,
+				DelayedEventActionRestart: 409,
+			},
+			finalisedChecks: []match.JSON{
+				match.JSONKeyMissing("finalised.event_id"),
+			},
+		},
+	} {
+		t.Run(fmt.Sprintf("actions on %s delayed events succeed if repeated and conflict otherwise", tc.name), func(t *testing.T) {
+			defer cleanupDelayedEvents(t, user)
+
+			res := user.MustDo(
+				t,
+				"PUT",
+				getPathForDelayedEvent(roomID, eventType, fmt.Sprintf("txn-delayed-msg-finalised-%s-actions", tc.name)),
+				client.WithJSONBody(t, getDelayedEventBody(100000, map[string]interface{}{})),
+			)
+			delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
+
+			user.MustDo(
+				t,
+				"POST",
+				getPathForUpdateDelayedEvent(delayID, tc.finalisedBy),
+				client.WithJSONBody(t, map[string]interface{}{}),
+			)
+			matchFinalisedDelayedEvent(t, user, delayID, tc.finalisedChecks...)
+
+			for _, action := range []DelayedEventAction{
+				DelayedEventActionCancel,
+				DelayedEventActionRestart,
+				DelayedEventActionSend,
+			} {
+				statusCode := tc.statusByAction[action]
+				t.Run(fmt.Sprintf("%s returns %d", action, statusCode), func(t *testing.T) {
+					res := user.Do(
+						t,
+						"POST",
+						getPathForUpdateDelayedEvent(delayID, action),
+						client.WithJSONBody(t, map[string]interface{}{}),
+					)
+					must.MatchResponse(t, res, match.HTTPResponse{
+						StatusCode: statusCode,
+					})
+				})
+			}
+
+			// The delayed event is still finalised the same way
+			matchFinalisedDelayedEvent(t, user, delayID, tc.finalisedChecks...)
+		})
+	}
+
+	t.Run("finalised delayed events are not listed", func(t *testing.T) {
+		var res *http.Response
+
+		defer cleanupDelayedEvents(t, user)
+
+		delayIDs := make([]string, 3)
+		for i := range delayIDs {
+			res = user.MustDo(
+				t,
+				"PUT",
+				getPathForDelayedEvent(roomID, eventType, fmt.Sprintf("txn-delayed-msg-finalised-list-%d", i)),
+				client.WithJSONBody(t, getDelayedEventBody(100000, map[string]interface{}{})),
+			)
+			delayIDs[i] = client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
+		}
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(len(delayIDs)))
+
+		// Finalise all but the last delayed event
+		for i, action := range []DelayedEventAction{
+			DelayedEventActionSend,
+			DelayedEventActionCancel,
+		} {
+			user.MustDo(
+				t,
+				"POST",
+				getPathForUpdateDelayedEvent(delayIDs[i], action),
+				client.WithJSONBody(t, map[string]interface{}{}),
+			)
+			matchFinalisedDelayedEvent(t, user, delayIDs[i])
+		}
+
+		// Only the delayed event that is still scheduled is listed
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(1))
+		res = getDelayedEvents(t, user)
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual("delayed_events.0.delay_id", delayIDs[2]),
+			},
+		})
+	})
+
 	t.Run("delayed state events are kept on server restart", func(t *testing.T) {
 		// Spec cannot enforce server restart behaviour
 		runtime.SkipIf(t, runtime.Dendrite, runtime.Conduit, runtime.Conduwuit)
@@ -601,6 +845,10 @@ func getPathForDelayedEvents() []string {
 
 func getPathForUpdateDelayedEvent(delayId string, action DelayedEventAction) []string {
 	return append(getPathForDelayedEvents(), delayId, string(action))
+}
+
+func getPathForLookupDelayedEvent(delayID string) []string {
+	return append(getPathForDelayedEvents(), delayID)
 }
 
 func getPathForDelayedEvent(roomID string, eventType string, txnID string) []string {
@@ -735,6 +983,33 @@ func matchDelayedEvents(t *testing.T, user *client.CSAPI, checks ...delayedEvent
 			},
 		),
 	)
+}
+
+// matchFinalisedDelayedEvent looks up the given delayed event until it is finalised, then
+// runs the given checks on it. This retries as the homeserver may still be sending the
+// delayed event.
+func matchFinalisedDelayedEvent(t *testing.T, user *client.CSAPI, delayID string, checks ...match.JSON) {
+	t.Helper()
+
+	res := user.MustDo(t, "GET", getPathForLookupDelayedEvent(delayID),
+		client.WithRetryUntil(
+			5*time.Second,
+			func(res *http.Response) bool {
+				body, err := io.ReadAll(res.Body)
+				if err != nil {
+					t.Log(err)
+					return false
+				}
+				return res.StatusCode == 200 && gjson.GetBytes(body, "finalised").Exists()
+			},
+		),
+	)
+	must.MatchResponse(t, res, match.HTTPResponse{
+		JSON: append([]match.JSON{
+			match.JSONKeyEqual("delay_id", delayID),
+			match.JSONKeyTypeEqual("finalised.finalised_ts", gjson.Number),
+		}, checks...),
+	})
 }
 
 // FIXME: Instead of using `cleanupDelayedEvents`, each test should just use their own
