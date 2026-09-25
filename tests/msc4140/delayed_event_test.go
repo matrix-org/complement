@@ -223,58 +223,6 @@ func TestDelayedEvents(t *testing.T) {
 		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
 	})
 
-	// TODO: Remove once homeservers stop accepting the `org.matrix.msc4140.delay` query
-	// parameter on `/send` and `/state`, which MSC4140 lists as a rejected alternative to
-	// the dedicated endpoint.
-	t.Run("delayed events scheduled with the delay query parameter are sent on timeout", func(t *testing.T) {
-		var res *http.Response
-
-		defer cleanupDelayedEvents(t, user)
-
-		stateKey := "to_send_on_timeout_with_query_param"
-
-		// Schedule a delayed message event and a delayed state event
-		setterKey := "setter"
-		setterExpected := "on_timeout_with_query_param"
-		user.MustDo(
-			t,
-			"PUT",
-			getPathForSend(roomID, eventType, "txn-delayed-msg-query-param"),
-			client.WithJSONBody(t, map[string]interface{}{
-				setterKey: setterExpected,
-			}),
-			getDelayQueryParam("900"),
-		)
-		user.MustDo(
-			t,
-			"PUT",
-			getPathForState(roomID, eventType, stateKey),
-			client.WithJSONBody(t, map[string]interface{}{
-				setterKey: setterExpected,
-			}),
-			getDelayQueryParam("900"),
-		)
-		matchDelayedEvents(t, user, delayedEventsNumberEqual(2))
-
-		// Check for both delayed events being sent (using `MustSyncUntil` to account for
-		// any processing or worker replication delays)
-		user.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHas(roomID, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == eventType && !ev.Get("state_key").Exists() && ev.Get("content."+setterKey).Str == setterExpected
-		}))
-		user.MustSyncUntil(t, client.SyncReq{UseStateAfter: true}, client.SyncStateAfterHas(roomID, func(ev gjson.Result) bool {
-			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey
-		}))
-		// Make sure the state looks as expected after
-		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
-		must.MatchResponse(t, res, match.HTTPResponse{
-			JSON: []match.JSON{
-				match.JSONKeyEqual(setterKey, setterExpected),
-			},
-		})
-		// No more delayed events
-		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
-	})
-
 	t.Run("cannot update a delayed event without an action", func(t *testing.T) {
 		res := unauthedClient.Do(
 			t,
@@ -624,18 +572,8 @@ func getDelayedStateEventBody(delayMs int64, stateKey string, content map[string
 	return body
 }
 
-func getPathForSend(roomID string, eventType string, txnId string) []string {
-	return []string{"_matrix", "client", "v3", "rooms", roomID, "send", eventType, txnId}
-}
-
 func getPathForState(roomID string, eventType string, stateKey string) []string {
 	return []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, stateKey}
-}
-
-func getDelayQueryParam(delayStr string) client.RequestOpt {
-	return client.WithQueries(url.Values{
-		"org.matrix.msc4140.delay": []string{delayStr},
-	})
 }
 
 func getDelayedEvents(t *testing.T, user *client.CSAPI) *http.Response {
