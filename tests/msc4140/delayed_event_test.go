@@ -62,6 +62,44 @@ func TestDelayedEvents(t *testing.T) {
 		})
 	})
 
+	t.Run("delayed event management is authenticated", func(t *testing.T) {
+		defer cleanupDelayedEvents(t, user)
+
+		// Schedule a delayed event that will not be sent during this test
+		res := user.MustDo(
+			t,
+			"PUT",
+			getPathForState(roomID, eventType, "to_manage_without_a_token"),
+			client.WithJSONBody(t, map[string]interface{}{}),
+			getDelayQueryParam("100000"),
+		)
+		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
+
+		for _, action := range []DelayedEventAction{
+			DelayedEventActionCancel,
+			DelayedEventActionRestart,
+			DelayedEventActionSend,
+		} {
+			t.Run(fmt.Sprintf("cannot %s a delayed event without a token", action), func(t *testing.T) {
+				res := unauthedClient.Do(
+					t,
+					"POST",
+					getPathForUpdateDelayedEvent(delayID, action),
+					client.WithJSONBody(t, map[string]interface{}{}),
+				)
+				must.MatchResponse(t, res, match.HTTPResponse{
+					StatusCode: 401,
+					JSON: []match.JSON{
+						match.JSONKeyEqual("errcode", "M_MISSING_TOKEN"),
+					},
+				})
+			})
+		}
+
+		// The delayed event is still scheduled
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(1))
+	})
+
 	// FIXME: Too much mixing of tests that should be more independent
 	t.Run("delayed message events are sent on timeout", func(t *testing.T) {
 		var res *http.Response
@@ -200,7 +238,7 @@ func TestDelayedEvents(t *testing.T) {
 	})
 
 	t.Run("cannot update a delayed event without an action", func(t *testing.T) {
-		res := unauthedClient.Do(
+		res := user.Do(
 			t,
 			"POST",
 			append(getPathForDelayedEvents(), "abc"),
@@ -211,7 +249,7 @@ func TestDelayedEvents(t *testing.T) {
 	})
 
 	t.Run("cannot update a delayed event with an invalid action", func(t *testing.T) {
-		res := unauthedClient.Do(
+		res := user.Do(
 			t,
 			"POST",
 			append(getPathForDelayedEvents(), "abc", "oops"),
@@ -230,7 +268,7 @@ func TestDelayedEvents(t *testing.T) {
 		} {
 			t.Run(fmt.Sprintf("cannot %s a delayed event without a matching delay ID", action), func(t *testing.T) {
 				t.Parallel()
-				res := unauthedClient.Do(
+				res := user.Do(
 					t,
 					"POST",
 					getPathForUpdateDelayedEvent("abc", action),
@@ -241,6 +279,76 @@ func TestDelayedEvents(t *testing.T) {
 				})
 			})
 		}
+	})
+
+	t.Run("cannot manage a delayed event of another user", func(t *testing.T) {
+		var res *http.Response
+
+		defer cleanupDelayedEvents(t, user)
+
+		stateKey := "to_send_on_timeout_despite_another_user"
+
+		// Schedule a delayed event
+		setterKey := "setter"
+		setterExpected := "on_timeout"
+		res = user.MustDo(
+			t,
+			"PUT",
+			getPathForState(roomID, eventType, stateKey),
+			client.WithJSONBody(t, map[string]interface{}{
+				setterKey: setterExpected,
+			}),
+			getDelayQueryParam("1500"),
+		)
+		delayID := client.GetJSONFieldStr(t, client.ParseJSON(t, res), "delay_id")
+
+		for _, action := range []DelayedEventAction{
+			DelayedEventActionCancel,
+			DelayedEventActionRestart,
+			DelayedEventActionSend,
+		} {
+			t.Run(fmt.Sprintf("cannot %s a delayed event of another user", action), func(t *testing.T) {
+				res := user2.Do(
+					t,
+					"POST",
+					getPathForUpdateDelayedEvent(delayID, action),
+					client.WithJSONBody(t, map[string]interface{}{}),
+				)
+				must.MatchResponse(t, res, match.HTTPResponse{
+					StatusCode: 404,
+					JSON: []match.JSON{
+						match.JSONKeyEqual("errcode", "M_NOT_FOUND"),
+					},
+				})
+			})
+		}
+
+		// The delayed event is still scheduled for the user who scheduled it
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(1))
+
+		// Sanity check that the room state hasn't changed yet
+		res = user.Do(t, "GET", getPathForState(roomID, eventType, stateKey))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			StatusCode: 404,
+		})
+
+		// Wait a bit but not long enough for the delayed state event to be sent
+		time.Sleep(1 * time.Second)
+
+		// Check that the delayed state event is still sent on its original timeout (using
+		// `MustSyncUntil` to account for any processing or worker replication delays)
+		user.MustSyncUntil(t, client.SyncReq{UseStateAfter: true}, client.SyncStateAfterHas(roomID, func(ev gjson.Result) bool {
+			return ev.Get("type").Str == eventType && ev.Get("state_key").Str == stateKey
+		}))
+		// Make sure the state looks as expected after
+		res = user.MustDo(t, "GET", getPathForState(roomID, eventType, stateKey))
+		must.MatchResponse(t, res, match.HTTPResponse{
+			JSON: []match.JSON{
+				match.JSONKeyEqual(setterKey, setterExpected),
+			},
+		})
+		// No more delayed events
+		matchDelayedEvents(t, user, delayedEventsNumberEqual(0))
 	})
 
 	t.Run("delayed state events can be cancelled", func(t *testing.T) {
@@ -274,7 +382,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 
 		// Cancel the delayed event
-		unauthedClient.MustDo(
+		user.MustDo(
 			t,
 			"POST",
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionCancel),
@@ -328,7 +436,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 
 		// Force the delayed event to be sent immediately
-		unauthedClient.MustDo(
+		user.MustDo(
 			t,
 			"POST",
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionSend),
@@ -384,7 +492,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 
 		// Restart the timer on the delayed event
-		unauthedClient.MustDo(
+		user.MustDo(
 			t,
 			"POST",
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionRestart),
