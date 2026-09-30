@@ -252,6 +252,177 @@ func TestMSC4242JoinPublicRoomWithRejectedStateDAGEvents(t *testing.T) {
 	)
 }
 
+// Test that rejection cascades across a rejoin: an event which references an event the server
+// already knows to be rejected must itself be rejected, even though the rejected event is not
+// reprocessed because the server has seen it before.
+//
+// This is the same cascading rejection rule as
+// TestMSC4242JoinPublicRoomWithRejectedStateDAGEvents, but split over two joins. The rejected
+// event arrives in the first /send_join response and is persisted as rejected. The events built
+// on top of it only arrive in the second /send_join response, by which time the rejected event
+// is an event the server has already seen, so it is filtered out of the batch being processed.
+// A server which only tracks the rejection status of events in the batch it is currently
+// processing will accept the new events and fail this test.
+//
+// The state DAG we build is:
+//
+//	            BASE (m.room.join_rules, last of the initial room events)
+//	           /    \
+//	TOPIC_BEFORE     DORIS_NAME (rejected: doris is not in the room)
+//	     |                |
+//	ALICE_JOIN            |   <- first join, prev_state_events = [TOPIC_BEFORE]
+//	     |                |
+//	ALICE_LEAVE           |
+//	     |                |
+//	TOPIC_AFTER           |   <- rejoin, prev_state_events = [TOPIC_AFTER]
+//	                      |
+//	                 CHARLIE_JOIN (valid on its own, rejected for referencing DORIS_NAME)
+//	                      |
+//	                   BOB_NAME (valid on its own, rejected two hops from DORIS_NAME)
+//
+// Every event which sets the room name is on the rejected branch, so a conformant server never
+// has an (m.room.name, "") event in the room state.
+func TestMSC4242RejectionCascadesOnRejoin(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+		federation.HandleEventRequests(),
+		federation.HandleMakeSendJoinRequests(),
+	)
+	srv.UnexpectedRequestsAreErrors = false
+	cancel := srv.Listen()
+	defer cancel()
+
+	bob := srv.UserID("bob")
+	charlie := srv.UserID("charlie")
+	doris := srv.UserID("doris")
+	room := srv.MustMakeRoom(t, roomVersion,
+		federation.InitialRoomEvents(roomVersion, bob),
+		federation.WithImpl(ServerRoomImplStateDAG(t)),
+	)
+	base := room.ForwardExtremities[0]
+
+	// Fork the state DAG at the last of the initial room events: one branch is where the
+	// homeserver joins, the other is where the rejected events live.
+	topicBefore := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:       spec.MRoomTopic,
+			Sender:     bob,
+			StateKey:   &empty,
+			Content:    map[string]interface{}{"topic": "before the join"},
+			PrevEvents: []string{base},
+		},
+		PrevStateEvents: []string{base},
+	})
+	room.AddEvent(topicBefore)
+	// Doris is not in the room, so her event fails auth and is rejected.
+	dorisName := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:       spec.MRoomName,
+			Sender:     doris,
+			StateKey:   &empty,
+			Content:    map[string]interface{}{"name": "doris is not in the room so this is rejected"},
+			PrevEvents: []string{base},
+		},
+		PrevStateEvents: []string{base},
+	})
+	room.AddEvent(dorisName)
+
+	// Join on the clean branch: the rejected event is in the /send_join response, but the join
+	// does not reference it, so only the rejected event itself is rejected.
+	room.ForwardExtremities = []string{topicBefore.EventID()}
+	alice.MustJoinRoom(t, room.RoomID, []spec.ServerName{srv.ServerName()})
+	sinceJoined := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, room.RoomID))
+
+	// The rejected event must not be part of the room state after the first join. If it is, the
+	// rest of this test is meaningless as there is no rejection to cascade.
+	mustNotHaveStateEvent(
+		t, currentRoomState(t, alice, room.RoomID), spec.MRoomName, "",
+		"doris is not in the room so her name event must be rejected",
+	)
+
+	// Alice leaves, wait for it to propagate.
+	alice.MustLeaveRoom(t, room.RoomID)
+	alice.MustSyncUntil(t, client.SyncReq{Since: sinceJoined}, client.SyncLeftFrom(alice.UserID, room.RoomID))
+	leaveEvent := awaitMembership(t, room, alice.UserID, "leave")
+
+	// Extend the clean branch past the leave: this is where the rejoin will hang off.
+	topicAfter := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:       spec.MRoomTopic,
+			Sender:     bob,
+			StateKey:   &empty,
+			Content:    map[string]interface{}{"topic": "after the leave"},
+			PrevEvents: []string{leaveEvent.EventID()},
+		},
+		PrevStateEvents: []string{leaveEvent.EventID()},
+	})
+	room.AddEvent(topicAfter)
+
+	// Extend the rejected branch while the homeserver is not in the room. These events are new to
+	// the homeserver, but the event they descend from is not: it was rejected during the first join.
+	//
+	// Charlie's join would be allowed on its own as the room is public. It is rejected because it
+	// references a rejected event in prev_state_events.
+	charlieJoin := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:       spec.MRoomMember,
+			Sender:     charlie,
+			StateKey:   &charlie,
+			Content:    map[string]interface{}{"membership": spec.Join},
+			PrevEvents: []string{dorisName.EventID()},
+		},
+		PrevStateEvents: []string{dorisName.EventID()},
+	})
+	room.AddEvent(charlieJoin)
+	// Bob may set the room name, and this event references a valid event, but it is rejected because
+	// that event is itself rejected two hops back.
+	bobName := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:       spec.MRoomName,
+			Sender:     bob,
+			StateKey:   &empty,
+			Content:    map[string]interface{}{"name": "rejected: two hops from a rejected event"},
+			PrevEvents: []string{charlieJoin.EventID()},
+		},
+		PrevStateEvents: []string{charlieJoin.EventID()},
+	})
+	room.AddEvent(bobName)
+
+	t.Logf(
+		"base=%s topicBefore=%s dorisName=%s leave=%s topicAfter=%s charlieJoin=%s bobName=%s",
+		base, topicBefore.EventID(), dorisName.EventID(), leaveEvent.EventID(),
+		topicAfter.EventID(), charlieJoin.EventID(), bobName.EventID(),
+	)
+
+	// Rejoin on the clean branch.
+	room.ForwardExtremities = []string{topicAfter.EventID()}
+	alice.MustJoinRoom(t, room.RoomID, []spec.ServerName{srv.ServerName()})
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, room.RoomID))
+
+	state := currentRoomState(t, alice, room.RoomID)
+	mustHaveStateEventContent(
+		t, state, spec.MRoomMember, alice.UserID, "membership", "join",
+		"the rejoining user is not joined",
+	)
+	mustHaveStateEventContent(
+		t, state, spec.MRoomTopic, "", "topic", "after the leave",
+		"current state at rejoin was not calculated from the state DAG",
+	)
+	mustNotHaveStateEvent(
+		t, state, spec.MRoomMember, charlie,
+		"charlie's join references an event which was rejected before the rejoin so must itself be rejected",
+	)
+	mustNotHaveStateEvent(
+		t, state, spec.MRoomName, "",
+		"every event setting the room name descends from a rejected event so must itself be rejected",
+	)
+}
+
 // setDisplayName sends numTimes membership events for userID which each change the display name,
 // lengthening the state DAG. The events are added to the room but not sent anywhere: they are
 // picked up by servers when they next join.
