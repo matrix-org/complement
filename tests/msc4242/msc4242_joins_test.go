@@ -423,6 +423,173 @@ func TestMSC4242RejectionCascadesOnRejoin(t *testing.T) {
 	)
 }
 
+// Test that a rejoin works when an event in the /send_join response merges a state DAG branch the
+// server already has with a branch which is new in that response.
+//
+// The homeserver joins on the main branch, leaves, then rejoins. A side branch created before the
+// first join is never extended, so it stays a state DAG head throughout and is persisted during
+// the first join. The merge event which joins it back to the main branch only arrives in the
+// second /send_join response, so its prev_state_events mix an event the server persisted a join
+// ago with an event which is still only in the batch being processed. A server which can only use
+// the state it remembered for events in the current batch, or only the state in its database,
+// cannot resolve this event.
+//
+// The state DAG we build is:
+//
+//	            BASE (m.room.join_rules, last of the initial room events)
+//	           /    \
+//	  MAIN_TOPIC     SIDE_NAME        <- both valid, both persisted during the first join
+//	      |             |
+//	 ALICE_JOIN         |             <- first join, prev_state_events = [MAIN_TOPIC]
+//	      |             |
+//	 ALICE_LEAVE        |
+//	      |             |
+//	POST_LEAVE_TOPIC    |             <- new to the homeserver at the rejoin
+//	           \        |
+//	            \       |
+//	             MERGE                <- prev_state_events = [POST_LEAVE_TOPIC, SIDE_NAME]
+//	               |
+//	          ALICE_REJOIN            <- rejoin, prev_state_events = [MERGE]
+//
+// The state at MERGE is the resolution of both branches, so the room name set on the side branch
+// and the topic set on the main branch must both be in the current state after the rejoin.
+func TestMSC4242RejoinMergesOldAndNewStateDAGBranches(t *testing.T) {
+	deployment := complement.Deploy(t, 1)
+	defer deployment.Destroy(t)
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	srv := federation.NewServer(t, deployment,
+		federation.HandleKeyRequests(),
+		federation.HandleTransactionRequests(nil, nil),
+		federation.HandleEventRequests(),
+		federation.HandleMakeSendJoinRequests(),
+	)
+	srv.UnexpectedRequestsAreErrors = false
+	cancel := srv.Listen()
+	defer cancel()
+
+	bob := srv.UserID("bob")
+	room := srv.MustMakeRoom(t, roomVersion,
+		federation.InitialRoomEvents(roomVersion, bob),
+		federation.WithImpl(ServerRoomImplStateDAG(t)),
+	)
+	base := room.ForwardExtremities[0]
+
+	// Fork the state DAG at the last of the initial room events. The homeserver joins on the main
+	// branch; nothing ever extends the side branch, so it remains a head of the state DAG.
+	mainTopic := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:       spec.MRoomTopic,
+			Sender:     bob,
+			StateKey:   &empty,
+			Content:    map[string]interface{}{"topic": "before the join"},
+			PrevEvents: []string{base},
+		},
+		PrevStateEvents: []string{base},
+	})
+	room.AddEvent(mainTopic)
+	sideName := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:       spec.MRoomName,
+			Sender:     bob,
+			StateKey:   &empty,
+			Content:    map[string]interface{}{"name": "set on the side branch"},
+			PrevEvents: []string{base},
+		},
+		PrevStateEvents: []string{base},
+	})
+	room.AddEvent(sideName)
+
+	// Join on the main branch. The side branch is in the /send_join response, so it is persisted
+	// during this join: this is what makes it an event the homeserver has already seen when it
+	// rejoins, and so an event which is not reprocessed as part of that batch.
+	room.ForwardExtremities = []string{mainTopic.EventID()}
+	alice.MustJoinRoom(t, room.RoomID, []spec.ServerName{srv.ServerName()})
+	sinceJoined := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, room.RoomID))
+	stateAtFirstJoin := currentRoomState(t, alice, room.RoomID)
+	mustHaveStateEventContent(
+		t, stateAtFirstJoin, spec.MRoomName, "", "name", "set on the side branch",
+		"the side branch was not persisted during the first join, so the rejoin cannot exercise a merge",
+	)
+	// Both branches must already be merged into the current state here. If they are not, the
+	// server is losing a fork before the rejoin is even involved, and the rest of this test says
+	// nothing about how it handles a merge of an old branch with a new one.
+	mustHaveStateEventContent(
+		t, stateAtFirstJoin, spec.MRoomTopic, "", "topic", "before the join",
+		"the branch the homeserver joined on is not in the current state after the first join",
+	)
+
+	// Alice leaves, wait for it to propagate.
+	alice.MustLeaveRoom(t, room.RoomID)
+	alice.MustSyncUntil(t, client.SyncReq{Since: sinceJoined}, client.SyncLeftFrom(alice.UserID, room.RoomID))
+	leaveEvent := awaitMembership(t, room, alice.UserID, "leave")
+
+	// Extend the main branch while the homeserver is not in the room: this event is new to it at
+	// the rejoin.
+	postLeaveTopic := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:       spec.MRoomTopic,
+			Sender:     bob,
+			StateKey:   &empty,
+			Content:    map[string]interface{}{"topic": "after the leave"},
+			PrevEvents: []string{leaveEvent.EventID()},
+		},
+		PrevStateEvents: []string{leaveEvent.EventID()},
+	})
+	room.AddEvent(postLeaveTopic)
+
+	// Merge the two branches. One parent is new in the upcoming /send_join response, the other was
+	// persisted during the first join.
+	merge := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:     spec.MRoomMember,
+			Sender:   bob,
+			StateKey: &bob,
+			Content: map[string]interface{}{
+				"membership":  spec.Join,
+				"displayname": "bob merged the branches",
+			},
+			PrevEvents: []string{postLeaveTopic.EventID(), sideName.EventID()},
+		},
+		PrevStateEvents: []string{postLeaveTopic.EventID(), sideName.EventID()},
+	})
+	room.AddEvent(merge)
+
+	t.Logf(
+		"base=%s mainTopic=%s sideName=%s leave=%s postLeaveTopic=%s merge=%s",
+		base, mainTopic.EventID(), sideName.EventID(), leaveEvent.EventID(),
+		postLeaveTopic.EventID(), merge.EventID(),
+	)
+	// The merge must reference one event which is new in the upcoming /send_join response
+	// (postLeaveTopic) and one which the homeserver persisted during the first join (sideName).
+	t.Logf("merge %s prev_state_events=%v prev_events=%v",
+		merge.EventID(), merge.PrevStateEventIDs(), merge.PrevEventIDs())
+	t.Logf("leave %s prev_state_events=%v", leaveEvent.EventID(), leaveEvent.PrevStateEventIDs())
+
+	// Rejoin at the merge event.
+	room.ForwardExtremities = []string{merge.EventID()}
+	alice.MustJoinRoom(t, room.RoomID, []spec.ServerName{srv.ServerName()})
+	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, room.RoomID))
+
+	state := currentRoomState(t, alice, room.RoomID)
+	mustHaveStateEventContent(
+		t, state, spec.MRoomMember, alice.UserID, "membership", "join",
+		"the rejoining user is not joined",
+	)
+	mustHaveStateEventContent(
+		t, state, spec.MRoomMember, bob, "displayname", "bob merged the branches",
+		"the merge event is not part of the current state",
+	)
+	mustHaveStateEventContent(
+		t, state, spec.MRoomTopic, "", "topic", "after the leave",
+		"the branch which was new in the rejoin's /send_join response was dropped from the merged state",
+	)
+	mustHaveStateEventContent(
+		t, state, spec.MRoomName, "", "name", "set on the side branch",
+		"the branch persisted before the rejoin was dropped from the merged state",
+	)
+}
+
 // setDisplayName sends numTimes membership events for userID which each change the display name,
 // lengthening the state DAG. The events are added to the room but not sent anywhere: they are
 // picked up by servers when they next join.
