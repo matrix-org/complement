@@ -8,6 +8,7 @@ import (
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
+	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/gomatrixserverlib"
@@ -120,7 +121,7 @@ func TestMSC4242JoinLeaveRejoinPublicRoom(t *testing.T) {
 //	       |                   \
 //	CHARLIE_JOIN (valid on its own, rejected for referencing DORIS_NAME)
 //	       |                     \
-//	 BOB_NAME (valid on its own, rejected two hops from DORIS_NAME)
+//	 BOB_ROOM_AVATAR (valid on its own, rejected two hops from DORIS_NAME)
 //	                               \
 //	                      ALICE_REJOIN, prev_state_events = [NAME]
 //
@@ -207,24 +208,24 @@ func TestMSC4242JoinPublicRoomWithRejectedStateDAGEvents(t *testing.T) {
 		PrevStateEvents: []string{dorisName.EventID()},
 	})
 	room.AddEvent(charlieJoin)
-	// Bob may set the room name, and this event references a valid event, but it is rejected because
+	// Bob may set the room avatar, and this event references a valid event, but it is rejected because
 	// that event is itself rejected two hops back.
-	bobName := mustCreateEvent(t, srv, room, MSC4242Event{
+	bobAvatar := mustCreateEvent(t, srv, room, MSC4242Event{
 		Event: federation.Event{
-			Type:       spec.MRoomName,
+			Type:       spec.MRoomAvatar,
 			Sender:     bob,
 			StateKey:   &empty,
-			Content:    map[string]interface{}{"name": "rejected: two hops from a rejected event"},
+			Content:    map[string]interface{}{"avatar": "rejected: two hops from a rejected event"},
 			PrevEvents: []string{charlieJoin.EventID()},
 		},
 		PrevStateEvents: []string{charlieJoin.EventID()},
 	})
-	room.AddEvent(bobName)
+	room.AddEvent(bobAvatar)
 
 	t.Logf(
-		"leave=%s topic=%s name=%s dorisName=%s charlieJoin=%s bobName=%s",
+		"leave=%s topic=%s name=%s dorisName=%s charlieJoin=%s bobAvatar=%s",
 		leaveEvent.EventID(), topic.EventID(), name.EventID(),
-		dorisName.EventID(), charlieJoin.EventID(), bobName.EventID(),
+		dorisName.EventID(), charlieJoin.EventID(), bobAvatar.EventID(),
 	)
 
 	// Point the rejoin at the name event.
@@ -239,7 +240,7 @@ func TestMSC4242JoinPublicRoomWithRejectedStateDAGEvents(t *testing.T) {
 	state := currentRoomState(t, alice, room.RoomID)
 	// Both forks should be in the current state
 	mustHaveStateEventContent(
-		t, state, "m.room.topic", "", "topic", "fork containing rejected events",
+		t, state, spec.MRoomTopic, "", "topic", "fork containing rejected events",
 		"the rejected fork was not merged into the current state",
 	)
 	mustHaveStateEventContent(
@@ -249,6 +250,10 @@ func TestMSC4242JoinPublicRoomWithRejectedStateDAGEvents(t *testing.T) {
 	mustNotHaveStateEvent(
 		t, state, spec.MRoomMember, charlie,
 		"charlie's join references a rejected event so must itself be rejected",
+	)
+	mustNotHaveStateEvent(
+		t, state, spec.MRoomAvatar, "",
+		"bob's room avatar references a rejected event 2 hops back so must itself be rejected",
 	)
 }
 
@@ -442,7 +447,7 @@ func TestMSC4242RejectionCascadesOnRejoin(t *testing.T) {
 //	      |             |
 //	 ALICE_JOIN         |             <- first join, prev_state_events = [MAIN_TOPIC]
 //	      |             |
-//	 ALICE_LEAVE        |
+//	 BOB_KICK_ALICE     |
 //	      |             |
 //	POST_LEAVE_TOPIC    |             <- new to the homeserver at the rejoin
 //	           \        |
@@ -518,9 +523,24 @@ func TestMSC4242RejoinMergesOldAndNewStateDAGBranches(t *testing.T) {
 		t, stateAtFirstJoin, spec.MRoomTopic, "", "topic", "before the join",
 		"the branch the homeserver joined on is not in the current state after the first join",
 	)
+	aliceJoinEventID := stateAtFirstJoin[[2]string{spec.MRoomMember, alice.UserID}].Get("event_id").Str
+	if aliceJoinEventID == "" {
+		ct.Fatalf(t, "failed to find alice's join event")
+	}
 
-	// Alice leaves, wait for it to propagate.
-	alice.MustLeaveRoom(t, room.RoomID)
+	// Bob kicks Alice, ensuring it never references SIDE_NAME in the kick, wait for it to propagate.
+	bobKickAlice := mustCreateEvent(t, srv, room, MSC4242Event{
+		Event: federation.Event{
+			Type:       spec.MRoomMember,
+			Sender:     bob,
+			StateKey:   &alice.UserID,
+			Content:    map[string]interface{}{"membership": spec.Leave},
+			PrevEvents: []string{aliceJoinEventID},
+		},
+		PrevStateEvents: []string{aliceJoinEventID},
+	})
+	room.AddEvent(bobKickAlice)
+	srv.MustSendTransaction(t, deployment, "hs1", []json.RawMessage{bobKickAlice.JSON()}, nil)
 	alice.MustSyncUntil(t, client.SyncReq{Since: sinceJoined}, client.SyncLeftFrom(alice.UserID, room.RoomID))
 	leaveEvent := awaitMembership(t, room, alice.UserID, "leave")
 
