@@ -12,6 +12,7 @@ require (
 	github.com/sirupsen/logrus v1.10.2
 	github.com/tidwall/gjson v1.19.0
 	github.com/tidwall/sjson v1.2.5
+	github.com/zeebo/blake3 v0.2.4
 	golang.org/x/crypto v0.57.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	gonum.org/v1/plot v0.17.0
@@ -35,6 +36,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/hashicorp/go-set/v3 v3.0.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/oleiade/lane/v2 v2.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
