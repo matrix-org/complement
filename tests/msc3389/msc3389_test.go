@@ -59,9 +59,9 @@ func TestMSC3389RedactionPreservesRelation(t *testing.T) {
 	// Verify the original event is fully intact before redaction.
 	eventJsonBefore := alice.MustGetEvent(t, roomID, reactionID)
 	must.MatchGJSON(t, eventJsonBefore,
-		match.JSONKeyEqual("content.m.relates_to.rel_type", "m.annotation"),
-		match.JSONKeyEqual("content.m.relates_to.event_id", parentID),
-		match.JSONKeyEqual("content.m.relates_to.key", "👍"),
+		match.JSONKeyEqual("content.m\\.relates_to.rel_type", "m.annotation"),
+		match.JSONKeyEqual("content.m\\.relates_to.event_id", parentID),
+		match.JSONKeyEqual("content.m\\.relates_to.key", "👍"),
 	)
 
 	alice.MustSendRedaction(t, roomID, map[string]interface{}{}, reactionID)
@@ -70,9 +70,9 @@ func TestMSC3389RedactionPreservesRelation(t *testing.T) {
 	// `event_id` survive; the `key` is removed.
 	eventJsonAfter := alice.MustGetEvent(t, roomID, reactionID)
 	must.MatchGJSON(t, eventJsonAfter,
-		match.JSONKeyEqual("content.m.relates_to.rel_type", "m.annotation"),
-		match.JSONKeyEqual("content.m.relates_to.event_id", parentID),
-		match.JSONKeyMissing("content.m.relates_to.key"),
+		match.JSONKeyEqual("content.m\\.relates_to.rel_type", "m.annotation"),
+		match.JSONKeyEqual("content.m\\.relates_to.event_id", parentID),
+		match.JSONKeyMissing("content.m\\.relates_to.key"),
 	)
 }
 
@@ -105,7 +105,7 @@ func TestMSC3389RedactionStripsRelationInOlderVersions(t *testing.T) {
 	// In room v9 the whole `m.relates_to` is stripped, leaving no content.
 	eventJsonAfter := alice.MustGetEvent(t, roomID, reactionID)
 	must.MatchGJSON(t, eventJsonAfter,
-		match.JSONKeyMissing("content.m.relates_to"),
+		match.JSONKeyMissing("content.m\\.relates_to"),
 	)
 }
 
@@ -149,7 +149,7 @@ func TestMSC3389RedactionPreservesPlainRelation(t *testing.T) {
 
 	eventJsonAfter := alice.MustGetEvent(t, roomID, replyID)
 	must.MatchGJSON(t, eventJsonAfter,
-		match.JSONKeyEqual("content.m.relates_to.rel_type", "m.thread"),
-		match.JSONKeyEqual("content.m.relates_to.event_id", parentID),
+		match.JSONKeyEqual("content.m\\.relates_to.rel_type", "m.thread"),
+		match.JSONKeyEqual("content.m\\.relates_to.event_id", parentID),
 	)
 }
