@@ -18,6 +18,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"sync"
@@ -26,6 +27,7 @@ import (
 	"github.com/matrix-org/gomatrix"
 	"github.com/matrix-org/gomatrixserverlib/fclient"
 	"github.com/matrix-org/gomatrixserverlib/spec"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
 	"github.com/gorilla/mux"
@@ -35,6 +37,9 @@ import (
 	"github.com/matrix-org/complement/config"
 	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/internal"
+	"github.com/matrix-org/complement/match"
+	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/should"
 )
 
 // Subset of Deployment used in federation
@@ -64,8 +69,9 @@ type Server struct {
 
 	directoryHandlerSetup bool
 	aliases               map[string]string
-	rooms                 map[string]*ServerRoom
-	keyRing               *gomatrixserverlib.KeyRing
+	// List of rooms known to this server
+	rooms   map[string]*ServerRoom
+	keyRing *gomatrixserverlib.KeyRing
 }
 
 // EXPERIMENTAL
@@ -180,17 +186,34 @@ func (s *Server) MustMakeRoom(t ct.TestLike, roomVer gomatrixserverlib.RoomVersi
 	if !s.listening {
 		ct.Fatalf(s.t, "MustMakeRoom() called before Listen() - this is not supported because Listen() chooses a high-numbered port and thus changes the server name and thus changes the room ID. Ensure you Listen() first!")
 	}
+
 	// Generate a unique room ID, prefixed with an incrementing counter.
 	// This ensures that room IDs are not re-used across tests, even if a Complement server happens
 	// to re-use the same port as a previous one, which
 	//  * reduces noise when searching through logs and
 	//  * prevents homeservers from getting confused when multiple test cases re-use the same homeserver deployment.
+	// This value is temporary for domainless room IDs and will be replaced with the create event ID.
 	roomID := fmt.Sprintf("!%d-%s:%s", len(s.rooms), util.RandomString(18), s.serverName)
-	t.Logf("Creating room %s with version %s", roomID, roomVer)
 	room := NewServerRoom(roomVer, roomID)
 	for _, opt := range opts {
+		// let the caller replace the room impl before we try to create events
 		opt(room)
 	}
+
+	iRoomVer := gomatrixserverlib.MustGetRoomVersion(roomVer)
+	if iRoomVer.DomainlessRoomIDs() {
+		if len(events) == 0 || events[0].Type != spec.MRoomCreate {
+			ct.Fatalf(s.t, "MustMakeRoom: room version %s requires the create event as an initial event but it wasn't found", roomVer)
+		}
+		room.RoomID = ""
+		// build and sign the create event to work out the room ID
+		createEvent := s.MustCreateEvent(t, room, events[0])
+		events = events[1:]
+		room.RoomID = "!" + createEvent.EventID()[1:]
+		room.AddEvent(createEvent)
+	}
+
+	t.Logf("Creating room %s with version %s", room.RoomID, roomVer)
 
 	// sign all these events
 	for _, ev := range events {
@@ -224,7 +247,7 @@ func (s *Server) FederationClient(deployment FederationDeployment) fclient.Feder
 // for any sent PDUs. Times out after 10 seconds.
 //
 // Args:
-//   - `destination`: This should be a resolvable addresses within the deployment network.
+//   - `destination`: This should be a resolvable address within the deployment network.
 func (s *Server) MustSendTransaction(t ct.TestLike, deployment FederationDeployment, destination spec.ServerName, pdus []json.RawMessage, edus []gomatrixserverlib.EDU) {
 	t.Helper()
 	fedClient := s.FederationClient(deployment)
@@ -340,11 +363,11 @@ func (s *Server) MustCreateEvent(t ct.TestLike, room *ServerRoom, ev Event) goma
 	return pdu
 }
 
-// MustJoinRoom will make the server send a make_join and a send_join to join a room
+// MustJoinRoom will make the server send a /make_join and a /send_join to join a room
 // It returns the resultant room.
 //
 // Args:
-//   - `remoteServer`: This should be a resolvable addresses within the deployment network.
+//   - `remoteServer`: This should be a resolvable address within the deployment network.
 func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string, opts ...JoinRoomOpt) *ServerRoom {
 	t.Helper()
 	var jr joinRoom
@@ -426,10 +449,103 @@ func (s *Server) MustJoinRoom(t ct.TestLike, deployment FederationDeployment, re
 	return room
 }
 
+type knockRoom struct {
+	strictKnockRoomStateChecks bool
+}
+
+// KnockRoomOpt is an option for configuring how the server should knock on the room
+type KnockRoomOpt func(kr *knockRoom)
+
+// WithStrictKnockRoomStateChecks tells the server to strictly check that the received
+// `knock_room_state` is valid according to the spec (c.f. MSC4311).
+func WithStrictKnockRoomStateChecks() KnockRoomOpt {
+	return func(kr *knockRoom) {
+		kr.strictKnockRoomStateChecks = true
+	}
+}
+
+// MustKnockRoom  will make the server send a /make_knock and a /send_knock to knock on a room
+// It returns the resultant room.
+//
+// Args:
+//   - `remoteServer`: This should be a resolvable address within the deployment network.
+func (s *Server) MustKnockRoom(
+	t ct.TestLike,
+	deployment FederationDeployment,
+	remoteServer spec.ServerName,
+	roomID string,
+	userID string,
+	opts ...KnockRoomOpt,
+) *ServerRoom {
+	t.Helper()
+	var kr knockRoom
+	for _, opt := range opts {
+		opt(&kr)
+	}
+
+	origin := spec.ServerName(s.serverName)
+	fedClient := s.FederationClient(deployment)
+
+	makeKnockResp, err := fedClient.MakeKnock(context.Background(), origin, remoteServer, roomID, userID, SupportedRoomVersions())
+	if err != nil {
+		ct.Fatalf(t, "MustKnockRoom: make_knock failed: %v", err)
+	}
+
+	verImpl, err := gomatrixserverlib.GetRoomVersion(makeKnockResp.RoomVersion)
+	if err != nil {
+		ct.Fatalf(t, "MustKnockRoom: invalid room version: %v", err)
+	}
+
+	stateKey := userID
+	makeKnockResp.KnockEvent.SenderID = userID
+	makeKnockResp.KnockEvent.StateKey = &stateKey
+
+	eb := verImpl.NewEventBuilderFromProtoEvent(&makeKnockResp.KnockEvent)
+	knockEvent, err := eb.Build(time.Now(), origin, s.KeyID, s.Priv)
+	if err != nil {
+		ct.Fatalf(t, "MustKnockRoom: failed to sign event: %v", err)
+	}
+
+	// FIXME: Use `fedClient.SendKnock()` once it supports full PDU's vs stripped state
+	sendKnockPath := "/_matrix/federation/v1/send_knock/" + url.PathEscape(roomID) + "/" + url.PathEscape(knockEvent.EventID())
+	sendKnockReq := fclient.NewFederationRequest("PUT", origin, remoteServer, sendKnockPath)
+	if err := sendKnockReq.SetContent(knockEvent); err != nil {
+		ct.Fatalf(t, "MustKnockRoom: failed to set send_knock content: %v", err)
+	}
+	var rawResponse json.RawMessage
+	if err := s.SendFederationRequest(context.Background(), t, deployment, sendKnockReq, &rawResponse); err != nil {
+		ct.Fatalf(t, "MustKnockRoom: send_knock failed: %v", err)
+	}
+	knockResponse := gjson.ParseBytes(rawResponse)
+
+	// Strictly check that the received `knock_room_state` is valid according to the spec
+	// (c.f. MSC4311).
+	if kr.strictKnockRoomStateChecks {
+		must.MatchGJSON(t, knockResponse,
+			match.JSONArraySome("knock_room_state", func(event gjson.Result) error {
+				// MSC4311 also mandates that `m.room.create` event is required
+				return should.MatchGJSON(event, match.JSONKeyEqual("type", "m.room.create"))
+			}),
+			match.JSONArrayEach("knock_room_state", func(event gjson.Result) error {
+				// Each event should have extra fields `origin_server_ts` that indicate we're
+				// seeing a full PDU and not just a "stripped state event"
+				return should.MatchGJSON(event, match.JSONKeyPresent("origin_server_ts"))
+			}),
+		)
+	}
+
+	room := NewServerRoom(makeKnockResp.RoomVersion, roomID)
+	s.rooms[room.RoomID] = room
+
+	t.Logf("Server.MustKnockRoom knocked on room ID %s", room.RoomID)
+
+	return room
+}
+
 // Leaves a room. If this is rejecting an invite then a make_leave request is made first, before send_leave.
 //
 // Args:
-//   - `remoteServer`: This should be a resolvable addresses within the deployment network.
+//   - `remoteServer`: This should be a resolvable address within the deployment network.
 func (s *Server) MustLeaveRoom(t ct.TestLike, deployment FederationDeployment, remoteServer spec.ServerName, roomID string, userID string) {
 	t.Helper()
 	origin := spec.ServerName(s.serverName)
@@ -511,7 +627,88 @@ func (s *Server) Mux() *mux.Router {
 	return s.mux
 }
 
-// Listen for federation server requests - call the returned function to gracefully close the server.
+// Keep track of the ports that we've previously used so that we never use the same port
+// (and therefore the same `server_name`) to two different servers.
+//
+// A `Server` is identified over federation solely by its `server_name` (which looks
+// like `hostname:port` for these Complement engineered homeservers). When the OS recycles a
+// freed port, a new Server could otherwise get a `server_name` that is identical to a
+// previously torn-down one.
+//
+// To explain an actual situation where this becomes a problem: A real homeserver under
+// test (that is participating in a room with the now-dead engineered homeserver) might
+// still try to reach the dead server, but since the `server_name` is the same, it's now
+// hitting the new server unexpectedly (cross-test pollution).
+//
+// This particularly happens when you try to share a `deployment` across many tests and
+// then each test creates a engineered homeservers to interact against.
+//
+// Retiring each port for the lifetime of the process keeps stray requests pointed at a
+// dead port (connection refused) instead of a live, unrelated server.
+var (
+	// Use a mutex so only one thread can advance `lastUsedPort` at a time. We don't want
+	// multiple threads clobbering `lastUsedPort`.
+	lastUsedPortMu sync.Mutex
+	// Start at 1024 (1023 + 1) to avoid the priviged ports used by the system
+	//
+	// Since we sequentially try each port, we just need to keep track of the last one we tried
+	lastUsedPort = 1023
+)
+
+// listenOnUnusedPort listens on an unused port that no other federation `Server` has
+// used before in this process.
+func listenOnUnusedPort(t ct.TestLike) net.Listener {
+	lastUsedPortMu.Lock()
+	defer lastUsedPortMu.Unlock()
+
+	// We use this sequential port scan strategy over guess and check with an OS-assigned
+	// port (by using `:0`) as it's more efficient. The OS may recycle and re-use freed
+	// ports meaning we could regress to O(n^2) behavior trying to search for each new
+	// port we want to find.
+	//
+	// Using `:0` means an unused port is automatically picked for us (could be random,
+	// could be the next sequential unused port, we don't know). Ideally, we could ask for
+	// the next unused port after X to avoid a bunch of work. When using `:0`, the
+	// pathological case that is O(n^2) is if OS hands back next lowest unused port
+	// sequentially which would mean we would have to probe and hold each listener until
+	// we finally got something new.
+
+	// Try the whole port range (untested but it's probably fast to do so)
+	max_attempts := 65535
+	var lastErr error
+	for i := 0; i < max_attempts; i++ {
+		port := lastUsedPort + 1
+		if port > 65535 {
+			// If this ever becomes a problem, we can namespace used ports by `deployment` since
+			// that has to be passed into `NewServer(...)` anyway and the whole point of this is
+			// that a homeserver from the `deployment` doesn't try to reach out to a previous
+			// engineered homeserver it knows about.
+			//
+			// As another alternative, we could also wrap-around to the beginning of the port
+			// range again although that is slightly unsound.
+			ct.Fatalf(
+				t, "listenOnUnusedPort: could not find an unused port in the entire port range (0 - 65535). "+
+					"(see comment here if you run into this). Last error: %s", lastErr,
+			)
+		}
+
+		// Check port availability
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		lastUsedPort = port
+		if err != nil {
+			lastErr = err
+			// Port unavailable, skip
+			continue
+		}
+
+		return ln
+	}
+	// Since we try the entire port range, we don't really expect to get here but we have
+	// it in case there is a programming error above
+	ct.Fatalf(t, "listenOnUnusedPort: Programming error")
+	return nil
+}
+
 func (s *Server) Listen() (cancel func()) {
 	if s.listening {
 		return
@@ -519,10 +716,7 @@ func (s *Server) Listen() (cancel func()) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	ln, err := net.Listen("tcp", ":0") //nolint
-	if err != nil {
-		ct.Fatalf(s.t, "ListenFederationServer: net.Listen failed: %s", err)
-	}
+	ln := listenOnUnusedPort(s.t)
 	port := ln.Addr().(*net.TCPAddr).Port
 	s.serverName = spec.ServerName(fmt.Sprintf("%s:%d", s.serverName, port))
 	s.listening = true

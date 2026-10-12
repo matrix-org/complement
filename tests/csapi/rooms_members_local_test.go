@@ -52,6 +52,8 @@ func TestMembersLocal(t *testing.T) {
 		// Split into initial and incremental sync cases in Complement.
 		t.Run("Existing members see new members' presence (in initial sync)", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/matrix-spec/issues/1374
+			// Venator: does not implement presence
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 			// First we sync to make sure bob to have joined the room...
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(bob.UserID, roomID))
@@ -65,6 +67,8 @@ func TestMembersLocal(t *testing.T) {
 		// sytest: Existing members see new members' presence
 		// Split into initial and incremental sync cases in Complement.
 		t.Run("Existing members see new members' presence (in incremental sync)", func(t *testing.T) {
+			// Venator: does not implement presence
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 			alice.MustSyncUntil(t, client.SyncReq{Since: incrementalSyncTokenBeforeBobJoinsRoom},
 				client.SyncJoinedTo(bob.UserID, roomID),

@@ -63,6 +63,8 @@ func TestRoomImageRoundtrip(t *testing.T) {
 
 // sytest: Can read configuration endpoint
 func TestMediaConfig(t *testing.T) {
+	// Venator: does not permit the use of the legacy media API (always returns M_NOT_FOUND)
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 

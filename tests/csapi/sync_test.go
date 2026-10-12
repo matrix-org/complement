@@ -210,6 +210,8 @@ func TestSync(t *testing.T) {
 		// sytest: Newly joined room includes presence in incremental sync
 		t.Run("Newly joined room includes presence in incremental sync", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
+			// Venator: does not implement presence
+			runtime.SkipIf(t, runtime.Venator)
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			_, nextBatch := bob.MustSync(t, client.SyncReq{})
@@ -230,6 +232,8 @@ func TestSync(t *testing.T) {
 		// sytest: Get presence for newly joined members in incremental sync
 		t.Run("Get presence for newly joined members in incremental sync", func(t *testing.T) {
 			runtime.SkipIf(t, runtime.Dendrite) // FIXME: https://github.com/matrix-org/dendrite/issues/1324
+			// Venator: does not implement presence
+			runtime.SkipIf(t, runtime.Venator)
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
 			nextBatch := alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, roomID))
 			sendMessages(t, alice, roomID, "dummy message", 1)
@@ -276,6 +280,8 @@ func TestSync(t *testing.T) {
 			// in the order we send them, but in practice it seems to get close
 			// enough.
 
+			// Venator: does not yet implement federation, so this test cannot function (see third paragraph of above)
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 
 			// alice creates two rooms, which charlie (on our test server) joins
@@ -450,6 +456,8 @@ func TestSync(t *testing.T) {
 // events, with the `limited` flag set.
 func TestSyncTimelineGap(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
+	// Venator: does not yet implement federation (so this test cannot function)
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
@@ -626,6 +634,8 @@ func TestSyncTimelineGap(t *testing.T) {
 
 // Test presence from people in 2 different rooms in incremental sync
 func TestPresenceSyncDifferentRooms(t *testing.T) {
+	// Venator: does not implement presence
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 

@@ -14,6 +14,8 @@ import (
 func TestContent(t *testing.T) {
 	// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 	runtime.SkipIf(t, runtime.Synapse)
+	// Venator is too young for any media to be available over the unauthenticated API, and always returns M_NOT_FOUND
+	runtime.SkipIf(t, runtime.Venator)
 
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)

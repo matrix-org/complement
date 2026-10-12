@@ -1,3 +1,5 @@
+// Usage: `go run ./cmd/gendoc --config config/config.go > ENVIRONMENT.md`
+
 package main
 
 import (

@@ -158,6 +158,8 @@ func TestRoomCreate(t *testing.T) {
 		})
 		// sytest: POST /createRoom creates a room with the given version
 		t.Run("POST /createRoom creates a room with the given version", func(t *testing.T) {
+			// Venator: does not support room v2 (>=v10 only)
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
 				"room_version": "2",

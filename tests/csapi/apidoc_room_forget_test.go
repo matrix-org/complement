@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -19,6 +20,8 @@ import (
 
 // These tests ensure that forgetting about rooms works as intended
 func TestRoomForget(t *testing.T) {
+	// Venator: does not implement manual room forgetting (is always done automatically on leave)
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 

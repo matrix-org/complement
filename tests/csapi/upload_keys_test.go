@@ -180,11 +180,11 @@ func TestKeyClaimOrdering(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
-	_, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 2)
+	deviceKeys, oneTimeKeys := alice.MustGenerateOneTimeKeys(t, 2)
 
 	// first upload key 1, sleep a bit, then upload key 0.
 	otk1 := map[string]interface{}{"signed_curve25519:1": oneTimeKeys["signed_curve25519:1"]}
-	alice.MustUploadKeys(t, nil, otk1)
+	alice.MustUploadKeys(t, deviceKeys, otk1)
 	// Ensure that there is a difference in timestamp between the two upload requests.
 	time.Sleep(1 * time.Second)
 

@@ -36,7 +36,7 @@ To solve this, you will need to configure your firewall to allow such requests.
 If you are using [ufw](https://code.launchpad.net/ufw), this can be done with:
 
 ```sh
-sudo ufw allow in on br-+
+sudo ufw allow in on br-+ comment "(from Matrix Complement testing) Allow traffic from custom Docker networks to the host machine (host.docker.internal)"
 ```
 
 ### Running using Podman
@@ -96,6 +96,7 @@ If you're looking to run against a custom Dockerfile, it must meet the following
 
 - The Dockerfile must `EXPOSE 8008` and `EXPOSE 8448` for client and federation traffic respectively.
 - The homeserver should run and listen on these ports.
+- The homeserver should listen on plain HTTP for client traffic and HTTPS for federation traffic. See [Complement PKI](#Complement-PKI) below.
 - The homeserver should become healthy within `COMPLEMENT_SPAWN_HS_TIMEOUT_SECS` if a `HEALTHCHECK` is specified in the Dockerfile.
 - The homeserver needs to `200 OK` requests to `GET /_matrix/client/versions`.
 - The homeserver needs to manage its own storage within the image.

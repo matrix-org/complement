@@ -28,7 +28,7 @@ HOMERUNNER_KEEP_BLUEPRINTS='name-of-blueprint' ./homerunner
 ```
 This is neccessary to stop Homerunner from cleaning up the image. Then perform a single POST request:
 ```
-curl -XPOST -d '{"blueprint_name":"name-of-blueprint"}'
+curl -XPOST -d '{"blueprint_name":"name-of-blueprint"}' http://localhost:54321/create
 {
   "homeservers":{
     "hs1":{

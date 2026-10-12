@@ -203,7 +203,7 @@ func (c *CSAPI) UpgradeRoom(t ct.TestLike, roomID string, newVersion string) *ht
 //
 // Args:
 //   - `serverNames`: The list of servers to attempt to join the room through.
-//     These should be a resolvable addresses within the deployment network.
+//     These should be a resolvable address within the deployment network.
 func (c *CSAPI) MustJoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []spec.ServerName) string {
 	t.Helper()
 	res := c.JoinRoom(t, roomIDOrAlias, serverNames)
@@ -221,7 +221,7 @@ func (c *CSAPI) MustJoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []
 //
 // Args:
 //   - `serverNames`: The list of servers to attempt to join the room through.
-//     These should be a resolvable addresses within the deployment network.
+//     These should be a resolvable address within the deployment network.
 func (c *CSAPI) JoinRoom(t ct.TestLike, roomIDOrAlias string, serverNames []spec.ServerName) *http.Response {
 	t.Helper()
 	// construct URL query parameters
@@ -268,14 +268,14 @@ func (c *CSAPI) LeaveRoom(t ct.TestLike, roomID string) *http.Response {
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "leave"}, WithJSONBody(t, body))
 }
 
-// InviteRoom invites userID to the room ID, else fails the test.
+// MustInviteRoom invites userID to the room ID, else fails the test.
 func (c *CSAPI) MustInviteRoom(t ct.TestLike, roomID string, userID string) {
 	t.Helper()
 	res := c.InviteRoom(t, roomID, userID)
 	mustRespond2xx(t, res)
 }
 
-// InviteRoom invites userID to the room ID, else fails the test.
+// InviteRoom invites userID to the room ID.
 func (c *CSAPI) InviteRoom(t ct.TestLike, roomID string, userID string) *http.Response {
 	t.Helper()
 	// Invite the user to the room
@@ -287,6 +287,39 @@ func (c *CSAPI) InviteRoom(t ct.TestLike, roomID string, userID string) *http.Re
 
 func (c *CSAPI) GetRoomCurrentState(t ct.TestLike, roomID string) *http.Response {
 	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
+}
+
+// MustKnockRoom will cause userID to knock on the room ID, else fails the test.
+//
+// Args:
+//   - `serverNames`: The list of servers to attempt to knock on the room through.
+//     These should be a resolvable address within the deployment network.
+func (c *CSAPI) MustKnockRoom(t ct.TestLike, roomID string, serverNames []spec.ServerName) {
+	t.Helper()
+	res := c.KnockRoom(t, roomID, serverNames)
+	mustRespond2xx(t, res)
+}
+
+// KnockRoom will cause userID to knock on the room ID.
+//
+// Args:
+//   - `serverNames`: The list of servers to attempt to knock on the room through.
+//     These should be a resolvable address within the deployment network.
+func (c *CSAPI) KnockRoom(t ct.TestLike, roomID string, serverNames []spec.ServerName) *http.Response {
+	t.Helper()
+	// construct URL query parameters
+	serverNameStrings := make([]string, len(serverNames))
+	for i, serverName := range serverNames {
+		serverNameStrings[i] = string(serverName)
+	}
+	query := url.Values{
+		"via": serverNameStrings,
+	}
+	// User knocks on the room
+	return c.Do(
+		t, "POST", []string{"_matrix", "client", "v3", "knock", roomID},
+		WithQueries(query), WithJSONBody(t, map[string]interface{}{}),
+	)
 }
 
 func (c *CSAPI) MustGetGlobalAccountData(t ct.TestLike, eventType string) *http.Response {
@@ -463,7 +496,7 @@ func (c *CSAPI) SendRedaction(t ct.TestLike, roomID string, content map[string]i
 	return c.Do(t, "PUT", paths, WithJSONBody(t, content))
 }
 
-// MustGetStateEvent returns the event content for the given state event. Fails the test if the state event does not exist.
+// MustGetStateEventContent returns the event content for the given state event. Fails the test if the state event does not exist.
 func (c *CSAPI) MustGetStateEventContent(t ct.TestLike, roomID, eventType, stateKey string) (content gjson.Result) {
 	t.Helper()
 	res := c.GetStateEventContent(t, roomID, eventType, stateKey)
@@ -472,10 +505,25 @@ func (c *CSAPI) MustGetStateEventContent(t ct.TestLike, roomID, eventType, state
 	return gjson.ParseBytes(body)
 }
 
-// GetStateEvent returns the event content for the given state event. Use this form to detect absence via 404.
+// GetStateEventContent returns the event content for the given state event. Use this form to detect absence via 404.
 func (c *CSAPI) GetStateEventContent(t ct.TestLike, roomID, eventType, stateKey string) *http.Response {
 	t.Helper()
 	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state", eventType, stateKey})
+}
+
+// MustGetEvent returns the event content for the given state event. Fails the test if the state event does not exist.
+func (c *CSAPI) MustGetEvent(t ct.TestLike, roomID, eventID string) (eventJson gjson.Result) {
+	t.Helper()
+	res := c.GetEvent(t, roomID, eventID)
+	mustRespond2xx(t, res)
+	body := ParseJSON(t, res)
+	return gjson.ParseBytes(body)
+}
+
+// GetEvent returns the event JSON. Use this form to detect absence via 404.
+func (c *CSAPI) GetEvent(t ct.TestLike, roomID, eventID string) *http.Response {
+	t.Helper()
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "event", eventID})
 }
 
 // MustSendTyping marks this user as typing until the timeout is reached. If isTyping is false, timeout is ignored.

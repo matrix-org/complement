@@ -449,16 +449,34 @@ func TestDeviceListUpdates(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	t.Run("when local user joins a room", func(t *testing.T) { testOtherUserJoin(t, deployment, "hs1", "hs1") })
-	t.Run("when remote user joins a room", func(t *testing.T) { testOtherUserJoin(t, deployment, "hs1", "hs2") })
+	t.Run("when remote user joins a room", func(t *testing.T) {
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
+		testOtherUserJoin(t, deployment, "hs1", "hs2")
+	})
 	t.Run("when joining a room with a local user", func(t *testing.T) { testJoin(t, deployment, "hs1", "hs1") })
-	t.Run("when joining a room with a remote user", func(t *testing.T) { testJoin(t, deployment, "hs1", "hs2") })
+	t.Run("when joining a room with a remote user", func(t *testing.T) {
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
+		testJoin(t, deployment, "hs1", "hs2")
+	})
 	t.Run("when local user leaves a room", func(t *testing.T) { testOtherUserLeave(t, deployment, "hs1", "hs1") })
-	t.Run("when remote user leaves a room", func(t *testing.T) { testOtherUserLeave(t, deployment, "hs1", "hs2") })
+	t.Run("when remote user leaves a room", func(t *testing.T) {
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
+		testOtherUserLeave(t, deployment, "hs1", "hs2")
+	})
 	t.Run("when leaving a room with a local user", func(t *testing.T) { testLeave(t, deployment, "hs1", "hs1") })
 	t.Run("when leaving a room with a remote user", func(t *testing.T) {
 		runtime.SkipIf(t, runtime.Synapse) // FIXME: https://github.com/matrix-org/synapse/issues/13650
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
 		testLeave(t, deployment, "hs1", "hs2")
 	})
 	t.Run("when local user rejoins a room", func(t *testing.T) { testOtherUserRejoin(t, deployment, "hs1", "hs1") })
-	t.Run("when remote user rejoins a room", func(t *testing.T) { testOtherUserRejoin(t, deployment, "hs1", "hs2") })
+	t.Run("when remote user rejoins a room", func(t *testing.T) {
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
+		testOtherUserRejoin(t, deployment, "hs1", "hs2")
+	})
 }

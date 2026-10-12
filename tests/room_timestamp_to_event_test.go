@@ -9,9 +9,9 @@ package tests
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,12 +21,15 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 	"golang.org/x/exp/slices"
 )
 
 func TestJumpToDateEndpoint(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.OldDeploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
@@ -56,6 +59,9 @@ func TestJumpToDateEndpoint(t *testing.T) {
 		t.Run("should find nothing before the earliest timestamp", func(t *testing.T) {
 			t.Parallel()
 			timeBeforeRoomCreation := time.Now()
+			// Guard so createRoom cannot share this sample's millisecond; a
+			// backward search there would return m.room.create instead of nothing.
+			time.Sleep(tsBoundaryGuard)
 			roomID, _, _ := createTestRoom(t, alice)
 			mustCheckEventisReturnedForTime(t, alice, roomID, timeBeforeRoomCreation, "b", "")
 		})
@@ -75,6 +81,9 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			as.MustJoinRoom(t, roomID, []spec.ServerName{
 				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			})
+
+			// Guard so the join cannot share a millisecond with the messages below.
+			time.Sleep(tsBoundaryGuard)
 
 			// Send a couple messages with the same timestamp after the other test
 			// messages in the room.
@@ -98,6 +107,9 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 			})
 
+			// Guard so the join cannot share a millisecond with the messages below.
+			time.Sleep(tsBoundaryGuard)
+
 			// Send a couple messages with the same timestamp after the other test
 			// messages in the room.
 			timeBeforeMessageCreation := time.Now()
@@ -113,6 +125,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 		t.Run("should not be able to query a private room you are not a member of", func(t *testing.T) {
 			t.Parallel()
 			timeBeforeRoomCreation := time.Now()
+			time.Sleep(tsBoundaryGuard)
 
 			// Alice will create the private room
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
@@ -141,6 +154,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 		t.Run("should not be able to query a public room you are not a member of", func(t *testing.T) {
 			t.Parallel()
 			timeBeforeRoomCreation := time.Now()
+			time.Sleep(tsBoundaryGuard)
 
 			// Alice will create the public room
 			roomID := alice.MustCreateRoom(t, map[string]interface{}{
@@ -187,6 +201,7 @@ func TestJumpToDateEndpoint(t *testing.T) {
 			t.Run("when looking backwards before the room was created, should be able to find event that was imported", func(t *testing.T) {
 				t.Parallel()
 				timeBeforeRoomCreation := time.Now()
+				time.Sleep(tsBoundaryGuard)
 				roomID, _, _ := createTestRoom(t, alice)
 
 				// Join from the application service bridge user so we can use it to send
@@ -205,34 +220,112 @@ func TestJumpToDateEndpoint(t *testing.T) {
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, timeBeforeRoomCreation, "b", importedEventID)
 			})
 
-			t.Run("can paginate after getting remote event from timestamp to event endpoint", func(t *testing.T) {
+			t.Run("can paginate backwards after getting remote event from timestamp to event endpoint (start)", func(t *testing.T) {
 				t.Parallel()
 				roomID, eventA, eventB := createTestRoom(t, alice)
 				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
 					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
 				})
+				// After Charlie's homeserver finds the event, it "should try to backfill this
+				// event" (per the spec,
+				// https://spec.matrix.org/v1.17/server-server-api/#get_matrixfederationv1timestamp_to_eventroomid)
 				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
 
-				// Get a pagination token from eventB
-				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"limit": []string{"0"},
-				}))
+				// And then "clients can call /rooms/{roomId}/context/{eventId} to obtain a
+				// pagination token to retrieve the events around the returned event." (per the
+				// spec, https://spec.matrix.org/v1.17/client-server-api/#get_matrixclientv1roomsroomidtimestamp_to_event).
+				//
+				// Get a pagination token that represents the position just *before* eventB
+				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID},
+					client.WithContentType("application/json"), client.WithQueries(url.Values{
+						"limit": []string{"0"},
+					}),
+					// Retry as the worker backfilling and persisting the event isn't necessarily
+					// the same as the worker serving `/context`
+					client.WithRetryUntil(remoteCharlie.SyncUntilTimeout, func(res *http.Response) bool {
+						return res.StatusCode == 200
+					}),
+				)
 				contextResResBody := client.ParseJSON(t, contextRes)
+				// Remember: Tokens are positions between events.
+				//
+				//          start   end
+				//          |       |
+				// [A] <--  ▼  [B]  ▼  <--- [remoteCharlie join]
+				//
+				// "start" is the token that represents the position just *before* eventB
+				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "start")
+
+				// Paginate backwards seamlessly from the `/context` request (start, point
+				// before eventB)
+				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
+					client.WithContentType("application/json"),
+					client.WithQueries(url.Values{
+						"dir":   []string{"b"},
+						"limit": []string{"100"},
+						"from":  []string{paginationToken},
+					}),
+				)
+
+				// Make sure A is visible
+				must.MatchResponse(t, messagesRes, match.HTTPResponse{
+					JSON: []match.JSON{
+						match.JSONCheckOff("chunk", []interface{}{eventA.EventID}, match.CheckOffMapper(func(r gjson.Result) interface{} {
+							return r.Get("event_id").Str
+						}), match.CheckOffAllowUnwanted()),
+					},
+				})
+			})
+
+			t.Run("can paginate backwards after getting remote event from timestamp to event endpoint (end)", func(t *testing.T) {
+				t.Parallel()
+				roomID, eventA, eventB := createTestRoom(t, alice)
+				remoteCharlie.MustJoinRoom(t, roomID, []spec.ServerName{
+					deployment.GetFullyQualifiedHomeserverName(t, "hs1"),
+				})
+				// After Charlie's homeserver finds the event, it "should try to backfill this
+				// event" (per the spec,
+				// https://spec.matrix.org/v1.17/server-server-api/#get_matrixfederationv1timestamp_to_eventroomid)
+				mustCheckEventisReturnedForTime(t, remoteCharlie, roomID, eventB.AfterTimestamp, "b", eventB.EventID)
+
+				// And then "clients can call /rooms/{roomId}/context/{eventId} to obtain a
+				// pagination token to retrieve the events around the returned event." (per the
+				// spec, https://spec.matrix.org/v1.17/client-server-api/#get_matrixclientv1roomsroomidtimestamp_to_event).
+				//
+				// Get a pagination token that represents the position just *after* eventB
+				contextRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "context", eventB.EventID},
+					client.WithContentType("application/json"), client.WithQueries(url.Values{
+						"limit": []string{"0"},
+					}),
+					// Retry as the worker backfilling and persisting the event isn't necessarily
+					// the same as the worker serving `/context`
+					client.WithRetryUntil(remoteCharlie.SyncUntilTimeout, func(res *http.Response) bool {
+						return res.StatusCode == 200
+					}),
+				)
+				contextResResBody := client.ParseJSON(t, contextRes)
+				// Remember: Tokens are positions between events. Normally, you would use the
+				// `start` token to paginate backwards with but for the sake of the test we want
+				// to paginate `/messages` and want see both A and B in the response; so we use
+				// the `end` token. The `end` token comes after B.
+				//
+				//          start   end
+				//          |       |
+				// [A] <--  ▼  [B]  ▼  <--- [remoteCharlie join]
+				//
+				// "end" is the token that represents the position just *after* eventB
 				paginationToken := client.GetJSONFieldStr(t, contextResResBody, "end")
 
-				// Hit `/messages` until `eventA` has been backfilled and replicated across
-				// workers (the worker persisting events isn't necessarily the same as the worker
-				// serving `/messages`)
-				fetchUntilMessagesResponseHas(t, remoteCharlie, roomID, func(ev gjson.Result) bool {
-					return ev.Get("event_id").Str == eventA.EventID
-				})
-
-				// Paginate backwards from eventB
-				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-					"dir":   []string{"b"},
-					"limit": []string{"100"},
-					"from":  []string{paginationToken},
-				}))
+				// Paginate backwards seamlessly from the `/context` request (end, point after
+				// eventB)
+				messagesRes := remoteCharlie.MustDo(t, "GET", []string{"_matrix", "client", "r0", "rooms", roomID, "messages"},
+					client.WithContentType("application/json"),
+					client.WithQueries(url.Values{
+						"dir":   []string{"b"},
+						"limit": []string{"100"},
+						"from":  []string{paginationToken},
+					}),
+				)
 
 				// Make sure both messages are visible
 				must.MatchResponse(t, messagesRes, match.HTTPResponse{
@@ -253,15 +346,15 @@ type eventTime struct {
 	AfterTimestamp  time.Time
 }
 
-var txnCounter int64 = 0
-
-func getTxnID(prefix string) (txnID string) {
-	txnId := fmt.Sprintf("%s-%d", prefix, atomic.LoadInt64(&txnCounter))
-
-	atomic.AddInt64(&txnCounter, 1)
-
-	return txnId
-}
+// tsBoundaryGuard is a pause inserted around (before and after) where we create events
+// so that `time.Now()` samples and subsequent event `origin_server_ts` don't collide at
+// the same millisecond granularity. /timestamp_to_event returns the boundary event
+// inclusively (forward picks the earliest event with ts >= query, backward picks the
+// latest with ts <= query), so a shared millisecond between events means the wrong
+// event can be picked. Adding one whole millisecond to a timestamp always carries it
+// into the next millisecond bucket, so 1ms is enough to separate the sample from every
+// event stamped after the pause.
+const tsBoundaryGuard = 1 * time.Millisecond
 
 func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, eventB *eventTime) {
 	t.Helper()
@@ -269,8 +362,11 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 	roomID = c.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
-
+	// timeBeforeEventA doubles as the initial creation events after-timestamp, so guard it on
+	// both sides to keep it between the two events.
+	time.Sleep(tsBoundaryGuard)
 	timeBeforeEventA := time.Now()
+	time.Sleep(tsBoundaryGuard)
 	eventAID := c.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
@@ -278,8 +374,12 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 			"body":    "Message A",
 		},
 	})
-	timeAfterEventA := time.Now()
 
+	// timeBeforeEventB doubles as eventA's after-timestamp, so guard it on
+	// both sides to keep it between the two events.
+	time.Sleep(tsBoundaryGuard)
+	timeBeforeEventB := time.Now()
+	time.Sleep(tsBoundaryGuard)
 	eventBID := c.SendEventSynced(t, roomID, b.Event{
 		Type: "m.room.message",
 		Content: map[string]interface{}{
@@ -287,10 +387,12 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 			"body":    "Message B",
 		},
 	})
+
+	time.Sleep(tsBoundaryGuard)
 	timeAfterEventB := time.Now()
 
-	eventA = &eventTime{EventID: eventAID, BeforeTimestamp: timeBeforeEventA, AfterTimestamp: timeAfterEventA}
-	eventB = &eventTime{EventID: eventBID, BeforeTimestamp: timeAfterEventA, AfterTimestamp: timeAfterEventB}
+	eventA = &eventTime{EventID: eventAID, BeforeTimestamp: timeBeforeEventA, AfterTimestamp: timeBeforeEventB}
+	eventB = &eventTime{EventID: eventBID, BeforeTimestamp: timeBeforeEventB, AfterTimestamp: timeAfterEventB}
 
 	return roomID, eventA, eventB
 }
@@ -305,7 +407,7 @@ func sendMessageWithTimestamp(t *testing.T, as *client.CSAPI, c *client.CSAPI, r
 	//
 	// We can't use as.SendEventSynced(...) because application services can't use
 	// the /sync API.
-	sendRes := as.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", getTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
+	sendRes := as.Do(t, "PUT", []string{"_matrix", "client", "v3", "rooms", roomID, "send", "m.room.message", helpers.GetTxnID("sendMessageWithTimestamp-txn")}, client.WithContentType("application/json"), client.WithJSONBody(t, map[string]interface{}{
 		"body":    message,
 		"msgtype": "m.text",
 	}), client.WithQueries(url.Values{
@@ -352,42 +454,6 @@ func mustCheckEventisReturnedForTime(t *testing.T, c *client.CSAPI, roomID strin
 			decorateStringWithAnsiColor(actualEventId, AnsiColorRed),
 			debugMessageList,
 		)
-	}
-}
-
-func fetchUntilMessagesResponseHas(t *testing.T, c *client.CSAPI, roomID string, check func(gjson.Result) bool) {
-	t.Helper()
-	start := time.Now()
-	checkCounter := 0
-	for {
-		if time.Since(start) > c.SyncUntilTimeout {
-			t.Fatalf("fetchUntilMessagesResponseHas timed out. Called check function %d times", checkCounter)
-		}
-
-		messagesRes := c.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "messages"}, client.WithContentType("application/json"), client.WithQueries(url.Values{
-			"dir":   []string{"b"},
-			"limit": []string{"100"},
-		}))
-		messsageResBody := client.ParseJSON(t, messagesRes)
-		wantKey := "chunk"
-		keyRes := gjson.GetBytes(messsageResBody, wantKey)
-		if !keyRes.Exists() {
-			t.Fatalf("missing key '%s'", wantKey)
-		}
-		if !keyRes.IsArray() {
-			t.Fatalf("key '%s' is not an array (was %s)", wantKey, keyRes.Type)
-		}
-
-		events := keyRes.Array()
-		for _, ev := range events {
-			if check(ev) {
-				return
-			}
-		}
-
-		checkCounter++
-		// Add a slight delay so we don't hammmer the messages endpoint
-		time.Sleep(500 * time.Millisecond)
 	}
 }
 
