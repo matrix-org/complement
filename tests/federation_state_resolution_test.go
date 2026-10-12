@@ -2,7 +2,6 @@ package tests
 
 import (
 	"encoding/json"
-	"io"
 	"testing"
 	"time"
 
@@ -12,8 +11,8 @@ import (
 	"github.com/matrix-org/complement/ct"
 	"github.com/matrix-org/complement/federation"
 	"github.com/matrix-org/complement/helpers"
+	"github.com/matrix-org/complement/must"
 	"github.com/matrix-org/gomatrixserverlib/spec"
-	"github.com/tidwall/gjson"
 )
 
 // Tests state resolution (v2) by forcing a fork with conflicted state, per:
@@ -28,14 +27,14 @@ import (
 //	|                           |
 //	v                           v
 //
-// alice sets name2       bob kicks alice (this arrives late)
+// alice sets name2       bob bans alice (this arrives late)
 //
 //	|                           |
 //	|     .---------------------'
 //	v     v
 //
 // what is the current state here
-func TestFederationStateResolution(t *testing.T) {
+func TestFederationStateConflictResolution(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	srv := federation.NewServer(t, deployment,
@@ -47,50 +46,28 @@ func TestFederationStateResolution(t *testing.T) {
 	cancel := srv.Listen()
 	defer cancel()
 
-	hsName := "hs1"
-
-	alice := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	alice := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 	// Charlie exists so we can view the room after we ban Alice
-	charlie := deployment.Register(t, hsName, helpers.RegistrationOpts{})
+	charlie := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
 
 	bob := srv.UserID("bob")
 	ver := alice.GetDefaultRoomVersion(t)
 	serverRoom := srv.MustMakeRoom(t, ver, federation.InitialRoomEvents(ver, bob))
 
-	getName := func() string {
-		res := charlie.GetRoomCurrentState(t, serverRoom.RoomID)
-		body, err := io.ReadAll(res.Body)
-		if err != nil {
-			panic(err)
-		}
-
-		var evs []json.RawMessage
-		if err := json.Unmarshal(body, &evs); err != nil {
-			panic(err)
-		}
-
-		for _, ev := range evs {
-			if gjson.GetBytes(ev, "type").String() == "m.room.name" {
-				return gjson.GetBytes(ev, "content.name").String()
-			}
-		}
-		return ""
-	}
-
 	// Join Charlie - this will be a federated join as the server is not yet in the room
 	charlie.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{srv.ServerName()})
 	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(charlie.UserID, serverRoom.RoomID))
-	serverRoom.WaiterForMembershipEvent(charlie.UserID).Waitf(t, 5*time.Second, "failed to see alice join complement server")
+	serverRoom.WaiterForStateEvent("m.room.member", charlie.UserID).Waitf(t, 5*time.Second, "failed to see charlie join complement server")
 	serverRoom.MustHaveMembershipForUser(t, charlie.UserID, "join")
 
 	// Join Alice - this will be a local send since the server is now in the room
 	alice.MustJoinRoom(t, serverRoom.RoomID, []spec.ServerName{srv.ServerName()})
 	alice.MustSyncUntil(t, client.SyncReq{}, client.SyncJoinedTo(alice.UserID, serverRoom.RoomID))
-	serverRoom.WaiterForMembershipEvent(alice.UserID).Waitf(t, 5*time.Second, "failed to see alice join complement server")
+	serverRoom.WaiterForStateEvent("m.room.member", alice.UserID).Waitf(t, 5*time.Second, "failed to see alice join complement server")
 	serverRoom.MustHaveMembershipForUser(t, alice.UserID, "join")
 
 	// Send updated power levels so alice can set the room name.
-	pwlvlEvt := srv.MustCreateEvent(t, serverRoom, federation.Event{
+	powerlevelEvent := srv.MustCreateEvent(t, serverRoom, federation.Event{
 		Type:     "m.room.power_levels",
 		StateKey: b.Ptr(""),
 		Sender:   bob,
@@ -102,12 +79,12 @@ func TestFederationStateResolution(t *testing.T) {
 			},
 		},
 	})
-	serverRoom.AddEvent(pwlvlEvt)
-	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, hsName), []json.RawMessage{pwlvlEvt.JSON()}, nil)
-	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(serverRoom.RoomID, pwlvlEvt.EventID()))
+	serverRoom.AddEvent(powerlevelEvent)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{powerlevelEvent.JSON()}, nil)
+	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(serverRoom.RoomID, powerlevelEvent.EventID()))
 
 	// Bob set an initial name, this will not usually be in the resolved state
-	nameEvt := srv.MustCreateEvent(t, serverRoom, federation.Event{
+	roomNameChangeFromBob := srv.MustCreateEvent(t, serverRoom, federation.Event{
 		Type:     "m.room.name",
 		StateKey: b.Ptr(""),
 		Sender:   bob,
@@ -115,30 +92,30 @@ func TestFederationStateResolution(t *testing.T) {
 			"name": "Bob initial",
 		},
 	})
-	serverRoom.AddEvent(nameEvt)
-	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, hsName), []json.RawMessage{nameEvt.JSON()}, nil)
-	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(serverRoom.RoomID, nameEvt.EventID()))
-	if getName() != "Bob initial" {
-		ct.Fatalf(t, "first initial name not set")
+	serverRoom.AddEvent(roomNameChangeFromBob)
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{roomNameChangeFromBob.JSON()}, nil)
+	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(serverRoom.RoomID, roomNameChangeFromBob.EventID()))
+	if name := getRoomName(t, charlie, serverRoom.RoomID); name != "Bob initial" {
+		ct.Fatalf(t, "expected room name to be %q after roomNameChangeFromBob, got %q", "Bob initial", name)
 	}
 
 	// Alice now sets the room name, which is allowed. Notably it is this event that will be lost
 	// due to the state reset.
-	e2 := alice.SendEventSynced(t, serverRoom.RoomID, b.Event{
+	roomNameChangeFromAlice := alice.SendEventSynced(t, serverRoom.RoomID, b.Event{
 		Type:     "m.room.name",
 		StateKey: b.Ptr(""),
 		Content: map[string]any{
 			"name": "Alice initial",
 		},
 	})
-	// wait until bob's server sees e
-	serverRoom.WaiterForEvent(e2).Waitf(t, 5*time.Second, "failed to see e2 (%s) on complement server", e2)
-	if getName() != "Alice initial" {
-		ct.Fatalf(t, "second initial name not set")
+	// wait until bob's server sees the event
+	serverRoom.WaiterForEvent(roomNameChangeFromAlice).Waitf(t, 5*time.Second, "failed to see roomNameChangeFromAlice (%s) on complement server", roomNameChangeFromAlice)
+	if name := getRoomName(t, charlie, serverRoom.RoomID); name != "Alice initial" {
+		ct.Fatalf(t, "expected room name to be %q after roomNameChangeFromAlice, got %q", "Alice initial", name)
 	}
 
-	// create S2, which kicks alice but don't send it yet
-	s2 := srv.MustCreateEvent(t, serverRoom, federation.Event{
+	// Create the ban of alice but don't send it yet
+	aliceBanEvent := srv.MustCreateEvent(t, serverRoom, federation.Event{
 		Type:     "m.room.member",
 		StateKey: b.Ptr(alice.UserID),
 		Sender:   bob,
@@ -146,34 +123,45 @@ func TestFederationStateResolution(t *testing.T) {
 			"membership": "ban",
 		},
 	})
-	serverRoom.AddEvent(s2)
+	serverRoom.AddEvent(aliceBanEvent)
 
-	// Alice now sets the room name agian, which is allowed currently, but should be removed
-	e3 := alice.SendEventSynced(t, serverRoom.RoomID, b.Event{
+	// Alice now sets the room name again, which is allowed from hs1's point of view but will be
+	// rolled back once hs1 receives aliceBanEvent.
+	rolledBackRoomNameChangeFromAlice := alice.SendEventSynced(t, serverRoom.RoomID, b.Event{
 		Type:     "m.room.name",
 		StateKey: b.Ptr(""),
 		Content: map[string]any{
-			"name": "Bad name",
+			"name": "another name",
 		},
 	})
-	// wait until bob's server sees e
-	serverRoom.WaiterForEvent(e3).Waitf(t, 5*time.Second, "failed to see e3 (%s) on complement server", e3)
-	if getName() != "Bad name" {
-		ct.Fatalf(t, "First updated name not set")
+	// wait until bob's server sees the event
+	serverRoom.WaiterForEvent(rolledBackRoomNameChangeFromAlice).Waitf(t, 5*time.Second, "failed to see rolledBackRoomNameChangeFromAlice (%s) on complement server", rolledBackRoomNameChangeFromAlice)
+	if name := getRoomName(t, charlie, serverRoom.RoomID); name != "another name" {
+		ct.Fatalf(t, "expected room name to be %q after rolledBackRoomNameChangeFromAlice, got %q", "another name", name)
 	}
 
-	// Now send s2, which has prev event e2 same as e3, resulting in two extremeties in the DAG that
-	// must be resolved, which should undo e3.
-	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, hsName), []json.RawMessage{s2.JSON()}, nil)
-	// wait until we see S2 to ensure the server has processed this.
-	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(serverRoom.RoomID, s2.EventID()))
+	// Now send aliceBanEvent, which has prev event roomNameChangeFromAlice same as
+	// rolledBackRoomNameChangeFromAlice, resulting in two extremeties in the DAG that must be resolved.
+	srv.MustSendTransaction(t, deployment, deployment.GetFullyQualifiedHomeserverName(t, "hs1"), []json.RawMessage{aliceBanEvent.JSON()}, nil)
+	// wait until we see aliceBanEvent to ensure the server has processed this.
+	charlie.MustSyncUntil(t, client.SyncReq{}, client.SyncTimelineHasEventID(serverRoom.RoomID, aliceBanEvent.EventID()))
 
-	// Check the name was reverted or dropped. Although this seems counterintuitive the name being
-	// dropped is an unfortunate consequence of the state res v2 algorithm, as described here:
+	// The ban is a power event so is resolved first, after which both of alice's name changes fail
+	// auth and the name is dropped entirely rather than restored to "Alice initial". Although this
+	// seems counterintuitive it is an unfortunate consequence of the state res v2 algorithm, as described here:
 	// https://github.com/matrix-org/matrix-spec-proposals/blob/erikj/state_res_msc/proposals/1442-state-resolution.md#state-resets
-	if name := getName(); name == "Bad name" {
-		ct.Fatalf(t, "initial name not restored after state resolution, got: %s", name)
-	} else if name == "" {
-		t.Log("original name not restored")
+	if name := getRoomName(t, charlie, serverRoom.RoomID); name != "" {
+		ct.Fatalf(t, "expected room name to be removed by state resolution, got %q", name)
 	}
+}
+
+func getRoomName(t *testing.T, c *client.CSAPI, roomID string) string {
+	t.Helper()
+	res := c.GetRoomCurrentState(t, roomID)
+	for _, ev := range must.ParseJSON(t, res.Body).Array() {
+		if ev.Get("type").Str == "m.room.name" {
+			return ev.Get("content.name").Str
+		}
+	}
+	return ""
 }

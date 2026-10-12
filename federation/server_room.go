@@ -72,7 +72,7 @@ type ServerRoom struct {
 	ForwardExtremities []string
 	Depth              int64
 	waitersEvent       map[string][]*helpers.Waiter // event ID -> []Waiter
-	waitersMembership  map[string][]*helpers.Waiter // userID -> []Waiter
+	waitersState       map[string][]*helpers.Waiter // (type, state key) tuple -> []Waiter
 	waitersMu          *sync.Mutex
 }
 
@@ -84,7 +84,7 @@ func NewServerRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *Server
 		State:              make(map[string]gomatrixserverlib.PDU),
 		ForwardExtremities: make([]string, 0),
 		waitersEvent:       make(map[string][]*helpers.Waiter),
-		waitersMembership:  make(map[string][]*helpers.Waiter),
+		waitersState:       make(map[string][]*helpers.Waiter),
 		waitersMu:          &sync.Mutex{},
 	}
 	room.ServerRoomImpl = &ServerRoomImplDefault{}
@@ -112,12 +112,14 @@ func (r *ServerRoom) AddEvent(ev gomatrixserverlib.PDU) {
 	for _, w := range r.waitersEvent[ev.EventID()] {
 		w.Finish()
 	}
-	if ev.Type() == "m.room.member" {
-		for _, w := range r.waitersMembership[*ev.StateKey()] {
+	delete(r.waitersEvent, ev.EventID()) // clear the waiters
+	if ev.StateKey() != nil {
+		tuple := fmt.Sprintf("%s\x1f%s", ev.Type(), *ev.StateKey())
+		for _, w := range r.waitersState[tuple] {
 			w.Finish()
 		}
+		delete(r.waitersState, tuple)
 	}
-	delete(r.waitersEvent, ev.EventID()) // clear the waiters
 }
 
 // WaiterForEvent creates a Waiter which waits until the given event ID is added to the room.
@@ -147,16 +149,18 @@ func (r *ServerRoom) WaiterForEvent(eventID string) *helpers.Waiter {
 	return w
 }
 
-func (r *ServerRoom) WaiterForMembershipEvent(userID string) *helpers.Waiter {
-	// We need to lock the state so we can check for it at the end
-	r.StateMutex.Lock()
-	defer r.StateMutex.Unlock()
+// WaiterForStateEvent creates a Waiter which waits until a state event with the given type and
+// state key is added to the room, finishing immediately if one is already in the current state.
+// Like WaiterForEvent, this requires HandleTransactionRequests(nil,nil) to see events from the
+// server under test.
+func (r *ServerRoom) WaiterForStateEvent(evType, stateKey string) *helpers.Waiter {
 	w := helpers.NewWaiter()
+	tuple := fmt.Sprintf("%s\x1f%s", evType, stateKey)
 	r.waitersMu.Lock()
-	r.waitersMembership[userID] = append(r.waitersMembership[userID], w)
+	r.waitersState[tuple] = append(r.waitersState[tuple], w)
 	r.waitersMu.Unlock()
-	tuple := fmt.Sprintf("m.room.member\x1f%s", userID)
-	if _, found := r.State[tuple]; found {
+	// registered before checking so an event added in between still finishes the waiter
+	if r.CurrentState(evType, stateKey) != nil {
 		w.Finish()
 	}
 	return w
