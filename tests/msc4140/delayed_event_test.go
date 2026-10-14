@@ -70,6 +70,9 @@ func TestDelayedEvents(t *testing.T) {
 			{"missing delay_ms", map[string]interface{}{"content": map[string]interface{}{}}},
 			{"zero delay_ms", getDelayedEventBody(0, map[string]interface{}{})},
 			{"negative delay_ms", getDelayedEventBody(-1, map[string]interface{}{})},
+			{"non-integer delay_ms", map[string]interface{}{"delay_ms": 1.5, "content": map[string]interface{}{}}},
+			{"string delay_ms", map[string]interface{}{"delay_ms": "1000", "content": map[string]interface{}{}}},
+			{"missing content", map[string]interface{}{"delay_ms": 1000}},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				res := user.Do(
