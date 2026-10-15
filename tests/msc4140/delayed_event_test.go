@@ -200,7 +200,7 @@ func TestDelayedEvents(t *testing.T) {
 	})
 
 	t.Run("cannot update a delayed event without an action", func(t *testing.T) {
-		res := unauthedClient.Do(
+		res := user.Do(
 			t,
 			"POST",
 			append(getPathForDelayedEvents(), "abc"),
@@ -211,7 +211,7 @@ func TestDelayedEvents(t *testing.T) {
 	})
 
 	t.Run("cannot update a delayed event with an invalid action", func(t *testing.T) {
-		res := unauthedClient.Do(
+		res := user.Do(
 			t,
 			"POST",
 			append(getPathForDelayedEvents(), "abc", "oops"),
@@ -230,7 +230,7 @@ func TestDelayedEvents(t *testing.T) {
 		} {
 			t.Run(fmt.Sprintf("cannot %s a delayed event without a matching delay ID", action), func(t *testing.T) {
 				t.Parallel()
-				res := unauthedClient.Do(
+				res := user.Do(
 					t,
 					"POST",
 					getPathForUpdateDelayedEvent("abc", action),
@@ -274,7 +274,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 
 		// Cancel the delayed event
-		unauthedClient.MustDo(
+		user.MustDo(
 			t,
 			"POST",
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionCancel),
@@ -328,7 +328,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 
 		// Force the delayed event to be sent immediately
-		unauthedClient.MustDo(
+		user.MustDo(
 			t,
 			"POST",
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionSend),
@@ -384,7 +384,7 @@ func TestDelayedEvents(t *testing.T) {
 		})
 
 		// Restart the timer on the delayed event
-		unauthedClient.MustDo(
+		user.MustDo(
 			t,
 			"POST",
 			getPathForUpdateDelayedEvent(delayID, DelayedEventActionRestart),
