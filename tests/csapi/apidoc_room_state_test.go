@@ -98,7 +98,7 @@ func TestRoomState(t *testing.T) {
 					match.JSONKeyPresent("joined"),
 					match.JSONKeyPresent("joined." + authedClient.UserID),
 					match.JSONKeyPresent("joined." + authedClient.UserID + ".display_name"),
-					match.JSONKeyPresent("joined." + authedClient.UserID + ".avatar_url"),
+					match.JSONKeyMissingOrNull("joined." + authedClient.UserID + ".avatar_url"),
 				},
 			})
 		})
