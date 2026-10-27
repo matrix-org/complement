@@ -130,7 +130,8 @@ func TestIsDirectFlagFederation(t *testing.T) {
 			"is_direct":  true,
 		},
 	})
-	inviteReq, err := fclient.NewInviteV2Request(dmInviteEvent, []gomatrixserverlib.InviteStrippedState{})
+	createEvent := room.Timeline[0]
+	inviteReq, err := fclient.NewInviteV2Request(dmInviteEvent, []gomatrixserverlib.InviteStrippedState{gomatrixserverlib.NewInviteStrippedState(createEvent)})
 	if err != nil {
 		t.Fatalf("failed to make invite request: %s", err)
 	}
