@@ -1,11 +1,8 @@
 package csapi_tests
 
 import (
-	"encoding/base64"
 	"fmt"
 	"testing"
-
-	"math/rand"
 
 	"github.com/matrix-org/complement"
 	"github.com/matrix-org/complement/client"
@@ -22,37 +19,18 @@ import (
 //  1. `/sync`'s `device_lists.changed/left` contain the correct user IDs.
 //  2. `/keys/query` returns the correct information after device list updates.
 func TestDeviceListUpdates(t *testing.T) {
-	prng := rand.New(rand.NewSource(42))
 	// uploadNewKeys uploads a new set of keys for a given client.
 	// Returns a check function that can be passed to mustQueryKeys.
 	uploadNewKeys := func(t *testing.T, user *client.CSAPI) []match.JSON {
 		t.Helper()
 		ed25519KeyID := fmt.Sprintf("ed25519:%s", user.DeviceID)
 		curve25519KeyID := fmt.Sprintf("curve25519:%s", user.DeviceID)
-		// generate key-like looking values
-		ed25519KeyBytes := make([]byte, 32)
-		_, err := prng.Read(ed25519KeyBytes)
-		must.NotError(t, "failed to read from prng", err)
-		ed25519Key := base64.RawStdEncoding.EncodeToString(ed25519KeyBytes)
-		curve25519KeyBytes := make([]byte, 32)
-		_, err = prng.Read(curve25519KeyBytes)
-		must.NotError(t, "failed to read from prng", err)
-		curve25519Key := base64.RawStdEncoding.EncodeToString(curve25519KeyBytes)
 
-		user.MustDo(t, "POST", []string{"_matrix", "client", "v3", "keys", "upload"},
-			client.WithJSONBody(t, map[string]interface{}{
-				"device_keys": map[string]interface{}{
-					"user_id":    user.UserID,
-					"device_id":  user.DeviceID,
-					"algorithms": []interface{}{"m.olm.v1.curve25519-aes-sha2", "m.megolm.v1.aes-sha2"},
-					"keys": map[string]interface{}{
-						ed25519KeyID:    ed25519Key,
-						curve25519KeyID: curve25519Key,
-					},
-					"signatures": map[string]interface{}{},
-				},
-			}),
-		)
+		deviceKeys, _ := user.MustGenerateOneTimeKeys(t, 0)
+		user.MustUploadKeys(t, deviceKeys, nil)
+		keys := deviceKeys["keys"].(map[string]any)
+		ed25519Key := keys[ed25519KeyID]
+		curve25519Key := keys[curve25519KeyID]
 
 		algorithmsPath := fmt.Sprintf("device_keys.%s.%s.algorithms", user.UserID, user.DeviceID)
 		ed25519Path := fmt.Sprintf("device_keys.%s.%s.keys.%s", user.UserID, user.DeviceID, ed25519KeyID)
