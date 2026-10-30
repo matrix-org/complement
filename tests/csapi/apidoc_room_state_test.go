@@ -87,6 +87,13 @@ func TestRoomState(t *testing.T) {
 		// sytest: GET /rooms/:room_id/joined_members fetches my membership
 		t.Run("GET /rooms/:room_id/joined_members fetches my membership", func(t *testing.T) {
 			t.Parallel()
+
+			avatarURL := "mxc://example.com/SEsfnsuifSDFSSEF"
+			reqBody := client.WithJSONBody(t, map[string]interface{}{
+				"avatar_url": avatarURL,
+			})
+			authedClient.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "profile", authedClient.UserID, "avatar_url"}, reqBody)
+
 			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
 				"visibility": "public",
 				"preset":     "public_chat",
@@ -97,8 +104,8 @@ func TestRoomState(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONKeyPresent("joined"),
 					match.JSONKeyPresent("joined." + authedClient.UserID),
-					match.JSONKeyPresent("joined." + authedClient.UserID + ".display_name"),
-					match.JSONKeyPresent("joined." + authedClient.UserID + ".avatar_url"),
+					match.JSONKeyTypeEqual("joined."+authedClient.UserID+".display_name", gjson.String),
+					match.JSONKeyEqual("joined."+authedClient.UserID+".avatar_url", avatarURL),
 				},
 			})
 		})
