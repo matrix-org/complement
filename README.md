@@ -175,6 +175,7 @@ The currently known blacklist tags are:
 * `dendrite_blacklist`
 * `conduit_blacklist`
 * `conduwuit_blacklist`
+* `venator_blacklist`
 
 ### Writing tests for unstable MSCs
 
