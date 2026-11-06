@@ -125,7 +125,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		})
 
 		// The observing user must share a room with the dummy barrier user.
-		roomID := barry.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := barry.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		observingUser.MustJoinRoom(t, roomID, []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, otherHSName),
 		})
@@ -160,7 +171,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Alice performs an initial sync
@@ -215,7 +237,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := bob.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := bob.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", bob.UserID, roomID)
 
 		// Alice performs an initial sync
@@ -268,7 +301,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Bob joins the room
@@ -327,7 +371,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := bob.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := bob.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", bob.UserID, roomID)
 
 		// Alice joins the room
@@ -386,7 +441,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Bob joins the room
