@@ -285,6 +285,10 @@ func (c *CSAPI) InviteRoom(t ct.TestLike, roomID string, userID string) *http.Re
 	return c.Do(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "invite"}, WithJSONBody(t, body))
 }
 
+func (c *CSAPI) GetRoomCurrentState(t ct.TestLike, roomID string) *http.Response {
+	return c.Do(t, "GET", []string{"_matrix", "client", "v3", "rooms", roomID, "state"})
+}
+
 // MustKnockRoom will cause userID to knock on the room ID, else fails the test.
 //
 // Args:
