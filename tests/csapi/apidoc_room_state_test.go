@@ -20,6 +20,13 @@ func TestRoomState(t *testing.T) {
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	authedClient := deployment.Register(t, "hs1", helpers.RegistrationOpts{})
+
+	avatarURL := "mxc://example.com/SEsfnsuifSDFSSEF"
+	reqBody := client.WithJSONBody(t, map[string]interface{}{
+		"avatar_url": avatarURL,
+	})
+	authedClient.MustDo(t, "PUT", []string{"_matrix", "client", "v3", "profile", authedClient.UserID, "avatar_url"}, reqBody)
+
 	t.Run("Parallel", func(t *testing.T) {
 		// sytest: GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership
 		t.Run("GET /rooms/:room_id/state/m.room.member/:user_id fetches my membership", func(t *testing.T) {
@@ -97,8 +104,8 @@ func TestRoomState(t *testing.T) {
 				JSON: []match.JSON{
 					match.JSONKeyPresent("joined"),
 					match.JSONKeyPresent("joined." + authedClient.UserID),
-					match.JSONKeyPresent("joined." + authedClient.UserID + ".display_name"),
-					match.JSONKeyPresent("joined." + authedClient.UserID + ".avatar_url"),
+					match.JSONKeyTypeEqual("joined."+authedClient.UserID+".display_name", gjson.String),
+					match.JSONKeyEqual("joined."+authedClient.UserID+".avatar_url", avatarURL),
 				},
 			})
 		})
