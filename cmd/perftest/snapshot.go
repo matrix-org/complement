@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
 	"github.com/matrix-org/complement/internal/docker"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 )
 
 type Snapshot struct {
@@ -26,7 +27,7 @@ type Snapshot struct {
 
 func snapshotStats(spanName, desc string, deployment *docker.Deployment, absDuration, duration time.Duration) (snapshots []Snapshot) {
 	for hsName, hsInfo := range deployment.HS {
-		stats, err := deployment.Deployer.Docker.ContainerStatsOneShot(context.Background(), hsInfo.ContainerID)
+		stats, err := deployment.Deployer.Docker.ContainerStats(context.Background(), hsInfo.ContainerID, client.ContainerStatsOptions{})
 		if err != nil {
 			return nil
 		}

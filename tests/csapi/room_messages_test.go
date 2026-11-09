@@ -242,6 +242,8 @@ type MessagesTestCase struct {
 }
 
 func TestMessagesOverFederation(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 

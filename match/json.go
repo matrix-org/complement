@@ -308,6 +308,37 @@ func JSONMapEach(wantKey string, fn func(k, v gjson.Result) error) JSON {
 	}
 }
 
+// JSONArraySome returns a matcher which will check that `wantKey` is an array then
+// loops over each item calling `fn`. If `fn` returns nil, the matcher is satisifed,
+// iterating stops and we return.
+//
+// Will fail if the array is empty and the check never runs
+func JSONArraySome(wantKey string, fn func(gjson.Result) error) JSON {
+	return func(body gjson.Result) error {
+		if wantKey != "" {
+			body = body.Get(wantKey)
+		}
+
+		if !body.Exists() {
+			return fmt.Errorf("JSONArraySome: missing key '%s'", wantKey)
+		}
+		if !body.IsArray() {
+			return fmt.Errorf("JSONArraySome: key '%s' is not an array", wantKey)
+		}
+		var satisfied bool = false
+		body.ForEach(func(_, val gjson.Result) bool {
+			err := fn(val)
+			satisfied = err == nil
+			// Stop iterating when we find a non-error
+			return !satisfied
+		})
+		if !satisfied {
+			return fmt.Errorf("JSONArraySome('%s'): unable to find item that satisfies check", wantKey)
+		}
+		return nil
+	}
+}
+
 // EXPERIMENTAL
 // AnyOf takes 1 or more `checkers`, and builds a new checker which accepts a given
 // json body iff it's accepted by at least one of the original `checkers`.

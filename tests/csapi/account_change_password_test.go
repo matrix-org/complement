@@ -9,11 +9,16 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 
 	"github.com/tidwall/gjson"
 )
 
 func TestChangePassword(t *testing.T) {
+	// Venator: https://github.com/matrix-org/complement/issues/897
+	// Omitting the entire file via build tag breaks other test files due to the definition of createSession
+	runtime.SkipIf(t, runtime.Venator)
+
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
 	password1 := "superuser"

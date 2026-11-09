@@ -39,6 +39,9 @@ func TestLocalPngThumbnail(t *testing.T) {
 	t.Run("test /_matrix/media/v3 endpoint", func(t *testing.T) {
 		// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 		runtime.SkipIf(t, runtime.Synapse)
+		// Venator is too young for any media to be available over the unauthenticated API,
+		// and always returns M_NOT_FOUND
+		runtime.SkipIf(t, runtime.Venator)
 		fetchAndValidateThumbnail(t, alice, uri, false)
 	})
 
@@ -51,6 +54,8 @@ func TestLocalPngThumbnail(t *testing.T) {
 
 // sytest: Remote media can be thumbnailed
 func TestRemotePngThumbnail(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 
@@ -84,6 +89,8 @@ func TestRemotePngThumbnail(t *testing.T) {
 
 func TestFederationThumbnail(t *testing.T) {
 	runtime.SkipIf(t, runtime.Dendrite)
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)

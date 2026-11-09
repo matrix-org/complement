@@ -9,6 +9,7 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 )
 
 func queryUnknownEndpoint(t *testing.T, user *client.CSAPI, paths []string) {
@@ -73,7 +74,11 @@ func TestUnknownEndpoints(t *testing.T) {
 		// v3 should exist, but not v3/unknown.
 		queryUnknownEndpoint(t, alice, []string{"_matrix", "key", "v2", "unknown"})
 
-		queryUnknownMethod(t, alice, "PUT", []string{"_matrix", "key", "v2", "query"})
+		if runtime.Homeserver != runtime.Venator {
+			// Venator does not implement this endpoint at all - since it doesn't know what the expected methods are,
+			// it returns 404 M_UNRECOGNIZED, instead of 405 M_UNRECOGNIZED, which causes this to fail.
+			queryUnknownMethod(t, alice, "PUT", []string{"_matrix", "key", "v2", "query"})
+		}
 	})
 
 	// Unknown media endpoints.

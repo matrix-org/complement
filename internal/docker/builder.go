@@ -17,15 +17,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/netip"
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
 
 	"github.com/matrix-org/complement/b"
 	"github.com/matrix-org/complement/config"
@@ -77,7 +76,7 @@ func (d *Builder) Cleanup() {
 
 // removeImages removes all images with `complementLabel`.
 func (d *Builder) removeNetworks() error {
-	networks, err := d.Docker.NetworkList(context.Background(), network.ListOptions{
+	networks, err := d.Docker.NetworkList(context.Background(), client.NetworkListOptions{
 		Filters: label(
 			complementLabel,
 			"complement_pkg="+d.Config.PackageNamespace,
@@ -86,8 +85,8 @@ func (d *Builder) removeNetworks() error {
 	if err != nil {
 		return err
 	}
-	for _, nw := range networks {
-		err = d.Docker.NetworkRemove(context.Background(), nw.ID)
+	for _, nw := range networks.Items {
+		_, err = d.Docker.NetworkRemove(context.Background(), nw.ID, client.NetworkRemoveOptions{})
 		if err != nil {
 			return err
 		}
@@ -97,7 +96,7 @@ func (d *Builder) removeNetworks() error {
 
 // removeImages removes all images with `complementLabel`.
 func (d *Builder) removeImages() error {
-	images, err := d.Docker.ImageList(context.Background(), image.ListOptions{
+	images, err := d.Docker.ImageList(context.Background(), client.ImageListOptions{
 		Filters: label(
 			complementLabel,
 			"complement_pkg="+d.Config.PackageNamespace,
@@ -106,7 +105,7 @@ func (d *Builder) removeImages() error {
 	if err != nil {
 		return err
 	}
-	for _, img := range images {
+	for _, img := range images.Items {
 		// we only clean up localhost/complement images else if someone docker pulls
 		// an anonymous snapshot we might incorrectly nuke it :( any non-localhost
 		// tag marks this image as safe (as images can have multiple tags)
@@ -133,7 +132,7 @@ func (d *Builder) removeImages() error {
 			d.log("Keeping image created from blueprint %s", bprintName)
 			continue
 		}
-		_, err = d.Docker.ImageRemove(context.Background(), img.ID, image.RemoveOptions{
+		_, err = d.Docker.ImageRemove(context.Background(), img.ID, client.ImageRemoveOptions{
 			Force: true,
 		})
 		if err != nil {
@@ -146,7 +145,7 @@ func (d *Builder) removeImages() error {
 
 // removeContainers removes all containers with `complementLabel`.
 func (d *Builder) removeContainers() error {
-	containers, err := d.Docker.ContainerList(context.Background(), container.ListOptions{
+	containers, err := d.Docker.ContainerList(context.Background(), client.ContainerListOptions{
 		All: true,
 		Filters: label(
 			complementLabel,
@@ -156,8 +155,8 @@ func (d *Builder) removeContainers() error {
 	if err != nil {
 		return err
 	}
-	for _, c := range containers {
-		err = d.Docker.ContainerRemove(context.Background(), c.ID, container.RemoveOptions{
+	for _, c := range containers.Items {
+		_, err = d.Docker.ContainerRemove(context.Background(), c.ID, client.ContainerRemoveOptions{
 			Force: true,
 		})
 		if err != nil {
@@ -168,7 +167,7 @@ func (d *Builder) removeContainers() error {
 }
 
 func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
-	images, err := d.Docker.ImageList(context.Background(), image.ListOptions{
+	images, err := d.Docker.ImageList(context.Background(), client.ImageListOptions{
 		Filters: label(
 			"complement_blueprint="+bprint.Name,
 			"complement_pkg="+d.Config.PackageNamespace,
@@ -177,7 +176,7 @@ func (d *Builder) ConstructBlueprintIfNotExist(bprint b.Blueprint) error {
 	if err != nil {
 		return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ImageList: %w", bprint.Name, err)
 	}
-	if len(images) == 0 {
+	if len(images.Items) == 0 {
 		err = d.ConstructBlueprint(bprint)
 		if err != nil {
 			return fmt.Errorf("ConstructBlueprintIfNotExist(%s): failed to ConstructBlueprint: %w", bprint.Name, err)
@@ -197,12 +196,12 @@ func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
 
 	// wait a bit for images/containers to show up in 'image ls'
 	foundImages := false
-	var images []image.Summary
+	var images client.ImageListResult
 	var err error
 	waitTime := 5 * time.Second
 	startTime := time.Now()
 	for time.Since(startTime) < waitTime {
-		images, err = d.Docker.ImageList(context.Background(), image.ListOptions{
+		images, err = d.Docker.ImageList(context.Background(), client.ImageListOptions{
 			Filters: label(
 				complementLabel,
 				"complement_blueprint="+bprint.Name,
@@ -212,7 +211,7 @@ func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
 		if err != nil {
 			return err
 		}
-		if len(images) < len(bprint.Homeservers) {
+		if len(images.Items) < len(bprint.Homeservers) {
 			time.Sleep(100 * time.Millisecond)
 		} else {
 			foundImages = true
@@ -226,7 +225,7 @@ func (d *Builder) ConstructBlueprint(bprint b.Blueprint) error {
 		return fmt.Errorf("failed to find built images via ImageList: did they all build ok?")
 	}
 	var imgDatas []string
-	for _, img := range images {
+	for _, img := range images.Items {
 		imgDatas = append(imgDatas, fmt.Sprintf("%s=>%v", img.ID, img.Labels))
 	}
 	d.log("Constructed blueprint '%s' : %v", bprint.Name, imgDatas)
@@ -252,7 +251,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 				// something went wrong, but we have a container which may have interesting logs
 				printLogs(d.Docker, res.containerID, res.contextStr)
 			}
-			if delErr := d.Docker.ContainerRemove(context.Background(), res.containerID, container.RemoveOptions{
+			if _, delErr := d.Docker.ContainerRemove(context.Background(), res.containerID, client.ContainerRemoveOptions{
 				Force: true,
 			}); delErr != nil {
 				d.log("%s: failed to remove container which failed to deploy: %s", res.contextStr, delErr)
@@ -262,19 +261,21 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		}
 		// kill the container
 		defer func(r result) {
-			containerInfo, err := d.Docker.ContainerInspect(context.Background(), r.containerID)
+			containerInfo, err := d.Docker.ContainerInspect(context.Background(), r.containerID, client.ContainerInspectOptions{})
 
 			if err != nil {
 				d.log("%s : Can't get status of %s", r.contextStr, r.containerID)
 				return
 			}
 
-			if !containerInfo.State.Running {
+			if !containerInfo.Container.State.Running {
 				// The container isn't running anyway, so no need to kill it.
 				return
 			}
 
-			killErr := d.Docker.ContainerKill(context.Background(), r.containerID, "KILL")
+			_, killErr := d.Docker.ContainerKill(context.Background(), r.containerID, client.ContainerKillOptions{
+				Signal: "SIGKILL",
+			})
 			if killErr != nil {
 				d.log("%s : Failed to kill container %s: %s\n", r.contextStr, r.containerID, killErr)
 			}
@@ -323,7 +324,7 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		// then incurs a slow recovery process when we use the blueprint later.
 		d.log("%s: Stopping container: %s", res.contextStr, res.containerID)
 		tenSeconds := 10
-		d.Docker.ContainerStop(context.Background(), res.containerID, container.StopOptions{
+		d.Docker.ContainerStop(context.Background(), res.containerID, client.ContainerStopOptions{
 			Timeout: &tenSeconds,
 		})
 
@@ -331,9 +332,9 @@ func (d *Builder) construct(bprint b.Blueprint) (errs []error) {
 		d.log("%s: Stopped container: %s", res.contextStr, res.containerID)
 
 		// commit the container
-		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, container.CommitOptions{
+		commit, err := d.Docker.ContainerCommit(context.Background(), res.containerID, client.ContainerCommitOptions{
 			Author:    "Complement",
-			Pause:     true,
+			NoPause:   false,
 			Reference: "localhost/complement:" + res.contextStr,
 			Changes:   toChanges(labels),
 
@@ -438,7 +439,7 @@ func generateASRegistrationYaml(as b.ApplicationService) string {
 // Name is guaranteed not to be empty when err == nil
 func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName string) (networkName string, err error) {
 	// check if a network already exists for this blueprint
-	nws, err := docker.NetworkList(context.Background(), network.ListOptions{
+	nws, err := docker.NetworkList(context.Background(), client.NetworkListOptions{
 		Filters: label(
 			"complement_pkg="+pkgNamespace,
 			"complement_blueprint="+blueprintName,
@@ -448,15 +449,15 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 		return "", fmt.Errorf("%s: failed to list networks. %w", blueprintName, err)
 	}
 	// return the existing network
-	if len(nws) > 0 {
-		if len(nws) > 1 {
-			log.Printf("WARNING: createNetworkIfNotExists got %d networks for pkg=%s blueprint=%s", len(nws), pkgNamespace, blueprintName)
+	if len(nws.Items) > 0 {
+		if len(nws.Items) > 1 {
+			log.Printf("WARNING: createNetworkIfNotExists got %d networks for pkg=%s blueprint=%s", len(nws.Items), pkgNamespace, blueprintName)
 		}
-		return nws[0].Name, nil
+		return nws.Items[0].Name, nil
 	}
 	networkName = "complement_" + pkgNamespace + "_" + blueprintName
 	// make a user-defined network so we get DNS based on the container name
-	nw, err := docker.NetworkCreate(context.Background(), networkName, network.CreateOptions{
+	nw, err := docker.NetworkCreate(context.Background(), networkName, client.NetworkCreateOptions{
 		Labels: map[string]string{
 			complementLabel:        blueprintName,
 			"complement_blueprint": blueprintName,
@@ -466,11 +467,11 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 	if err != nil {
 		return "", fmt.Errorf("%s: failed to create docker network. %w", blueprintName, err)
 	}
-	if nw.Warning != "" {
+	if len(nw.Warning) > 0 && nw.Warning[0] != "" {
 		if nw.ID == "" {
-			return "", fmt.Errorf("%s: fatal warning while creating docker network. %s", blueprintName, nw.Warning)
+			return "", fmt.Errorf("%s: fatal warning while creating docker network. %s", blueprintName, nw.Warning[0])
 		}
-		log.Printf("WARNING: %s\n", nw.Warning)
+		log.Printf("WARNING: %s\n", nw.Warning[0])
 	}
 	if nw.ID == "" {
 		return "", fmt.Errorf("%s: unexpected empty ID while creating networkID", blueprintName)
@@ -479,7 +480,7 @@ func createNetworkIfNotExists(docker *client.Client, pkgNamespace, blueprintName
 }
 
 func printLogs(docker *client.Client, containerID, contextStr string) {
-	reader, err := docker.ContainerLogs(context.Background(), containerID, container.LogsOptions{
+	reader, err := docker.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{
 		ShowStderr: true,
 		ShowStdout: true,
 		Follow:     false,
@@ -497,7 +498,7 @@ func printLogs(docker *client.Client, containerID, contextStr string) {
 func printPortBindingsOfAllComplementContainers(docker *client.Client, contextStr string) {
 	ctx := context.Background()
 
-	containers, err := docker.ContainerList(ctx, container.ListOptions{
+	containers, err := docker.ContainerList(ctx, client.ContainerListOptions{
 		All: true,
 		Filters: label(
 			complementLabel,
@@ -510,10 +511,10 @@ func printPortBindingsOfAllComplementContainers(docker *client.Client, contextSt
 
 	log.Printf("============== %s : START ALL COMPLEMENT DOCKER PORT BINDINGS ==============\n", contextStr)
 
-	for _, container := range containers {
+	for _, container := range containers.Items {
 		log.Printf("Container: %s: %s", container.ID, container.Names)
 
-		inspectRes, err := docker.ContainerInspect(ctx, container.ID)
+		inspectRes, err := docker.ContainerInspect(ctx, container.ID, client.ContainerInspectOptions{})
 		if err != nil {
 			log.Printf("%s : Failed to inspect container (%s) while trying to `printPortBindingsOfAllComplementContainers`: %s\n", contextStr, container.ID, err)
 			return
@@ -522,7 +523,7 @@ func printPortBindingsOfAllComplementContainers(docker *client.Client, contextSt
 		// Print an example so it's easier to understand the output
 		log.Printf("    (host) -> (container)\n")
 		// Then print the actual port bindings
-		for containerPort, portBindings := range inspectRes.NetworkSettings.Ports {
+		for containerPort, portBindings := range inspectRes.Container.NetworkSettings.Ports {
 			hostPortBindingStrings := make([]string, len(portBindings))
 			for portBindingIndex, portBinding := range portBindings {
 				hostPortBindingStrings[portBindingIndex] = fmt.Sprintf("%s:%s", portBinding.HostIP, portBinding.HostPort)
@@ -537,58 +538,68 @@ func printPortBindingsOfAllComplementContainers(docker *client.Client, contextSt
 }
 
 // endpoints transforms the homeserver ports into the base URL and federation base URL.
-func endpoints(p nat.PortMap, hsPortBindingIP string, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {
+func endpoints(p network.PortMap, hsPortBindingIP string, csPort, ssPort int) (baseURL, fedBaseURL string, err error) {
 	csapiPortBinding, err := findPortBinding(p, hsPortBindingIP, csPort)
 	if err != nil {
 		return "", "", fmt.Errorf("Problem finding CS API port: %s", err)
 	}
-	baseURL = fmt.Sprintf("http://"+csapiPortBinding.HostIP+":%s", csapiPortBinding.HostPort)
+	baseURL = fmt.Sprintf("http://%s:%s", csapiPortBinding.HostIP, csapiPortBinding.HostPort)
 
 	ssapiPortBinding, err := findPortBinding(p, hsPortBindingIP, ssPort)
 	if err != nil {
 		return "", "", fmt.Errorf("Problem finding SS API port: %s", err)
 	}
-	fedBaseURL = fmt.Sprintf("https://"+ssapiPortBinding.HostIP+":%s", ssapiPortBinding.HostPort)
+	fedBaseURL = fmt.Sprintf("https://%s:%s", ssapiPortBinding.HostIP, ssapiPortBinding.HostPort)
 	return
 }
 
-// findPortBinding finds a matching port binding for the given host/port in the `nat.PortMap`.
+// findPortBinding finds a matching port binding for the given host/port in the `network.PortMap`.
 //
 // This function will return the first port binding that matches the given host IP. If a
 // `0.0.0.0` binding is found, we will assume that it is listening on all interfaces,
 // including the `hsPortBindingIP`, and return a binding with the `hsPortBindingIP` as
 // the host IP.
-func findPortBinding(p nat.PortMap, hsPortBindingIP string, port int) (portBinding nat.PortBinding, err error) {
+func findPortBinding(p network.PortMap, hsPortBindingIP string, port int) (network.PortBinding, error) {
 	portString := fmt.Sprintf("%d/tcp", port)
-	portBindings, ok := p[nat.Port(portString)]
+	parsedPort, err := network.ParsePort(portString)
+	if err != nil {
+		return network.PortBinding{}, fmt.Errorf("port %s failed to be parsed: %v", portString, err)
+	}
+	portBindings, ok := p[parsedPort]
 	if !ok {
-		return nat.PortBinding{}, fmt.Errorf("port %s not exposed - exposed ports: %v", portString, p)
+		return network.PortBinding{}, fmt.Errorf("port %s not exposed - exposed ports: %v", portString, p)
 	}
 	if len(portBindings) == 0 {
-		return nat.PortBinding{}, fmt.Errorf("port %s exposed with not mapped port: %+v", portString, p)
+		return network.PortBinding{}, fmt.Errorf("port %s exposed with not mapped port: %+v", portString, p)
 	}
 
 	for _, pb := range portBindings {
-		if pb.HostIP == hsPortBindingIP {
+		pbHostIP := pb.HostIP.String()
+		if pbHostIP == hsPortBindingIP {
 			return pb, nil
-		} else if pb.HostIP == "0.0.0.0" {
+		} else if pbHostIP == "0.0.0.0" {
 			// `0.0.0.0` means "all interfaces", so we can assume that this will be listening
 			// for connections from `hsPortBindingIP` as well.
-			return nat.PortBinding{
-				HostIP:   hsPortBindingIP,
-				HostPort: pb.HostPort,
-			}, nil
-		} else if pb.HostIP == "" && hsPortBindingIP == "127.0.0.1" {
+			return getPortBinding(hsPortBindingIP, pb.HostPort)
+		} else if pbHostIP == "" && hsPortBindingIP == "127.0.0.1" {
 			// `HostIP` can be empty in certain environments (observed with podman v4.3.1). We
 			// will assume this is only a binding for `127.0.0.1`.
-			return nat.PortBinding{
-				HostIP:   hsPortBindingIP,
-				HostPort: pb.HostPort,
-			}, nil
+			return getPortBinding(hsPortBindingIP, pb.HostPort)
 		}
 	}
 
-	return nat.PortBinding{}, fmt.Errorf("unable to find matching port binding for %s %s: %+v", hsPortBindingIP, portString, p)
+	return network.PortBinding{}, fmt.Errorf("unable to find matching port binding for %s %s: %+v", hsPortBindingIP, portString, p)
+}
+
+func getPortBinding(hsPortBindingIP string, hostPort string) (network.PortBinding, error) {
+	hostAddr, err := netip.ParseAddr(hsPortBindingIP)
+	if err != nil {
+		return network.PortBinding{}, fmt.Errorf("hsPortBindingIP %s failed to be parsed: %v", hsPortBindingIP, err)
+	}
+	return network.PortBinding{
+		HostIP:   hostAddr,
+		HostPort: hostPort,
+	}, nil
 }
 
 type result struct {

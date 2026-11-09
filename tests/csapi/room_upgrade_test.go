@@ -21,6 +21,9 @@ import (
 // perhaps that just needs a clarification/MSC to document the state of things. Synapse
 // and Dendrite do this for example.
 func TestPushRuleRoomUpgrade(t *testing.T) {
+	// Venator: does not implement this functionality (needs spec change).
+	// Venator: additionally does not implement federation (which several tests depend on).
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 

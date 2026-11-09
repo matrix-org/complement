@@ -125,7 +125,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		})
 
 		// The observing user must share a room with the dummy barrier user.
-		roomID := barry.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := barry.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		observingUser.MustJoinRoom(t, roomID, []spec.ServerName{
 			deployment.GetFullyQualifiedHomeserverName(t, otherHSName),
 		})
@@ -160,7 +171,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Alice performs an initial sync
@@ -215,7 +237,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := bob.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := bob.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", bob.UserID, roomID)
 
 		// Alice performs an initial sync
@@ -268,7 +301,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Bob joins the room
@@ -327,7 +371,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := bob.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := bob.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", bob.UserID, roomID)
 
 		// Alice joins the room
@@ -386,7 +441,18 @@ func TestDeviceListUpdates(t *testing.T) {
 		barrier := makeBarrier(t, deployment, alice, otherHSName)
 		checkBobKeys := uploadNewKeys(t, bob)
 
-		roomID := alice.MustCreateRoom(t, map[string]interface{}{"preset": "public_chat"})
+		roomID := alice.MustCreateRoom(t, map[string]interface{}{
+			"preset": "public_chat",
+			"initial_state": []map[string]interface{}{
+				{
+					"type":      "m.room.encryption",
+					"state_key": "",
+					"content": map[string]interface{}{
+						"algorithm": "m.megolm.v1.aes-sha2",
+					},
+				},
+			},
+		})
 		t.Logf("%s created test room %s.", alice.UserID, roomID)
 
 		// Bob joins the room
@@ -449,16 +515,34 @@ func TestDeviceListUpdates(t *testing.T) {
 	defer deployment.Destroy(t)
 
 	t.Run("when local user joins a room", func(t *testing.T) { testOtherUserJoin(t, deployment, "hs1", "hs1") })
-	t.Run("when remote user joins a room", func(t *testing.T) { testOtherUserJoin(t, deployment, "hs1", "hs2") })
+	t.Run("when remote user joins a room", func(t *testing.T) {
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
+		testOtherUserJoin(t, deployment, "hs1", "hs2")
+	})
 	t.Run("when joining a room with a local user", func(t *testing.T) { testJoin(t, deployment, "hs1", "hs1") })
-	t.Run("when joining a room with a remote user", func(t *testing.T) { testJoin(t, deployment, "hs1", "hs2") })
+	t.Run("when joining a room with a remote user", func(t *testing.T) {
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
+		testJoin(t, deployment, "hs1", "hs2")
+	})
 	t.Run("when local user leaves a room", func(t *testing.T) { testOtherUserLeave(t, deployment, "hs1", "hs1") })
-	t.Run("when remote user leaves a room", func(t *testing.T) { testOtherUserLeave(t, deployment, "hs1", "hs2") })
+	t.Run("when remote user leaves a room", func(t *testing.T) {
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
+		testOtherUserLeave(t, deployment, "hs1", "hs2")
+	})
 	t.Run("when leaving a room with a local user", func(t *testing.T) { testLeave(t, deployment, "hs1", "hs1") })
 	t.Run("when leaving a room with a remote user", func(t *testing.T) {
 		runtime.SkipIf(t, runtime.Synapse) // FIXME: https://github.com/matrix-org/synapse/issues/13650
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
 		testLeave(t, deployment, "hs1", "hs2")
 	})
 	t.Run("when local user rejoins a room", func(t *testing.T) { testOtherUserRejoin(t, deployment, "hs1", "hs1") })
-	t.Run("when remote user rejoins a room", func(t *testing.T) { testOtherUserRejoin(t, deployment, "hs1", "hs2") })
+	t.Run("when remote user rejoins a room", func(t *testing.T) {
+		// Venator: does not yet implement federation
+		runtime.SkipIf(t, runtime.Venator)
+		testOtherUserRejoin(t, deployment, "hs1", "hs2")
+	})
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -73,6 +74,8 @@ func TestDeactivateAccount(t *testing.T) {
 
 	// sytest: Can't deactivate account with wrong password
 	t.Run("Can't deactivate account with wrong password", func(t *testing.T) {
+		// Venator: https://github.com/matrix-org/complement/issues/898
+		runtime.SkipIf(t, runtime.Venator)
 		res := deactivateAccount(t, authedClient, "wrong_password")
 		must.MatchResponse(t, res, match.HTTPResponse{
 			StatusCode: 401,
@@ -83,6 +86,8 @@ func TestDeactivateAccount(t *testing.T) {
 	})
 	// sytest: Can deactivate account
 	t.Run("Can deactivate account", func(t *testing.T) {
+		// Venator: https://github.com/matrix-org/complement/issues/898
+		runtime.SkipIf(t, runtime.Venator)
 
 		res := deactivateAccount(t, authedClient, password)
 		must.MatchResponse(t, res, match.HTTPResponse{
@@ -91,6 +96,8 @@ func TestDeactivateAccount(t *testing.T) {
 	})
 	// sytest: After deactivating account, can't log in with password
 	t.Run("After deactivating account, can't log in with password", func(t *testing.T) {
+		// Venator: https://github.com/matrix-org/complement/issues/898
+		runtime.SkipIf(t, runtime.Venator)
 
 		reqBody := client.WithJSONBody(t, map[string]interface{}{
 			"identifier": map[string]interface{}{

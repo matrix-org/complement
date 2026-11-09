@@ -21,12 +21,15 @@ import (
 	"github.com/matrix-org/complement/helpers"
 	"github.com/matrix-org/complement/match"
 	"github.com/matrix-org/complement/must"
+	"github.com/matrix-org/complement/runtime"
 	"github.com/matrix-org/gomatrixserverlib/spec"
 	"github.com/tidwall/gjson"
 	"golang.org/x/exp/slices"
 )
 
 func TestJumpToDateEndpoint(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.OldDeploy(t, b.BlueprintHSWithApplicationService)
 	defer deployment.Destroy(t)
 
@@ -359,7 +362,9 @@ func createTestRoom(t *testing.T, c *client.CSAPI) (roomID string, eventA, event
 	roomID = c.MustCreateRoom(t, map[string]interface{}{
 		"preset": "public_chat",
 	})
-
+	// timeBeforeEventA doubles as the initial creation events after-timestamp, so guard it on
+	// both sides to keep it between the two events.
+	time.Sleep(tsBoundaryGuard)
 	timeBeforeEventA := time.Now()
 	time.Sleep(tsBoundaryGuard)
 	eventAID := c.SendEventSynced(t, roomID, b.Event{

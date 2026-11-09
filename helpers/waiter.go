@@ -47,6 +47,13 @@ func (w *Waiter) Waitf(t ct.TestLike, timeout time.Duration, errFormat string, a
 	}
 }
 
+// Done returns a channel which is closed when Finish is called. It can be used
+// in `select` statements where failing the test on a timeout (as Wait does) is
+// not appropriate. Prefer `Wait`/`Waitf` otherwise.
+func (w *Waiter) Done() <-chan bool {
+	return w.ch
+}
+
 // Finish will cause all goroutines waiting via Wait to stop waiting and return.
 // Once this function has been called, subsequent calls to Wait will return immediately.
 // To begin waiting again, make a new Waiter.

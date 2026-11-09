@@ -1,5 +1,7 @@
-//go:build !dendrite_blacklist
-// +build !dendrite_blacklist
+//go:build !dendrite_blacklist && !venator_blacklist
+// +build !dendrite_blacklist,!venator_blacklist
+
+// Venator: https://github.com/matrix-org/complement/issues/897
 
 package csapi_tests
 

@@ -31,6 +31,9 @@ func TestAsyncUpload(t *testing.T) {
 	})
 
 	t.Run("Not yet uploaded", func(t *testing.T) {
+		// Venator is too young for any media to be available over the unauthenticated API,
+		// and always returns M_NOT_FOUND
+		runtime.SkipIf(t, runtime.Venator)
 		mxcURI := alice.CreateMedia(t)
 		parts := strings.Split(mxcURI, "/")
 		mediaID := parts[len(parts)-1]

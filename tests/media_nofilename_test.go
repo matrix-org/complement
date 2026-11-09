@@ -17,6 +17,8 @@ import (
 func TestMediaWithoutFileName(t *testing.T) {
 	// Synapse no longer allows downloads over the unauthenticated media endpoints by default
 	runtime.SkipIf(t, runtime.Synapse)
+	// Venator is too young for any media to be available over the unauthenticated API, and always returns M_NOT_FOUND
+	runtime.SkipIf(t, runtime.Venator)
 
 	deployment := complement.Deploy(t, 1)
 	defer deployment.Destroy(t)
@@ -103,6 +105,8 @@ func TestMediaWithoutFileName(t *testing.T) {
 
 // same test as above, but for the new _matrix/client/v1/media endpoint
 func TestMediaWithoutFileNameCSMediaV1(t *testing.T) {
+	// Venator: does not yet implement federation
+	runtime.SkipIf(t, runtime.Venator)
 	deployment := complement.Deploy(t, 2)
 	defer deployment.Destroy(t)
 

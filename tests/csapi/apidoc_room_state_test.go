@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matrix-org/complement/runtime"
 	"github.com/tidwall/gjson"
 
 	"github.com/matrix-org/complement"
@@ -59,6 +60,8 @@ func TestRoomState(t *testing.T) {
 		})
 		// sytest: GET /rooms/:room_id/state/m.room.power_levels fetches powerlevels
 		t.Run("GET /rooms/:room_id/state/m.room.power_levels fetches powerlevels", func(t *testing.T) {
+			// Venator doesn't marshal default values so the presence check fails despite being valid.
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 
 			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{
@@ -329,6 +332,8 @@ func TestRoomState(t *testing.T) {
 			})
 		})
 		t.Run("GET /rooms/:room_id/joined_members is forbidden after leaving room", func(t *testing.T) {
+			// Venator: does not implement API version r0
+			runtime.SkipIf(t, runtime.Venator)
 			t.Parallel()
 			roomID := authedClient.MustCreateRoom(t, map[string]interface{}{})
 			authedClient.MustLeaveRoom(t, roomID)
