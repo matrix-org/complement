@@ -159,15 +159,20 @@ func TestFederationRoomsInvite(t *testing.T) {
 				"preset": "private_chat",
 				"invite": []string{bob.UserID},
 			})
-			bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
+			since := bob.MustSyncUntil(t, client.SyncReq{}, client.SyncInvitedTo(bob.UserID, roomID))
 			alice.MustDo(t, "POST", []string{"_matrix", "client", "v3", "rooms", roomID, "kick"},
 				client.WithJSONBody(t, map[string]interface{}{
 					"user_id": bob.UserID,
 					"reason":  "testing",
 				}),
 			)
+			bob.MustSyncUntil(t, client.SyncReq{Since: since, Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob.UserID, roomID))
 
-			bob.MustSyncUntil(t, client.SyncReq{Filter: includeLeaveSyncFilter}, client.SyncLeftFrom(bob.UserID, roomID))
+			// bob's server already has the rescission, so an initial sync must include it.
+			syncResp, _ := bob.MustSync(t, client.SyncReq{Filter: includeLeaveSyncFilter})
+			if err := client.SyncLeftFrom(bob.UserID, roomID)(bob.UserID, syncResp); err != nil {
+				t.Fatalf("initial sync is missing the rescinded invite: %s", err)
+			}
 		})
 
 		t.Run("Non-invitee user cannot rescind invite over federation", func(t *testing.T) {
