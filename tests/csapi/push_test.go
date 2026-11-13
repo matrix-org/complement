@@ -116,6 +116,9 @@ func checkWokenUp(t *testing.T, csapi *client.CSAPI, syncReq client.SyncReq, fn 
 		}
 		errChan <- nil
 	}()
+	// Wait for sync on every exit path,
+	// otherwise it can fail after test completion and panic.
+	defer func() { <-errChan }()
 	// Try to wait for the sync to actually start, so that we test wakeups
 	select {
 	case <-syncStarted:
