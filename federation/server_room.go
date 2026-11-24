@@ -72,7 +72,8 @@ type ServerRoom struct {
 	TimelineMutex      sync.RWMutex
 	ForwardExtremities []string
 	Depth              int64
-	waiters            map[string][]*helpers.Waiter // room ID -> []Waiter
+	waitersEvent       map[string][]*helpers.Waiter // event ID -> []Waiter
+	waitersState       map[string][]*helpers.Waiter // (type, state key) tuple -> []Waiter
 	waitersMu          *sync.Mutex
 }
 
@@ -83,7 +84,8 @@ func NewServerRoom(roomVer gomatrixserverlib.RoomVersion, roomId string) *Server
 		Version:            roomVer,
 		State:              make(map[string]gomatrixserverlib.PDU),
 		ForwardExtremities: make([]string, 0),
-		waiters:            make(map[string][]*helpers.Waiter),
+		waitersEvent:       make(map[string][]*helpers.Waiter),
+		waitersState:       make(map[string][]*helpers.Waiter),
 		waitersMu:          &sync.Mutex{},
 	}
 	room.ServerRoomImpl = &ServerRoomImplDefault{}
@@ -108,10 +110,17 @@ func (r *ServerRoom) AddEvent(ev gomatrixserverlib.PDU) {
 	// inform waiters
 	r.waitersMu.Lock()
 	defer r.waitersMu.Unlock()
-	for _, w := range r.waiters[ev.EventID()] {
+	for _, w := range r.waitersEvent[ev.EventID()] {
 		w.Finish()
 	}
-	delete(r.waiters, ev.EventID()) // clear the waiters
+	delete(r.waitersEvent, ev.EventID()) // clear the waiters
+	if ev.StateKey() != nil {
+		tuple := fmt.Sprintf("%s\x1f%s", ev.Type(), *ev.StateKey())
+		for _, w := range r.waitersState[tuple] {
+			w.Finish()
+		}
+		delete(r.waitersState, tuple)
+	}
 }
 
 // WaiterForEvent creates a Waiter which waits until the given event ID is added to the room.
@@ -129,7 +138,7 @@ func (r *ServerRoom) WaiterForEvent(eventID string) *helpers.Waiter {
 	defer r.TimelineMutex.Unlock()
 	w := helpers.NewWaiter()
 	r.waitersMu.Lock()
-	r.waiters[eventID] = append(r.waiters[eventID], w)
+	r.waitersEvent[eventID] = append(r.waitersEvent[eventID], w)
 	r.waitersMu.Unlock()
 	// check if the event is already there and if so immediately end the wait
 	for _, ev := range r.Timeline {
@@ -137,6 +146,23 @@ func (r *ServerRoom) WaiterForEvent(eventID string) *helpers.Waiter {
 			w.Finish()
 			break
 		}
+	}
+	return w
+}
+
+// WaiterForStateEvent creates a Waiter which waits until a state event with the given type and
+// state key is added to the room, finishing immediately if one is already in the current state.
+// Like WaiterForEvent, this requires HandleTransactionRequests(nil,nil) to see events from the
+// server under test.
+func (r *ServerRoom) WaiterForStateEvent(evType, stateKey string) *helpers.Waiter {
+	w := helpers.NewWaiter()
+	tuple := fmt.Sprintf("%s\x1f%s", evType, stateKey)
+	r.waitersMu.Lock()
+	r.waitersState[tuple] = append(r.waitersState[tuple], w)
+	r.waitersMu.Unlock()
+	// registered before checking so an event added in between still finishes the waiter
+	if r.CurrentState(evType, stateKey) != nil {
+		w.Finish()
 	}
 	return w
 }
