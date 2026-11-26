@@ -111,10 +111,12 @@ jobs:
       # Build homeserver image
 
         # Build the base Synapse dockerfile and then build a Complement-specific image from that base.
+        # The intermediate images are tagged under `localhost/` and passed via `FROM` so that
+        # each build uses the local image rather than a same-named image from Docker Hub.
       - run: |
-          docker build -t matrixdotorg/synapse:latest -f docker/Dockerfile .
-          docker build -t matrixdotorg/synapse-workers:latest -f docker/Dockerfile-workers .
-          docker build -t homeserver -f docker/complement/Dockerfile docker/complement
+          docker build -t localhost/synapse -f docker/Dockerfile .
+          docker build -t localhost/synapse-workers --build-arg FROM=localhost/synapse -f docker/Dockerfile-workers .
+          docker build -t homeserver --build-arg FROM=localhost/synapse-workers -f docker/complement/Dockerfile docker/complement
         if: ${{ matrix.homeserver == 'Synapse' }}
         working-directory: homeserver
         env:
