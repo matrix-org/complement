@@ -426,6 +426,9 @@ func TestPartialStateJoin(t *testing.T) {
 			})
 			responseChan <- response
 		}()
+		// Wait for sync on every exit path,
+		// otherwise it can fail after test completion and panic.
+		defer func() { <-responseChan }()
 
 		// Try to wait for the sync to actually start, then un-partial-state the room
 		time.Sleep(2 * time.Second)
@@ -1147,6 +1150,7 @@ func TestPartialStateJoin(t *testing.T) {
 		// Fire off a goroutine to send the request, and write the response back to a channel.
 		clientMembersRequestResponseChan := make(chan *http.Response)
 		go func() {
+			defer close(clientMembersRequestResponseChan)
 			queryParams := url.Values{}
 			queryParams.Set("at", syncToken)
 			clientMembersRequestResponseChan <- alice.MustDo(
@@ -1155,8 +1159,10 @@ func TestPartialStateJoin(t *testing.T) {
 				[]string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "members"},
 				client.WithQueries(queryParams),
 			)
-			close(clientMembersRequestResponseChan)
 		}()
+		// Wait for the request on every exit path,
+		// otherwise it can fail after test completion and panic.
+		defer func() { <-clientMembersRequestResponseChan }()
 
 		// release the federation /state response
 		psjResult.FinishStateRequest()
@@ -1969,10 +1975,13 @@ func TestPartialStateJoin(t *testing.T) {
 		// attempts to joined_members should now block. Fire off a goroutine to try it.
 		jmResponseChan := make(chan *http.Response)
 		go func() {
+			defer close(jmResponseChan)
 			response := alice.MustDo(t, "GET", []string{"_matrix", "client", "v3", "rooms", serverRoom.RoomID, "joined_members"})
 			jmResponseChan <- response
-			close(jmResponseChan)
 		}()
+		// Wait for the request on every exit path,
+		// otherwise it can fail after test completion and panic.
+		defer func() { <-jmResponseChan }()
 
 		// wait for the state_ids request to arrive
 		psjResult.AwaitStateIdsRequest(t)
@@ -3632,10 +3641,13 @@ func TestPartialStateJoin(t *testing.T) {
 			t.Log("Alice starts a leave request")
 			server.AddPDUHandler(func(e gomatrixserverlib.PDU) bool { return true })
 			go func() {
+				defer leaveCompleted.Finish()
 				alice.MustLeaveRoom(t, serverRoom.RoomID)
 				t.Log("Alice's leave request completed")
-				leaveCompleted.Finish()
 			}()
+			// Wait for the leave request on every exit path,
+			// otherwise it can fail after test completion and panic.
+			defer func() { <-leaveCompleted.Done() }()
 
 			t.Log("The resync finishes")
 			psjResult.FinishStateRequest()
